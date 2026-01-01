@@ -301,6 +301,10 @@ class DamageModifiers:
             "metal-coat": "Steel",
             "silk-scarf": "Normal",
             "fairy-feather": "Fairy",
+            # Ogerpon masks (1.2x type boost + Embody Aspect)
+            "hearthflame-mask": "Fire",
+            "wellspring-mask": "Water",
+            "cornerstone-mask": "Rock",
         }
 
         if item in type_items and type_items[item] == move_type:

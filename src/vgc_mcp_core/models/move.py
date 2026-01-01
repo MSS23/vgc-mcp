@@ -412,6 +412,51 @@ def is_always_crit_move(move_name: str) -> bool:
     return multi_hit is not None and multi_hit[2]
 
 
+# Moves that change type based on the user's form
+# Note: Forms are listed longest-first so specific forms match before base form
+FORM_DEPENDENT_MOVE_TYPES: dict[str, dict[str, str]] = {
+    "ivy-cudgel": {
+        # Specific forms first (sorted by length, longest first)
+        "ogerpon-hearthflame-mask": "Fire",
+        "ogerpon-wellspring-mask": "Water",
+        "ogerpon-cornerstone-mask": "Rock",
+        "ogerpon-hearthflame": "Fire",
+        "ogerpon-wellspring": "Water",
+        "ogerpon-cornerstone": "Rock",
+        "ogerpon-teal-mask": "Grass",
+        "ogerpon-teal": "Grass",
+        "ogerpon": "Grass",  # Base form last
+    }
+}
+
+
+def get_move_type_for_user(move_name: str, user_name: str, default_type: str) -> str:
+    """
+    Get the actual move type based on user's form.
+
+    Some moves change type depending on the Pokemon using them:
+    - Ivy Cudgel: Grass (base), Water (Wellspring), Fire (Hearthflame), Rock (Cornerstone)
+
+    Args:
+        move_name: Name of the move
+        user_name: Name of the Pokemon using the move
+        default_type: Default type from PokeAPI
+
+    Returns:
+        The correct move type for this user
+    """
+    normalized_move = move_name.lower().replace(" ", "-")
+    normalized_user = user_name.lower().replace(" ", "-")
+
+    if normalized_move in FORM_DEPENDENT_MOVE_TYPES:
+        form_types = FORM_DEPENDENT_MOVE_TYPES[normalized_move]
+        # Check each form - dict is ordered with specific forms first
+        for form, move_type in form_types.items():
+            if form in normalized_user:
+                return move_type
+    return default_type
+
+
 # Gen 9 signature moves with special mechanics
 GEN9_SPECIAL_MOVES: dict[str, dict] = {
     "rage-fist": {

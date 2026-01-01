@@ -1,19 +1,22 @@
 """Full Gen 9 VGC damage calculator.
 
-Damage Formula:
+Damage Formula (Gen 5+):
 Base = floor(floor(floor(floor(2*Level/5+2) * Power * Atk/Def) / 50) + 2)
 
-Then apply modifiers in order (each floors the result):
-1. Spread move (0.75x in doubles when hitting multiple targets)
-2. Weather
-3. Critical hit (1.5x)
-4. Random (0.85 to 1.0 in 16 rolls)
-5. STAB (1.5x, or 2x with Adaptability, or 2x with same-type Tera)
-6. Type effectiveness
-7. Burn (0.5x on physical, unless Guts/Facade)
-8. Screens (0.5x singles, 0.667x doubles)
-9. Item modifiers
-10. Ability modifiers
+Then apply modifiers in order using pokeRound (rounds DOWN on 0.5):
+1. Spread move (3072/4096 = 0.75x)
+2. Weather (6144/4096 = 1.5x boost, 2048/4096 = 0.5x reduce)
+3. Critical hit (6144/4096 = 1.5x)
+4. Random factor (85-100, as damage * random / 100)
+5. STAB (6144/4096 = 1.5x, or 8192/4096 = 2.0x)
+6. Type effectiveness (integer multiplier)
+7. Burn (2048/4096 = 0.5x on physical)
+8. Final modifier chain (screens, items, abilities)
+
+Pokemon uses 4096-based fractions for modifiers, applying pokeRound after each.
+pokeRound: if decimal > 0.5, round UP; otherwise round DOWN (0.5 rounds DOWN).
+
+Reference: https://bulbapedia.bulbagarden.net/wiki/Damage
 """
 
 import math
@@ -29,6 +32,91 @@ from .modifiers import (
     get_type_effectiveness,
     is_super_effective,
 )
+
+
+# =============================================================================
+# Pokemon-accurate rounding and modifier application
+# =============================================================================
+
+def poke_round(num: float) -> int:
+    """
+    Pokemon-style rounding: rounds DOWN on exactly 0.5, otherwise normal rounding.
+
+    This is used throughout Pokemon's damage calculation. Unlike standard math
+    rounding (which rounds 0.5 UP), Pokemon rounds 0.5 DOWN.
+
+    Examples:
+        poke_round(10.4) -> 10  (normal floor)
+        poke_round(10.5) -> 10  (rounds DOWN - this is the key difference!)
+        poke_round(10.6) -> 11  (normal ceil)
+    """
+    decimal = num % 1
+    if decimal > 0.5:
+        return math.ceil(num)
+    return math.floor(num)
+
+
+def apply_mod(value: int, modifier: int) -> int:
+    """
+    Apply a 4096-based modifier to a value with pokeRound.
+
+    Pokemon internally represents multipliers as fractions with 4096 denominator:
+    - 1.5x = 6144/4096
+    - 1.3x = 5324/4096 (Life Orb)
+    - 1.2x = 4915/4096 (type-boosting items)
+    - 0.75x = 3072/4096
+    - 0.5x = 2048/4096
+
+    Args:
+        value: The damage value to modify
+        modifier: The 4096-based modifier (4096 = 1.0x, no change)
+
+    Returns:
+        Modified value with proper Pokemon rounding
+    """
+    if modifier == 4096:
+        return value
+    return poke_round(value * modifier / 4096)
+
+
+def chain_mods(mods: list[int]) -> int:
+    """
+    Chain multiple 4096-based modifiers together.
+
+    When combining multiple modifiers of the same category (e.g., multiple
+    final damage modifiers), Pokemon chains them with a specific rounding method.
+
+    Args:
+        mods: List of 4096-based modifiers
+
+    Returns:
+        Combined modifier (4096-based)
+    """
+    result = 4096
+    for mod in mods:
+        if mod != 4096:
+            # (result * mod + 2048) >> 12 is equivalent to rounding (result * mod / 4096)
+            result = (result * mod + 2048) >> 12
+    return result
+
+
+# 4096-based modifier constants (matching Pokemon's internal values)
+MOD_NEUTRAL = 4096       # 1.0x (no change)
+MOD_SPREAD = 3072        # 0.75x (spread move in doubles)
+MOD_WEATHER_BOOST = 6144 # 1.5x (Fire in Sun, Water in Rain)
+MOD_WEATHER_NERF = 2048  # 0.5x (Fire in Rain, Water in Sun)
+MOD_CRIT = 6144          # 1.5x (critical hit)
+MOD_STAB = 6144          # 1.5x (Same Type Attack Bonus)
+MOD_STAB_BOOSTED = 8192  # 2.0x (Tera STAB into same type, or Adaptability)
+MOD_STAB_TERA_NEW = 6144 # 1.5x (Tera into different type)
+MOD_BURN = 2048          # 0.5x (burned, physical move)
+MOD_LIFE_ORB = 5324      # ~1.3x (Life Orb boost)
+MOD_EXPERT_BELT = 4915   # ~1.2x (Expert Belt on super effective)
+MOD_TYPE_BOOST = 4915    # ~1.2x (type-boosting items like Charcoal)
+MOD_SCREEN_SINGLES = 2048    # 0.5x (Reflect/Light Screen in singles)
+MOD_SCREEN_DOUBLES = 2732    # ~0.667x (Reflect/Light Screen in doubles)
+MOD_HELPING_HAND = 6144      # 1.5x (Helping Hand)
+MOD_FRIEND_GUARD = 3072      # 0.75x (Friend Guard)
 
 
 @dataclass
@@ -71,6 +159,13 @@ def calculate_damage(
     """
     if modifiers is None:
         modifiers = DamageModifiers()
+
+    # Auto-fill attacker/defender items from Pokemon builds if not specified
+    from dataclasses import replace
+    if modifiers.attacker_item is None and attacker.item:
+        modifiers = replace(modifiers, attacker_item=attacker.item)
+    if modifiers.defender_item is None and defender.item:
+        modifiers = replace(modifiers, defender_item=defender.item)
 
     # Check for multi-hit move mechanics
     multi_hit_info = get_multi_hit_info(move.name)
@@ -212,6 +307,12 @@ def calculate_damage(
         elif ability == "sheer-force" and move.effect_chance:
             power = int(power * 1.3)
 
+    # Apply type-boosting item to base power (NOT final damage)
+    # This matches Showdown's behavior where items like Charcoal, masks go into bpMods
+    bp_item_mod_4096 = _get_type_boost_item_mod_4096(modifiers.attacker_item, move.type)
+    if bp_item_mod_4096 != MOD_NEUTRAL:
+        power = apply_mod(power, bp_item_mod_4096)
+
     # Level constant for level 50: floor(2*50/5+2) = 22
     level_factor = 22
 
@@ -226,82 +327,99 @@ def calculate_damage(
     # Track applied modifiers for details
     applied_mods = []
 
-    # 1. Spread move modifier (0.75x in doubles when hitting multiple)
+    # 1. Spread move modifier (3072/4096 = 0.75x in doubles when hitting multiple)
     if move.is_spread and modifiers.is_doubles and modifiers.multiple_targets:
-        base_damage = int(base_damage * 0.75)
+        base_damage = apply_mod(base_damage, MOD_SPREAD)
         applied_mods.append("Spread (0.75x)")
 
-    # 2. Weather modifier
-    weather_mod = modifiers.get_weather_modifier(move.type)
-    if weather_mod != 1.0:
-        base_damage = int(base_damage * weather_mod)
-        applied_mods.append(f"Weather ({weather_mod}x)")
+    # 2. Weather modifier (6144/4096 = 1.5x boost, 2048/4096 = 0.5x nerf)
+    weather_mod_4096 = _get_weather_mod_4096(modifiers.weather, move.type)
+    if weather_mod_4096 != MOD_NEUTRAL:
+        base_damage = apply_mod(base_damage, weather_mod_4096)
+        weather_mult = weather_mod_4096 / 4096
+        applied_mods.append(f"Weather ({weather_mult:.1f}x)")
 
     # 2.5. Terrain modifier (applied after weather, before crit)
-    terrain_mod = modifiers.get_terrain_modifier(move.type, move.category == MoveCategory.PHYSICAL)
-    if terrain_mod != 1.0:
-        base_damage = int(base_damage * terrain_mod)
+    terrain_mod_4096 = _get_terrain_mod_4096(modifiers.terrain, move.type, move.category == MoveCategory.PHYSICAL)
+    if terrain_mod_4096 != MOD_NEUTRAL:
+        base_damage = apply_mod(base_damage, terrain_mod_4096)
         terrain_name = modifiers.terrain.capitalize() if modifiers.terrain else "Terrain"
-        applied_mods.append(f"{terrain_name} Terrain ({terrain_mod}x)")
+        terrain_mult = terrain_mod_4096 / 4096
+        applied_mods.append(f"{terrain_name} Terrain ({terrain_mult:.2f}x)")
 
-    # 3. Critical hit (1.5x in Gen 9)
+    # 3. Critical hit (6144/4096 = 1.5x in Gen 9)
     if modifiers.is_critical:
-        base_damage = int(base_damage * 1.5)
+        base_damage = apply_mod(base_damage, MOD_CRIT)
         applied_mods.append("Critical (1.5x)")
 
-    # Calculate 16 damage rolls (random factor 0.85 to 1.0)
+    # Pre-calculate STAB modifier (4096-based)
+    stab_mod_4096 = _get_stab_mod_4096(attacker, move, modifiers)
+
+    # Pre-calculate type effectiveness
+    defender_types = defender.types
+    if modifiers.defender_tera_active and modifiers.defender_tera_type:
+        defender_types = [modifiers.defender_tera_type]
+    type_eff = get_type_effectiveness(move.type, defender_types)
+
+    # Pre-calculate final modifier chain (screens, items, abilities)
+    final_mods = []
+
+    # Burn (2048/4096 = 0.5x on physical unless Guts/Facade)
+    if modifiers.attacker_burned and move.category == MoveCategory.PHYSICAL:
+        if not modifiers.has_guts and move.name.lower() != "facade":
+            final_mods.append(MOD_BURN)
+
+    # Screens
+    screen_mod_4096 = _get_screen_mod_4096(modifiers, move.category == MoveCategory.PHYSICAL)
+    if screen_mod_4096 != MOD_NEUTRAL:
+        final_mods.append(screen_mod_4096)
+
+    # Item modifiers (Life Orb, type-boosting items)
+    item_mod_4096 = _get_item_mod_4096(modifiers.attacker_item, move.type)
+    if item_mod_4096 != MOD_NEUTRAL:
+        final_mods.append(item_mod_4096)
+
+    # Expert Belt (only if super effective)
+    if modifiers.attacker_item and modifiers.attacker_item.lower().replace(" ", "-") == "expert-belt":
+        if type_eff >= 2.0:
+            final_mods.append(MOD_EXPERT_BELT)
+
+    # Helping Hand (6144/4096 = 1.5x)
+    if modifiers.helping_hand:
+        final_mods.append(MOD_HELPING_HAND)
+
+    # Friend Guard (3072/4096 = 0.75x)
+    if modifiers.friend_guard:
+        final_mods.append(MOD_FRIEND_GUARD)
+
+    # Chain all final modifiers together
+    final_mod_4096 = chain_mods(final_mods) if final_mods else MOD_NEUTRAL
+
+    # Calculate 16 damage rolls (random factor 85-100)
     rolls = []
     for i in range(16):
-        random_factor = (85 + i) / 100
-        damage = int(base_damage * random_factor)
+        # 4. Random factor: floor(damage * random / 100)
+        # Uses floor, NOT pokeRound (per Showdown implementation)
+        random_factor = 85 + i
+        damage = math.floor(base_damage * random_factor / 100)
 
-        # 5. STAB (after random)
-        stab_mod = _get_stab_modifier(attacker, move, modifiers)
-        if stab_mod != 1.0:
-            damage = int(damage * stab_mod)
+        # 5. STAB (6144/4096 = 1.5x, 8192/4096 = 2.0x)
+        if stab_mod_4096 != MOD_NEUTRAL:
+            damage = apply_mod(damage, stab_mod_4096)
 
-        # 6. Type effectiveness
-        defender_types = defender.types
-        if modifiers.defender_tera_active and modifiers.defender_tera_type:
-            defender_types = [modifiers.defender_tera_type]
-
-        type_eff = get_type_effectiveness(move.type, defender_types)
-
+        # 6. Type effectiveness (integer multiplier, applied directly)
         # Immunities deal 0 damage (no further modifiers apply)
         if type_eff == 0:
             rolls.append(0)
             continue
 
         if type_eff != 1.0:
+            # Type effectiveness uses floor, not pokeRound
             damage = int(damage * type_eff)
 
-        # 7. Burn (0.5x on physical unless Guts/Facade)
-        if modifiers.attacker_burned and move.category == MoveCategory.PHYSICAL:
-            if not modifiers.has_guts and move.name.lower() != "facade":
-                damage = int(damage * 0.5)
-
-        # 8. Screens
-        screen_mod = modifiers.get_screen_modifier(move.category == MoveCategory.PHYSICAL)
-        if screen_mod != 1.0:
-            damage = int(damage * screen_mod)
-
-        # 9. Item modifiers (Life Orb, type-boosting items)
-        item_mod = modifiers.get_item_modifier(move.type, move.category == MoveCategory.PHYSICAL)
-        if item_mod != 1.0:
-            damage = int(damage * item_mod)
-
-        # Expert Belt (only if super effective)
-        if modifiers.attacker_item and modifiers.attacker_item.lower().replace(" ", "-") == "expert-belt":
-            if type_eff >= 2.0:
-                damage = int(damage * 1.2)
-
-        # 10. Helping Hand (1.5x)
-        if modifiers.helping_hand:
-            damage = int(damage * 1.5)
-
-        # Friend Guard (0.75x damage to ally)
-        if modifiers.friend_guard:
-            damage = int(damage * 0.75)
+        # 7-10. Apply chained final modifiers (burn, screens, items, etc.)
+        if final_mod_4096 != MOD_NEUTRAL:
+            damage = apply_mod(damage, final_mod_4096)
 
         # Minimum 1 damage per hit
         damage = max(1, damage)
@@ -340,9 +458,9 @@ def calculate_damage(
         ko_chance = f"{(kos/16)*100:.1f}% OHKO"
 
     # Add STAB to applied mods
-    stab_mod = _get_stab_modifier(attacker, move, modifiers)
-    if stab_mod != 1.0:
-        if stab_mod == 2.0:
+    if stab_mod_4096 != MOD_NEUTRAL:
+        stab_mult = stab_mod_4096 / 4096
+        if stab_mod_4096 == MOD_STAB_BOOSTED:
             applied_mods.append("STAB (2.0x - Tera/Adaptability)")
         else:
             applied_mods.append("STAB (1.5x)")
@@ -391,12 +509,162 @@ def calculate_damage(
     )
 
 
-def _get_stab_modifier(
+# =============================================================================
+# 4096-based modifier helper functions
+# =============================================================================
+
+def _get_weather_mod_4096(weather: str | None, move_type: str) -> int:
+    """Get weather modifier as 4096-based value."""
+    if not weather:
+        return MOD_NEUTRAL
+
+    weather = weather.lower()
+    move_type = move_type.capitalize()
+
+    if weather == "sun":
+        if move_type == "Fire":
+            return MOD_WEATHER_BOOST  # 6144/4096 = 1.5x
+        elif move_type == "Water":
+            return MOD_WEATHER_NERF   # 2048/4096 = 0.5x
+    elif weather == "rain":
+        if move_type == "Water":
+            return MOD_WEATHER_BOOST
+        elif move_type == "Fire":
+            return MOD_WEATHER_NERF
+
+    return MOD_NEUTRAL
+
+
+def _get_terrain_mod_4096(terrain: str | None, move_type: str, is_physical: bool) -> int:
+    """Get terrain modifier as 4096-based value."""
+    if not terrain:
+        return MOD_NEUTRAL
+
+    terrain = terrain.lower()
+    move_type = move_type.capitalize()
+
+    # Terrain boosts are 5325/4096 (~1.3x) in Gen 9
+    MOD_TERRAIN = 5325
+
+    if terrain == "electric" and move_type == "Electric":
+        return MOD_TERRAIN
+    elif terrain == "grassy" and move_type == "Grass":
+        return MOD_TERRAIN
+    elif terrain == "psychic" and move_type == "Psychic":
+        return MOD_TERRAIN
+
+    return MOD_NEUTRAL
+
+
+def _get_screen_mod_4096(modifiers: DamageModifiers, is_physical: bool) -> int:
+    """Get screen modifier as 4096-based value."""
+    has_screen = (is_physical and modifiers.reflect_up) or (not is_physical and modifiers.light_screen_up)
+
+    if not has_screen:
+        return MOD_NEUTRAL
+
+    if modifiers.is_doubles:
+        return MOD_SCREEN_DOUBLES  # 2732/4096 = ~0.667x
+    else:
+        return MOD_SCREEN_SINGLES  # 2048/4096 = 0.5x
+
+
+def _get_type_boost_item_mod_4096(item: str | None, move_type: str) -> int:
+    """
+    Get type-boosting item modifier for BASE POWER (not final damage).
+
+    In Pokemon, type-boosting items like Charcoal, Mystic Water, and Ogerpon masks
+    are applied as base power modifiers, NOT final damage modifiers.
+    This matches Showdown's bpMods behavior.
+    """
+    if not item:
+        return MOD_NEUTRAL
+
+    item = item.lower().replace(" ", "-")
+    move_type = move_type.capitalize()
+
+    # Type-boosting items (4915/4096 = ~1.2x) - applied to BASE POWER
+    type_items = {
+        "charcoal": "Fire",
+        "mystic-water": "Water",
+        "magnet": "Electric",
+        "miracle-seed": "Grass",
+        "never-melt-ice": "Ice",
+        "black-belt": "Fighting",
+        "poison-barb": "Poison",
+        "soft-sand": "Ground",
+        "sharp-beak": "Flying",
+        "twisted-spoon": "Psychic",
+        "silver-powder": "Bug",
+        "hard-stone": "Rock",
+        "spell-tag": "Ghost",
+        "dragon-fang": "Dragon",
+        "black-glasses": "Dark",
+        "metal-coat": "Steel",
+        "silk-scarf": "Normal",
+        "fairy-feather": "Fairy",
+        # Ogerpon masks
+        "hearthflame-mask": "Fire",
+        "wellspring-mask": "Water",
+        "cornerstone-mask": "Rock",
+    }
+
+    if item in type_items and type_items[item] == move_type:
+        return MOD_TYPE_BOOST  # 4915/4096 = ~1.2x
+
+    # Plates (same boost as type items)
+    plates = {
+        "flame-plate": "Fire",
+        "splash-plate": "Water",
+        "zap-plate": "Electric",
+        "meadow-plate": "Grass",
+        "icicle-plate": "Ice",
+        "fist-plate": "Fighting",
+        "toxic-plate": "Poison",
+        "earth-plate": "Ground",
+        "sky-plate": "Flying",
+        "mind-plate": "Psychic",
+        "insect-plate": "Bug",
+        "stone-plate": "Rock",
+        "spooky-plate": "Ghost",
+        "draco-plate": "Dragon",
+        "dread-plate": "Dark",
+        "iron-plate": "Steel",
+        "pixie-plate": "Fairy",
+    }
+
+    if item in plates and plates[item] == move_type:
+        return MOD_TYPE_BOOST
+
+    return MOD_NEUTRAL
+
+
+def _get_item_mod_4096(item: str | None, move_type: str) -> int:
+    """
+    Get item FINAL DAMAGE modifier as 4096-based value.
+
+    Note: Type-boosting items (Charcoal, masks, plates) are NOT included here
+    because they are applied to base power instead. Only items that modify
+    final damage (like Life Orb) go here.
+    """
+    if not item:
+        return MOD_NEUTRAL
+
+    item = item.lower().replace(" ", "-")
+
+    # Life Orb - final damage modifier
+    if item == "life-orb":
+        return MOD_LIFE_ORB  # 5324/4096 = ~1.3x
+
+    return MOD_NEUTRAL
+
+
+def _get_stab_mod_4096(
     attacker: PokemonBuild,
     move: Move,
     modifiers: DamageModifiers
-) -> float:
-    """Calculate STAB modifier including Tera considerations."""
+) -> int:
+    """Calculate STAB modifier as 4096-based value including Tera considerations."""
     move_type = move.type.capitalize()
     original_types = [t.capitalize() for t in attacker.types]
 
@@ -408,22 +676,33 @@ def _get_stab_modifier(
     if tera_type:
         if move_type == tera_type:
             if move_type in original_types:
-                # Tera into same type = 2x STAB
-                return 2.0
+                # Tera into same type = 2x STAB (8192/4096)
+                return MOD_STAB_BOOSTED
             else:
-                # Tera into new type = 1.5x
-                return 1.5
+                # Tera into new type = 1.5x (6144/4096)
+                return MOD_STAB
         elif move_type in original_types:
             # Original type moves still get 1.5x STAB when Terastallized
-            return 1.5
+            return MOD_STAB
     else:
         # Not Terastallized
         if move_type in original_types:
             if modifiers.has_adaptability:
-                return 2.0
-            return 1.5
+                return MOD_STAB_BOOSTED  # 2x with Adaptability
+            return MOD_STAB  # 1.5x normal STAB
 
-    return 1.0
+    return MOD_NEUTRAL
+
+
+# Legacy function for backwards compatibility
+def _get_stab_modifier(
+    attacker: PokemonBuild,
+    move: Move,
+    modifiers: DamageModifiers
+) -> float:
+    """Calculate STAB modifier including Tera considerations (legacy float version)."""
+    mod_4096 = _get_stab_mod_4096(attacker, move, modifiers)
+    return mod_4096 / 4096
 
 
 def calculate_ko_threshold(

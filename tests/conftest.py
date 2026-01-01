@@ -3,10 +3,10 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from vgc_mcp.api.cache import APICache
-from vgc_mcp.api.pokeapi import PokeAPIClient
-from vgc_mcp.team.manager import TeamManager
-from vgc_mcp.models.pokemon import BaseStats
+from vgc_mcp_core.api.cache import APICache
+from vgc_mcp_core.api.pokeapi import PokeAPIClient
+from vgc_mcp_core.team.manager import TeamManager
+from vgc_mcp_core.models.pokemon import BaseStats
 
 
 @pytest.fixture

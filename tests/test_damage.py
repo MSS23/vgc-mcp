@@ -1,15 +1,15 @@
 """Tests for damage calculations."""
 
 import pytest
-from vgc_mcp.calc.damage import calculate_damage, _get_stab_modifier
-from vgc_mcp.calc.modifiers import (
+from vgc_mcp_core.calc.damage import calculate_damage, _get_stab_modifier
+from vgc_mcp_core.calc.modifiers import (
     DamageModifiers,
     get_type_effectiveness,
     is_super_effective,
     is_immune,
 )
-from vgc_mcp.models.pokemon import PokemonBuild, Nature, BaseStats, EVSpread
-from vgc_mcp.models.move import Move, MoveCategory
+from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, BaseStats, EVSpread
+from vgc_mcp_core.models.move import Move, MoveCategory
 
 
 class TestTypeEffectiveness:

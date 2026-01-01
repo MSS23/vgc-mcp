@@ -7,7 +7,7 @@ import httpx
 
 from ..config import settings, logger
 from ..models.pokemon import BaseStats
-from ..models.move import Move, MoveCategory, SPREAD_TARGETS, get_multi_hit_info, is_always_crit_move
+from ..models.move import Move, MoveCategory, SPREAD_TARGETS, get_multi_hit_info, is_always_crit_move, get_move_type_for_user
 from .cache import APICache
 
 
@@ -129,8 +129,14 @@ class PokeAPIClient:
             for a in data["abilities"]
         ]
 
-    async def get_move(self, name_or_id: str | int) -> Move:
-        """Get move data."""
+    async def get_move(self, name_or_id: str | int, user_name: Optional[str] = None) -> Move:
+        """Get move data.
+
+        Args:
+            name_or_id: Move name or ID
+            user_name: Optional Pokemon name using the move. Used for form-dependent
+                       move types like Ivy Cudgel (changes type based on Ogerpon form).
+        """
         name = self._normalize_name(str(name_or_id))
         data = await self._fetch(f"move/{name}")
 
@@ -157,9 +163,14 @@ class PokeAPIClient:
         if not always_crit:
             always_crit = is_always_crit_move(name)
 
+        # Determine move type (may vary by user form, e.g., Ivy Cudgel for Ogerpon)
+        move_type = data["type"]["name"].capitalize()
+        if user_name:
+            move_type = get_move_type_for_user(name, user_name, move_type)
+
         return Move(
             name=data["name"],
-            type=data["type"]["name"].capitalize(),
+            type=move_type,
             category=MoveCategory(data["damage_class"]["name"]),
             power=data.get("power"),
             accuracy=data.get("accuracy"),

@@ -125,12 +125,23 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             Damage range, percentages, and KO probability
         """
         try:
+            # Auto-assign mask item for Ogerpon forms if not specified
+            if attacker_item is None:
+                attacker_lower = attacker_name.lower()
+                if "ogerpon-hearthflame" in attacker_lower:
+                    attacker_item = "hearthflame-mask"
+                elif "ogerpon-wellspring" in attacker_lower:
+                    attacker_item = "wellspring-mask"
+                elif "ogerpon-cornerstone" in attacker_lower:
+                    attacker_item = "cornerstone-mask"
+
             # Fetch Pokemon data
             atk_base = await pokeapi.get_base_stats(attacker_name)
             def_base = await pokeapi.get_base_stats(defender_name)
             atk_types = await pokeapi.get_pokemon_types(attacker_name)
             def_types = await pokeapi.get_pokemon_types(defender_name)
-            move = await pokeapi.get_move(move_name)
+            # Pass attacker_name for form-dependent move types (e.g., Ivy Cudgel)
+            move = await pokeapi.get_move(move_name, user_name=attacker_name)
 
             # Track what spreads we used for the response
             attacker_spread_source = "custom"
@@ -538,7 +549,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             def_base = await pokeapi.get_base_stats(defender_name)
             atk_types = await pokeapi.get_pokemon_types(attacker_name)
             def_types = await pokeapi.get_pokemon_types(defender_name)
-            move = await pokeapi.get_move(move_name)
+            move = await pokeapi.get_move(move_name, user_name=attacker_name)
 
             # Parse natures
             atk_nature = Nature(attacker_nature.lower())
@@ -631,7 +642,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             def_base = await pokeapi.get_base_stats(defender_name)
             atk_types = await pokeapi.get_pokemon_types(attacker_name)
             def_types = await pokeapi.get_pokemon_types(defender_name)
-            move = await pokeapi.get_move(move_name)
+            move = await pokeapi.get_move(move_name, user_name=attacker_name)
 
             # Parse natures
             atk_nature = Nature(attacker_nature.lower())
@@ -752,7 +763,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             def_base = await pokeapi.get_base_stats(defender_name)
             atk_types = await pokeapi.get_pokemon_types(attacker_name)
             def_types = await pokeapi.get_pokemon_types(defender_name)
-            move = await pokeapi.get_move(move_name)
+            move = await pokeapi.get_move(move_name, user_name=attacker_name)
 
             # Auto-fetch Smogon spreads if enabled
             if use_smogon_spreads:
@@ -954,7 +965,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             def_base = await pokeapi.get_base_stats(defender_name)
             atk_types = await pokeapi.get_pokemon_types(attacker_name)
             def_types = await pokeapi.get_pokemon_types(defender_name)
-            move = await pokeapi.get_move(move_name)
+            move = await pokeapi.get_move(move_name, user_name=attacker_name)
 
             atk_nature = Nature(attacker_nature.lower())
             def_nature_parsed = Nature(defender_nature.lower())
