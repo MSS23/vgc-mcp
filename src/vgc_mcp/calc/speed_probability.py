@@ -287,6 +287,90 @@ def calculate_meta_outspeed_rate(
     )
 
 
+def build_speed_distribution_data(
+    top_pokemon_data: list[dict],
+) -> list[dict]:
+    """
+    Build cumulative speed distribution for UI visualization.
+
+    Takes pre-fetched Pokemon data and creates a sorted list of speed points
+    with cumulative outspeed percentages for client-side calculation.
+
+    Args:
+        top_pokemon_data: List of dicts, each with:
+            - name: Pokemon name
+            - base_speed: Base speed stat
+            - usage_percent: Overall usage % in meta (0-100)
+            - spreads: List of spread dicts with nature, evs, usage
+
+    Returns:
+        List of speed distribution entries sorted by speed (ascending):
+        [{
+            speed: int,
+            cumulative_outspeed_pct: float,  # % of meta slower than this speed
+            pokemon_at_speed: [{name, usage_pct, nature, evs}]
+        }]
+    """
+    # Collect all speed values with their usage weights
+    speed_entries: list[dict] = []
+
+    for pokemon_data in top_pokemon_data:
+        pokemon_name = pokemon_data.get("name", "Unknown")
+        base_speed = pokemon_data.get("base_speed", 50)
+        pokemon_usage = pokemon_data.get("usage_percent", 0) / 100  # Convert to 0-1
+        spreads = pokemon_data.get("spreads", [])
+
+        for spread in spreads:
+            spread_usage = spread.get("usage", 0) / 100  # Convert to 0-1
+            nature = spread.get("nature", "Serious")
+            evs = spread.get("evs", {})
+            speed_evs = evs.get("speed", 0)
+
+            # Calculate actual speed stat
+            speed_stat = calculate_speed_stat(base_speed, nature, speed_evs)
+
+            # Weight = pokemon usage * spread usage
+            weight = pokemon_usage * spread_usage
+
+            speed_entries.append({
+                "speed": speed_stat,
+                "pokemon": pokemon_name,
+                "weight": weight,
+                "nature": nature,
+                "evs": speed_evs
+            })
+
+    # Group by speed value
+    speed_map: dict[int, dict] = {}
+    for entry in speed_entries:
+        speed = entry["speed"]
+        if speed not in speed_map:
+            speed_map[speed] = {"pokemon_at_speed": [], "total_weight": 0.0}
+        speed_map[speed]["pokemon_at_speed"].append({
+            "name": entry["pokemon"],
+            "usage_pct": round(entry["weight"] * 100, 2),
+            "nature": entry["nature"],
+            "evs": entry["evs"]
+        })
+        speed_map[speed]["total_weight"] += entry["weight"]
+
+    # Sort by speed and calculate cumulative
+    sorted_speeds = sorted(speed_map.keys())
+    cumulative = 0.0
+    result = []
+
+    for speed in sorted_speeds:
+        data = speed_map[speed]
+        cumulative += data["total_weight"] * 100
+        result.append({
+            "speed": speed,
+            "cumulative_outspeed_pct": round(cumulative, 1),
+            "pokemon_at_speed": data["pokemon_at_speed"]
+        })
+
+    return result
+
+
 def calculate_speed_creep_evs(
     your_base_speed: int,
     your_nature: str,

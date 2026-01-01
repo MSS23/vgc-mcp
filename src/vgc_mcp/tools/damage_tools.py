@@ -10,7 +10,7 @@ from ..calc.modifiers import DamageModifiers
 from ..models.pokemon import PokemonBuild, Nature, EVSpread, IVSpread
 from ..utils.errors import error_response, ErrorCodes, pokemon_not_found_error, invalid_nature_error, api_error
 from ..utils.fuzzy import suggest_pokemon_name, suggest_nature
-from ..ui.resources import create_damage_calc_resource, add_ui_metadata
+from ..ui.resources import create_damage_calc_resource, create_interactive_damage_calc_resource, add_ui_metadata
 
 
 # Module-level Smogon client reference (set during registration)
@@ -423,9 +423,45 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             if ability_notes:
                 response["ability_effects"] = ability_notes
 
-            # Add MCP-UI resource for interactive damage display
+            # Add MCP-UI resource for interactive damage display with editable spreads
             try:
-                ui_resource = create_damage_calc_resource(
+                # Build EV dicts for the interactive UI
+                attacker_evs_dict = {
+                    "hp": attacker_evs.hp,
+                    "attack": attacker_evs.attack,
+                    "defense": attacker_evs.defense,
+                    "special_attack": attacker_evs.special_attack,
+                    "special_defense": attacker_evs.special_defense,
+                    "speed": attacker_evs.speed,
+                }
+                defender_evs_dict = {
+                    "hp": defender_evs.hp,
+                    "attack": defender_evs.attack,
+                    "defense": defender_evs.defense,
+                    "special_attack": defender_evs.special_attack,
+                    "special_defense": defender_evs.special_defense,
+                    "speed": defender_evs.speed,
+                }
+
+                # Build base stats dicts
+                attacker_base_stats_dict = {
+                    "hp": atk_base.hp,
+                    "attack": atk_base.attack,
+                    "defense": atk_base.defense,
+                    "special_attack": atk_base.special_attack,
+                    "special_defense": atk_base.special_defense,
+                    "speed": atk_base.speed,
+                }
+                defender_base_stats_dict = {
+                    "hp": def_base.hp,
+                    "attack": def_base.attack,
+                    "defense": def_base.defense,
+                    "special_attack": def_base.special_attack,
+                    "special_defense": def_base.special_defense,
+                    "speed": def_base.speed,
+                }
+
+                ui_resource = create_interactive_damage_calc_resource(
                     attacker=attacker_name,
                     defender=defender_name,
                     move=move_name,
@@ -437,6 +473,14 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     defender_item=None,
                     move_type=move.type,
                     notes=ability_notes if ability_notes else None,
+                    attacker_evs=attacker_evs_dict,
+                    defender_evs=defender_evs_dict,
+                    attacker_nature=str(atk_nature.value).title(),
+                    defender_nature=str(def_nature.value).title(),
+                    attacker_base_stats=attacker_base_stats_dict,
+                    defender_base_stats=defender_base_stats_dict,
+                    move_category=move.category,
+                    move_power=move.power,
                 )
                 response = add_ui_metadata(response, ui_resource)
             except Exception:

@@ -23,6 +23,15 @@ from .components import (
     create_speed_tier_ui,
     create_coverage_ui,
     create_matchup_summary_ui,
+    create_threat_analysis_ui,
+    create_usage_stats_ui,
+    create_speed_outspeed_ui,
+    create_stats_card_ui,
+    create_threat_matrix_ui,
+    create_turn_order_ui,
+    create_bring_selector_ui,
+    create_ability_synergy_ui,
+    create_team_report_ui,
 )
 
 
@@ -78,6 +87,65 @@ def create_damage_calc_resource(
 
     return create_ui_resource({
         "uri": f"ui://vgc/damage-calc/{attacker.lower()}-vs-{defender.lower()}",
+        "content": {
+            "type": "rawHtml",
+            "htmlString": html,
+        },
+        "encoding": "text",
+    })
+
+
+def create_interactive_damage_calc_resource(
+    attacker: str,
+    defender: str,
+    move: str,
+    damage_min: float,
+    damage_max: float,
+    ko_chance: str,
+    type_effectiveness: float = 1.0,
+    attacker_item: str | None = None,
+    defender_item: str | None = None,
+    move_type: str | None = None,
+    notes: list[str] | None = None,
+    attacker_evs: dict[str, int] | None = None,
+    defender_evs: dict[str, int] | None = None,
+    attacker_nature: str = "Serious",
+    defender_nature: str = "Serious",
+    attacker_base_stats: dict[str, int] | None = None,
+    defender_base_stats: dict[str, int] | None = None,
+    move_category: str = "special",
+    move_power: int = 0,
+) -> dict[str, Any]:
+    """Create an interactive damage calculator UI resource.
+
+    Returns a dict with the UI resource that includes editable EV spreads
+    and dynamically recalculates damage when users adjust values.
+    """
+    html = create_damage_calc_ui(
+        attacker=attacker,
+        defender=defender,
+        move=move,
+        damage_min=damage_min,
+        damage_max=damage_max,
+        ko_chance=ko_chance,
+        type_effectiveness=type_effectiveness,
+        attacker_item=attacker_item,
+        defender_item=defender_item,
+        move_type=move_type,
+        notes=notes,
+        interactive=True,
+        attacker_evs=attacker_evs,
+        defender_evs=defender_evs,
+        attacker_nature=attacker_nature,
+        defender_nature=defender_nature,
+        attacker_base_stats=attacker_base_stats,
+        defender_base_stats=defender_base_stats,
+        move_category=move_category,
+        move_power=move_power,
+    )
+
+    return create_ui_resource({
+        "uri": f"ui://vgc/damage-calc-interactive/{attacker.lower()}-vs-{defender.lower()}",
         "content": {
             "type": "rawHtml",
             "htmlString": html,
@@ -173,6 +241,360 @@ def create_matchup_summary_resource(
 
     return create_ui_resource({
         "uri": f"ui://vgc/matchups/{pokemon_name.lower()}",
+        "content": {
+            "type": "rawHtml",
+            "htmlString": html,
+        },
+        "encoding": "text",
+    })
+
+
+def create_threat_analysis_resource(
+    threat_name: str,
+    threat_speed: int,
+    ohko_by: list[str],
+    twohko_by: list[str],
+    checks: list[str],
+    counters: list[str],
+    threatened: list[str],
+    survives: list[str],
+    notes: list[str] | None = None,
+) -> dict[str, Any]:
+    """Create a threat analysis UI resource.
+
+    Returns a dict with the UI resource showing threat matchup analysis.
+    """
+    html = create_threat_analysis_ui(
+        threat_name=threat_name,
+        threat_speed=threat_speed,
+        ohko_by=ohko_by,
+        twohko_by=twohko_by,
+        checks=checks,
+        counters=counters,
+        threatened=threatened,
+        survives=survives,
+        notes=notes,
+    )
+
+    return create_ui_resource({
+        "uri": f"ui://vgc/threat/{threat_name.lower()}",
+        "content": {
+            "type": "rawHtml",
+            "htmlString": html,
+        },
+        "encoding": "text",
+    })
+
+
+def create_usage_stats_resource(
+    pokemon_name: str,
+    usage_percent: float,
+    items: list[dict[str, Any]],
+    abilities: list[dict[str, Any]],
+    moves: list[dict[str, Any]],
+    spreads: list[dict[str, Any]],
+    tera_types: list[dict[str, Any]] | None = None,
+    teammates: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Create a usage statistics UI resource.
+
+    Returns a dict with the UI resource showing competitive usage data.
+    """
+    html = create_usage_stats_ui(
+        pokemon_name=pokemon_name,
+        usage_percent=usage_percent,
+        items=items,
+        abilities=abilities,
+        moves=moves,
+        spreads=spreads,
+        tera_types=tera_types,
+        teammates=teammates,
+    )
+
+    return create_ui_resource({
+        "uri": f"ui://vgc/usage/{pokemon_name.lower()}",
+        "content": {
+            "type": "rawHtml",
+            "htmlString": html,
+        },
+        "encoding": "text",
+    })
+
+
+def create_speed_outspeed_resource(
+    pokemon_name: str,
+    base_speed: int,
+    current_speed: int,
+    nature: str,
+    speed_evs: int,
+    speed_distribution: list[dict[str, Any]],
+    outspeed_percentage: float,
+    mode: str = "meta",
+    target_pokemon: str | None = None,
+    format_info: dict[str, Any] | None = None,
+    pokemon_base_speeds: dict[str, int] | None = None,
+) -> dict[str, Any]:
+    """Create a speed outspeed percentage UI resource.
+
+    Returns a dict with the UI resource showing what % of the meta
+    (or a specific target) your Pokemon outspeeds, with an interactive
+    slider to adjust Speed EVs.
+
+    Args:
+        pokemon_name: Your Pokemon's name
+        base_speed: Base speed stat
+        current_speed: Current calculated speed stat
+        nature: Current nature
+        speed_evs: Current Speed EVs
+        speed_distribution: Pre-computed distribution from build_speed_distribution_data()
+        outspeed_percentage: Initial outspeed percentage
+        mode: "meta" for meta-wide, "single" for single target
+        target_pokemon: Target Pokemon name (for single mode)
+        format_info: Format metadata (name, month)
+        pokemon_base_speeds: Dict mapping Pokemon names to their base speed stats
+    """
+    html = create_speed_outspeed_ui(
+        pokemon_name=pokemon_name,
+        base_speed=base_speed,
+        current_speed=current_speed,
+        nature=nature,
+        speed_evs=speed_evs,
+        speed_distribution=speed_distribution,
+        outspeed_percentage=outspeed_percentage,
+        mode=mode,
+        target_pokemon=target_pokemon,
+        format_info=format_info,
+        pokemon_base_speeds=pokemon_base_speeds,
+    )
+
+    uri_suffix = f"{pokemon_name.lower()}"
+    if mode == "single" and target_pokemon:
+        uri_suffix = f"{pokemon_name.lower()}-vs-{target_pokemon.lower()}"
+
+    return create_ui_resource({
+        "uri": f"ui://vgc/speed/outspeed/{uri_suffix}",
+        "content": {
+            "type": "rawHtml",
+            "htmlString": html,
+        },
+        "encoding": "text",
+    })
+
+
+def create_stats_card_resource(
+    pokemon_name: str,
+    base_stats: dict[str, int],
+    evs: dict[str, int] | None = None,
+    ivs: dict[str, int] | None = None,
+    nature: str = "Serious",
+    level: int = 50,
+    types: list[str] | None = None,
+    ability: str | None = None,
+    item: str | None = None,
+) -> dict[str, Any]:
+    """Create a stats card UI resource.
+
+    Returns a dict with the UI resource showing Pokemon stats with bars.
+
+    Args:
+        pokemon_name: Pokemon name
+        base_stats: Base stats dict {hp, atk, def, spa, spd, spe}
+        evs: EV spread (optional)
+        ivs: IV spread (optional)
+        nature: Nature name
+        level: Pokemon level (default 50 for VGC)
+        types: Pokemon types
+        ability: Pokemon ability
+        item: Held item
+    """
+    html = create_stats_card_ui(
+        pokemon_name=pokemon_name,
+        base_stats=base_stats,
+        evs=evs,
+        ivs=ivs,
+        nature=nature,
+        level=level,
+        types=types,
+        ability=ability,
+        item=item,
+    )
+
+    return create_ui_resource({
+        "uri": f"ui://vgc/stats/{pokemon_name.lower()}",
+        "content": {
+            "type": "rawHtml",
+            "htmlString": html,
+        },
+        "encoding": "text",
+    })
+
+
+def create_threat_matrix_resource(
+    pokemon_name: str,
+    pokemon_speed: int,
+    threats: list[dict[str, Any]],
+    pokemon_sprite: str | None = None,
+) -> dict[str, Any]:
+    """Create a threat matchup matrix UI resource.
+
+    Returns a dict with the UI resource showing damage matchups vs threats.
+
+    Args:
+        pokemon_name: Your Pokemon's name
+        pokemon_speed: Your Pokemon's speed stat
+        threats: List of threat dicts with damage data
+        pokemon_sprite: Optional sprite URL
+    """
+    html = create_threat_matrix_ui(
+        pokemon_name=pokemon_name,
+        pokemon_speed=pokemon_speed,
+        threats=threats,
+        pokemon_sprite=pokemon_sprite,
+    )
+
+    return create_ui_resource({
+        "uri": f"ui://vgc/threat-matrix/{pokemon_name.lower()}",
+        "content": {
+            "type": "rawHtml",
+            "htmlString": html,
+        },
+        "encoding": "text",
+    })
+
+
+def create_turn_order_resource(
+    pokemon_list: list[dict[str, Any]],
+    trick_room: bool = False,
+    tailwind_pokemon: list[str] | None = None,
+    paralysis_pokemon: list[str] | None = None,
+) -> dict[str, Any]:
+    """Create a turn order timeline UI resource.
+
+    Returns a dict with the UI resource showing turn order with priority.
+
+    Args:
+        pokemon_list: List of Pokemon dicts {name, speed, priority, move, team}
+        trick_room: Whether Trick Room is active
+        tailwind_pokemon: List of Pokemon names benefiting from Tailwind
+        paralysis_pokemon: List of Pokemon names affected by paralysis
+    """
+    html = create_turn_order_ui(
+        pokemon_list=pokemon_list,
+        trick_room=trick_room,
+        tailwind_pokemon=tailwind_pokemon,
+        paralysis_pokemon=paralysis_pokemon,
+    )
+
+    return create_ui_resource({
+        "uri": "ui://vgc/turn-order",
+        "content": {
+            "type": "rawHtml",
+            "htmlString": html,
+        },
+        "encoding": "text",
+    })
+
+
+def create_bring_selector_resource(
+    your_team: list[dict[str, Any]],
+    opponent_team: list[dict[str, Any]],
+    recommendations: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Create a bring/leave selector UI resource.
+
+    Returns a dict with the UI resource for team preview selection.
+
+    Args:
+        your_team: List of your team Pokemon dicts {name, types, item, ability}
+        opponent_team: List of opponent Pokemon dicts
+        recommendations: AI recommendations {bring: [], leave: [], reasoning}
+    """
+    html = create_bring_selector_ui(
+        your_team=your_team,
+        opponent_team=opponent_team,
+        recommendations=recommendations,
+    )
+
+    return create_ui_resource({
+        "uri": "ui://vgc/bring-selector",
+        "content": {
+            "type": "rawHtml",
+            "htmlString": html,
+        },
+        "encoding": "text",
+    })
+
+
+def create_ability_synergy_resource(
+    team: list[dict[str, Any]],
+    synergies: dict[str, Any],
+) -> dict[str, Any]:
+    """Create an ability synergy network UI resource.
+
+    Returns a dict with the UI resource showing ability interactions.
+
+    Args:
+        team: List of team Pokemon dicts {name, ability, types}
+        synergies: Synergy data dict with weather, terrain, intimidate, combos, conflicts
+    """
+    html = create_ability_synergy_ui(
+        team=team,
+        synergies=synergies,
+    )
+
+    return create_ui_resource({
+        "uri": "ui://vgc/ability-synergy",
+        "content": {
+            "type": "rawHtml",
+            "htmlString": html,
+        },
+        "encoding": "text",
+    })
+
+
+def create_team_report_resource(
+    team_name: str,
+    grade: str,
+    tournament_ready: bool,
+    strengths: list[str],
+    weaknesses: list[str],
+    suggestions: list[dict[str, Any]],
+    legality_issues: list[dict[str, Any]],
+    type_coverage: dict[str, Any],
+    speed_control: dict[str, Any],
+    team: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Create a team report card UI resource.
+
+    Returns a dict with the UI resource showing comprehensive team analysis.
+
+    Args:
+        team_name: Team name or identifier
+        grade: Letter grade (A+, A, B+, B, etc.)
+        tournament_ready: Whether team is legal for tournament
+        strengths: List of strength descriptions
+        weaknesses: List of weakness descriptions
+        suggestions: List of suggestion dicts {action, reason, priority}
+        legality_issues: List of issue dicts {issue, severity, fix}
+        type_coverage: Dict with super_effective, weak_to, resists
+        speed_control: Dict with has_trick_room, has_tailwind, fastest, slowest
+        team: List of team Pokemon for display
+    """
+    html = create_team_report_ui(
+        team_name=team_name,
+        grade=grade,
+        tournament_ready=tournament_ready,
+        strengths=strengths,
+        weaknesses=weaknesses,
+        suggestions=suggestions,
+        legality_issues=legality_issues,
+        type_coverage=type_coverage,
+        speed_control=speed_control,
+        team=team,
+    )
+
+    return create_ui_resource({
+        "uri": "ui://vgc/team-report",
         "content": {
             "type": "rawHtml",
             "htmlString": html,

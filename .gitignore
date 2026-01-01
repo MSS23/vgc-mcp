@@ -48,3 +48,4 @@ Thumbs.db
 # Local config
 .env
 .env.local
+.claude/settings.local.json

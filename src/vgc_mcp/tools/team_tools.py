@@ -302,18 +302,3 @@ def register_team_tools(
         except Exception as e:
             return {"error": str(e)}
 
-    @mcp.tool()
-    async def quick_team_check() -> dict:
-        """
-        Get a quick summary of team weaknesses and issues.
-
-        Returns:
-            Major weaknesses, unresisted types, and speed range
-        """
-        try:
-            if team_manager.size == 0:
-                return {"error": "No Pokemon on team"}
-
-            return analyzer.get_quick_summary(team_manager.team)
-        except Exception as e:
-            return {"error": str(e)}

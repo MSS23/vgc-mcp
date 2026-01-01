@@ -262,6 +262,12 @@ def calculate_damage(
             defender_types = [modifiers.defender_tera_type]
 
         type_eff = get_type_effectiveness(move.type, defender_types)
+
+        # Immunities deal 0 damage (no further modifiers apply)
+        if type_eff == 0:
+            rolls.append(0)
+            continue
+
         if type_eff != 1.0:
             damage = int(damage * type_eff)
 
@@ -317,7 +323,12 @@ def calculate_damage(
     is_guaranteed_ohko = kos == 16
     is_possible_ohko = kos > 0
 
-    if is_guaranteed_ohko:
+    # Check for immunity (all rolls are 0)
+    is_immune = max_damage == 0
+
+    if is_immune:
+        ko_chance = "Immune (0 damage)"
+    elif is_guaranteed_ohko:
         ko_chance = "Guaranteed OHKO"
     elif kos == 0:
         ko_chance = f"0% OHKO ({max_percent:.1f}% max)"

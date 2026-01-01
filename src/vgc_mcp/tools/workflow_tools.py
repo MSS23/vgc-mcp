@@ -17,24 +17,38 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
     """Register high-level workflow tools with the MCP server."""
 
     @mcp.tool()
-    async def full_team_check(paste: Optional[str] = None) -> dict:
+    async def full_team_check(
+        paste: Optional[str] = None,
+        detailed: bool = True
+    ) -> dict:
         """
-        Comprehensive team analysis with grade and tournament readiness.
+        Team analysis with configurable detail level.
 
-        This is a one-stop check that tells you if your team is good to go,
-        what its strengths are, and what needs fixing. More detailed than
-        quick_team_check - use this when you want the full picture.
+        When detailed=True (default): Full comprehensive analysis with grade,
+        tournament readiness, legality check, strengths, weaknesses, and fix suggestions.
+
+        When detailed=False: Quick summary with just major weaknesses,
+        unresisted types, and speed range - useful for fast iteration.
 
         Args:
             paste: Optional Showdown paste. If not provided, uses current team.
+            detailed: If True (default), returns full analysis with grades.
+                     If False, returns quick summary only.
 
-        Returns:
+        Returns (detailed=True):
             - overall_grade: Letter grade (A to F)
             - tournament_ready: Whether team can be used in tournaments
             - legality: Pass/fail with specific issues
             - strengths: Top 3 things the team does well
             - weaknesses: Top 3 problems to address
             - one_fix: Single most impactful improvement to make
+
+        Returns (detailed=False):
+            - team_size: Number of Pokemon
+            - pokemon: List of names
+            - major_weaknesses: Types the team is weak to
+            - unresisted_types: Types the team can't hit super effectively
+            - speed_range: Slowest and fastest Pokemon
         """
         try:
             # If paste provided, parse it temporarily
@@ -60,10 +74,25 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                         suggestions=[
                             "Add Pokemon with 'add_to_team' or 'add_pokemon_smart'",
                             "Import a team with 'import_showdown_team'",
-                            "Provide a paste directly: quick_team_check(paste='...')"
+                            "Provide a paste directly: full_team_check(paste='...')"
                         ]
                     )
                 pokemon_names = [slot.pokemon.name for slot in team_manager.team.slots]
+
+            # Quick summary mode - return early with minimal analysis
+            if not detailed:
+                if paste:
+                    # For paste-only mode, we can only return names
+                    return {
+                        "team_size": len(pokemon_names),
+                        "pokemon": pokemon_names,
+                        "major_weaknesses": [],
+                        "unresisted_types": [],
+                        "speed_range": {},
+                        "note": "Quick analysis on pastes is limited. Load team with import_showdown_team for full quick analysis."
+                    }
+                # Use the analyzer's quick summary
+                return analyzer.get_quick_summary(team_manager.team)
 
             # Initialize scores
             scores = {
@@ -1810,8 +1839,10 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                 return error_response(ErrorCodes.VALIDATION_ERROR, "direction must be 'from' or 'to'")
 
             # Get my Pokemon data
-            my_data = await pokeapi.get_pokemon(my_pokemon)
-            if not my_data:
+            try:
+                my_data = await pokeapi.get_pokemon(my_pokemon)
+                my_base_stats = await pokeapi.get_base_stats(my_pokemon)
+            except Exception:
                 suggestions = suggest_pokemon_name(my_pokemon)
                 return error_response(
                     ErrorCodes.POKEMON_NOT_FOUND,
@@ -1820,8 +1851,10 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                 )
 
             # Get opponent Pokemon data
-            opp_data = await pokeapi.get_pokemon(opponent_pokemon)
-            if not opp_data:
+            try:
+                opp_data = await pokeapi.get_pokemon(opponent_pokemon)
+                opp_base_stats = await pokeapi.get_base_stats(opponent_pokemon)
+            except Exception:
                 suggestions = suggest_pokemon_name(opponent_pokemon)
                 return error_response(
                     ErrorCodes.POKEMON_NOT_FOUND,
@@ -1847,13 +1880,13 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                     my_ability = abilities[0].lower().replace(" ", "-")
 
             # Build my Pokemon
-            my_types = my_data.get("types", [])
+            my_types = await pokeapi.get_pokemon_types(my_pokemon)
             # If Tera active, defensive typing changes
             defensive_types = [my_tera_type] if my_tera_type else my_types
 
             my_build = PokemonBuild(
                 name=my_pokemon,
-                base_stats=BaseStats(**my_data["base_stats"]),
+                base_stats=my_base_stats,
                 types=defensive_types,
                 nature=parsed_nature,
                 evs=EVSpread(
@@ -1870,14 +1903,13 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
             )
 
             # Calculate my final stats for display
-            my_base = my_data["base_stats"]
             my_final_stats = {
-                "hp": calculate_hp(my_base["hp"], 31, my_hp_evs, 50),
-                "attack": calculate_stat(my_base["attack"], 31, my_atk_evs, 50, get_nature_modifier(parsed_nature, "attack")),
-                "defense": calculate_stat(my_base["defense"], 31, my_def_evs, 50, get_nature_modifier(parsed_nature, "defense")),
-                "special_attack": calculate_stat(my_base["special_attack"], 31, my_spa_evs, 50, get_nature_modifier(parsed_nature, "special_attack")),
-                "special_defense": calculate_stat(my_base["special_defense"], 31, my_spd_evs, 50, get_nature_modifier(parsed_nature, "special_defense")),
-                "speed": calculate_stat(my_base["speed"], 31, my_spe_evs, 50, get_nature_modifier(parsed_nature, "speed"))
+                "hp": calculate_hp(my_base_stats.hp, 31, my_hp_evs, 50),
+                "attack": calculate_stat(my_base_stats.attack, 31, my_atk_evs, 50, get_nature_modifier(parsed_nature, "attack")),
+                "defense": calculate_stat(my_base_stats.defense, 31, my_def_evs, 50, get_nature_modifier(parsed_nature, "defense")),
+                "special_attack": calculate_stat(my_base_stats.special_attack, 31, my_spa_evs, 50, get_nature_modifier(parsed_nature, "special_attack")),
+                "special_defense": calculate_stat(my_base_stats.special_defense, 31, my_spd_evs, 50, get_nature_modifier(parsed_nature, "special_defense")),
+                "speed": calculate_stat(my_base_stats.speed, 31, my_spe_evs, 50, get_nature_modifier(parsed_nature, "speed"))
             }
 
             # Get opponent's Smogon usage data
@@ -1911,7 +1943,7 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
             if top_ability:
                 top_ability = top_ability.lower().replace(" ", "-")
 
-            opp_types = opp_data.get("types", [])
+            opp_types = await pokeapi.get_pokemon_types(opponent_pokemon)
             is_physical = move_data.category == MoveCategory.PHYSICAL
 
             damage_results = []
@@ -1946,7 +1978,7 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                 # Build opponent with this spread
                 opp_build = PokemonBuild(
                     name=opponent_pokemon,
-                    base_stats=BaseStats(**opp_data["base_stats"]),
+                    base_stats=opp_base_stats,
                     types=opp_types,
                     nature=spread_nature,
                     evs=EVSpread(

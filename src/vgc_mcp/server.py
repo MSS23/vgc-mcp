@@ -54,14 +54,13 @@ from .tools.priority_tools import register_priority_tools
 from .tools.ability_tools import register_ability_tools
 from .tools.coverage_tools import register_coverage_tools
 from .tools.context_tools import register_context_tools
-from .tools.speed_probability_tools import register_speed_probability_tools
+from .tools.speed_probability_tools import register_speed_probability_tools, register_visualize_outspeed_tool
 from .tools.meta_threat_tools import register_meta_threat_tools
 from .tools.workflow_tools import register_workflow_tools
 from .tools.item_tools import register_item_tools
 from .tools.chip_damage_tools import register_chip_damage_tools
 from .tools.lead_tools import register_lead_tools
 from .tools.preset_tools import register_preset_tools
-from .tools.speed_tier_tools import register_speed_tier_tools
 from .tools.sample_team_tools import register_sample_team_tools
 from .tools.pokepaste_tools import register_pokepaste_tools
 
@@ -107,6 +106,7 @@ register_coverage_tools(mcp, team_manager, pokeapi)
 # Phase 6 tools - Meta-aware speed probability and optimization
 register_context_tools(mcp, pokeapi, team_manager)
 register_speed_probability_tools(mcp, smogon, pokeapi, team_manager)
+register_visualize_outspeed_tool(mcp, smogon, pokeapi)  # Interactive UI for outspeed %
 register_meta_threat_tools(mcp, smogon, pokeapi, team_manager)
 
 # Phase 7 tools - User experience improvements (workflow coordinators)
@@ -119,7 +119,6 @@ register_lead_tools(mcp, team_manager)
 
 # Phase 10 tools - Quality of life improvements
 register_preset_tools(mcp, smogon)
-register_speed_tier_tools(mcp, pokeapi)
 register_sample_team_tools(mcp)
 register_pokepaste_tools(mcp, pokepaste, pokeapi, smogon)
 

@@ -10,6 +10,7 @@ from ..calc.matchup import (
     analyze_defensive_matchup,
     COMMON_THREATS,
 )
+from ..ui.resources import create_threat_analysis_resource, add_ui_metadata
 
 
 def register_matchup_tools(mcp: FastMCP, team_manager: TeamManager):
@@ -48,7 +49,7 @@ def register_matchup_tools(mcp: FastMCP, team_manager: TeamManager):
 
             analysis = analyze_threat_matchup(team_manager.team, threat_name)
 
-            return {
+            result = {
                 "threat": analysis.threat_name,
                 "threat_speed": analysis.threat_speed,
                 "can_ohko": analysis.ohko_by,
@@ -59,6 +60,20 @@ def register_matchup_tools(mcp: FastMCP, team_manager: TeamManager):
                 "survives_attack": analysis.survives,
                 "notes": analysis.notes
             }
+
+            # Add interactive UI
+            ui_resource = create_threat_analysis_resource(
+                threat_name=analysis.threat_name,
+                threat_speed=analysis.threat_speed,
+                ohko_by=analysis.ohko_by,
+                twohko_by=analysis.twohko_by,
+                checks=analysis.checks,
+                counters=analysis.counters,
+                threatened=analysis.threatened,
+                survives=analysis.survives,
+                notes=analysis.notes,
+            )
+            return add_ui_metadata(result, ui_resource)
 
         except Exception as e:
             return {"error": str(e)}

@@ -35,14 +35,13 @@ from .team.analysis import TeamAnalyzer
 # Target: ~50 tools (well under Goose's 60 recommendation)
 from .tools.stats_tools import register_stats_tools          # 2 tools
 from .tools.damage_tools import register_damage_tools        # 3 tools
-from .tools.speed_tools import register_speed_tools          # 4 tools
+from .tools.speed_tools import register_speed_tools          # 7 tools (includes speed tier tools)
 from .tools.team_tools import register_team_tools            # 9 tools
 from .tools.usage_tools import register_usage_tools          # 6 tools
 from .tools.spread_tools import register_spread_tools        # 6 tools
 from .tools.import_export_tools import register_import_export_tools  # 4 tools
 from .tools.coverage_tools import register_coverage_tools    # 6 tools
 from .tools.matchup_tools import register_matchup_tools      # 6 tools
-from .tools.speed_tier_tools import register_speed_tier_tools  # 3 tools
 # Total: ~49 tools
 
 # NOT included in lite (to stay under 60):
@@ -78,9 +77,8 @@ register_damage_tools(mcp, pokeapi, smogon)  # Pass smogon for auto-fetching com
 # Stats (2 tools)
 register_stats_tools(mcp, pokeapi)
 
-# Speed analysis (4 tools from speed_tools + 3 from speed_tier_tools = 7)
+# Speed analysis (7 tools - includes speed tier tools)
 register_speed_tools(mcp, pokeapi)
-register_speed_tier_tools(mcp, pokeapi)
 
 # Import/export (4 tools)
 register_import_export_tools(mcp, pokeapi, team_manager)
