@@ -7,6 +7,27 @@ from ..api.pokeapi import PokeAPIClient
 from ..team.manager import TeamManager
 from ..team.analysis import TeamAnalyzer
 from ..models.pokemon import PokemonBuild, Nature, EVSpread, IVSpread
+from ..ui.resources import create_team_roster_resource, add_ui_metadata
+
+
+def _pokemon_to_ui_dict(pokemon: PokemonBuild) -> dict:
+    """Convert a PokemonBuild to the format expected by the UI components."""
+    return {
+        "name": pokemon.name,
+        "item": pokemon.item or "None",
+        "ability": pokemon.ability or "Unknown",
+        "moves": [{"name": m, "type": "normal"} for m in (pokemon.moves or [])],
+        "evs": {
+            "hp": pokemon.evs.hp,
+            "attack": pokemon.evs.attack,
+            "defense": pokemon.evs.defense,
+            "special_attack": pokemon.evs.special_attack,
+            "special_defense": pokemon.evs.special_defense,
+            "speed": pokemon.evs.speed,
+        },
+        "types": pokemon.types or [],
+        "tera_type": pokemon.tera_type,
+    }
 
 
 def register_team_tools(
@@ -235,7 +256,19 @@ def register_team_tools(
             Complete team information including all Pokemon builds
         """
         try:
-            return team_manager.get_team_summary()
+            result = team_manager.get_team_summary()
+
+            # Add MCP-UI resource for interactive team display
+            try:
+                if team_manager.size > 0:
+                    team_ui_data = [_pokemon_to_ui_dict(p) for p in team_manager.team]
+                    ui_resource = create_team_roster_resource(team=team_ui_data)
+                    result = add_ui_metadata(result, ui_resource)
+            except Exception:
+                # UI is optional
+                pass
+
+            return result
         except Exception as e:
             return {"error": str(e)}
 

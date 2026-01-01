@@ -9,6 +9,7 @@ from ..calc.modifiers import DamageModifiers
 from ..models.pokemon import PokemonBuild, Nature, EVSpread, IVSpread
 from ..utils.errors import error_response, ErrorCodes, pokemon_not_found_error, invalid_nature_error, api_error
 from ..utils.fuzzy import suggest_pokemon_name, suggest_nature
+from ..ui.resources import create_damage_calc_resource, add_ui_metadata
 
 
 def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
@@ -302,6 +303,26 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
 
             if ability_notes:
                 response["ability_effects"] = ability_notes
+
+            # Add MCP-UI resource for interactive damage display
+            try:
+                ui_resource = create_damage_calc_resource(
+                    attacker=attacker_name,
+                    defender=defender_name,
+                    move=move_name,
+                    damage_min=result.damage_range[0],
+                    damage_max=result.damage_range[1],
+                    ko_chance=result.ko_chance,
+                    type_effectiveness=result.details.get("type_effectiveness", 1.0),
+                    attacker_item=attacker_item,
+                    defender_item=None,
+                    move_type=move.type,
+                    notes=ability_notes if ability_notes else None,
+                )
+                response = add_ui_metadata(response, ui_resource)
+            except Exception:
+                # UI is optional - continue without it if there's an issue
+                pass
 
             return response
 

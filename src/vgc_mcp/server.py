@@ -65,6 +65,9 @@ from .tools.speed_tier_tools import register_speed_tier_tools
 from .tools.sample_team_tools import register_sample_team_tools
 from .tools.pokepaste_tools import register_pokepaste_tools
 
+# MCP-UI support
+from .ui import register_ui_resources
+
 
 # Initialize MCP server
 mcp = FastMCP(
@@ -119,6 +122,9 @@ register_preset_tools(mcp, smogon)
 register_speed_tier_tools(mcp, pokeapi)
 register_sample_team_tools(mcp)
 register_pokepaste_tools(mcp, pokepaste, pokeapi, smogon)
+
+# Register MCP-UI resources
+register_ui_resources(mcp)
 
 
 def main():

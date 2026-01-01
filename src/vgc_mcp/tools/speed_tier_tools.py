@@ -5,6 +5,7 @@ from mcp.server.fastmcp import FastMCP
 
 from ..calc.stats import calculate_speed
 from ..models.pokemon import Nature
+from ..ui.resources import create_speed_tier_resource, add_ui_metadata
 
 
 # Common VGC Pokemon with their base speeds and common speed investments
@@ -180,11 +181,37 @@ def register_speed_tier_tools(mcp: FastMCP, pokeapi):
             if underspeeds:
                 lines.append(f"Faster than your slowest: {', '.join(set(underspeeds)[:5])}")
 
-        return {
+        result = {
             "visualization": "\n".join(lines),
             "your_pokemon": your_pokemon,
             "mode": mode
         }
+
+        # Add MCP-UI resource for interactive speed tier display
+        try:
+            if your_pokemon:
+                # Get the first user Pokemon as the primary one
+                primary = your_pokemon[0]
+                # Build speed tiers list for UI
+                speed_tier_list = [
+                    {"name": p["name"], "speed": p["speed"], "common": not p["is_yours"]}
+                    for p in all_pokemon
+                ]
+                ui_resource = create_speed_tier_resource(
+                    pokemon_name=primary["name"],
+                    pokemon_speed=primary["speed"],
+                    speed_tiers=speed_tier_list,
+                    modifiers={
+                        "tailwind": include_tailwind,
+                        "trick_room": include_trick_room,
+                    },
+                )
+                result = add_ui_metadata(result, ui_resource)
+        except Exception:
+            # UI is optional
+            pass
+
+        return result
 
     @mcp.tool()
     async def get_meta_speed_tiers(
