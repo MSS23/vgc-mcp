@@ -47,10 +47,57 @@ def register_preset_tools(mcp: FastMCP, smogon=None):
 
             spreads = data.get("spreads", [])[:limit]
             meta = data.get("_meta", {})
+            abilities = data.get("abilities", {})
+            items = data.get("items", {})
 
-            return {
+            # Get most common ability
+            top_ability = list(abilities.keys())[0] if abilities else None
+            top_ability_pct = list(abilities.values())[0] if abilities else 0
+
+            # Get most common item
+            top_item = list(items.keys())[0] if items else None
+            top_item_pct = list(items.values())[0] if items else 0
+
+            # Check for ability warnings
+            ability_warnings = []
+            normalized_pokemon = pokemon_name.lower().replace(" ", "-")
+            normalized_ability = top_ability.lower().replace(" ", "-") if top_ability else ""
+
+            # Unseen Fist (Urshifu)
+            if normalized_pokemon in ("urshifu", "urshifu-single-strike", "urshifu-rapid-strike"):
+                ability_warnings.append("⚠️ Unseen Fist: Contact moves bypass Protect!")
+
+            # Ruin abilities
+            if normalized_ability == "beads-of-ruin":
+                ability_warnings.append("⚠️ Beads of Ruin: Lowers opponent's SpD to 0.75x")
+            elif normalized_ability == "sword-of-ruin":
+                ability_warnings.append("⚠️ Sword of Ruin: Lowers opponent's Def to 0.75x")
+            elif normalized_ability == "tablets-of-ruin":
+                ability_warnings.append("⚠️ Tablets of Ruin: Lowers opponent's Atk to 0.75x")
+            elif normalized_ability == "vessel-of-ruin":
+                ability_warnings.append("⚠️ Vessel of Ruin: Lowers opponent's SpA to 0.75x")
+
+            # Paradox abilities
+            if normalized_ability == "protosynthesis":
+                ability_warnings.append("📈 Protosynthesis: 1.3x boost (1.5x Speed) in Sun or with Booster Energy")
+            elif normalized_ability == "quark-drive":
+                ability_warnings.append("📈 Quark Drive: 1.3x boost (1.5x Speed) in Electric Terrain or with Booster Energy")
+
+            # Stat-doubling abilities
+            if normalized_ability in ("huge-power", "pure-power"):
+                ability_warnings.append("💪 Attack stat is DOUBLED")
+
+            result = {
                 "pokemon": data.get("name", pokemon_name),
                 "usage_percent": data.get("usage_percent", 0),
+                "most_common_ability": {
+                    "name": top_ability,
+                    "usage_percent": top_ability_pct
+                },
+                "most_common_item": {
+                    "name": top_item,
+                    "usage_percent": top_item_pct
+                },
                 "data_source": {
                     "source": "Smogon Chaos Stats",
                     "format": meta.get("format", "unknown"),
@@ -64,14 +111,21 @@ def register_preset_tools(mcp: FastMCP, smogon=None):
                         "nature": s.get("nature", "Unknown"),
                         "evs": s.get("evs", {}),
                         "spread_string": s.get("spread_string", ""),
-                        "usage_percent": s.get("usage", 0)
+                        "usage_percent": s.get("usage", 0),
+                        "common_ability": top_ability,
+                        "common_item": top_item
                     }
                     for i, s in enumerate(spreads)
                 ],
-                "top_items": list(data.get("items", {}).items())[:3],
-                "top_abilities": list(data.get("abilities", {}).items())[:2],
+                "all_abilities": list(abilities.items())[:3],
+                "all_items": list(items.items())[:5],
                 "top_tera_types": list(data.get("tera_types", {}).items())[:3]
             }
+
+            if ability_warnings:
+                result["ability_notes"] = ability_warnings
+
+            return result
         except Exception as e:
             return {"error": str(e)}
 
