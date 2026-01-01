@@ -1,23 +1,16 @@
-# VGC Team Builder MCP Server
+# VGC MCP Server
 
-MCP server for VGC Pokemon team building with damage calculations, usage stats, and team analysis.
+A Model Context Protocol (MCP) server for Pokemon VGC (Video Game Championships) team building and competitive analysis.
 
 ## Features
 
-- Stat calculations (level 50 VGC standard)
-- Damage calculations with full modifier support
-- Speed comparisons and tier analysis
-- Team management with species clause
-- Smogon usage data integration
-- EV spread optimization
-- Showdown paste import/export
-- Speed control analysis (Trick Room, Tailwind)
-- Matchup analysis against common threats
-- Core building and team suggestions
-- VGC format legality checking
-- Move legality validation
-- Priority move analysis
-- Ability synergy analysis
+- **157 tools** for damage calculations, stat analysis, team management
+- Full Gen 9 damage formula with all modifiers
+- Type effectiveness calculations
+- Speed tier analysis
+- EV optimization
+- Team import/export (Showdown paste format)
+- Smogon usage statistics integration
 
 ## Installation
 
@@ -27,12 +20,23 @@ pip install -e .
 
 ## Usage
 
+### Local (stdio)
 ```bash
 vgc-mcp
 ```
 
-Or run directly:
-
+### Remote (HTTP/SSE)
 ```bash
-python -m vgc_mcp
+pip install -e ".[remote]"
+vgc-mcp-http
 ```
+
+## MCP Endpoint
+
+Connect your MCP client to:
+- **SSE**: `https://your-server.com/sse`
+- **Health**: `https://your-server.com/health`
+
+## License
+
+MIT
