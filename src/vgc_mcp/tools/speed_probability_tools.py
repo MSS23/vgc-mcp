@@ -17,7 +17,15 @@ from ..calc.speed_probability import (
     build_speed_distribution_data,
     calculate_speed_stat,
 )
-from ..ui.resources import create_speed_outspeed_resource, add_ui_metadata
+# Optional MCP-UI support (only in vgc-mcp-lite)
+try:
+    from ..ui.resources import create_speed_outspeed_resource, add_ui_metadata
+    HAS_UI = True
+except ImportError:
+    HAS_UI = False
+    create_speed_outspeed_resource = None
+    add_ui_metadata = None
+
 from ..models.pokemon import Nature
 
 
@@ -563,24 +571,6 @@ def register_visualize_outspeed_tool(mcp: FastMCP, smogon, pokeapi):
         # Calculate initial outspeed percentage
         outspeed_pct = _get_outspeed_pct_from_distribution(current_speed, speed_distribution)
 
-        # Create UI resource
-        ui_resource = create_speed_outspeed_resource(
-            pokemon_name=pokemon_name,
-            base_speed=base_speed,
-            current_speed=current_speed,
-            nature=nature,
-            speed_evs=speed_evs,
-            speed_distribution=speed_distribution,
-            outspeed_percentage=outspeed_pct,
-            mode=mode,
-            target_pokemon=target_pokemon if mode == "single" else None,
-            format_info={
-                "format": meta_info.get("format", "VGC"),
-                "month": meta_info.get("month", "")
-            },
-            pokemon_base_speeds=pokemon_base_speeds,
-        )
-
         # Build result
         result = {
             "pokemon": pokemon_name,
@@ -601,7 +591,27 @@ def register_visualize_outspeed_tool(mcp: FastMCP, smogon, pokeapi):
         if mode == "single":
             result["target_pokemon"] = target_pokemon
 
-        return add_ui_metadata(result, ui_resource)
+        # Create UI resource (only in vgc-mcp-lite)
+        if HAS_UI:
+            ui_resource = create_speed_outspeed_resource(
+                pokemon_name=pokemon_name,
+                base_speed=base_speed,
+                current_speed=current_speed,
+                nature=nature,
+                speed_evs=speed_evs,
+                speed_distribution=speed_distribution,
+                outspeed_percentage=outspeed_pct,
+                mode=mode,
+                target_pokemon=target_pokemon if mode == "single" else None,
+                format_info={
+                    "format": meta_info.get("format", "VGC"),
+                    "month": meta_info.get("month", "")
+                },
+                pokemon_base_speeds=pokemon_base_speeds,
+            )
+            return add_ui_metadata(result, ui_resource)
+
+        return result
 
 
 def _get_outspeed_analysis(pct: float, pokemon: str, speed: int) -> str:

@@ -4,7 +4,15 @@ from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
 from ..api.smogon import SmogonStatsClient
-from ..ui.resources import create_usage_stats_resource, add_ui_metadata
+
+# Optional MCP-UI support (only in vgc-mcp-lite)
+try:
+    from ..ui.resources import create_usage_stats_resource, add_ui_metadata
+    HAS_UI = True
+except ImportError:
+    HAS_UI = False
+    create_usage_stats_resource = None
+    add_ui_metadata = None
 
 
 def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
@@ -40,18 +48,20 @@ def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
                     ]
                 }
 
-            # Add interactive UI
-            ui_resource = create_usage_stats_resource(
-                pokemon_name=usage.get("pokemon", pokemon_name),
-                usage_percent=usage.get("usage_percent", 0),
-                items=usage.get("items", []),
-                abilities=usage.get("abilities", []),
-                moves=usage.get("moves", []),
-                spreads=usage.get("spreads", []),
-                tera_types=usage.get("tera_types"),
-                teammates=usage.get("teammates"),
-            )
-            return add_ui_metadata(usage, ui_resource)
+            # Add interactive UI (only in vgc-mcp-lite)
+            if HAS_UI:
+                ui_resource = create_usage_stats_resource(
+                    pokemon_name=usage.get("pokemon", pokemon_name),
+                    usage_percent=usage.get("usage_percent", 0),
+                    items=usage.get("items", []),
+                    abilities=usage.get("abilities", []),
+                    moves=usage.get("moves", []),
+                    spreads=usage.get("spreads", []),
+                    tera_types=usage.get("tera_types"),
+                    teammates=usage.get("teammates"),
+                )
+                return add_ui_metadata(usage, ui_resource)
+            return usage
 
         except Exception as e:
             return {"error": str(e)}

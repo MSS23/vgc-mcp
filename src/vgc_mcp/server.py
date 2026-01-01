@@ -64,8 +64,8 @@ from .tools.preset_tools import register_preset_tools
 from .tools.sample_team_tools import register_sample_team_tools
 from .tools.pokepaste_tools import register_pokepaste_tools
 
-# MCP-UI support
-from .ui import register_ui_resources
+# Note: MCP-UI is only enabled in vgc-mcp-lite for smaller footprint
+# Full server focuses on tool completeness over visual components
 
 
 # Initialize MCP server
@@ -122,8 +122,6 @@ register_preset_tools(mcp, smogon)
 register_sample_team_tools(mcp)
 register_pokepaste_tools(mcp, pokepaste, pokeapi, smogon)
 
-# Register MCP-UI resources
-register_ui_resources(mcp)
 
 
 def main():

@@ -7,7 +7,15 @@ from ..api.pokeapi import PokeAPIClient
 from ..team.manager import TeamManager
 from ..team.analysis import TeamAnalyzer
 from ..models.pokemon import PokemonBuild, Nature, EVSpread, IVSpread
-from ..ui.resources import create_team_roster_resource, add_ui_metadata
+
+# Optional MCP-UI support (only in vgc-mcp-lite)
+try:
+    from ..ui.resources import create_team_roster_resource, add_ui_metadata
+    HAS_UI = True
+except ImportError:
+    HAS_UI = False
+    create_team_roster_resource = None
+    add_ui_metadata = None
 
 
 def _pokemon_to_ui_dict(pokemon: PokemonBuild) -> dict:
@@ -258,15 +266,16 @@ def register_team_tools(
         try:
             result = team_manager.get_team_summary()
 
-            # Add MCP-UI resource for interactive team display
-            try:
-                if team_manager.size > 0:
-                    team_ui_data = [_pokemon_to_ui_dict(p) for p in team_manager.team]
-                    ui_resource = create_team_roster_resource(team=team_ui_data)
-                    result = add_ui_metadata(result, ui_resource)
-            except Exception:
-                # UI is optional
-                pass
+            # Add MCP-UI resource for interactive team display (only in vgc-mcp-lite)
+            if HAS_UI:
+                try:
+                    if team_manager.size > 0:
+                        team_ui_data = [_pokemon_to_ui_dict(p) for p in team_manager.team]
+                        ui_resource = create_team_roster_resource(team=team_ui_data)
+                        result = add_ui_metadata(result, ui_resource)
+                except Exception:
+                    # UI is optional
+                    pass
 
             return result
         except Exception as e:

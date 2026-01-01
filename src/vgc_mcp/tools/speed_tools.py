@@ -7,7 +7,15 @@ from ..api.pokeapi import PokeAPIClient
 from ..calc.stats import calculate_speed, find_speed_evs
 from ..calc.speed import SPEED_BENCHMARKS, calculate_speed_tier
 from ..models.pokemon import Nature
-from ..ui.resources import create_speed_tier_resource, add_ui_metadata
+
+# Optional MCP-UI support (only in vgc-mcp-lite)
+try:
+    from ..ui.resources import create_speed_tier_resource, add_ui_metadata
+    HAS_UI = True
+except ImportError:
+    HAS_UI = False
+    create_speed_tier_resource = None
+    add_ui_metadata = None
 
 
 # Common VGC Pokemon with their base speeds and common speed investments
@@ -425,29 +433,30 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             "mode": mode
         }
 
-        # Add MCP-UI resource for interactive speed tier display
-        try:
-            if your_pokemon:
-                # Get the first user Pokemon as the primary one
-                primary = your_pokemon[0]
-                # Build speed tiers list for UI
-                speed_tier_list = [
-                    {"name": p["name"], "speed": p["speed"], "common": not p["is_yours"]}
-                    for p in all_pokemon
-                ]
-                ui_resource = create_speed_tier_resource(
-                    pokemon_name=primary["name"],
-                    pokemon_speed=primary["speed"],
-                    speed_tiers=speed_tier_list,
-                    modifiers={
-                        "tailwind": include_tailwind,
-                        "trick_room": include_trick_room,
-                    },
-                )
-                result = add_ui_metadata(result, ui_resource)
-        except Exception:
-            # UI is optional
-            pass
+        # Add MCP-UI resource for interactive speed tier display (only in vgc-mcp-lite)
+        if HAS_UI:
+            try:
+                if your_pokemon:
+                    # Get the first user Pokemon as the primary one
+                    primary = your_pokemon[0]
+                    # Build speed tiers list for UI
+                    speed_tier_list = [
+                        {"name": p["name"], "speed": p["speed"], "common": not p["is_yours"]}
+                        for p in all_pokemon
+                    ]
+                    ui_resource = create_speed_tier_resource(
+                        pokemon_name=primary["name"],
+                        pokemon_speed=primary["speed"],
+                        speed_tiers=speed_tier_list,
+                        modifiers={
+                            "tailwind": include_tailwind,
+                            "trick_room": include_trick_room,
+                        },
+                    )
+                    result = add_ui_metadata(result, ui_resource)
+            except Exception:
+                # UI is optional
+                pass
 
         return result
 
