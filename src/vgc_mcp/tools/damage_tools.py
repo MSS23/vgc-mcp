@@ -689,3 +689,387 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     suggestions if suggestions else None
                 )
             return api_error("PokeAPI", str(e), is_retryable=True)
+
+    @mcp.tool()
+    async def survive_multiple_hits(
+        attacker_name: str,
+        defender_name: str,
+        move_name: str,
+        num_hits: int = 2,
+        attacker_nature: Optional[str] = None,
+        attacker_atk_evs: Optional[int] = None,
+        attacker_spa_evs: Optional[int] = None,
+        defender_nature: Optional[str] = None,
+        defender_hp_evs: Optional[int] = None,
+        defender_def_evs: Optional[int] = None,
+        defender_spd_evs: Optional[int] = None,
+        use_smogon_spreads: bool = True,
+        attacker_attack_stage: int = 0,
+        weather: Optional[str] = None,
+        terrain: Optional[str] = None,
+        attacker_item: Optional[str] = None,
+        reflect: bool = False,
+        light_screen: bool = False
+    ) -> dict:
+        """
+        Calculate if a Pokemon can survive multiple hits of an attack.
+
+        Useful for scenarios like "Can Ogerpon survive 2 Close Combats from Urshifu?"
+        Note: Close Combat drops the ATTACKER's defenses, not the defender's,
+        so each hit does the same damage to the defender.
+
+        Args:
+            attacker_name: Attacking Pokemon's name
+            defender_name: Defending Pokemon's name (your Pokemon)
+            move_name: Move being used repeatedly
+            num_hits: Number of hits to survive (default 2)
+            attacker_nature: Attacker's nature
+            attacker_atk_evs: Attacker's Attack EVs
+            attacker_spa_evs: Attacker's Sp. Atk EVs
+            defender_nature: Defender's nature
+            defender_hp_evs: Defender's HP EVs
+            defender_def_evs: Defender's Defense EVs
+            defender_spd_evs: Defender's Sp. Def EVs
+            use_smogon_spreads: Auto-fetch spreads from Smogon
+            attacker_attack_stage: Attack stage (-6 to +6). Use -1 for Intimidate.
+            weather: "sun", "rain", "sand", or "snow"
+            terrain: "electric", "grassy", "psychic", or "misty"
+            attacker_item: Attacker's item
+            reflect: True if Reflect is active
+            light_screen: True if Light Screen is active
+
+        Returns:
+            Analysis of whether the defender survives N hits
+        """
+        try:
+            # Fetch Pokemon data
+            atk_base = await pokeapi.get_base_stats(attacker_name)
+            def_base = await pokeapi.get_base_stats(defender_name)
+            atk_types = await pokeapi.get_pokemon_types(attacker_name)
+            def_types = await pokeapi.get_pokemon_types(defender_name)
+            move = await pokeapi.get_move(move_name)
+
+            # Auto-fetch Smogon spreads if enabled
+            if use_smogon_spreads:
+                if attacker_nature is None or attacker_atk_evs is None or attacker_spa_evs is None:
+                    atk_spread = await _get_common_spread(attacker_name)
+                    if atk_spread:
+                        if attacker_nature is None:
+                            attacker_nature = atk_spread["nature"]
+                        evs = atk_spread.get("evs", {})
+                        if attacker_atk_evs is None:
+                            attacker_atk_evs = evs.get("attack", 0)
+                        if attacker_spa_evs is None:
+                            attacker_spa_evs = evs.get("special_attack", 0)
+                        if attacker_item is None and atk_spread.get("item"):
+                            attacker_item = atk_spread["item"].lower().replace(" ", "-")
+
+                if defender_nature is None or defender_hp_evs is None or defender_def_evs is None or defender_spd_evs is None:
+                    def_spread = await _get_common_spread(defender_name)
+                    if def_spread:
+                        if defender_nature is None:
+                            defender_nature = def_spread["nature"]
+                        evs = def_spread.get("evs", {})
+                        if defender_hp_evs is None:
+                            defender_hp_evs = evs.get("hp", 0)
+                        if defender_def_evs is None:
+                            defender_def_evs = evs.get("defense", 0)
+                        if defender_spd_evs is None:
+                            defender_spd_evs = evs.get("special_defense", 0)
+
+            # Set defaults
+            attacker_nature = attacker_nature or "adamant"
+            attacker_atk_evs = attacker_atk_evs if attacker_atk_evs is not None else 252
+            attacker_spa_evs = attacker_spa_evs if attacker_spa_evs is not None else 0
+            defender_nature = defender_nature or "serious"
+            defender_hp_evs = defender_hp_evs if defender_hp_evs is not None else 0
+            defender_def_evs = defender_def_evs if defender_def_evs is not None else 0
+            defender_spd_evs = defender_spd_evs if defender_spd_evs is not None else 0
+
+            # Parse natures
+            try:
+                atk_nature = Nature(attacker_nature.lower())
+            except ValueError:
+                suggestions = suggest_nature(attacker_nature)
+                return invalid_nature_error(attacker_nature, suggestions if suggestions else [n.value for n in Nature])
+
+            try:
+                def_nature = Nature(defender_nature.lower())
+            except ValueError:
+                suggestions = suggest_nature(defender_nature)
+                return invalid_nature_error(defender_nature, suggestions if suggestions else [n.value for n in Nature])
+
+            # Create builds
+            attacker = PokemonBuild(
+                name=attacker_name,
+                base_stats=atk_base,
+                types=atk_types,
+                nature=atk_nature,
+                evs=EVSpread(attack=attacker_atk_evs, special_attack=attacker_spa_evs),
+                item=attacker_item
+            )
+
+            defender = PokemonBuild(
+                name=defender_name,
+                base_stats=def_base,
+                types=def_types,
+                nature=def_nature,
+                evs=EVSpread(hp=defender_hp_evs, defense=defender_def_evs, special_defense=defender_spd_evs)
+            )
+
+            # Set up modifiers with attack stage
+            is_physical = move.category.value == "physical"
+            modifiers = DamageModifiers(
+                is_doubles=True,
+                weather=weather,
+                terrain=terrain,
+                attacker_item=attacker_item,
+                reflect_up=reflect,
+                light_screen_up=light_screen,
+                attack_stage=attacker_attack_stage if is_physical else 0,
+                special_attack_stage=attacker_attack_stage if not is_physical else 0
+            )
+
+            # Calculate single hit damage
+            result = calculate_damage(attacker, defender, move, modifiers)
+
+            # Calculate multi-hit survival
+            min_per_hit = result.min_damage
+            max_per_hit = result.max_damage
+            defender_hp = result.defender_hp
+
+            total_min = min_per_hit * num_hits
+            total_max = max_per_hit * num_hits
+
+            min_percent_per_hit = (min_per_hit / defender_hp) * 100
+            max_percent_per_hit = (max_per_hit / defender_hp) * 100
+            total_min_percent = (total_min / defender_hp) * 100
+            total_max_percent = (total_max / defender_hp) * 100
+
+            survives_guaranteed = total_max < defender_hp
+            survives_possible = total_min < defender_hp
+
+            # Calculate exact survival probability
+            survival_scenarios = 0
+            total_scenarios = 16 ** num_hits
+
+            if num_hits <= 3:
+                from itertools import product
+                for roll_combo in product(result.rolls, repeat=num_hits):
+                    if sum(roll_combo) < defender_hp:
+                        survival_scenarios += 1
+                survival_chance = (survival_scenarios / total_scenarios) * 100
+            else:
+                avg_damage = sum(result.rolls) / len(result.rolls)
+                total_avg = avg_damage * num_hits
+                survival_chance = 100.0 if total_avg < defender_hp else 0.0
+
+            response = {
+                "attacker": attacker_name,
+                "defender": defender_name,
+                "move": move_name,
+                "num_hits": num_hits,
+                "defender_hp": defender_hp,
+                "per_hit": {
+                    "min_damage": min_per_hit,
+                    "max_damage": max_per_hit,
+                    "min_percent": f"{min_percent_per_hit:.1f}%",
+                    "max_percent": f"{max_percent_per_hit:.1f}%"
+                },
+                "total_damage": {
+                    "min": total_min,
+                    "max": total_max,
+                    "min_percent": f"{total_min_percent:.1f}%",
+                    "max_percent": f"{total_max_percent:.1f}%"
+                },
+                "survives_guaranteed": survives_guaranteed,
+                "survives_possible": survives_possible,
+                "survival_chance": f"{survival_chance:.1f}%",
+                "verdict": "SURVIVES" if survives_guaranteed else ("MIGHT SURVIVE" if survives_possible else "FAINTS"),
+                "attacker_spread": {
+                    "nature": attacker_nature,
+                    "attack_evs": attacker_atk_evs,
+                    "spa_evs": attacker_spa_evs,
+                    "attack_stage": attacker_attack_stage
+                },
+                "defender_spread": {
+                    "nature": defender_nature,
+                    "hp_evs": defender_hp_evs,
+                    "def_evs": defender_def_evs,
+                    "spd_evs": defender_spd_evs
+                }
+            }
+
+            if attacker_attack_stage == -1:
+                response["notes"] = ["Attacker at -1 Attack (Intimidate)"]
+            elif attacker_attack_stage < 0:
+                response["notes"] = [f"Attacker at {attacker_attack_stage} Attack"]
+
+            return response
+
+        except Exception as e:
+            error_str = str(e).lower()
+            if "not found" in error_str or "404" in error_str:
+                suggestions = suggest_pokemon_name(attacker_name) or suggest_pokemon_name(defender_name)
+                return pokemon_not_found_error(
+                    f"{attacker_name} or {defender_name}",
+                    suggestions if suggestions else None
+                )
+            return api_error("PokeAPI", str(e), is_retryable=True)
+
+    @mcp.tool()
+    async def find_bulk_to_survive_hits(
+        attacker_name: str,
+        defender_name: str,
+        move_name: str,
+        num_hits: int = 2,
+        attacker_nature: str = "adamant",
+        attacker_evs: int = 252,
+        defender_nature: str = "impish",
+        attacker_attack_stage: int = 0
+    ) -> dict:
+        """
+        Find minimum HP/Def EVs to survive multiple hits of an attack.
+
+        Args:
+            attacker_name: Attacking Pokemon
+            defender_name: Defending Pokemon (your Pokemon)
+            move_name: Move to survive
+            num_hits: Number of hits to survive (default 2)
+            attacker_nature: Attacker's nature
+            attacker_evs: Attacker's offensive EVs
+            defender_nature: Your nature (+Def: Impish/Bold, +SpD: Calm/Careful)
+            attacker_attack_stage: Attack stage (-1 for Intimidate)
+
+        Returns:
+            Required HP/Def EVs to survive, or indication if impossible
+        """
+        try:
+            atk_base = await pokeapi.get_base_stats(attacker_name)
+            def_base = await pokeapi.get_base_stats(defender_name)
+            atk_types = await pokeapi.get_pokemon_types(attacker_name)
+            def_types = await pokeapi.get_pokemon_types(defender_name)
+            move = await pokeapi.get_move(move_name)
+
+            atk_nature = Nature(attacker_nature.lower())
+            def_nature_parsed = Nature(defender_nature.lower())
+            is_physical = move.category.value == "physical"
+
+            attacker = PokemonBuild(
+                name=attacker_name,
+                base_stats=atk_base,
+                types=atk_types,
+                nature=atk_nature,
+                evs=EVSpread(
+                    attack=attacker_evs if is_physical else 0,
+                    special_attack=0 if is_physical else attacker_evs
+                )
+            )
+
+            best_spread = None
+            min_total_evs = 999
+
+            for hp_ev in range(0, 256, 4):
+                for def_ev in range(0, 256, 4):
+                    if hp_ev + def_ev > 508:
+                        continue
+
+                    test_evs = EVSpread(hp=hp_ev)
+                    if is_physical:
+                        test_evs.defense = def_ev
+                    else:
+                        test_evs.special_defense = def_ev
+
+                    defender = PokemonBuild(
+                        name=defender_name,
+                        base_stats=def_base,
+                        types=def_types,
+                        nature=def_nature_parsed,
+                        evs=test_evs
+                    )
+
+                    modifiers = DamageModifiers(
+                        is_doubles=True,
+                        attack_stage=attacker_attack_stage if is_physical else 0,
+                        special_attack_stage=attacker_attack_stage if not is_physical else 0
+                    )
+
+                    result = calculate_damage(attacker, defender, move, modifiers)
+                    total_max = result.max_damage * num_hits
+
+                    if total_max < result.defender_hp:
+                        total_evs = hp_ev + def_ev
+                        if total_evs < min_total_evs:
+                            min_total_evs = total_evs
+                            best_spread = {
+                                "hp_evs": hp_ev,
+                                "def_evs": def_ev,
+                                "total_evs": total_evs,
+                                "defender_hp": result.defender_hp,
+                                "per_hit_max": result.max_damage,
+                                "total_max": total_max,
+                                "remaining_hp": result.defender_hp - total_max
+                            }
+                            break
+
+            if best_spread is None:
+                max_defender = PokemonBuild(
+                    name=defender_name,
+                    base_stats=def_base,
+                    types=def_types,
+                    nature=def_nature_parsed,
+                    evs=EVSpread(hp=252, defense=252 if is_physical else 0, special_defense=0 if is_physical else 252)
+                )
+                modifiers = DamageModifiers(
+                    is_doubles=True,
+                    attack_stage=attacker_attack_stage if is_physical else 0,
+                    special_attack_stage=attacker_attack_stage if not is_physical else 0
+                )
+                result = calculate_damage(attacker, max_defender, move, modifiers)
+                total_max = result.max_damage * num_hits
+
+                return {
+                    "attacker": attacker_name,
+                    "defender": defender_name,
+                    "move": move_name,
+                    "num_hits": num_hits,
+                    "achievable": False,
+                    "message": f"Cannot survive {num_hits} hits even with 252 HP / 252 {'Def' if is_physical else 'SpD'} {defender_nature}",
+                    "max_bulk_stats": {
+                        "hp": result.defender_hp,
+                        "per_hit": f"{result.max_damage} ({result.max_damage/result.defender_hp*100:.1f}%)",
+                        "total": f"{total_max} ({total_max/result.defender_hp*100:.1f}%)"
+                    },
+                    "suggestion": "Try Intimidate (-1 Attack)" if attacker_attack_stage >= 0 else "Try Reflect/Light Screen or resistance berry"
+                }
+
+            return {
+                "attacker": attacker_name,
+                "defender": defender_name,
+                "move": move_name,
+                "num_hits": num_hits,
+                "achievable": True,
+                "minimum_spread": {
+                    "hp_evs": best_spread["hp_evs"],
+                    "def_evs": best_spread["def_evs"],
+                    "nature": defender_nature,
+                    "total_evs": best_spread["total_evs"],
+                    "evs_remaining": 508 - best_spread["total_evs"]
+                },
+                "calculation": {
+                    "defender_hp": best_spread["defender_hp"],
+                    "per_hit_max": best_spread["per_hit_max"],
+                    "total_max": best_spread["total_max"],
+                    "hp_remaining": best_spread["remaining_hp"]
+                }
+            }
+
+        except Exception as e:
+            error_str = str(e).lower()
+            if "not found" in error_str or "404" in error_str:
+                suggestions = suggest_pokemon_name(attacker_name) or suggest_pokemon_name(defender_name)
+                return pokemon_not_found_error(
+                    f"{attacker_name} or {defender_name}",
+                    suggestions if suggestions else None
+                )
+            return api_error("PokeAPI", str(e), is_retryable=True)
