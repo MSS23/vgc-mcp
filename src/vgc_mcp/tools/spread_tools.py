@@ -550,6 +550,12 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                         "attack" if is_physical else "special_attack"
                     )
 
+                    # Auto-detect Unseen Fist for Urshifu forms
+                    normalized_attacker = survive_pokemon.lower().replace(" ", "-")
+                    if normalized_attacker in ("urshifu", "urshifu-single-strike", "urshifu-rapid-strike"):
+                        if not survive_pokemon_ability:
+                            survive_pokemon_ability = "unseen-fist"
+
                     # Create attacker build
                     attacker = PokemonBuild(
                         name=survive_pokemon,
@@ -611,6 +617,12 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                     def_evs = best_spread["def"]
                     spd_evs = best_spread["spd"]
 
+                    # Check if attacker has Unseen Fist (bypasses Protect)
+                    has_unseen_fist = (
+                        survive_pokemon_ability and
+                        survive_pokemon_ability.lower().replace(" ", "-") == "unseen-fist"
+                    )
+
                     results["benchmarks"]["survival"] = {
                         "attacker": survive_pokemon,
                         "move": survive_move,
@@ -619,7 +631,11 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                         "defender_tera": defender_tera_type,
                         "damage_range": best_result.damage_range,
                         "survives": best_result.max_percent < 100,
-                        "hp_remaining": f"{100 - best_result.max_percent:.1f}%"
+                        "hp_remaining": f"{100 - best_result.max_percent:.1f}%",
+                        "unseen_fist_warning": (
+                            "WARNING: Attacker has Unseen Fist - contact moves bypass Protect!"
+                            if has_unseen_fist else None
+                        )
                     }
 
                 except Exception as e:

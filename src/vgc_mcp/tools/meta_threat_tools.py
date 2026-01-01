@@ -498,7 +498,11 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
         survives = your_stats["hp"] > damage["max_damage"]
         survives_min = your_stats["hp"] > damage["min_damage"]
 
-        return {
+        # Check if attacker has Unseen Fist (Urshifu forms)
+        normalized_threat = threat_pokemon.lower().replace(" ", "-")
+        has_unseen_fist = normalized_threat in ("urshifu", "urshifu-single-strike", "urshifu-rapid-strike")
+
+        result = {
             "your_pokemon": pokemon_name,
             "your_hp": your_stats["hp"],
             "threat_pokemon": threat_pokemon,
@@ -516,6 +520,14 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                 f"{threat_pokemon}'s {threat_move} ({damage['min_percent']:.0f}%-{damage['max_percent']:.0f}%)"
             )
         }
+
+        if has_unseen_fist:
+            result["unseen_fist_warning"] = (
+                "WARNING: Urshifu has Unseen Fist - contact moves bypass Protect! "
+                "You cannot avoid this damage with Protect."
+            )
+
+        return result
 
     @mcp.tool()
     async def find_survival_evs(
@@ -641,27 +653,39 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                     continue
                 break
 
+        # Check if attacker has Unseen Fist (Urshifu forms)
+        normalized_threat = threat_pokemon.lower().replace(" ", "-")
+        has_unseen_fist = normalized_threat in ("urshifu", "urshifu-single-strike", "urshifu-rapid-strike")
+
         if not best_spread:
-            return {
+            result = {
                 "pokemon": pokemon_name,
                 "threat": threat_pokemon,
                 "move": threat_move,
                 "impossible": True,
                 "message": f"Cannot survive {threat_pokemon}'s {threat_move} even with max bulk investment"
             }
+        else:
+            result = {
+                "pokemon": pokemon_name,
+                "nature": nature,
+                "threat": threat_pokemon,
+                "move": threat_move,
+                "move_type": move_data.get("type"),
+                "move_category": "Physical" if move_is_physical else "Special",
+                "minimum_evs": best_spread,
+                "analysis": (
+                    f"Minimum {best_spread['total_evs']} total EVs needed: "
+                    f"{best_spread['hp_evs']} HP / "
+                    f"{best_spread['def_evs']} Def / "
+                    f"{best_spread['spd_evs']} SpD"
+                )
+            }
 
-        return {
-            "pokemon": pokemon_name,
-            "nature": nature,
-            "threat": threat_pokemon,
-            "move": threat_move,
-            "move_type": move_data.get("type"),
-            "move_category": "Physical" if move_is_physical else "Special",
-            "minimum_evs": best_spread,
-            "analysis": (
-                f"Minimum {best_spread['total_evs']} total EVs needed: "
-                f"{best_spread['hp_evs']} HP / "
-                f"{best_spread['def_evs']} Def / "
-                f"{best_spread['spd_evs']} SpD"
+        if has_unseen_fist:
+            result["unseen_fist_warning"] = (
+                "WARNING: Urshifu has Unseen Fist - contact moves bypass Protect! "
+                "You cannot avoid this damage with Protect."
             )
-        }
+
+        return result
