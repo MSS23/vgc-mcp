@@ -3812,7 +3812,7 @@ body {{
             </div>
             <div>
                 <div class="usage-bar"><div class="usage-fill" style="width:{min(100, t.get('usage_percent', 0) * 2)}%"></div></div>
-                <div class="usage-text">{t.get('usage_percent', 0):.1f}%</div>
+                <div class="usage-text">{format(t.get('usage_percent', 0), '.1f')}%</div>
             </div>
         </div>
         ''' for t in threats[:10])}
