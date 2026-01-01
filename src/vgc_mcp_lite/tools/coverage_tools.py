@@ -13,8 +13,11 @@ from vgc_mcp_core.calc.coverage import (
     ALL_TYPES,
     COVERAGE_MOVES,
 )
-# Note: MCP-UI is only available in vgc-mcp-lite, not the full server
-HAS_UI = False
+from vgc_mcp_core.calc.modifiers import get_type_effectiveness
+
+# MCP-UI support (enabled in vgc-mcp-lite)
+from ..ui.resources import create_coverage_resource, add_ui_metadata
+HAS_UI = True
 
 
 def register_coverage_tools(mcp: FastMCP, team_manager, pokeapi):

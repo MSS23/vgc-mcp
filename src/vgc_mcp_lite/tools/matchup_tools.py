@@ -10,8 +10,10 @@ from vgc_mcp_core.calc.matchup import (
     analyze_defensive_matchup,
     COMMON_THREATS,
 )
-# Note: MCP-UI is only available in vgc-mcp-lite, not the full server
-HAS_UI = False
+
+# MCP-UI support (enabled in vgc-mcp-lite)
+from ..ui.resources import create_threat_analysis_resource, add_ui_metadata
+HAS_UI = True
 
 
 def register_matchup_tools(mcp: FastMCP, team_manager: TeamManager):

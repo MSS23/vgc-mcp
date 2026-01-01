@@ -1,7 +1,8 @@
+# -*- coding: utf-8 -*-
 """VGC Team Builder MCP Server - Lite Version.
 
-A lightweight version with ~40 essential tools optimized for smaller models
-like Llama 3.3 70B. Full version has 158 tools which can overwhelm
+A lightweight version with ~49 essential tools optimized for smaller models
+like Llama 3.3 70B. Full version has 157 tools which can overwhelm
 models with limited context or tool selection capability.
 
 Essential tools included:
@@ -12,30 +13,28 @@ Essential tools included:
 - EV spread optimization
 - Coverage analysis
 - Matchup analysis
-- Basic legality checking
-- Move suggestions
 - Usage data
 
 Usage:
-    python -m vgc_mcp.server_lite
+    python -m vgc_mcp_lite
     # or
     vgc-mcp-lite (after pip install)
 """
 
 from mcp.server.fastmcp import FastMCP
 
-from .config import logger
-from .api.cache import APICache
-from .api.pokeapi import PokeAPIClient
-from .api.smogon import SmogonStatsClient
-from .team.manager import TeamManager
-from .team.analysis import TeamAnalyzer
+from vgc_mcp_core.config import logger
+from vgc_mcp_core.api.cache import APICache
+from vgc_mcp_core.api.pokeapi import PokeAPIClient
+from vgc_mcp_core.api.smogon import SmogonStatsClient
+from vgc_mcp_core.team.manager import TeamManager
+from vgc_mcp_core.team.analysis import TeamAnalyzer
 
 # Import only the essential tool modules
-# Target: ~50 tools (well under Goose's 60 recommendation)
+# Target: ~49 tools (well under Goose's 60 recommendation)
 from .tools.stats_tools import register_stats_tools          # 2 tools
 from .tools.damage_tools import register_damage_tools        # 3 tools
-from .tools.speed_tools import register_speed_tools          # 7 tools (includes speed tier tools)
+from .tools.speed_tools import register_speed_tools          # 7 tools
 from .tools.team_tools import register_team_tools            # 9 tools
 from .tools.usage_tools import register_usage_tools          # 6 tools
 from .tools.spread_tools import register_spread_tools        # 6 tools
@@ -44,11 +43,6 @@ from .tools.coverage_tools import register_coverage_tools    # 6 tools
 from .tools.matchup_tools import register_matchup_tools      # 6 tools
 # Total: ~49 tools
 
-# NOT included in lite (to stay under 60):
-# - legality_tools (12 tools) - advanced legality checks
-# - move_tools (7 tools) - detailed move analysis
-# - speed_control_tools (6 tools) - TR/Tailwind deep analysis
-
 # MCP-UI support
 from .ui import register_ui_resources
 
@@ -56,7 +50,7 @@ from .ui import register_ui_resources
 # Initialize MCP server
 mcp = FastMCP(
     "VGC Team Builder Lite",
-    instructions="Lite MCP server for VGC Pokemon team building (~40 essential tools)"
+    instructions="Lite MCP server for VGC Pokemon team building (~49 essential tools)"
 )
 
 # Initialize shared state
@@ -72,12 +66,12 @@ analyzer = TeamAnalyzer()
 register_team_tools(mcp, pokeapi, team_manager, analyzer)
 
 # Damage calculations (3 tools)
-register_damage_tools(mcp, pokeapi, smogon)  # Pass smogon for auto-fetching common spreads
+register_damage_tools(mcp, pokeapi, smogon)
 
 # Stats (2 tools)
 register_stats_tools(mcp, pokeapi)
 
-# Speed analysis (7 tools - includes speed tier tools)
+# Speed analysis (7 tools)
 register_speed_tools(mcp, pokeapi)
 
 # Import/export (4 tools)
@@ -109,9 +103,9 @@ def main_http(host: str = "0.0.0.0", port: int = 8000):
     """Entry point for HTTP/SSE transport (for remote/mobile access).
 
     Usage:
-        python -c "from vgc_mcp.server_lite import main_http; main_http()"
+        python -c "from vgc_mcp_lite.server import main_http; main_http()"
         # or with custom port:
-        python -c "from vgc_mcp.server_lite import main_http; main_http(port=3000)"
+        python -c "from vgc_mcp_lite.server import main_http; main_http(port=3000)"
 
     Then add to Goose/Claude.ai:
         URL: https://your-server.com/sse
@@ -122,7 +116,7 @@ def main_http(host: str = "0.0.0.0", port: int = 8000):
     from starlette.routing import Mount, Route
     from starlette.responses import JSONResponse, Response
 
-    # Create SSE transport - note the trailing slash for Mount compatibility
+    # Create SSE transport
     sse = SseServerTransport("/messages/")
 
     async def handle_sse(request):

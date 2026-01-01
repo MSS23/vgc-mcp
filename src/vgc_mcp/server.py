@@ -30,13 +30,13 @@ Usage:
 
 from mcp.server.fastmcp import FastMCP
 
-from .config import logger
-from .api.cache import APICache
-from .api.pokeapi import PokeAPIClient
-from .api.smogon import SmogonStatsClient
-from .api.pokepaste import PokePasteClient
-from .team.manager import TeamManager
-from .team.analysis import TeamAnalyzer
+from vgc_mcp_core.config import logger
+from vgc_mcp_core.api.cache import APICache
+from vgc_mcp_core.api.pokeapi import PokeAPIClient
+from vgc_mcp_core.api.smogon import SmogonStatsClient
+from vgc_mcp_core.api.pokepaste import PokePasteClient
+from vgc_mcp_core.team.manager import TeamManager
+from vgc_mcp_core.team.analysis import TeamAnalyzer
 
 from .tools.stats_tools import register_stats_tools
 from .tools.damage_tools import register_damage_tools

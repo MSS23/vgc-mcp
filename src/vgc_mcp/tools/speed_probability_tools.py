@@ -8,8 +8,8 @@ distribution of spreads used by players in the meta.
 from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
-from ..calc.stats import calculate_speed
-from ..calc.speed_probability import (
+from vgc_mcp_core.calc.stats import calculate_speed
+from vgc_mcp_core.calc.speed_probability import (
     calculate_outspeed_probability,
     calculate_meta_outspeed_rate,
     calculate_speed_creep_evs,
@@ -17,16 +17,10 @@ from ..calc.speed_probability import (
     build_speed_distribution_data,
     calculate_speed_stat,
 )
-# Optional MCP-UI support (only in vgc-mcp-lite)
-try:
-    from ..ui.resources import create_speed_outspeed_resource, add_ui_metadata
-    HAS_UI = True
-except ImportError:
-    HAS_UI = False
-    create_speed_outspeed_resource = None
-    add_ui_metadata = None
+# Note: MCP-UI is only available in vgc-mcp-lite, not the full server
+HAS_UI = False
 
-from ..models.pokemon import Nature
+from vgc_mcp_core.models.pokemon import Nature
 
 
 def register_speed_probability_tools(mcp: FastMCP, smogon, pokeapi, team_manager):

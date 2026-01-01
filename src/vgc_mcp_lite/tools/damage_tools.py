@@ -11,8 +11,9 @@ from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, IVSpread
 from vgc_mcp_core.utils.errors import error_response, ErrorCodes, pokemon_not_found_error, invalid_nature_error, api_error
 from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name, suggest_nature
 
-# Note: MCP-UI is only available in vgc-mcp-lite, not the full server
-HAS_UI = False
+# MCP-UI support (enabled in vgc-mcp-lite)
+from ..ui.resources import create_damage_calc_resource, create_interactive_damage_calc_resource, add_ui_metadata
+HAS_UI = True
 
 
 # Module-level Smogon client reference (set during registration)
@@ -212,8 +213,8 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             def get_paradox_boost_stat(base_stats, nature_enum, evs_dict) -> Optional[str]:
                 """Determine which stat gets boosted by Protosynthesis/Quark Drive.
                 Boosts the highest stat (excluding HP). Speed gets 1.5x, others get 1.3x."""
-                from vgc_mcp_core.calc.stats import calculate_stat, calculate_speed
-                from vgc_mcp_core.models.pokemon import get_nature_modifier
+                from ..calc.stats import calculate_stat, calculate_speed
+                from ..models.pokemon import get_nature_modifier
 
                 stats = {
                     "attack": calculate_stat(

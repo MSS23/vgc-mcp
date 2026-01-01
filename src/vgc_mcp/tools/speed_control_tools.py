@@ -2,8 +2,8 @@
 
 from mcp.server.fastmcp import FastMCP
 
-from ..team.manager import TeamManager
-from ..calc.speed_control import (
+from vgc_mcp_core.team.manager import TeamManager
+from vgc_mcp_core.calc.speed_control import (
     analyze_trick_room,
     analyze_tailwind,
     analyze_speed_drop,

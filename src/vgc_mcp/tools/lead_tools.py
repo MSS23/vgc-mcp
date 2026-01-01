@@ -11,9 +11,9 @@ from mcp.server.fastmcp import FastMCP
 from typing import Optional
 from itertools import combinations
 
-from ..team.manager import TeamManager
-from ..calc.matchup import COMMON_THREATS, analyze_threat_matchup
-from ..utils.errors import error_response, success_response
+from vgc_mcp_core.team.manager import TeamManager
+from vgc_mcp_core.calc.matchup import COMMON_THREATS, analyze_threat_matchup
+from vgc_mcp_core.utils.errors import error_response, success_response
 
 
 def register_lead_tools(mcp: FastMCP, team_manager: TeamManager):

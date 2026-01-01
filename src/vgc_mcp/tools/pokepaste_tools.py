@@ -3,8 +3,8 @@
 from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
-from ..api.pokepaste import PokePasteClient, PokePasteError
-from ..formats.showdown import parse_showdown_team, ShowdownParseError
+from vgc_mcp_core.api.pokepaste import PokePasteClient, PokePasteError
+from vgc_mcp_core.formats.showdown import parse_showdown_team, ShowdownParseError
 
 
 def register_pokepaste_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi=None, smogon=None):

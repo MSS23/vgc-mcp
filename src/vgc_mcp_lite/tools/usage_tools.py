@@ -5,8 +5,9 @@ from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp_core.api.smogon import SmogonStatsClient
 
-# Note: MCP-UI is only available in vgc-mcp-lite, not the full server
-HAS_UI = False
+# MCP-UI support (enabled in vgc-mcp-lite)
+from ..ui.resources import create_usage_stats_resource, add_ui_metadata
+HAS_UI = True
 
 
 def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):

@@ -3,7 +3,7 @@
 from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
-from ..data.spread_presets import (
+from vgc_mcp_core.data.spread_presets import (
     get_presets_for_pokemon,
     get_preset_by_name,
     get_all_pokemon_with_presets,

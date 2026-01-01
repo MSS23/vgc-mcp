@@ -8,8 +8,9 @@ from vgc_mcp_core.team.manager import TeamManager
 from vgc_mcp_core.team.analysis import TeamAnalyzer
 from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, IVSpread
 
-# Note: MCP-UI is only available in vgc-mcp-lite, not the full server
-HAS_UI = False
+# MCP-UI support (enabled in vgc-mcp-lite)
+from ..ui.resources import create_team_roster_resource, add_ui_metadata
+HAS_UI = True
 
 
 def _pokemon_to_ui_dict(pokemon: PokemonBuild) -> dict:

@@ -2,9 +2,9 @@
 
 from mcp.server.fastmcp import FastMCP
 
-from ..team.manager import TeamManager
-from ..api.smogon import SmogonStatsClient
-from ..team.core_builder import (
+from vgc_mcp_core.team.manager import TeamManager
+from vgc_mcp_core.api.smogon import SmogonStatsClient
+from vgc_mcp_core.team.core_builder import (
     suggest_partners,
     find_popular_cores,
     analyze_core_synergy,

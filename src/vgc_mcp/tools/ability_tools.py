@@ -3,7 +3,7 @@
 from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
-from ..calc.abilities import (
+from vgc_mcp_core.calc.abilities import (
     analyze_intimidate_matchup,
     analyze_weather_synergy,
     analyze_terrain_synergy,

@@ -8,17 +8,17 @@ and matchup assessments.
 from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
-from ..calc.stats import calculate_all_stats
-from ..calc.speed_probability import calculate_speed_stat
-from ..calc.meta_threats import (
+from vgc_mcp_core.calc.stats import calculate_all_stats
+from vgc_mcp_core.calc.speed_probability import calculate_speed_stat
+from vgc_mcp_core.calc.meta_threats import (
     analyze_single_threat,
     generate_spread_suggestions,
     create_empty_threat_report,
     MetaThreatReport,
     ThreatDamageResult
 )
-from ..models.pokemon import PokemonBuild, BaseStats, EVSpread, Nature
-from ..config import EV_BREAKPOINTS_LV50
+from vgc_mcp_core.models.pokemon import PokemonBuild, BaseStats, EVSpread, Nature
+from vgc_mcp_core.config import EV_BREAKPOINTS_LV50
 
 
 def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
@@ -476,7 +476,7 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
             "speed": threat_data["base_stats"]["speed"] + 40
         }
 
-        from ..calc.meta_threats import calculate_simple_damage, _get_simple_effectiveness
+        from vgc_mcp_core.calc.meta_threats import calculate_simple_damage, _get_simple_effectiveness
 
         # Check if STAB
         stab = move_data.get("type", "normal").lower() in [t.lower() for t in threat_data.get("types", [])]
@@ -584,7 +584,7 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
 
         stab = move_data.get("type", "normal").lower() in [t.lower() for t in threat_data.get("types", [])]
 
-        from ..calc.meta_threats import calculate_simple_damage, _get_simple_effectiveness
+        from vgc_mcp_core.calc.meta_threats import calculate_simple_damage, _get_simple_effectiveness
 
         type_eff = _get_simple_effectiveness(
             move_data.get("type", "normal"),

@@ -7,10 +7,10 @@ for common VGC teambuilding workflows.
 from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
-from ..formats.showdown import parse_showdown_team, ShowdownParseError
-from ..rules.regulation_loader import get_regulation_config
-from ..utils.errors import error_response, success_response, ErrorCodes
-from ..utils.fuzzy import suggest_pokemon_name
+from vgc_mcp_core.formats.showdown import parse_showdown_team, ShowdownParseError
+from vgc_mcp_core.rules.regulation_loader import get_regulation_config
+from vgc_mcp_core.utils.errors import error_response, success_response, ErrorCodes
+from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name
 
 
 def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyzer):
@@ -276,7 +276,7 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                     # Get Pokemon data from API
                     pokemon_data = await pokeapi.get_pokemon(pokemon.name)
                     if pokemon_data:
-                        from ..models.pokemon import PokemonBuild, Nature, EVSpread, BaseStats
+                        from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, BaseStats
 
                         base_stats = BaseStats(
                             hp=pokemon_data["base_stats"]["hp"],
@@ -685,7 +685,7 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
             build = role_builds.get(role, role_builds["mixed"])
 
             # Create the Pokemon build
-            from ..models.pokemon import PokemonBuild, Nature, EVSpread, BaseStats
+            from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, BaseStats
 
             ev_map = build["evs"]
             evs = EVSpread(
@@ -811,11 +811,11 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                 ko_targets=[{"defender": "palafin", "move": "wood-hammer"}]
             )
         """
-        from ..models.pokemon import Nature, PokemonBuild, EVSpread, BaseStats, get_nature_modifier
-        from ..models.move import MoveCategory
-        from ..calc.stats import calculate_stat, calculate_hp
-        from ..calc.damage import calculate_damage
-        from ..calc.modifiers import DamageModifiers
+        from vgc_mcp_core.models.pokemon import Nature, PokemonBuild, EVSpread, BaseStats, get_nature_modifier
+        from vgc_mcp_core.models.move import MoveCategory
+        from vgc_mcp_core.calc.stats import calculate_stat, calculate_hp
+        from vgc_mcp_core.calc.damage import calculate_damage
+        from vgc_mcp_core.calc.modifiers import DamageModifiers
 
         try:
             # Get Pokemon data
@@ -1018,7 +1018,7 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                         benchmarks_failed.append(f"Error checking KO on {defender_name}: {str(e)}")
 
             # 4. Distribute remaining EVs (ensure multiples of 4)
-            from ..config import normalize_evs, EV_BREAKPOINTS_LV50
+            from vgc_mcp_core.config import normalize_evs, EV_BREAKPOINTS_LV50
 
             used_evs = speed_evs_needed + hp_evs + def_evs + spd_evs + atk_evs
             leftover = 508 - used_evs
@@ -1119,10 +1119,10 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
             - ko_chance: "Guaranteed OHKO", "Possible OHKO", "2HKO", "3HKO+", "Never KO"
             - what_changes_outcome: Items/abilities that would flip the result
         """
-        from ..models.pokemon import Nature, PokemonBuild, EVSpread, BaseStats
-        from ..models.move import MoveCategory
-        from ..calc.damage import calculate_damage
-        from ..calc.modifiers import DamageModifiers
+        from vgc_mcp_core.models.pokemon import Nature, PokemonBuild, EVSpread, BaseStats
+        from vgc_mcp_core.models.move import MoveCategory
+        from vgc_mcp_core.calc.damage import calculate_damage
+        from vgc_mcp_core.calc.modifiers import DamageModifiers
 
         try:
             # Get Pokemon data
@@ -1255,8 +1255,8 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
             - scenarios: Result for each requested scenario
             - evs_to_outspeed: Minimum EVs needed to outspeed (if behind)
         """
-        from ..models.pokemon import Nature, get_nature_modifier
-        from ..calc.stats import calculate_stat
+        from vgc_mcp_core.models.pokemon import Nature, get_nature_modifier
+        from vgc_mcp_core.calc.stats import calculate_stat
 
         try:
             my_data = await pokeapi.get_pokemon(my_pokemon)
@@ -1392,9 +1392,9 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
             - safe_switches: Team members that can switch in safely
             - answers: Team members that can KO the threat
         """
-        from ..models.pokemon import Nature, PokemonBuild, EVSpread, BaseStats
-        from ..calc.damage import calculate_damage
-        from ..calc.modifiers import DamageModifiers
+        from vgc_mcp_core.models.pokemon import Nature, PokemonBuild, EVSpread, BaseStats
+        from vgc_mcp_core.calc.damage import calculate_damage
+        from vgc_mcp_core.calc.modifiers import DamageModifiers
 
         try:
             if team_manager.size == 0:
@@ -1589,8 +1589,8 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
             - moves: Suggested moves (from common competitive usage)
             - final_stats: Stats at level 50
         """
-        from ..models.pokemon import Nature, EVSpread, get_nature_modifier
-        from ..calc.stats import calculate_stat, calculate_hp
+        from vgc_mcp_core.models.pokemon import Nature, EVSpread, get_nature_modifier
+        from vgc_mcp_core.calc.stats import calculate_stat, calculate_hp
 
         try:
             pokemon_data = await pokeapi.get_pokemon(pokemon_name)
@@ -1823,11 +1823,11 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
             - damage_results: Damage calc for each set
             - summary: Quick overview of survival/KO across sets
         """
-        from ..models.pokemon import Nature, PokemonBuild, EVSpread, BaseStats, get_nature_modifier
-        from ..models.move import MoveCategory
-        from ..calc.damage import calculate_damage
-        from ..calc.modifiers import DamageModifiers
-        from ..calc.stats import calculate_stat, calculate_hp
+        from vgc_mcp_core.models.pokemon import Nature, PokemonBuild, EVSpread, BaseStats, get_nature_modifier
+        from vgc_mcp_core.models.move import MoveCategory
+        from vgc_mcp_core.calc.damage import calculate_damage
+        from vgc_mcp_core.calc.modifiers import DamageModifiers
+        from vgc_mcp_core.calc.stats import calculate_stat, calculate_hp
 
         try:
             # Validate inputs
@@ -2242,11 +2242,11 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                 use_smogon_spreads=True
             )
         """
-        from ..models.pokemon import Nature, PokemonBuild, EVSpread, BaseStats, get_nature_modifier
-        from ..models.move import MoveCategory
-        from ..calc.stats import calculate_stat, calculate_hp
-        from ..calc.damage import calculate_damage
-        from ..calc.modifiers import DamageModifiers
+        from vgc_mcp_core.models.pokemon import Nature, PokemonBuild, EVSpread, BaseStats, get_nature_modifier
+        from vgc_mcp_core.models.move import MoveCategory
+        from vgc_mcp_core.calc.stats import calculate_stat, calculate_hp
+        from vgc_mcp_core.calc.damage import calculate_damage
+        from vgc_mcp_core.calc.modifiers import DamageModifiers
 
         try:
             # Get Pokemon data
@@ -2264,7 +2264,7 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
             is_physical = base_stats["attack"] > base_stats["special_attack"]
 
             # Import EV normalization helper
-            from ..config import normalize_evs, EV_BREAKPOINTS_LV50
+            from vgc_mcp_core.config import normalize_evs, EV_BREAKPOINTS_LV50
 
             # Normalize input EVs to valid multiples of 4
             current_hp_evs = normalize_evs(current_hp_evs)
@@ -2761,8 +2761,8 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
             - usage_data: Smogon usage if available
             - verdict: Recommendation with reasoning
         """
-        from ..calc.stats import calculate_stat, calculate_hp
-        from ..calc.modifiers import get_type_effectiveness
+        from vgc_mcp_core.calc.stats import calculate_stat, calculate_hp
+        from vgc_mcp_core.calc.modifiers import get_type_effectiveness
 
         try:
             # Fetch both Pokemon
@@ -3010,8 +3010,8 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
             - meta_counters: Popular Pokemon that counter this threat
             - recommendation: Best approach
         """
-        from ..calc.stats import calculate_stat
-        from ..calc.modifiers import get_type_effectiveness
+        from vgc_mcp_core.calc.stats import calculate_stat
+        from vgc_mcp_core.calc.modifiers import get_type_effectiveness
 
         try:
             # Get threat data
@@ -3215,8 +3215,8 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
             - issues: Problems with this core
             - suggested_partners: Pokemon that complement this core
         """
-        from ..calc.stats import calculate_stat
-        from ..calc.modifiers import get_type_effectiveness
+        from vgc_mcp_core.calc.stats import calculate_stat
+        from vgc_mcp_core.calc.modifiers import get_type_effectiveness
 
         try:
             if len(pokemon_list) < 2:

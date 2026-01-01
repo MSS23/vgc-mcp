@@ -3,7 +3,7 @@
 from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
-from ..validation.learnset import (
+from vgc_mcp_core.validation.learnset import (
     get_learnable_moves,
     validate_moveset,
     validate_team_movesets,

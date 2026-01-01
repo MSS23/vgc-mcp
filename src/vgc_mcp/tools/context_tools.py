@@ -9,8 +9,8 @@ that stored build automatically.
 from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
-from ..models.pokemon import PokemonBuild, Nature, EVSpread, IVSpread, BaseStats
-from ..calc.stats import calculate_all_stats
+from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, IVSpread, BaseStats
+from vgc_mcp_core.calc.stats import calculate_all_stats
 
 
 def register_context_tools(mcp: FastMCP, pokeapi, team_manager):

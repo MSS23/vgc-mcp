@@ -3,14 +3,14 @@
 from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
-from ..rules.regulation_loader import get_regulation_config
-from ..rules.vgc_rules import get_regulation, list_regulations, validate_team_rules
-from ..rules.restricted import (
+from vgc_mcp_core.rules.regulation_loader import get_regulation_config
+from vgc_mcp_core.rules.vgc_rules import get_regulation, list_regulations, validate_team_rules
+from vgc_mcp_core.rules.restricted import (
     is_restricted, is_banned, count_restricted,
     find_banned, get_restricted_status, find_restricted,
     get_pokemon_legality
 )
-from ..rules.item_clause import check_item_clause, get_duplicate_items, suggest_alternative_items
+from vgc_mcp_core.rules.item_clause import check_item_clause, get_duplicate_items, suggest_alternative_items
 
 
 def register_legality_tools(mcp: FastMCP, team_manager):

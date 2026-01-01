@@ -8,8 +8,9 @@ from vgc_mcp_core.calc.stats import calculate_speed, find_speed_evs
 from vgc_mcp_core.calc.speed import SPEED_BENCHMARKS, calculate_speed_tier
 from vgc_mcp_core.models.pokemon import Nature
 
-# Note: MCP-UI is only available in vgc-mcp-lite, not the full server
-HAS_UI = False
+# MCP-UI support (enabled in vgc-mcp-lite)
+from ..ui.resources import create_speed_tier_resource, add_ui_metadata
+HAS_UI = True
 
 
 # Common VGC Pokemon with their base speeds and common speed investments
@@ -550,7 +551,7 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 data = await pokeapi.get_pokemon(pokemon_name)
                 base_speed = data["base_stats"]["speed"]
 
-                from vgc_mcp_core.config import EV_BREAKPOINTS_LV50
+                from ..config import EV_BREAKPOINTS_LV50
 
                 evs_needed = None
                 for ev in EV_BREAKPOINTS_LV50:
