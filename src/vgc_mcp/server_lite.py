@@ -121,11 +121,11 @@ def main_http(host: str = "0.0.0.0", port: int = 8000):
     import uvicorn
     from mcp.server.sse import SseServerTransport
     from starlette.applications import Starlette
-    from starlette.routing import Route
-    from starlette.responses import JSONResponse
+    from starlette.routing import Mount, Route
+    from starlette.responses import JSONResponse, Response
 
-    # Create SSE transport
-    sse = SseServerTransport("/messages")
+    # Create SSE transport - note the trailing slash for Mount compatibility
+    sse = SseServerTransport("/messages/")
 
     async def handle_sse(request):
         async with sse.connect_sse(
@@ -134,9 +134,7 @@ def main_http(host: str = "0.0.0.0", port: int = 8000):
             await mcp._mcp_server.run(
                 streams[0], streams[1], mcp._mcp_server.create_initialization_options()
             )
-
-    async def handle_messages(request):
-        return await sse.handle_post_message(request.scope, request.receive, request._send)
+        return Response()
 
     async def health_check(request):
         """Health check endpoint for monitoring."""
@@ -152,7 +150,7 @@ def main_http(host: str = "0.0.0.0", port: int = 8000):
         routes=[
             Route("/health", endpoint=health_check, methods=["GET"]),
             Route("/sse", endpoint=handle_sse),
-            Route("/messages", endpoint=handle_messages, methods=["POST"]),
+            Mount("/messages/", app=sse.handle_post_message),
         ]
     )
 
