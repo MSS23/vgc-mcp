@@ -4,6 +4,7 @@ from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
 from ..api.pokeapi import PokeAPIClient
+from ..api.smogon import SmogonStatsClient
 from ..calc.damage import calculate_damage, calculate_ko_threshold, calculate_bulk_threshold
 from ..calc.modifiers import DamageModifiers
 from ..models.pokemon import PokemonBuild, Nature, EVSpread, IVSpread
@@ -12,21 +13,52 @@ from ..utils.fuzzy import suggest_pokemon_name, suggest_nature
 from ..ui.resources import create_damage_calc_resource, add_ui_metadata
 
 
-def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
+# Module-level Smogon client reference (set during registration)
+_smogon_client: Optional[SmogonStatsClient] = None
+
+
+async def _get_common_spread(pokemon_name: str) -> Optional[dict]:
+    """Fetch the most common spread for a Pokemon from Smogon usage stats.
+
+    Returns:
+        dict with 'nature' and 'evs' keys, or None if not found
+    """
+    if _smogon_client is None:
+        return None
+    try:
+        usage = await _smogon_client.get_pokemon_usage(pokemon_name)
+        if usage and usage.get("spreads"):
+            top_spread = usage["spreads"][0]
+            return {
+                "nature": top_spread.get("nature", "Serious"),
+                "evs": top_spread.get("evs", {}),
+                "usage": top_spread.get("usage", 0),
+                "item": list(usage.get("items", {}).keys())[0] if usage.get("items") else None,
+                "ability": list(usage.get("abilities", {}).keys())[0] if usage.get("abilities") else None,
+            }
+    except Exception:
+        pass
+    return None
+
+
+def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[SmogonStatsClient] = None):
     """Register damage calculation tools with the MCP server."""
+    global _smogon_client
+    _smogon_client = smogon
 
     @mcp.tool()
     async def calculate_damage_output(
         attacker_name: str,
         defender_name: str,
         move_name: str,
-        attacker_nature: str = "serious",
-        attacker_atk_evs: int = 0,
-        attacker_spa_evs: int = 0,
-        defender_nature: str = "serious",
-        defender_hp_evs: int = 0,
-        defender_def_evs: int = 0,
-        defender_spd_evs: int = 0,
+        attacker_nature: Optional[str] = None,
+        attacker_atk_evs: Optional[int] = None,
+        attacker_spa_evs: Optional[int] = None,
+        defender_nature: Optional[str] = None,
+        defender_hp_evs: Optional[int] = None,
+        defender_def_evs: Optional[int] = None,
+        defender_spd_evs: Optional[int] = None,
+        use_smogon_spreads: bool = True,
         is_spread: bool = False,
         weather: Optional[str] = None,
         terrain: Optional[str] = None,
@@ -50,22 +82,27 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         """
         Calculate damage from one Pokemon to another.
 
+        By default, uses the most common Smogon VGC spread for both Pokemon when
+        nature/EVs are not specified. This gives realistic damage calculations
+        based on how Pokemon are typically built in competitive play.
+
         Args:
             attacker_name: Attacking Pokemon's name
             defender_name: Defending Pokemon's name
             move_name: Name of the move being used
-            attacker_nature: Attacker's nature (default: serious)
-            attacker_atk_evs: Attacker's Attack EVs (for physical moves)
-            attacker_spa_evs: Attacker's Sp. Atk EVs (for special moves)
-            defender_nature: Defender's nature
-            defender_hp_evs: Defender's HP EVs
-            defender_def_evs: Defender's Defense EVs
-            defender_spd_evs: Defender's Sp. Def EVs
+            attacker_nature: Attacker's nature. If None and use_smogon_spreads=True, uses most common.
+            attacker_atk_evs: Attacker's Attack EVs. If None and use_smogon_spreads=True, uses most common.
+            attacker_spa_evs: Attacker's Sp. Atk EVs. If None and use_smogon_spreads=True, uses most common.
+            defender_nature: Defender's nature. If None and use_smogon_spreads=True, uses most common.
+            defender_hp_evs: Defender's HP EVs. If None and use_smogon_spreads=True, uses most common.
+            defender_def_evs: Defender's Defense EVs. If None and use_smogon_spreads=True, uses most common.
+            defender_spd_evs: Defender's Sp. Def EVs. If None and use_smogon_spreads=True, uses most common.
+            use_smogon_spreads: If True (default), auto-fetch most common spreads from Smogon usage data
             is_spread: True if move is hitting multiple targets (0.75x damage)
             weather: "sun", "rain", "sand", or "snow" (affects Fire/Water moves)
             terrain: "electric", "grassy", "psychic", or "misty" (affects damage)
-            attacker_item: Item like "life-orb", "choice-band", "choice-specs"
-            attacker_ability: Attacker's ability (e.g., "sheer-force", "adaptability"). Auto-detected if not specified.
+            attacker_item: Item like "life-orb", "choice-band", "choice-specs". Auto-fetched if use_smogon_spreads=True.
+            attacker_ability: Attacker's ability. Auto-detected if not specified.
             defender_ability: Defender's ability. Auto-detected if not specified.
             attacker_tera_type: Attacker's Tera type if Terastallized
             defender_tera_type: Defender's Tera type if Terastallized
@@ -91,6 +128,71 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             atk_types = await pokeapi.get_pokemon_types(attacker_name)
             def_types = await pokeapi.get_pokemon_types(defender_name)
             move = await pokeapi.get_move(move_name)
+
+            # Track what spreads we used for the response
+            attacker_spread_source = "custom"
+            defender_spread_source = "custom"
+            attacker_spread_info = None
+            defender_spread_info = None
+
+            # Auto-fetch Smogon spreads if enabled and values not provided
+            if use_smogon_spreads:
+                # Check if attacker needs spread data
+                attacker_needs_spread = (
+                    attacker_nature is None or
+                    attacker_atk_evs is None or
+                    attacker_spa_evs is None
+                )
+                if attacker_needs_spread:
+                    atk_spread = await _get_common_spread(attacker_name)
+                    if atk_spread:
+                        attacker_spread_source = "smogon"
+                        attacker_spread_info = atk_spread
+                        if attacker_nature is None:
+                            attacker_nature = atk_spread["nature"]
+                        evs = atk_spread.get("evs", {})
+                        if attacker_atk_evs is None:
+                            attacker_atk_evs = evs.get("attack", 0)
+                        if attacker_spa_evs is None:
+                            attacker_spa_evs = evs.get("special_attack", 0)
+                        # Also use common item/ability if not specified
+                        if attacker_item is None and atk_spread.get("item"):
+                            attacker_item = atk_spread["item"].lower().replace(" ", "-")
+                        if attacker_ability is None and atk_spread.get("ability"):
+                            attacker_ability = atk_spread["ability"].lower().replace(" ", "-")
+
+                # Check if defender needs spread data
+                defender_needs_spread = (
+                    defender_nature is None or
+                    defender_hp_evs is None or
+                    defender_def_evs is None or
+                    defender_spd_evs is None
+                )
+                if defender_needs_spread:
+                    def_spread = await _get_common_spread(defender_name)
+                    if def_spread:
+                        defender_spread_source = "smogon"
+                        defender_spread_info = def_spread
+                        if defender_nature is None:
+                            defender_nature = def_spread["nature"]
+                        evs = def_spread.get("evs", {})
+                        if defender_hp_evs is None:
+                            defender_hp_evs = evs.get("hp", 0)
+                        if defender_def_evs is None:
+                            defender_def_evs = evs.get("defense", 0)
+                        if defender_spd_evs is None:
+                            defender_spd_evs = evs.get("special_defense", 0)
+                        if defender_ability is None and def_spread.get("ability"):
+                            defender_ability = def_spread["ability"].lower().replace(" ", "-")
+
+            # Set defaults for any remaining None values
+            attacker_nature = attacker_nature or "serious"
+            attacker_atk_evs = attacker_atk_evs if attacker_atk_evs is not None else 0
+            attacker_spa_evs = attacker_spa_evs if attacker_spa_evs is not None else 0
+            defender_nature = defender_nature or "serious"
+            defender_hp_evs = defender_hp_evs if defender_hp_evs is not None else 0
+            defender_def_evs = defender_def_evs if defender_def_evs is not None else 0
+            defender_spd_evs = defender_spd_evs if defender_spd_evs is not None else 0
 
             # Auto-fetch abilities if not specified
             if attacker_ability is None:
@@ -247,6 +349,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             response = {
                 "attacker": attacker_name,
                 "attacker_ability": attacker_ability,
+                "attacker_item": attacker_item,
                 "defender": defender_name,
                 "move": move_name,
                 "move_type": move.type,
@@ -265,6 +368,22 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 "modifiers": result.details.get("modifiers_applied", []),
                 "type_effectiveness": result.details.get("type_effectiveness", 1.0)
             }
+
+            # Add spread info to response so user knows what was used
+            if attacker_spread_source == "smogon" and attacker_spread_info:
+                response["attacker_spread"] = {
+                    "source": "smogon_usage",
+                    "nature": attacker_nature,
+                    "evs": attacker_spread_info.get("evs", {}),
+                    "usage_percent": attacker_spread_info.get("usage", 0)
+                }
+            if defender_spread_source == "smogon" and defender_spread_info:
+                response["defender_spread"] = {
+                    "source": "smogon_usage",
+                    "nature": defender_nature,
+                    "evs": defender_spread_info.get("evs", {}),
+                    "usage_percent": defender_spread_info.get("usage", 0)
+                }
 
             # Add ability effect notes
             ability_notes = []

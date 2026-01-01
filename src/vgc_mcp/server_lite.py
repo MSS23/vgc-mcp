@@ -73,7 +73,7 @@ analyzer = TeamAnalyzer()
 register_team_tools(mcp, pokeapi, team_manager, analyzer)
 
 # Damage calculations (3 tools)
-register_damage_tools(mcp, pokeapi)
+register_damage_tools(mcp, pokeapi, smogon)  # Pass smogon for auto-fetching common spreads
 
 # Stats (2 tools)
 register_stats_tools(mcp, pokeapi)
