@@ -1,0 +1,14 @@
+# render.yaml - Render.com deployment configuration
+# Deploy by connecting your GitHub repo to Render
+
+services:
+  - type: web
+    name: vgc-mcp
+    runtime: python
+    plan: free
+    buildCommand: pip install -e ".[remote]"
+    startCommand: vgc-mcp-http
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"

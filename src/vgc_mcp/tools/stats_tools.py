@@ -1,0 +1,171 @@
+"""MCP tools for stat calculations."""
+
+from typing import Optional
+from mcp.server.fastmcp import FastMCP
+
+from ..api.pokeapi import PokeAPIClient
+from ..calc.stats import calculate_all_stats, calculate_speed, get_max_speed, get_min_speed
+from ..models.pokemon import PokemonBuild, Nature, EVSpread, IVSpread
+from ..utils.errors import error_response, ErrorCodes, pokemon_not_found_error, invalid_nature_error, invalid_evs_error, api_error
+from ..utils.fuzzy import suggest_pokemon_name, suggest_nature
+
+
+def register_stats_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
+    """Register stat calculation tools with the MCP server."""
+
+    @mcp.tool()
+    async def get_pokemon_stats(
+        pokemon_name: str,
+        nature: str = "serious",
+        hp_evs: int = 0,
+        atk_evs: int = 0,
+        def_evs: int = 0,
+        spa_evs: int = 0,
+        spd_evs: int = 0,
+        spe_evs: int = 0,
+        level: int = 50
+    ) -> dict:
+        """
+        Calculate all stats for a Pokemon at level 50 (VGC standard).
+
+        Args:
+            pokemon_name: Pokemon name (e.g., "flutter-mane", "dragapult", "urshifu-rapid-strike")
+            nature: Pokemon's nature (e.g., "timid", "jolly", "modest", "adamant")
+            hp_evs: HP EVs (0-252)
+            atk_evs: Attack EVs (0-252)
+            def_evs: Defense EVs (0-252)
+            spa_evs: Special Attack EVs (0-252)
+            spd_evs: Special Defense EVs (0-252)
+            spe_evs: Speed EVs (0-252)
+            level: Pokemon level (default 50 for VGC)
+
+        Returns:
+            Dict with base stats, EVs, and calculated final stats
+        """
+        try:
+            # Validate EVs
+            total_evs = hp_evs + atk_evs + def_evs + spa_evs + spd_evs + spe_evs
+            if total_evs > 508:
+                return invalid_evs_error("total", total_evs, f"Total EVs ({total_evs}) exceed maximum of 508", total=total_evs)
+
+            # Fetch Pokemon data
+            base_stats = await pokeapi.get_base_stats(pokemon_name)
+            types = await pokeapi.get_pokemon_types(pokemon_name)
+
+            # Parse nature
+            try:
+                parsed_nature = Nature(nature.lower())
+            except ValueError:
+                suggestions = suggest_nature(nature)
+                return invalid_nature_error(nature, suggestions if suggestions else [n.value for n in Nature])
+
+            # Create Pokemon build
+            pokemon = PokemonBuild(
+                name=pokemon_name,
+                base_stats=base_stats,
+                types=types,
+                nature=parsed_nature,
+                evs=EVSpread(
+                    hp=hp_evs,
+                    attack=atk_evs,
+                    defense=def_evs,
+                    special_attack=spa_evs,
+                    special_defense=spd_evs,
+                    speed=spe_evs
+                ),
+                ivs=IVSpread(),
+                level=level
+            )
+
+            # Calculate stats
+            stats = calculate_all_stats(pokemon)
+
+            return {
+                "pokemon": pokemon_name,
+                "level": level,
+                "nature": nature,
+                "types": types,
+                "base_stats": {
+                    "hp": base_stats.hp,
+                    "attack": base_stats.attack,
+                    "defense": base_stats.defense,
+                    "special_attack": base_stats.special_attack,
+                    "special_defense": base_stats.special_defense,
+                    "speed": base_stats.speed
+                },
+                "evs": {
+                    "hp": hp_evs,
+                    "attack": atk_evs,
+                    "defense": def_evs,
+                    "special_attack": spa_evs,
+                    "special_defense": spd_evs,
+                    "speed": spe_evs,
+                    "total": total_evs,
+                    "remaining": 508 - total_evs
+                },
+                "final_stats": stats
+            }
+
+        except Exception as e:
+            error_str = str(e).lower()
+            if "not found" in error_str or "404" in error_str:
+                suggestions = suggest_pokemon_name(pokemon_name)
+                return pokemon_not_found_error(pokemon_name, suggestions if suggestions else None)
+            return api_error("PokeAPI", str(e), is_retryable=True)
+
+    @mcp.tool()
+    async def get_pokemon_speed(
+        pokemon_name: str,
+        nature: str = "serious",
+        speed_evs: int = 0,
+        speed_iv: int = 31,
+        level: int = 50
+    ) -> dict:
+        """
+        Calculate the Speed stat for a Pokemon.
+
+        Args:
+            pokemon_name: Pokemon name
+            nature: Nature affecting speed (+Spe: timid/jolly, -Spe: brave/quiet/relaxed/sassy)
+            speed_evs: Speed EVs (0-252)
+            speed_iv: Speed IV (0-31, default 31)
+            level: Pokemon level (default 50)
+
+        Returns:
+            Speed stat value with calculation details
+        """
+        try:
+            base_stats = await pokeapi.get_base_stats(pokemon_name)
+            base_speed = base_stats.speed
+
+            try:
+                parsed_nature = Nature(nature.lower())
+            except ValueError:
+                suggestions = suggest_nature(nature)
+                return invalid_nature_error(nature, suggestions if suggestions else [n.value for n in Nature])
+
+            speed = calculate_speed(base_speed, speed_iv, speed_evs, level, parsed_nature)
+
+            # Also calculate min/max for reference
+            max_speed = get_max_speed(base_speed, Nature.JOLLY, 31, level)
+            min_speed = get_min_speed(base_speed, Nature.BRAVE, 0, level)
+
+            return {
+                "pokemon": pokemon_name,
+                "base_speed": base_speed,
+                "nature": nature,
+                "evs": speed_evs,
+                "iv": speed_iv,
+                "calculated_speed": speed,
+                "reference": {
+                    "max_speed_jolly_252ev": max_speed,
+                    "min_speed_brave_0iv_0ev": min_speed
+                }
+            }
+
+        except Exception as e:
+            error_str = str(e).lower()
+            if "not found" in error_str or "404" in error_str:
+                suggestions = suggest_pokemon_name(pokemon_name)
+                return pokemon_not_found_error(pokemon_name, suggestions if suggestions else None)
+            return api_error("PokeAPI", str(e), is_retryable=True)

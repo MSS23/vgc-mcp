@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "Bash(tree:*)",
+      "Bash(findstr:*)",
+      "Bash(wc:*)",
+      "Bash(done)",
+      "Bash(python -m pytest tests/test_legality.py tests/test_priority.py tests/test_abilities.py tests/test_learnset.py -v --tb=short)",
+      "Bash(pip install:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(python:*)",
+      "Bash(pip show:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(where:*)",
+      "Bash(C:Python313python.exe -c \"import vgc_mcp; print\\(''Module found at:'', vgc_mcp.__file__\\)\")",
+      "Bash(C:Python313python.exe -c \"from vgc_mcp.server import mcp; print\\(''Server OK''\\); print\\(''Tools:'', len\\(mcp._tool_manager._tools\\) if hasattr\\(mcp, ''_tool_manager''\\) else ''unknown''\\)\")",
+      "Bash(C:Python313python.exe -c \"from vgc_mcp.server import mcp; print\\(''Server loaded successfully''\\); print\\(''Tools:'', len\\(mcp._tool_manager._tools\\) if hasattr\\(mcp, ''_tool_manager''\\) else ''unknown''\\)\")",
+      "Bash(for file in \"c:\\\\Users\\\\msidh\\\\Documents\\\\ChatGPT App\\\\mcp vgc\\\\src\\\\vgc_mcp\\\\tools\"/*.py)",
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(C:Python313python.exe -c:*)",
+      "Bash(timeout 30 python:*)",
+      "Bash(comm:*)",
+      "Bash(del \"c:\\\\Users\\\\msidh\\\\Documents\\\\ChatGPT App\\\\mcp vgc\\\\src\\\\vgc_mcp\\\\api\\\\limitless.py\")",
+      "Bash(del \"c:\\\\Users\\\\msidh\\\\Documents\\\\ChatGPT App\\\\mcp vgc\\\\src\\\\vgc_mcp\\\\api\\\\victoryroad.py\")",
+      "Bash(del \"c:\\\\Users\\\\msidh\\\\Documents\\\\ChatGPT App\\\\mcp vgc\\\\src\\\\vgc_mcp\\\\api\\\\pikalytics.py\")",
+      "Bash(del \"c:\\\\Users\\\\msidh\\\\Documents\\\\ChatGPT App\\\\mcp vgc\\\\src\\\\vgc_mcp\\\\tools\\\\tournament_tools.py\")",
+      "Bash(echo \"Run this in PowerShell as admin: iwr https://fly.io/install.ps1 -useb | iex\")",
+      "Bash(git init:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
+    ]
+  }
+}
