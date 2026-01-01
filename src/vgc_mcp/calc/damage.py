@@ -161,6 +161,42 @@ def calculate_damage(
     if modifiers.defender_commander_active:
         defense_stat = int(defense_stat * 2)
 
+    # Apply Ruin abilities
+    # Sword of Ruin (Chien-Pao): Lowers foe Defense to 0.75x
+    if modifiers.sword_of_ruin and move.category == MoveCategory.PHYSICAL:
+        defense_stat = int(defense_stat * 0.75)
+
+    # Beads of Ruin (Chi-Yu): Lowers foe Special Defense to 0.75x
+    if modifiers.beads_of_ruin and move.category == MoveCategory.SPECIAL:
+        defense_stat = int(defense_stat * 0.75)
+
+    # Tablets of Ruin (Wo-Chien): Lowers foe Attack to 0.75x
+    if modifiers.tablets_of_ruin and move.category == MoveCategory.PHYSICAL:
+        attack_stat = int(attack_stat * 0.75)
+
+    # Vessel of Ruin (Ting-Lu): Lowers foe Special Attack to 0.75x
+    if modifiers.vessel_of_ruin and move.category == MoveCategory.SPECIAL:
+        attack_stat = int(attack_stat * 0.75)
+
+    # Apply Protosynthesis/Quark Drive boosts (1.3x, or 1.5x for Speed)
+    # These boost the attacker's relevant stat if it matches the boosted stat
+    for boost_stat in [modifiers.protosynthesis_boost, modifiers.quark_drive_boost]:
+        if boost_stat:
+            boost_multiplier = 1.5 if boost_stat == "speed" else 1.3
+            if boost_stat == "attack" and move.category == MoveCategory.PHYSICAL:
+                attack_stat = int(attack_stat * boost_multiplier)
+            elif boost_stat == "special_attack" and move.category == MoveCategory.SPECIAL:
+                attack_stat = int(attack_stat * boost_multiplier)
+
+    # Apply defender's Protosynthesis/Quark Drive boosts
+    for boost_stat in [modifiers.defender_protosynthesis_boost, modifiers.defender_quark_drive_boost]:
+        if boost_stat:
+            boost_multiplier = 1.5 if boost_stat == "speed" else 1.3
+            if boost_stat == "defense" and move.category == MoveCategory.PHYSICAL:
+                defense_stat = int(defense_stat * boost_multiplier)
+            elif boost_stat == "special_defense" and move.category == MoveCategory.SPECIAL:
+                defense_stat = int(defense_stat * boost_multiplier)
+
     # Get base power
     power = move.power
 

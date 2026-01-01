@@ -188,6 +188,21 @@ class DamageModifiers:
     commander_active: bool = False  # Attacker has Commander (doubles offensive stat)
     defender_commander_active: bool = False  # Defender has Commander (doubles defensive stat)
 
+    # Ruin abilities (treasures of ruin - Chi-Yu, Chien-Pao, Ting-Lu, Wo-Chien)
+    # These reduce opposing Pokemon's stats by 25%
+    beads_of_ruin: bool = False  # Chi-Yu: Lowers foe SpD to 0.75x
+    sword_of_ruin: bool = False  # Chien-Pao: Lowers foe Def to 0.75x
+    tablets_of_ruin: bool = False  # Wo-Chien: Lowers foe Atk to 0.75x
+    vessel_of_ruin: bool = False  # Ting-Lu: Lowers foe SpA to 0.75x
+
+    # Paradox abilities (stat boost when condition is met)
+    # Protosynthesis: 1.3x to highest stat (1.5x for Speed) in sun or with Booster Energy
+    # Quark Drive: 1.3x to highest stat (1.5x for Speed) in Electric Terrain or with Booster Energy
+    protosynthesis_boost: Optional[str] = None  # Stat being boosted: "attack", "defense", "special_attack", "special_defense", "speed"
+    quark_drive_boost: Optional[str] = None  # Stat being boosted
+    defender_protosynthesis_boost: Optional[str] = None
+    defender_quark_drive_boost: Optional[str] = None
+
     def get_weather_modifier(self, move_type: str) -> float:
         """Get weather damage modifier for a move type."""
         move_type = move_type.capitalize()

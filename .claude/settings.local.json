@@ -29,7 +29,8 @@
       "Bash(echo \"Run this in PowerShell as admin: iwr https://fly.io/install.ps1 -useb | iex\")",
       "Bash(git init:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(git push)"
     ]
   }
 }

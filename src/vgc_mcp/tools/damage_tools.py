@@ -28,15 +28,23 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         defender_spd_evs: int = 0,
         is_spread: bool = False,
         weather: Optional[str] = None,
+        terrain: Optional[str] = None,
         attacker_item: Optional[str] = None,
         attacker_ability: Optional[str] = None,
+        defender_ability: Optional[str] = None,
         attacker_tera_type: Optional[str] = None,
         defender_tera_type: Optional[str] = None,
         reflect: bool = False,
         light_screen: bool = False,
         helping_hand: bool = False,
         commander_active: bool = False,
-        defender_commander_active: bool = False
+        defender_commander_active: bool = False,
+        beads_of_ruin: bool = False,
+        sword_of_ruin: bool = False,
+        tablets_of_ruin: bool = False,
+        vessel_of_ruin: bool = False,
+        attacker_booster_energy: bool = False,
+        defender_booster_energy: bool = False
     ) -> dict:
         """
         Calculate damage from one Pokemon to another.
@@ -54,8 +62,10 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             defender_spd_evs: Defender's Sp. Def EVs
             is_spread: True if move is hitting multiple targets (0.75x damage)
             weather: "sun", "rain", "sand", or "snow" (affects Fire/Water moves)
+            terrain: "electric", "grassy", "psychic", or "misty" (affects damage)
             attacker_item: Item like "life-orb", "choice-band", "choice-specs"
             attacker_ability: Attacker's ability (e.g., "sheer-force", "adaptability"). Auto-detected if not specified.
+            defender_ability: Defender's ability. Auto-detected if not specified.
             attacker_tera_type: Attacker's Tera type if Terastallized
             defender_tera_type: Defender's Tera type if Terastallized
             reflect: True if Reflect is active (halves physical damage)
@@ -63,6 +73,12 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             helping_hand: True if Helping Hand was used (1.5x damage)
             commander_active: True if attacking Dondozo has Commander active (Tatsugiri inside). Doubles offensive stat.
             defender_commander_active: True if defending Dondozo has Commander active. Doubles defensive stat.
+            beads_of_ruin: True if Chi-Yu's Beads of Ruin is active (lowers foe SpD to 0.75x)
+            sword_of_ruin: True if Chien-Pao's Sword of Ruin is active (lowers foe Def to 0.75x)
+            tablets_of_ruin: True if Wo-Chien's Tablets of Ruin is active (lowers foe Atk to 0.75x)
+            vessel_of_ruin: True if Ting-Lu's Vessel of Ruin is active (lowers foe SpA to 0.75x)
+            attacker_booster_energy: True if attacker used Booster Energy (activates Protosynthesis/Quark Drive)
+            defender_booster_energy: True if defender used Booster Energy
 
         Returns:
             Damage range, percentages, and KO probability
@@ -75,12 +91,48 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             def_types = await pokeapi.get_pokemon_types(defender_name)
             move = await pokeapi.get_move(move_name)
 
-            # Auto-fetch ability if not specified
+            # Auto-fetch abilities if not specified
             if attacker_ability is None:
                 atk_abilities = await pokeapi.get_pokemon_abilities(attacker_name)
                 if atk_abilities:
                     # Use first (primary) ability as default
                     attacker_ability = atk_abilities[0].lower().replace(" ", "-")
+
+            if defender_ability is None:
+                def_abilities = await pokeapi.get_pokemon_abilities(defender_name)
+                if def_abilities:
+                    defender_ability = def_abilities[0].lower().replace(" ", "-")
+
+            # Helper function to determine which stat Protosynthesis/Quark Drive boosts
+            def get_paradox_boost_stat(base_stats, nature_enum, evs_dict) -> Optional[str]:
+                """Determine which stat gets boosted by Protosynthesis/Quark Drive.
+                Boosts the highest stat (excluding HP). Speed gets 1.5x, others get 1.3x."""
+                from ..calc.stats import calculate_stat, calculate_speed
+                from ..models.pokemon import get_nature_modifier
+
+                stats = {
+                    "attack": calculate_stat(
+                        base_stats.attack, 31, evs_dict.get("attack", 0), 50,
+                        get_nature_modifier(nature_enum, "attack")
+                    ),
+                    "defense": calculate_stat(
+                        base_stats.defense, 31, evs_dict.get("defense", 0), 50,
+                        get_nature_modifier(nature_enum, "defense")
+                    ),
+                    "special_attack": calculate_stat(
+                        base_stats.special_attack, 31, evs_dict.get("special_attack", 0), 50,
+                        get_nature_modifier(nature_enum, "special_attack")
+                    ),
+                    "special_defense": calculate_stat(
+                        base_stats.special_defense, 31, evs_dict.get("special_defense", 0), 50,
+                        get_nature_modifier(nature_enum, "special_defense")
+                    ),
+                    "speed": calculate_speed(
+                        base_stats.speed, 31, evs_dict.get("speed", 0), 50,
+                        get_nature_modifier(nature_enum, "speed")
+                    ),
+                }
+                return max(stats, key=stats.get)
 
             # Parse natures
             try:
@@ -122,13 +174,53 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 tera_type=defender_tera_type
             )
 
+            # Determine Protosynthesis/Quark Drive boost stats
+            attacker_proto_boost = None
+            attacker_quark_boost = None
+            defender_proto_boost = None
+            defender_quark_boost = None
+
+            # Check if attacker has Protosynthesis and conditions are met
+            if attacker_ability == "protosynthesis":
+                if weather == "sun" or attacker_booster_energy:
+                    attacker_proto_boost = get_paradox_boost_stat(
+                        atk_base, atk_nature,
+                        {"attack": attacker_atk_evs, "special_attack": attacker_spa_evs}
+                    )
+
+            # Check if attacker has Quark Drive and conditions are met
+            if attacker_ability == "quark-drive":
+                if terrain == "electric" or attacker_booster_energy:
+                    attacker_quark_boost = get_paradox_boost_stat(
+                        atk_base, atk_nature,
+                        {"attack": attacker_atk_evs, "special_attack": attacker_spa_evs}
+                    )
+
+            # Check if defender has Protosynthesis and conditions are met
+            if defender_ability == "protosynthesis":
+                if weather == "sun" or defender_booster_energy:
+                    defender_proto_boost = get_paradox_boost_stat(
+                        def_base, def_nature,
+                        {"hp": defender_hp_evs, "defense": defender_def_evs, "special_defense": defender_spd_evs}
+                    )
+
+            # Check if defender has Quark Drive and conditions are met
+            if defender_ability == "quark-drive":
+                if terrain == "electric" or defender_booster_energy:
+                    defender_quark_boost = get_paradox_boost_stat(
+                        def_base, def_nature,
+                        {"hp": defender_hp_evs, "defense": defender_def_evs, "special_defense": defender_spd_evs}
+                    )
+
             # Set up modifiers
             modifiers = DamageModifiers(
                 is_doubles=True,
                 multiple_targets=is_spread,
                 weather=weather,
+                terrain=terrain,
                 attacker_item=attacker_item,
                 attacker_ability=attacker_ability,
+                defender_ability=defender_ability,
                 tera_type=attacker_tera_type,
                 tera_active=attacker_tera_type is not None,
                 defender_tera_type=defender_tera_type,
@@ -137,7 +229,15 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 light_screen_up=light_screen,
                 helping_hand=helping_hand,
                 commander_active=commander_active,
-                defender_commander_active=defender_commander_active
+                defender_commander_active=defender_commander_active,
+                beads_of_ruin=beads_of_ruin,
+                sword_of_ruin=sword_of_ruin,
+                tablets_of_ruin=tablets_of_ruin,
+                vessel_of_ruin=vessel_of_ruin,
+                protosynthesis_boost=attacker_proto_boost,
+                quark_drive_boost=attacker_quark_boost,
+                defender_protosynthesis_boost=defender_proto_boost,
+                defender_quark_drive_boost=defender_quark_boost
             )
 
             # Calculate damage
@@ -165,13 +265,43 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 "type_effectiveness": result.details.get("type_effectiveness", 1.0)
             }
 
+            # Add ability effect notes
+            ability_notes = []
+
             if commander_active:
                 response["commander_active"] = True
-                response["note"] = "Attacker's Commander: doubles offensive stat (Atk or SpA)"
+                ability_notes.append("Attacker's Commander: doubles offensive stat (Atk or SpA)")
 
             if defender_commander_active:
                 response["defender_commander_active"] = True
-                response["defender_note"] = "Defender's Commander: doubles defensive stat (Def or SpD)"
+                ability_notes.append("Defender's Commander: doubles defensive stat (Def or SpD)")
+
+            if beads_of_ruin:
+                ability_notes.append("Beads of Ruin (Chi-Yu): Defender's SpD reduced to 0.75x")
+
+            if sword_of_ruin:
+                ability_notes.append("Sword of Ruin (Chien-Pao): Defender's Def reduced to 0.75x")
+
+            if tablets_of_ruin:
+                ability_notes.append("Tablets of Ruin (Wo-Chien): Attacker's Atk reduced to 0.75x")
+
+            if vessel_of_ruin:
+                ability_notes.append("Vessel of Ruin (Ting-Lu): Attacker's SpA reduced to 0.75x")
+
+            if attacker_proto_boost:
+                ability_notes.append(f"Protosynthesis: Attacker's {attacker_proto_boost.replace('_', ' ').title()} boosted (1.3x, 1.5x for Speed)")
+
+            if attacker_quark_boost:
+                ability_notes.append(f"Quark Drive: Attacker's {attacker_quark_boost.replace('_', ' ').title()} boosted (1.3x, 1.5x for Speed)")
+
+            if defender_proto_boost:
+                ability_notes.append(f"Protosynthesis: Defender's {defender_proto_boost.replace('_', ' ').title()} boosted (1.3x, 1.5x for Speed)")
+
+            if defender_quark_boost:
+                ability_notes.append(f"Quark Drive: Defender's {defender_quark_boost.replace('_', ' ').title()} boosted (1.3x, 1.5x for Speed)")
+
+            if ability_notes:
+                response["ability_effects"] = ability_notes
 
             return response
 
