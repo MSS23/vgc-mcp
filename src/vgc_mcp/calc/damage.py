@@ -75,17 +75,21 @@ def calculate_damage(
     # Check for multi-hit move mechanics
     multi_hit_info = get_multi_hit_info(move.name)
     hit_count = 1
-    always_crit = False
+    always_crit = move.always_crit  # Check Move object first (includes single-hit always-crit moves)
     if multi_hit_info:
-        min_hits, max_hits, always_crit = multi_hit_info
+        min_hits, max_hits, multi_hit_always_crit = multi_hit_info
         # Use specified hit count from modifiers, or default to max hits for calc
         if modifiers.move_hits > 0:
             hit_count = modifiers.move_hits
         else:
             hit_count = max_hits  # Show max damage potential by default
-        # Surging Strikes always crits
-        if always_crit:
-            modifiers.is_critical = True
+        # Multi-hit moves may have always_crit flag
+        if multi_hit_always_crit:
+            always_crit = True
+
+    # Apply always-crit for moves like Surging Strikes, Wicked Blow, Frost Breath
+    if always_crit:
+        modifiers.is_critical = True
 
     # Non-damaging moves
     if not move.is_damaging:

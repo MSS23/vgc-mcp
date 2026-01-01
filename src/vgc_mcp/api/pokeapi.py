@@ -7,7 +7,7 @@ import httpx
 
 from ..config import settings, logger
 from ..models.pokemon import BaseStats
-from ..models.move import Move, MoveCategory, SPREAD_TARGETS
+from ..models.move import Move, MoveCategory, SPREAD_TARGETS, get_multi_hit_info, is_always_crit_move
 from .cache import APICache
 
 
@@ -145,6 +145,18 @@ class PokeAPIClient:
                 pass  # Continue checking
             # Contact is usually in the move's metadata
 
+        # Get multi-hit info from our database (e.g., Surging Strikes: 3 hits, always crits)
+        multi_hit_info = get_multi_hit_info(name)
+        min_hits = 1
+        max_hits = 1
+        always_crit = False
+        if multi_hit_info:
+            min_hits, max_hits, always_crit = multi_hit_info
+
+        # Also check for single-hit always-crit moves (e.g., Wicked Blow, Frost Breath)
+        if not always_crit:
+            always_crit = is_always_crit_move(name)
+
         return Move(
             name=data["name"],
             type=data["type"]["name"].capitalize(),
@@ -155,7 +167,10 @@ class PokeAPIClient:
             priority=data.get("priority", 0),
             target=target,
             effect_chance=data.get("effect_chance"),
-            makes_contact=makes_contact
+            makes_contact=makes_contact,
+            min_hits=min_hits,
+            max_hits=max_hits,
+            always_crit=always_crit
         )
 
     async def get_type(self, name: str) -> dict:

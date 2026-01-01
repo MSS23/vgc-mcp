@@ -332,6 +332,17 @@ def format_secondary_effect(effect: str, chance: int) -> str:
         return f"{desc} ({chance}% chance)"
 
 
+# Always-crit moves (single hit but guaranteed critical)
+ALWAYS_CRIT_MOVES: set[str] = {
+    "wicked-blow",      # Urshifu-Single-Strike signature
+    "frost-breath",     # Ice-type
+    "storm-throw",      # Fighting-type
+    "zippy-zap",        # Pikachu exclusive
+    "flower-trick",     # Meowscarada signature
+    # Note: Surging Strikes is in MULTI_HIT_MOVES with always_crit=True
+}
+
+
 # Multi-hit moves database
 # Format: {move_name: (min_hits, max_hits, always_crit)}
 MULTI_HIT_MOVES: dict[str, tuple[int, int, bool]] = {
@@ -381,6 +392,24 @@ def get_multi_hit_info(move_name: str) -> tuple[int, int, bool] | None:
     """
     normalized = move_name.lower().replace(" ", "-")
     return MULTI_HIT_MOVES.get(normalized)
+
+
+def is_always_crit_move(move_name: str) -> bool:
+    """
+    Check if a move always results in a critical hit.
+
+    Args:
+        move_name: Move name (case insensitive, hyphenated)
+
+    Returns:
+        True if the move always crits (e.g., Wicked Blow, Frost Breath)
+    """
+    normalized = move_name.lower().replace(" ", "-")
+    # Check both the always-crit set and multi-hit moves with always_crit=True
+    if normalized in ALWAYS_CRIT_MOVES:
+        return True
+    multi_hit = MULTI_HIT_MOVES.get(normalized)
+    return multi_hit is not None and multi_hit[2]
 
 
 # Gen 9 signature moves with special mechanics
