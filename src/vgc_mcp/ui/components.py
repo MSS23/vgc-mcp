@@ -3545,10 +3545,7 @@ body {{
         <div class="section-title">Stats (Level {level})</div>
         {"".join(f'''
         <div class="stat-row">
-            <div class="stat-label {
-                'boosted' if stat_keys[i] == boosted_stat else
-                'lowered' if stat_keys[i] == lowered_stat else ''
-            }">{stat_labels[i]}</div>
+            <div class="stat-label {'boosted' if stat_keys[i] == boosted_stat else 'lowered' if stat_keys[i] == lowered_stat else ''}">{stat_labels[i]}</div>
             <div class="stat-bar-container">
                 <div class="stat-bar {stat_keys[i]}" style="width:{min(100, base_stats.get(stat_keys[i], 100) / 2)}%"></div>
                 <div class="stat-values">
