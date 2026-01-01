@@ -28,6 +28,8 @@ remote = [
 [project.scripts]
 vgc-mcp = "vgc_mcp.server:main"
 vgc-mcp-http = "vgc_mcp.server:main_http"
+vgc-mcp-lite = "vgc_mcp.server_lite:main"
+vgc-mcp-lite-http = "vgc_mcp.server_lite:main_http"
 
 [build-system]
 requires = ["hatchling"]
