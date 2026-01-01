@@ -156,7 +156,7 @@ def main_http(host: str = "0.0.0.0", port: int = 8000):
             )
 
     async def handle_messages(request):
-        await sse.handle_post_message(request.scope, request.receive, request._send)
+        return await sse.handle_post_message(request.scope, request.receive, request._send)
 
     async def health_check(request):
         """Health check endpoint for monitoring."""
