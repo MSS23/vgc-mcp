@@ -275,8 +275,6 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             # If speed target specified, adjust
             if speed_target and role == "offensive":
                 # Calculate EVs needed
-                from ..calc.stats import find_speed_evs
-                from ..config import normalize_evs
                 nature = Nature(spread["nature"].lower())
                 needed = find_speed_evs(base_stats.speed, speed_target, nature)
 
@@ -632,7 +630,6 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                     def_evs = min(252, remaining_evs)
             else:
                 # No survival benchmark, just max HP
-                from ..config import normalize_evs
                 hp_evs = normalize_evs(min(252, remaining_evs))
                 remaining_evs -= hp_evs
                 def_evs = normalize_evs(min(252, remaining_evs // 2))
