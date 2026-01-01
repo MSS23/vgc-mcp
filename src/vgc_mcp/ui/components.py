@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """UI component builders for VGC Team Builder.
 
 Creates HTML strings for various UI components that can be
@@ -4446,7 +4447,7 @@ body {{
 
     {f'''
     <div class="strategy-box">
-        <div class="strategy-title">💡 Recommended Strategy</div>
+        <div class="strategy-title">&#128161; Recommended Strategy</div>
         <div class="strategy-content">
             <div class="strat-section">
                 <div class="strat-label">Lead</div>
