@@ -1918,6 +1918,19 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
             survives_count = 0
             ko_count = 0
 
+            # Check for special ability interactions
+            warnings = []
+
+            # Check if opponent is Urshifu (has Unseen Fist)
+            normalized_opp = opponent_pokemon.lower().replace(" ", "-")
+            if normalized_opp in ("urshifu", "urshifu-single-strike", "urshifu-rapid-strike"):
+                warnings.append("⚠️ Urshifu has Unseen Fist - contact moves bypass Protect!")
+
+            # Calculate my Life Orb recoil if I have one
+            my_life_orb_recoil = 0
+            if my_item and my_item.lower().replace(" ", "-") == "life-orb":
+                my_life_orb_recoil = my_final_stats["hp"] // 10
+
             for i, spread in enumerate(opp_spreads):
                 if "evs" not in spread:
                     continue
@@ -1975,12 +1988,45 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                 result = calculate_damage(attacker, defender, move_data, modifiers)
 
                 # Determine outcome
+                result_entry = {
+                    "set_rank": i + 1,
+                    "usage": f"{spread.get('usage', 0)}%",
+                    "nature": spread_nature_str,
+                    "evs": f"{spread_evs.get('hp', 0)} HP / {spread_evs.get('attack', 0)} Atk / {spread_evs.get('defense', 0)} Def / {spread_evs.get('special_attack', 0)} SpA / {spread_evs.get('special_defense', 0)} SpD / {spread_evs.get('speed', 0)} Spe",
+                    "damage_range": result.damage_range,
+                    "percent_range": f"{result.min_percent:.1f}% - {result.max_percent:.1f}%",
+                }
+
                 if direction == "from":
+                    # I'm being attacked
                     survives = result.max_percent < 100
+                    hp_remaining_min = my_final_stats["hp"] - result.max_damage
+                    hp_remaining_max = my_final_stats["hp"] - result.min_damage
+
+                    # Calculate survival after my Life Orb recoil (if I attack back with Extreme Speed, etc.)
+                    if my_life_orb_recoil > 0 and survives:
+                        hp_after_attack_then_lo = hp_remaining_min - my_life_orb_recoil
+                        survives_after_lo = hp_after_attack_then_lo > 0
+
+                        result_entry["hp_remaining"] = f"{hp_remaining_min}-{hp_remaining_max} HP"
+                        result_entry["life_orb_recoil"] = f"-{my_life_orb_recoil} HP ({(my_life_orb_recoil / my_final_stats['hp'] * 100):.0f}%)"
+
+                        if survives and survives_after_lo:
+                            outcome = f"Survives (HP: {hp_remaining_min}-{hp_remaining_max}, after LO: {hp_after_attack_then_lo}+)"
+                        elif survives and not survives_after_lo:
+                            outcome = f"⚠️ Survives hit but DIES to Life Orb recoil! (HP: {hp_remaining_min} -> {hp_after_attack_then_lo})"
+                            survives = False  # Don't count as survival
+                        else:
+                            outcome = "KO'd"
+                    else:
+                        outcome = "Survives" if survives else "KO'd"
+                        if survives:
+                            result_entry["hp_remaining"] = f"{hp_remaining_min}-{hp_remaining_max} HP"
+
                     if survives:
                         survives_count += 1
-                    outcome = "Survives" if survives else "KO'd"
                 else:
+                    # I'm attacking
                     kos = result.min_percent >= 100
                     possible_ko = result.max_percent >= 100
                     if kos:
@@ -1992,15 +2038,12 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                     else:
                         outcome = f"{result.max_percent:.0f}% max"
 
-                damage_results.append({
-                    "set_rank": i + 1,
-                    "usage": f"{spread.get('usage', 0)}%",
-                    "nature": spread_nature_str,
-                    "evs": f"{spread_evs.get('hp', 0)} HP / {spread_evs.get('attack', 0)} Atk / {spread_evs.get('defense', 0)} Def / {spread_evs.get('special_attack', 0)} SpA / {spread_evs.get('special_defense', 0)} SpD / {spread_evs.get('speed', 0)} Spe",
-                    "damage_range": result.damage_range,
-                    "percent_range": f"{result.min_percent:.1f}% - {result.max_percent:.1f}%",
-                    "outcome": outcome
-                })
+                    # Add Life Orb recoil note for offensive calcs
+                    if my_life_orb_recoil > 0:
+                        result_entry["life_orb_recoil"] = f"-{my_life_orb_recoil} HP per attack"
+
+                result_entry["outcome"] = outcome
+                damage_results.append(result_entry)
 
             # Build summary
             if direction == "from":
@@ -2020,10 +2063,10 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                 else:
                     verdict = f"Situational - KOs {ko_count}/{len(damage_results)}"
 
-            return success_response(
-                f"{my_pokemon} vs {opponent_pokemon} ({direction} {move})",
-                your_pokemon=my_pokemon,
-                your_build={
+            # Build response
+            response_data = {
+                "your_pokemon": my_pokemon,
+                "your_build": {
                     "nature": my_nature,
                     "evs": {
                         "HP": my_hp_evs,
@@ -2038,18 +2081,35 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                     "tera_type": my_tera_type,
                     "final_stats": my_final_stats
                 },
-                opponent_pokemon=opponent_pokemon,
-                opponent_common_item=top_item,
-                opponent_common_ability=top_ability,
-                opponent_common_tera=top_tera,
-                move=move,
-                move_type=move_data.type,
-                move_power=move_data.power,
-                direction="Opponent attacks you" if direction == "from" else "You attack opponent",
-                damage_vs_sets=damage_results,
-                summary=summary,
-                verdict=verdict,
-                meta_info=opp_usage.get("_meta", {})
+                "opponent_pokemon": opponent_pokemon,
+                "opponent_common_item": top_item,
+                "opponent_common_ability": top_ability,
+                "opponent_common_tera": top_tera,
+                "move": move,
+                "move_type": move_data.type,
+                "move_power": move_data.power,
+                "direction": "Opponent attacks you" if direction == "from" else "You attack opponent",
+                "damage_vs_sets": damage_results,
+                "summary": summary,
+                "verdict": verdict,
+                "meta_info": opp_usage.get("_meta", {})
+            }
+
+            # Add warnings if any
+            if warnings:
+                response_data["warnings"] = warnings
+
+            # Add Life Orb info if relevant
+            if my_life_orb_recoil > 0:
+                response_data["your_life_orb_recoil"] = {
+                    "damage": my_life_orb_recoil,
+                    "percent": f"{(my_life_orb_recoil / my_final_stats['hp'] * 100):.0f}%",
+                    "note": "Life Orb costs 10% HP per attacking move"
+                }
+
+            return success_response(
+                f"{my_pokemon} vs {opponent_pokemon} ({direction} {move})",
+                **response_data
             )
 
         except Exception as e:
