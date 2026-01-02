@@ -19,6 +19,109 @@ HAS_UI = False
 _smogon_client: Optional[SmogonStatsClient] = None
 
 
+def _normalize_smogon_name(name: str) -> str:
+    """Normalize Smogon names to hyphenated format.
+
+    Smogon uses concatenated names: 'lifeorb', 'sheerforce'
+    Damage calc expects hyphenated: 'life-orb', 'sheer-force'
+    """
+    # Common mappings from Smogon format to hyphenated
+    smogon_to_hyphenated = {
+        # Items
+        "lifeorb": "life-orb",
+        "choiceband": "choice-band",
+        "choicespecs": "choice-specs",
+        "choicescarf": "choice-scarf",
+        "assaultvest": "assault-vest",
+        "focussash": "focus-sash",
+        "clearamulet": "clear-amulet",
+        "safetygoggles": "safety-goggles",
+        "expertbelt": "expert-belt",
+        "rockyhelmet": "rocky-helmet",
+        "sitrusberry": "sitrus-berry",
+        "lumberry": "lum-berry",
+        "boosterenergy": "booster-energy",
+        "hearthflamemask": "hearthflame-mask",
+        "wellspringmask": "wellspring-mask",
+        "cornerstonemask": "cornerstone-mask",
+        "eviolite": "eviolite",
+        "leftovers": "leftovers",
+        "covertcloak": "covert-cloak",
+        "mirrorherb": "mirror-herb",
+        "loadeddice": "loaded-dice",
+        "punchingglove": "punching-glove",
+        "throatspray": "throat-spray",
+        "weaknesspolicy": "weakness-policy",
+        # Resistance berries
+        "occaberry": "occa-berry",
+        "passhoberry": "passho-berry",
+        "wacanberry": "wacan-berry",
+        "rindoberry": "rindo-berry",
+        "yacheberry": "yache-berry",
+        "chopleberry": "chople-berry",
+        "kebiaberry": "kebia-berry",
+        "shucaberry": "shuca-berry",
+        "cobaberry": "coba-berry",
+        "payapaberry": "payapa-berry",
+        "tangaberry": "tanga-berry",
+        "chartiberry": "charti-berry",
+        "kasibberry": "kasib-berry",
+        "habanberry": "haban-berry",
+        "colburberry": "colbur-berry",
+        "babiriberry": "babiri-berry",
+        "roseliberry": "roseli-berry",
+        # Abilities - offensive
+        "sheerforce": "sheer-force",
+        "sandforce": "sand-force",
+        "hugepower": "huge-power",
+        "purepower": "pure-power",
+        "toughclaws": "tough-claws",
+        "ironfist": "iron-fist",
+        "gorillatactics": "gorilla-tactics",
+        "technician": "technician",
+        "adaptability": "adaptability",
+        # Abilities - defensive
+        "multiscale": "multiscale",
+        "shadowshield": "shadow-shield",
+        "icescales": "ice-scales",
+        "solidrock": "solid-rock",
+        "filter": "filter",
+        "prismarmor": "prism-armor",
+        "fluffy": "fluffy",
+        "thickfat": "thick-fat",
+        "furcoat": "fur-coat",
+        "waterbubble": "water-bubble",
+        "heatproof": "heatproof",
+        # Abilities - Ruin
+        "swordofruin": "sword-of-ruin",
+        "beadsofruin": "beads-of-ruin",
+        "tabletsofruin": "tablets-of-ruin",
+        "vesselofruin": "vessel-of-ruin",
+        # Abilities - Paradox
+        "quarkdrive": "quark-drive",
+        "protosynthesis": "protosynthesis",
+        # Abilities - other common
+        "friendguard": "friend-guard",
+        "intimidate": "intimidate",
+        "moldbreaker": "mold-breaker",
+        "teravolt": "teravolt",
+        "turboblaze": "turboblaze",
+        "clearbody": "clear-body",
+        "innerfocus": "inner-focus",
+        "regenerator": "regenerator",
+        "magicguard": "magic-guard",
+        "magicbounce": "magic-bounce",
+        "prankster": "prankster",
+        "pixilate": "pixilate",
+        "refrigerate": "refrigerate",
+        "galvanize": "galvanize",
+        "aerilate": "aerilate",
+    }
+
+    name_lower = name.lower().replace(" ", "-")
+    return smogon_to_hyphenated.get(name_lower, name_lower)
+
+
 async def _get_common_spread(pokemon_name: str) -> Optional[dict]:
     """Fetch the most common spread for a Pokemon from Smogon usage stats.
 
@@ -170,9 +273,9 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                             attacker_spa_evs = evs.get("special_attack", 0)
                         # Also use common item/ability if not specified
                         if attacker_item is None and atk_spread.get("item"):
-                            attacker_item = atk_spread["item"].lower().replace(" ", "-")
+                            attacker_item = _normalize_smogon_name(atk_spread["item"])
                         if attacker_ability is None and atk_spread.get("ability"):
-                            attacker_ability = atk_spread["ability"].lower().replace(" ", "-")
+                            attacker_ability = _normalize_smogon_name(atk_spread["ability"])
 
                 # Check if defender needs spread data
                 defender_needs_spread = (
@@ -196,7 +299,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         if defender_spd_evs is None:
                             defender_spd_evs = evs.get("special_defense", 0)
                         if defender_ability is None and def_spread.get("ability"):
-                            defender_ability = def_spread["ability"].lower().replace(" ", "-")
+                            defender_ability = _normalize_smogon_name(def_spread["ability"])
 
             # Set defaults for any remaining None values
             attacker_nature = attacker_nature or "serious"
@@ -777,7 +880,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         if attacker_spa_evs is None:
                             attacker_spa_evs = evs.get("special_attack", 0)
                         if attacker_item is None and atk_spread.get("item"):
-                            attacker_item = atk_spread["item"].lower().replace(" ", "-")
+                            attacker_item = _normalize_smogon_name(atk_spread["item"])
 
                 if defender_nature is None or defender_hp_evs is None or defender_def_evs is None or defender_spd_evs is None:
                     def_spread = await _get_common_spread(defender_name)

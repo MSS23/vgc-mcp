@@ -203,6 +203,9 @@ class DamageModifiers:
     defender_protosynthesis_boost: Optional[str] = None
     defender_quark_drive_boost: Optional[str] = None
 
+    # Defender HP status (for Multiscale, Shadow Shield)
+    defender_at_full_hp: bool = True  # Whether defender is at full HP
+
     def get_weather_modifier(self, move_type: str) -> float:
         """Get weather damage modifier for a move type."""
         move_type = move_type.capitalize()

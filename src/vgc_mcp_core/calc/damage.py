@@ -117,6 +117,46 @@ MOD_SCREEN_SINGLES = 2048    # 0.5x (Reflect/Light Screen in singles)
 MOD_SCREEN_DOUBLES = 2732    # ~0.667x (Reflect/Light Screen in doubles)
 MOD_HELPING_HAND = 6144      # 1.5x (Helping Hand)
 MOD_FRIEND_GUARD = 3072      # 0.75x (Friend Guard)
+MOD_TOUGH_CLAWS = 5325       # ~1.3x (Tough Claws on contact moves)
+MOD_IRON_FIST = 4915         # ~1.2x (Iron Fist on punch moves)
+MOD_MULTISCALE = 2048        # 0.5x (Multiscale/Shadow Shield at full HP)
+MOD_ICE_SCALES = 2048        # 0.5x (Ice Scales on special moves)
+MOD_SOLID_ROCK = 3072        # 0.75x (Solid Rock/Filter on super effective)
+MOD_FLUFFY_CONTACT = 2048    # 0.5x (Fluffy on contact moves)
+MOD_FLUFFY_FIRE = 8192       # 2.0x (Fluffy weakness to Fire)
+MOD_THICK_FAT = 2048         # 0.5x (Thick Fat on Fire/Ice moves)
+MOD_RESISTANCE_BERRY = 2048  # 0.5x (Resistance berries on super effective)
+
+
+# Punch moves for Iron Fist ability
+PUNCH_MOVES = {
+    "ice-punch", "fire-punch", "thunder-punch", "mach-punch", "mega-punch",
+    "focus-punch", "comet-punch", "dizzy-punch", "dynamic-punch", "meteor-mash",
+    "shadow-punch", "sky-uppercut", "drain-punch", "bullet-punch", "hammer-arm",
+    "power-up-punch", "plasma-fists", "double-iron-bash", "surging-strikes",
+    "wicked-blow", "jet-punch", "rage-fist",
+}
+
+# Resistance berries - reduce super-effective damage by 50%
+RESISTANCE_BERRIES = {
+    "occa-berry": "Fire",
+    "passho-berry": "Water",
+    "wacan-berry": "Electric",
+    "rindo-berry": "Grass",
+    "yache-berry": "Ice",
+    "chople-berry": "Fighting",
+    "kebia-berry": "Poison",
+    "shuca-berry": "Ground",
+    "coba-berry": "Flying",
+    "payapa-berry": "Psychic",
+    "tanga-berry": "Bug",
+    "charti-berry": "Rock",
+    "kasib-berry": "Ghost",
+    "haban-berry": "Dragon",
+    "colbur-berry": "Dark",
+    "babiri-berry": "Steel",
+    "roseli-berry": "Fairy",
+}
 
 
 @dataclass
@@ -296,6 +336,12 @@ def calculate_damage(
             elif boost_stat == "special_defense" and move.category == MoveCategory.SPECIAL:
                 defense_stat = int(defense_stat * boost_multiplier)
 
+    # Apply Assault Vest (1.5x SpD for special moves)
+    if modifiers.defender_item:
+        def_item = modifiers.defender_item.lower().replace(" ", "-")
+        if def_item == "assault-vest" and move.category == MoveCategory.SPECIAL:
+            defense_stat = int(defense_stat * 1.5)
+
     # Get base power
     power = move.power
 
@@ -306,6 +352,10 @@ def calculate_damage(
             power = int(power * 1.5)
         elif ability == "sheer-force" and move.effect_chance:
             power = int(power * 1.3)
+        elif ability == "tough-claws" and move.makes_contact:
+            power = apply_mod(power, MOD_TOUGH_CLAWS)
+        elif ability == "iron-fist" and move.name.lower().replace(" ", "-") in PUNCH_MOVES:
+            power = apply_mod(power, MOD_IRON_FIST)
 
     # Apply type-boosting item to base power (NOT final damage)
     # This matches Showdown's behavior where items like Charcoal, masks go into bpMods
@@ -391,6 +441,43 @@ def calculate_damage(
     # Friend Guard (3072/4096 = 0.75x)
     if modifiers.friend_guard:
         final_mods.append(MOD_FRIEND_GUARD)
+
+    # Defender ability effects
+    if modifiers.defender_ability:
+        def_ability = modifiers.defender_ability.lower().replace(" ", "-")
+
+        # Multiscale / Shadow Shield (0.5x at full HP)
+        if def_ability in ("multiscale", "shadow-shield") and modifiers.defender_at_full_hp:
+            final_mods.append(MOD_MULTISCALE)
+
+        # Ice Scales (0.5x special damage)
+        if def_ability == "ice-scales" and move.category == MoveCategory.SPECIAL:
+            final_mods.append(MOD_ICE_SCALES)
+
+        # Solid Rock / Filter / Prism Armor (0.75x super-effective damage)
+        if def_ability in ("solid-rock", "filter", "prism-armor") and type_eff >= 2.0:
+            final_mods.append(MOD_SOLID_ROCK)
+
+        # Fluffy (0.5x contact damage, 2x Fire damage)
+        if def_ability == "fluffy":
+            if move.makes_contact:
+                final_mods.append(MOD_FLUFFY_CONTACT)
+            if move.type.capitalize() == "Fire":
+                final_mods.append(MOD_FLUFFY_FIRE)
+
+        # Thick Fat (0.5x Fire and Ice damage)
+        if def_ability == "thick-fat" and move.type.capitalize() in ("Fire", "Ice"):
+            final_mods.append(MOD_THICK_FAT)
+
+    # Defender item effects
+    if modifiers.defender_item:
+        def_item = modifiers.defender_item.lower().replace(" ", "-")
+
+        # Resistance berries (0.5x super-effective damage of matching type)
+        if def_item in RESISTANCE_BERRIES:
+            berry_type = RESISTANCE_BERRIES[def_item]
+            if move.type.capitalize() == berry_type and type_eff >= 2.0:
+                final_mods.append(MOD_RESISTANCE_BERRY)
 
     # Chain all final modifiers together
     final_mod_4096 = chain_mods(final_mods) if final_mods else MOD_NEUTRAL
