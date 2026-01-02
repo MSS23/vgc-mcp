@@ -220,7 +220,7 @@ META_SPEED_TIERS = {
     "landorus": {"base": 101, "common_speeds": [168, 153]},
     "garchomp": {"base": 102, "common_speeds": [169, 154]},
     "arcanine": {"base": 95, "common_speeds": [161, 146, 95]},
-    "arcanine-hisui": {"base": 95, "common_speeds": [161, 146, 95]},
+    "arcanine-hisui": {"base": 90, "common_speeds": [156, 141, 90]},
     "palafin": {"base": 100, "common_speeds": [167, 152]},
     "indeedee-f": {"base": 95, "common_speeds": [161, 146]},
 

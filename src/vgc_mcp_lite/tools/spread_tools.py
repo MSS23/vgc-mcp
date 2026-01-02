@@ -617,6 +617,10 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             # 2. Calculate remaining EVs for bulk/offense
             remaining_evs = 508 - speed_evs_needed
 
+            # Auto-fill offensive_evs to 252 when prioritize=offense but no value given
+            if prioritize == "offense" and offensive_evs == 0:
+                offensive_evs = 252
+
             if prioritize == "offense" and offensive_evs > 0:
                 atk_evs = min(offensive_evs, remaining_evs)
                 remaining_evs -= atk_evs
