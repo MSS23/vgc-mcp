@@ -1293,6 +1293,15 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
             scenarios = include_scenarios or ["tailwind", "trick_room", "paralysis"]
             scenario_results = {}
 
+            # Helper to determine faster Pokemon with proper tie handling
+            def get_faster(speed_a: int, speed_b: int, name_a: str, name_b: str) -> str:
+                if speed_a > speed_b:
+                    return name_a
+                elif speed_b > speed_a:
+                    return name_b
+                else:
+                    return "Speed tie (50/50)"
+
             for scenario in scenarios:
                 if scenario == "tailwind":
                     my_tw = my_speed * 2
@@ -1300,16 +1309,23 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                     scenario_results["my_tailwind"] = {
                         "my_speed": my_tw,
                         "opponent_speed": opp_speed,
-                        "faster": my_pokemon if my_tw > opp_speed else opponent_pokemon
+                        "faster": get_faster(my_tw, opp_speed, my_pokemon, opponent_pokemon)
                     }
                     scenario_results["opponent_tailwind"] = {
                         "my_speed": my_speed,
                         "opponent_speed": opp_tw,
-                        "faster": my_pokemon if my_speed > opp_tw else opponent_pokemon
+                        "faster": get_faster(my_speed, opp_tw, my_pokemon, opponent_pokemon)
                     }
                 elif scenario == "trick_room":
+                    # In Trick Room, slower moves first - but ties are still 50/50
+                    if my_speed == opp_speed:
+                        faster_in_tr = "Speed tie (50/50)"
+                    elif my_speed > opp_speed:
+                        faster_in_tr = opponent_pokemon
+                    else:
+                        faster_in_tr = my_pokemon
                     scenario_results["trick_room"] = {
-                        "faster": opponent_pokemon if my_speed > opp_speed else my_pokemon,
+                        "faster": faster_in_tr,
                         "note": "Slower Pokemon moves first in Trick Room"
                     }
                 elif scenario == "paralysis":
@@ -1317,28 +1333,28 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                     opp_para = int(opp_speed * 0.5)
                     scenario_results["my_paralysis"] = {
                         "my_speed": my_para,
-                        "faster": my_pokemon if my_para > opp_speed else opponent_pokemon
+                        "faster": get_faster(my_para, opp_speed, my_pokemon, opponent_pokemon)
                     }
                     scenario_results["opponent_paralysis"] = {
                         "opponent_speed": opp_para,
-                        "faster": my_pokemon if my_speed > opp_para else opponent_pokemon
+                        "faster": get_faster(my_speed, opp_para, my_pokemon, opponent_pokemon)
                     }
                 elif scenario == "icy_wind":
                     opp_icy = int(opp_speed * 0.67)
                     scenario_results["after_icy_wind"] = {
                         "opponent_speed": opp_icy,
-                        "faster": my_pokemon if my_speed > opp_icy else opponent_pokemon
+                        "faster": get_faster(my_speed, opp_icy, my_pokemon, opponent_pokemon)
                     }
                 elif scenario == "choice_scarf":
                     my_scarf = int(my_speed * 1.5)
                     opp_scarf = int(opp_speed * 1.5)
                     scenario_results["my_choice_scarf"] = {
                         "my_speed": my_scarf,
-                        "faster": my_pokemon if my_scarf > opp_speed else opponent_pokemon
+                        "faster": get_faster(my_scarf, opp_speed, my_pokemon, opponent_pokemon)
                     }
                     scenario_results["opponent_choice_scarf"] = {
                         "opponent_speed": opp_scarf,
-                        "faster": my_pokemon if my_speed > opp_scarf else opponent_pokemon
+                        "faster": get_faster(my_speed, opp_scarf, my_pokemon, opponent_pokemon)
                     }
 
             results["scenarios"] = scenario_results

@@ -3366,6 +3366,36 @@ def create_stats_card_ui(
         "final": final_stats
     })
 
+    # Pre-build stat rows to avoid nested f-string issues
+    stat_rows_html = ""
+    for i in range(6):
+        stat_class = 'boosted' if stat_keys[i] == boosted_stat else ('lowered' if stat_keys[i] == lowered_stat else '')
+        bar_width = min(100, base_stats.get(stat_keys[i], 100) / 2)
+        stat_rows_html += f'''
+        <div class="stat-row">
+            <div class="stat-label {stat_class}">{stat_labels[i]}</div>
+            <div class="stat-bar-container">
+                <div class="stat-bar {stat_keys[i]}" style="width:{bar_width}%"></div>
+                <div class="stat-values">
+                    <span class="stat-base">{base_stats.get(stat_keys[i], 100)}</span>
+                    <span class="stat-final">{final_stats[stat_keys[i]]}</span>
+                </div>
+            </div>
+        </div>
+        '''
+
+    # Pre-build EV items to avoid nested f-string issues
+    ev_items_html = ""
+    for i in range(6):
+        ev_val = evs.get(stat_keys[i], 0)
+        zero_class = 'zero' if ev_val == 0 else ''
+        ev_items_html += f'''
+            <div class="ev-item">
+                <div class="ev-label">{stat_labels[i]}</div>
+                <div class="ev-value {zero_class}">{ev_val}</div>
+            </div>
+            '''
+
     return f'''<!DOCTYPE html>
 <html>
 <head>
@@ -3544,29 +3574,13 @@ body {{
 
     <div class="stats-section">
         <div class="section-title">Stats (Level {level})</div>
-        {"".join(f'''
-        <div class="stat-row">
-            <div class="stat-label {'boosted' if stat_keys[i] == boosted_stat else 'lowered' if stat_keys[i] == lowered_stat else ''}">{stat_labels[i]}</div>
-            <div class="stat-bar-container">
-                <div class="stat-bar {stat_keys[i]}" style="width:{min(100, base_stats.get(stat_keys[i], 100) / 2)}%"></div>
-                <div class="stat-values">
-                    <span class="stat-base">{base_stats.get(stat_keys[i], 100)}</span>
-                    <span class="stat-final">{final_stats[stat_keys[i]]}</span>
-                </div>
-            </div>
-        </div>
-        ''' for i in range(6))}
+        {stat_rows_html}
     </div>
 
     <div class="ev-section">
         <div class="section-title">EV Spread</div>
         <div class="ev-grid">
-            {"".join(f'''
-            <div class="ev-item">
-                <div class="ev-label">{stat_labels[i]}</div>
-                <div class="ev-value {'zero' if evs.get(stat_keys[i], 0) == 0 else ''}">{evs.get(stat_keys[i], 0)}</div>
-            </div>
-            ''' for i in range(6))}
+            {ev_items_html}
         </div>
     </div>
 
