@@ -7,7 +7,7 @@ import httpx
 
 from ..config import settings, logger
 from ..models.pokemon import BaseStats
-from ..models.move import Move, MoveCategory, SPREAD_TARGETS, get_multi_hit_info, is_always_crit_move, get_move_type_for_user
+from ..models.move import Move, MoveCategory, SPREAD_TARGETS, get_multi_hit_info, is_always_crit_move, get_move_type_for_user, MOVE_SECONDARY_EFFECTS
 from .cache import APICache
 
 
@@ -194,6 +194,14 @@ class PokeAPIClient:
         if user_name:
             move_type = get_move_type_for_user(name, user_name, move_type)
 
+        # Get effect_chance from API, with fallback to our secondary effects database
+        # This is critical for Sheer Force calculations - PokeAPI sometimes returns null
+        effect_chance = data.get("effect_chance")
+        if effect_chance is None:
+            secondary_data = MOVE_SECONDARY_EFFECTS.get(name)
+            if secondary_data:
+                _, effect_chance = secondary_data
+
         return Move(
             name=data["name"],
             type=move_type,
@@ -203,7 +211,7 @@ class PokeAPIClient:
             pp=data.get("pp", 5),
             priority=data.get("priority", 0),
             target=target,
-            effect_chance=data.get("effect_chance"),
+            effect_chance=effect_chance,
             makes_contact=makes_contact,
             min_hits=min_hits,
             max_hits=max_hits,
