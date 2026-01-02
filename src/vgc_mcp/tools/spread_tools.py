@@ -872,47 +872,66 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     speed_evs_needed += extra_spe
                     leftover -= extra_spe
 
-                # Priority 2: HP (most efficient for mixed bulk)
+                # Priority 2 & 3: Optimal bulk distribution based on base stats
+                # Use mathematical optimization: effective bulk = HP * Def
+                # High base HP → invest more in defenses; High base Def → invest more in HP
                 if leftover > 0:
-                    extra_hp = min(252 - hp_evs, leftover)
-                    hp_evs += extra_hp
-                    leftover -= extra_hp
-
-                # Priority 3: Defenses based on context
-                if leftover > 0:
+                    # Determine which defense stat to optimize based on survival benchmark
+                    optimize_physical = True  # Default to balanced
                     if survive_pokemon and survive_move:
-                        # Continue optimizing the defense we calculated for
                         try:
                             move_check = await pokeapi.get_move(survive_move)
-                            is_phys_move = move_check.category == MoveCategory.PHYSICAL
-                            if is_phys_move:
-                                extra_def = min(252 - def_evs, leftover)
-                                def_evs += extra_def
-                                leftover -= extra_def
-                                # Any remaining to SpD
-                                if leftover > 0:
-                                    spd_evs = min(252, spd_evs + leftover)
-                            else:
-                                extra_spd = min(252 - spd_evs, leftover)
-                                spd_evs += extra_spd
-                                leftover -= extra_spd
-                                # Any remaining to Def
-                                if leftover > 0:
-                                    def_evs = min(252, def_evs + leftover)
+                            optimize_physical = move_check.category == MoveCategory.PHYSICAL
                         except Exception:
-                            # Fallback: split evenly
-                            half = leftover // 2
-                            extra_def = min(252 - def_evs, half)
-                            def_evs += extra_def
-                            leftover -= extra_def
-                            spd_evs = min(252, spd_evs + leftover)
-                    else:
-                        # No survival benchmark - split evenly between Def/SpD
-                        half = leftover // 2
-                        extra_def = min(252 - def_evs, half)
-                        def_evs += extra_def
-                        leftover -= extra_def
-                        spd_evs = min(252, spd_evs + leftover)
+                            pass
+
+                    # Calculate current final stats to determine optimal distribution
+                    current_hp = calculate_hp(my_base.hp, 31, hp_evs, 50)
+                    def_mod = get_nature_modifier(parsed_nature, "defense")
+                    spd_mod = get_nature_modifier(parsed_nature, "special_defense")
+                    current_def = calculate_stat(my_base.defense, 31, def_evs, 50, def_mod)
+                    current_spd = calculate_stat(my_base.special_defense, 31, spd_evs, 50, spd_mod)
+
+                    # Optimal bulk is when HP ≈ Defense (marginal gains equal)
+                    # If HP >> Def, invest in Def; if Def >> HP, invest in HP
+                    target_def = current_def if optimize_physical else current_spd
+
+                    while leftover > 0:
+                        # Recalculate current stats
+                        current_hp = calculate_hp(my_base.hp, 31, hp_evs, 50)
+                        if optimize_physical:
+                            current_def = calculate_stat(my_base.defense, 31, def_evs, 50, def_mod)
+                            target_def = current_def
+                            can_add_def = def_evs < 252
+                        else:
+                            current_spd = calculate_stat(my_base.special_defense, 31, spd_evs, 50, spd_mod)
+                            target_def = current_spd
+                            can_add_def = spd_evs < 252
+                        can_add_hp = hp_evs < 252
+
+                        # If HP > Defense, invest in defense; otherwise invest in HP
+                        if current_hp > target_def and can_add_def:
+                            if optimize_physical:
+                                def_evs = min(252, def_evs + 4)
+                            else:
+                                spd_evs = min(252, spd_evs + 4)
+                            leftover -= 4
+                        elif can_add_hp:
+                            hp_evs = min(252, hp_evs + 4)
+                            leftover -= 4
+                        elif can_add_def:
+                            if optimize_physical:
+                                def_evs = min(252, def_evs + 4)
+                            else:
+                                spd_evs = min(252, spd_evs + 4)
+                            leftover -= 4
+                        else:
+                            # All relevant stats maxed, put remainder in other defense
+                            if optimize_physical:
+                                spd_evs = min(252, spd_evs + leftover)
+                            else:
+                                def_evs = min(252, def_evs + leftover)
+                            leftover = 0
 
             # 4. Calculate final stats
             speed_mod = get_nature_modifier(parsed_nature, "speed")
