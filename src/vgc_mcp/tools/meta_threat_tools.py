@@ -59,26 +59,18 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
         Returns:
             Comprehensive threat analysis with matchup verdicts
         """
-        # Get your Pokemon's data
-        your_data = await pokeapi.get_pokemon(pokemon_name)
-        if not your_data:
-            return {"error": f"Pokemon not found: {pokemon_name}"}
-
-        # Validate nature
+        # Validate nature first
         try:
             nature_enum = Nature(nature.lower())
         except ValueError:
             return {"error": f"Invalid nature: {nature}"}
 
-        # Create your Pokemon build
-        base_stats = BaseStats(
-            hp=your_data["base_stats"]["hp"],
-            attack=your_data["base_stats"]["attack"],
-            defense=your_data["base_stats"]["defense"],
-            special_attack=your_data["base_stats"]["special_attack"],
-            special_defense=your_data["base_stats"]["special_defense"],
-            speed=your_data["base_stats"]["speed"]
-        )
+        # Get your Pokemon's data
+        try:
+            base_stats = await pokeapi.get_base_stats(pokemon_name)
+            your_types = await pokeapi.get_pokemon_types(pokemon_name)
+        except Exception as e:
+            return {"error": f"Pokemon not found: {pokemon_name}"}
 
         evs = EVSpread(
             hp=hp_evs,
@@ -90,9 +82,9 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
         )
 
         your_pokemon = PokemonBuild(
-            name=your_data["name"],
+            name=pokemon_name,
             base_stats=base_stats,
-            types=your_data.get("types", []),
+            types=your_types,
             nature=nature_enum,
             evs=evs,
             level=50
@@ -133,8 +125,10 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
             if threat_name.lower() == pokemon_name.lower():
                 continue
 
-            threat_api_data = await pokeapi.get_pokemon(threat_name)
-            if not threat_api_data:
+            try:
+                threat_base_stats = await pokeapi.get_base_stats(threat_name)
+                threat_types = await pokeapi.get_pokemon_types(threat_name)
+            except Exception:
                 continue
 
             threat_usage = await smogon.get_pokemon_usage(threat_name)
@@ -147,19 +141,19 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                     if move_data:
                         threat_moves.append({
                             "name": move_name,
-                            "power": move_data.get("power", 0),
-                            "type": move_data.get("type", "normal"),
-                            "category": move_data.get("category", "physical")
+                            "power": move_data.power or 0,
+                            "type": move_data.type.lower(),
+                            "category": move_data.category.value
                         })
 
-            # Build threat stats dict
+            # Build threat stats dict (rough estimate with EVs)
             threat_stats = {
-                "hp": threat_api_data["base_stats"]["hp"] + 75,  # Rough estimate with EVs
-                "attack": threat_api_data["base_stats"]["attack"] + 40,
-                "defense": threat_api_data["base_stats"]["defense"] + 40,
-                "special_attack": threat_api_data["base_stats"]["special_attack"] + 40,
-                "special_defense": threat_api_data["base_stats"]["special_defense"] + 40,
-                "speed": threat_api_data["base_stats"]["speed"] + 40
+                "hp": threat_base_stats.hp + 75,
+                "attack": threat_base_stats.attack + 40,
+                "defense": threat_base_stats.defense + 40,
+                "special_attack": threat_base_stats.special_attack + 40,
+                "special_defense": threat_base_stats.special_defense + 40,
+                "speed": threat_base_stats.speed + 40
             }
 
             result = analyze_single_threat(
@@ -167,7 +161,7 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                 your_stats=your_stats,
                 threat_name=threat_name,
                 threat_stats=threat_stats,
-                threat_types=threat_api_data.get("types", []),
+                threat_types=threat_types,
                 threat_usage_pct=round(threat_usage_data.get("usage", 0) * 100, 2),
                 threat_common_moves=threat_moves,
                 your_common_moves=your_moves,
@@ -295,8 +289,10 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
             if threat_name.lower() == pokemon.name.lower():
                 continue
 
-            threat_api_data = await pokeapi.get_pokemon(threat_name)
-            if not threat_api_data:
+            try:
+                threat_base_stats = await pokeapi.get_base_stats(threat_name)
+                threat_types = await pokeapi.get_pokemon_types(threat_name)
+            except Exception:
                 continue
 
             threat_usage = await smogon.get_pokemon_usage(threat_name)
@@ -308,18 +304,18 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                     if move_data:
                         threat_moves.append({
                             "name": move_name,
-                            "power": move_data.get("power", 0),
-                            "type": move_data.get("type", "normal"),
-                            "category": move_data.get("category", "physical")
+                            "power": move_data.power or 0,
+                            "type": move_data.type.lower(),
+                            "category": move_data.category.value
                         })
 
             threat_stats = {
-                "hp": threat_api_data["base_stats"]["hp"] + 75,
-                "attack": threat_api_data["base_stats"]["attack"] + 40,
-                "defense": threat_api_data["base_stats"]["defense"] + 40,
-                "special_attack": threat_api_data["base_stats"]["special_attack"] + 40,
-                "special_defense": threat_api_data["base_stats"]["special_defense"] + 40,
-                "speed": threat_api_data["base_stats"]["speed"] + 40
+                "hp": threat_base_stats.hp + 75,
+                "attack": threat_base_stats.attack + 40,
+                "defense": threat_base_stats.defense + 40,
+                "special_attack": threat_base_stats.special_attack + 40,
+                "special_defense": threat_base_stats.special_defense + 40,
+                "speed": threat_base_stats.speed + 40
             }
 
             result = analyze_single_threat(
@@ -327,7 +323,7 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                 your_stats=your_stats,
                 threat_name=threat_name,
                 threat_stats=threat_stats,
-                threat_types=threat_api_data.get("types", []),
+                threat_types=threat_types,
                 threat_usage_pct=round(threat_usage_data.get("usage", 0) * 100, 2),
                 threat_common_moves=threat_moves,
                 your_common_moves=your_moves,
@@ -419,34 +415,29 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
         Returns:
             Survival analysis with damage range
         """
-        # Get your Pokemon's data
-        your_data = await pokeapi.get_pokemon(pokemon_name)
-        if not your_data:
-            return {"error": f"Pokemon not found: {pokemon_name}"}
-
+        # Validate nature first
         try:
             nature_enum = Nature(nature.lower())
         except ValueError:
             return {"error": f"Invalid nature: {nature}"}
 
+        # Get your Pokemon's data
+        try:
+            base_stats = await pokeapi.get_base_stats(pokemon_name)
+            your_types = await pokeapi.get_pokemon_types(pokemon_name)
+        except Exception:
+            return {"error": f"Pokemon not found: {pokemon_name}"}
+
         # Get threat data
-        threat_data = await pokeapi.get_pokemon(threat_pokemon)
-        if not threat_data:
+        try:
+            threat_base_stats = await pokeapi.get_base_stats(threat_pokemon)
+            threat_types = await pokeapi.get_pokemon_types(threat_pokemon)
+        except Exception:
             return {"error": f"Pokemon not found: {threat_pokemon}"}
 
         move_data = await pokeapi.get_move(threat_move)
         if not move_data:
             return {"error": f"Move not found: {threat_move}"}
-
-        # Build your Pokemon
-        base_stats = BaseStats(
-            hp=your_data["base_stats"]["hp"],
-            attack=your_data["base_stats"]["attack"],
-            defense=your_data["base_stats"]["defense"],
-            special_attack=your_data["base_stats"]["special_attack"],
-            special_defense=your_data["base_stats"]["special_defense"],
-            speed=your_data["base_stats"]["speed"]
-        )
 
         evs = EVSpread(
             hp=hp_evs,
@@ -455,9 +446,9 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
         )
 
         your_pokemon = PokemonBuild(
-            name=your_data["name"],
+            name=pokemon_name,
             base_stats=base_stats,
-            types=your_data.get("types", []),
+            types=your_types,
             nature=nature_enum,
             evs=evs,
             level=50
@@ -466,30 +457,30 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
         your_stats = calculate_all_stats(your_pokemon)
 
         # Estimate threat stats (max offensive investment)
-        is_physical = move_data.get("category", "physical").lower() == "physical"
+        is_physical = move_data.category.value == "physical"
         threat_stats = {
-            "hp": threat_data["base_stats"]["hp"] + 75,
-            "attack": threat_data["base_stats"]["attack"] + 80 if is_physical else threat_data["base_stats"]["attack"] + 40,
-            "defense": threat_data["base_stats"]["defense"] + 40,
-            "special_attack": threat_data["base_stats"]["special_attack"] + 80 if not is_physical else threat_data["base_stats"]["special_attack"] + 40,
-            "special_defense": threat_data["base_stats"]["special_defense"] + 40,
-            "speed": threat_data["base_stats"]["speed"] + 40
+            "hp": threat_base_stats.hp + 75,
+            "attack": threat_base_stats.attack + 80 if is_physical else threat_base_stats.attack + 40,
+            "defense": threat_base_stats.defense + 40,
+            "special_attack": threat_base_stats.special_attack + 80 if not is_physical else threat_base_stats.special_attack + 40,
+            "special_defense": threat_base_stats.special_defense + 40,
+            "speed": threat_base_stats.speed + 40
         }
 
         from vgc_mcp_core.calc.meta_threats import calculate_simple_damage, _get_simple_effectiveness
 
         # Check if STAB
-        stab = move_data.get("type", "normal").lower() in [t.lower() for t in threat_data.get("types", [])]
+        stab = move_data.type.lower() in [t.lower() for t in threat_types]
 
         # Calculate type effectiveness
         type_eff = _get_simple_effectiveness(
-            move_data.get("type", "normal"),
-            your_data.get("types", [])
+            move_data.type.lower(),
+            your_types
         )
 
         damage = calculate_simple_damage(
             threat_stats, your_stats,
-            move_data.get("power", 80),
+            move_data.power or 80,
             is_physical,
             stab=stab,
             type_effectiveness=type_eff
@@ -507,8 +498,8 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
             "your_hp": your_stats["hp"],
             "threat_pokemon": threat_pokemon,
             "threat_move": threat_move,
-            "move_type": move_data.get("type"),
-            "move_category": move_data.get("category"),
+            "move_type": move_data.type,
+            "move_category": move_data.category.value,
             "damage_range": f"{damage['min_damage']}-{damage['max_damage']}",
             "damage_percent": f"{damage['min_percent']:.1f}%-{damage['max_percent']:.1f}%",
             "survives_guaranteed": survives,
@@ -550,18 +541,23 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
         Returns:
             Minimum HP and defensive EVs needed to survive
         """
-        # Get Pokemon data
-        your_data = await pokeapi.get_pokemon(pokemon_name)
-        if not your_data:
-            return {"error": f"Pokemon not found: {pokemon_name}"}
-
+        # Validate nature first
         try:
             nature_enum = Nature(nature.lower())
         except ValueError:
             return {"error": f"Invalid nature: {nature}"}
 
-        threat_data = await pokeapi.get_pokemon(threat_pokemon)
-        if not threat_data:
+        # Get Pokemon data
+        try:
+            base_stats = await pokeapi.get_base_stats(pokemon_name)
+            your_types = await pokeapi.get_pokemon_types(pokemon_name)
+        except Exception:
+            return {"error": f"Pokemon not found: {pokemon_name}"}
+
+        try:
+            threat_base_stats = await pokeapi.get_base_stats(threat_pokemon)
+            threat_types = await pokeapi.get_pokemon_types(threat_pokemon)
+        except Exception:
             return {"error": f"Pokemon not found: {threat_pokemon}"}
 
         move_data = await pokeapi.get_move(threat_move)
@@ -569,36 +565,26 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
             return {"error": f"Move not found: {threat_move}"}
 
         move_is_physical = is_physical if is_physical is not None else (
-            move_data.get("category", "physical").lower() == "physical"
+            move_data.category.value == "physical"
         )
 
         # Threat stats (max offensive)
         threat_stats = {
-            "hp": threat_data["base_stats"]["hp"] + 75,
-            "attack": threat_data["base_stats"]["attack"] + 80 if move_is_physical else threat_data["base_stats"]["attack"] + 40,
-            "defense": threat_data["base_stats"]["defense"] + 40,
-            "special_attack": threat_data["base_stats"]["special_attack"] + 80 if not move_is_physical else threat_data["base_stats"]["special_attack"] + 40,
-            "special_defense": threat_data["base_stats"]["special_defense"] + 40,
-            "speed": threat_data["base_stats"]["speed"] + 40
+            "hp": threat_base_stats.hp + 75,
+            "attack": threat_base_stats.attack + 80 if move_is_physical else threat_base_stats.attack + 40,
+            "defense": threat_base_stats.defense + 40,
+            "special_attack": threat_base_stats.special_attack + 80 if not move_is_physical else threat_base_stats.special_attack + 40,
+            "special_defense": threat_base_stats.special_defense + 40,
+            "speed": threat_base_stats.speed + 40
         }
 
-        stab = move_data.get("type", "normal").lower() in [t.lower() for t in threat_data.get("types", [])]
+        stab = move_data.type.lower() in [t.lower() for t in threat_types]
 
         from vgc_mcp_core.calc.meta_threats import calculate_simple_damage, _get_simple_effectiveness
 
         type_eff = _get_simple_effectiveness(
-            move_data.get("type", "normal"),
-            your_data.get("types", [])
-        )
-
-        # Try different EV combinations
-        base_stats = BaseStats(
-            hp=your_data["base_stats"]["hp"],
-            attack=your_data["base_stats"]["attack"],
-            defense=your_data["base_stats"]["defense"],
-            special_attack=your_data["base_stats"]["special_attack"],
-            special_defense=your_data["base_stats"]["special_defense"],
-            speed=your_data["base_stats"]["speed"]
+            move_data.type.lower(),
+            your_types
         )
 
         best_spread = None
@@ -616,9 +602,9 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                 )
 
                 test_pokemon = PokemonBuild(
-                    name=your_data["name"],
+                    name=pokemon_name,
                     base_stats=base_stats,
-                    types=your_data.get("types", []),
+                    types=your_types,
                     nature=nature_enum,
                     evs=evs,
                     level=50
@@ -628,7 +614,7 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
 
                 damage = calculate_simple_damage(
                     threat_stats, test_stats,
-                    move_data.get("power", 80),
+                    move_data.power or 80,
                     move_is_physical,
                     stab=stab,
                     type_effectiveness=type_eff
@@ -671,7 +657,7 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                 "nature": nature,
                 "threat": threat_pokemon,
                 "move": threat_move,
-                "move_type": move_data.get("type"),
+                "move_type": move_data.type,
                 "move_category": "Physical" if move_is_physical else "Special",
                 "minimum_evs": best_spread,
                 "analysis": (
