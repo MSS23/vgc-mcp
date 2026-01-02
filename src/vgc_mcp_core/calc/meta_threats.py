@@ -23,6 +23,8 @@ class ThreatDamageResult:
     threat_damage_to_you: dict    # Best move, damage range, KO chance
     speed_comparison: str
     matchup_verdict: str          # "Favorable", "Unfavorable", "Even"
+    threat_spread: Optional[dict] = None  # Spread used for calculation (nature, evs, usage)
+    threat_stats: Optional[dict] = None   # Calculated stats from spread
 
 
 @dataclass
@@ -126,7 +128,8 @@ def analyze_single_threat(
     threat_usage_pct: float,
     threat_common_moves: list[dict],
     your_common_moves: list[dict],
-    your_speed: int
+    your_speed: int,
+    threat_spread: Optional[dict] = None
 ) -> ThreatDamageResult:
     """
     Analyze matchup against a single threat.
@@ -141,6 +144,7 @@ def analyze_single_threat(
         threat_common_moves: List of threat's common moves with power/type/category
         your_common_moves: Your common moves
         your_speed: Your calculated speed
+        threat_spread: Optional spread dict with nature, evs, and usage
 
     Returns:
         ThreatDamageResult with matchup analysis
@@ -239,7 +243,9 @@ def analyze_single_threat(
         your_damage_to_threat=best_your_damage if best_your_damage.get("max_percent", 0) > 0 else {"message": "No damaging moves analyzed"},
         threat_damage_to_you=best_threat_damage if best_threat_damage.get("max_percent", 0) > 0 else {"message": "No damaging moves analyzed"},
         speed_comparison=speed_comparison,
-        matchup_verdict=verdict
+        matchup_verdict=verdict,
+        threat_spread=threat_spread,
+        threat_stats=threat_stats
     )
 
 

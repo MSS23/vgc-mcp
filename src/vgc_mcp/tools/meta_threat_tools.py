@@ -146,15 +146,54 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                             "category": move_data.category.value
                         })
 
-            # Build threat stats dict (rough estimate with EVs)
-            threat_stats = {
-                "hp": threat_base_stats.hp + 75,
-                "attack": threat_base_stats.attack + 40,
-                "defense": threat_base_stats.defense + 40,
-                "special_attack": threat_base_stats.special_attack + 40,
-                "special_defense": threat_base_stats.special_defense + 40,
-                "speed": threat_base_stats.speed + 40
-            }
+            # Use actual Smogon spread if available, otherwise estimate
+            threat_spread = None
+            if threat_usage and threat_usage.get("spreads"):
+                top_spread = threat_usage["spreads"][0]
+                try:
+                    threat_nature = Nature(top_spread["nature"].lower())
+                    threat_evs = EVSpread(
+                        hp=top_spread["evs"].get("hp", 0),
+                        attack=top_spread["evs"].get("attack", 0),
+                        defense=top_spread["evs"].get("defense", 0),
+                        special_attack=top_spread["evs"].get("special_attack", 0),
+                        special_defense=top_spread["evs"].get("special_defense", 0),
+                        speed=top_spread["evs"].get("speed", 0)
+                    )
+                    threat_pokemon_build = PokemonBuild(
+                        name=threat_name,
+                        base_stats=threat_base_stats,
+                        types=threat_types,
+                        nature=threat_nature,
+                        evs=threat_evs,
+                        level=50
+                    )
+                    threat_stats = calculate_all_stats(threat_pokemon_build)
+                    threat_spread = {
+                        "nature": top_spread["nature"],
+                        "evs": top_spread["evs"],
+                        "usage": top_spread.get("usage", 0)
+                    }
+                except (ValueError, KeyError):
+                    # Fallback to estimates if spread parsing fails
+                    threat_stats = {
+                        "hp": threat_base_stats.hp + 75,
+                        "attack": threat_base_stats.attack + 40,
+                        "defense": threat_base_stats.defense + 40,
+                        "special_attack": threat_base_stats.special_attack + 40,
+                        "special_defense": threat_base_stats.special_defense + 40,
+                        "speed": threat_base_stats.speed + 40
+                    }
+            else:
+                # Fallback to rough estimates if no spread data
+                threat_stats = {
+                    "hp": threat_base_stats.hp + 75,
+                    "attack": threat_base_stats.attack + 40,
+                    "defense": threat_base_stats.defense + 40,
+                    "special_attack": threat_base_stats.special_attack + 40,
+                    "special_defense": threat_base_stats.special_defense + 40,
+                    "speed": threat_base_stats.speed + 40
+                }
 
             result = analyze_single_threat(
                 your_pokemon=your_pokemon,
@@ -165,7 +204,8 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                 threat_usage_pct=round(threat_usage_data.get("usage", 0) * 100, 2),
                 threat_common_moves=threat_moves,
                 your_common_moves=your_moves,
-                your_speed=your_stats["speed"]
+                your_speed=your_stats["speed"],
+                threat_spread=threat_spread
             )
 
             threat_results.append(result)
@@ -206,6 +246,8 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                 {
                     "threat": r.threat_name,
                     "usage": r.threat_usage_pct,
+                    "threat_spread": r.threat_spread,
+                    "threat_stats": r.threat_stats,
                     "verdict": r.matchup_verdict,
                     "speed": r.speed_comparison,
                     "your_damage": r.your_damage_to_threat,
@@ -217,6 +259,8 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                 {
                     "threat": r.threat_name,
                     "usage": r.threat_usage_pct,
+                    "threat_spread": r.threat_spread,
+                    "threat_stats": r.threat_stats,
                     "verdict": r.matchup_verdict,
                     "speed": r.speed_comparison,
                     "your_damage": r.your_damage_to_threat,
@@ -309,14 +353,52 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                             "category": move_data.category.value
                         })
 
-            threat_stats = {
-                "hp": threat_base_stats.hp + 75,
-                "attack": threat_base_stats.attack + 40,
-                "defense": threat_base_stats.defense + 40,
-                "special_attack": threat_base_stats.special_attack + 40,
-                "special_defense": threat_base_stats.special_defense + 40,
-                "speed": threat_base_stats.speed + 40
-            }
+            # Use actual Smogon spread if available, otherwise estimate
+            threat_spread = None
+            if threat_usage and threat_usage.get("spreads"):
+                top_spread = threat_usage["spreads"][0]
+                try:
+                    threat_nature = Nature(top_spread["nature"].lower())
+                    threat_evs = EVSpread(
+                        hp=top_spread["evs"].get("hp", 0),
+                        attack=top_spread["evs"].get("attack", 0),
+                        defense=top_spread["evs"].get("defense", 0),
+                        special_attack=top_spread["evs"].get("special_attack", 0),
+                        special_defense=top_spread["evs"].get("special_defense", 0),
+                        speed=top_spread["evs"].get("speed", 0)
+                    )
+                    threat_pokemon_build = PokemonBuild(
+                        name=threat_name,
+                        base_stats=threat_base_stats,
+                        types=threat_types,
+                        nature=threat_nature,
+                        evs=threat_evs,
+                        level=50
+                    )
+                    threat_stats = calculate_all_stats(threat_pokemon_build)
+                    threat_spread = {
+                        "nature": top_spread["nature"],
+                        "evs": top_spread["evs"],
+                        "usage": top_spread.get("usage", 0)
+                    }
+                except (ValueError, KeyError):
+                    threat_stats = {
+                        "hp": threat_base_stats.hp + 75,
+                        "attack": threat_base_stats.attack + 40,
+                        "defense": threat_base_stats.defense + 40,
+                        "special_attack": threat_base_stats.special_attack + 40,
+                        "special_defense": threat_base_stats.special_defense + 40,
+                        "speed": threat_base_stats.speed + 40
+                    }
+            else:
+                threat_stats = {
+                    "hp": threat_base_stats.hp + 75,
+                    "attack": threat_base_stats.attack + 40,
+                    "defense": threat_base_stats.defense + 40,
+                    "special_attack": threat_base_stats.special_attack + 40,
+                    "special_defense": threat_base_stats.special_defense + 40,
+                    "speed": threat_base_stats.speed + 40
+                }
 
             result = analyze_single_threat(
                 your_pokemon=pokemon,
@@ -327,7 +409,8 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                 threat_usage_pct=round(threat_usage_data.get("usage", 0) * 100, 2),
                 threat_common_moves=threat_moves,
                 your_common_moves=your_moves,
-                your_speed=your_stats["speed"]
+                your_speed=your_stats["speed"],
+                threat_spread=threat_spread
             )
 
             threat_results.append(result)
@@ -365,6 +448,8 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                 {
                     "threat": r.threat_name,
                     "usage": r.threat_usage_pct,
+                    "threat_spread": r.threat_spread,
+                    "threat_stats": r.threat_stats,
                     "speed": r.speed_comparison,
                     "your_damage": r.your_damage_to_threat.get("ko_chance", "N/A"),
                     "their_damage": r.threat_damage_to_you.get("ko_chance", "N/A")
@@ -375,6 +460,8 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                 {
                     "threat": r.threat_name,
                     "usage": r.threat_usage_pct,
+                    "threat_spread": r.threat_spread,
+                    "threat_stats": r.threat_stats,
                     "speed": r.speed_comparison,
                     "your_damage": r.your_damage_to_threat.get("ko_chance", "N/A"),
                     "their_damage": r.threat_damage_to_you.get("ko_chance", "N/A")
@@ -456,16 +543,57 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
 
         your_stats = calculate_all_stats(your_pokemon)
 
-        # Estimate threat stats (max offensive investment)
+        # Get threat's actual spread from Smogon if available
         is_physical = move_data.category.value == "physical"
-        threat_stats = {
-            "hp": threat_base_stats.hp + 75,
-            "attack": threat_base_stats.attack + 80 if is_physical else threat_base_stats.attack + 40,
-            "defense": threat_base_stats.defense + 40,
-            "special_attack": threat_base_stats.special_attack + 80 if not is_physical else threat_base_stats.special_attack + 40,
-            "special_defense": threat_base_stats.special_defense + 40,
-            "speed": threat_base_stats.speed + 40
-        }
+        threat_usage = await smogon.get_pokemon_usage(threat_pokemon)
+        threat_spread = None
+
+        if threat_usage and threat_usage.get("spreads"):
+            top_spread = threat_usage["spreads"][0]
+            try:
+                threat_nature = Nature(top_spread["nature"].lower())
+                threat_evs = EVSpread(
+                    hp=top_spread["evs"].get("hp", 0),
+                    attack=top_spread["evs"].get("attack", 0),
+                    defense=top_spread["evs"].get("defense", 0),
+                    special_attack=top_spread["evs"].get("special_attack", 0),
+                    special_defense=top_spread["evs"].get("special_defense", 0),
+                    speed=top_spread["evs"].get("speed", 0)
+                )
+                threat_pokemon_build = PokemonBuild(
+                    name=threat_pokemon,
+                    base_stats=threat_base_stats,
+                    types=threat_types,
+                    nature=threat_nature,
+                    evs=threat_evs,
+                    level=50
+                )
+                threat_stats = calculate_all_stats(threat_pokemon_build)
+                threat_spread = {
+                    "nature": top_spread["nature"],
+                    "evs": top_spread["evs"],
+                    "usage": top_spread.get("usage", 0)
+                }
+            except (ValueError, KeyError):
+                # Fallback to estimates
+                threat_stats = {
+                    "hp": threat_base_stats.hp + 75,
+                    "attack": threat_base_stats.attack + 80 if is_physical else threat_base_stats.attack + 40,
+                    "defense": threat_base_stats.defense + 40,
+                    "special_attack": threat_base_stats.special_attack + 80 if not is_physical else threat_base_stats.special_attack + 40,
+                    "special_defense": threat_base_stats.special_defense + 40,
+                    "speed": threat_base_stats.speed + 40
+                }
+        else:
+            # Fallback to estimated max offensive investment
+            threat_stats = {
+                "hp": threat_base_stats.hp + 75,
+                "attack": threat_base_stats.attack + 80 if is_physical else threat_base_stats.attack + 40,
+                "defense": threat_base_stats.defense + 40,
+                "special_attack": threat_base_stats.special_attack + 80 if not is_physical else threat_base_stats.special_attack + 40,
+                "special_defense": threat_base_stats.special_defense + 40,
+                "speed": threat_base_stats.speed + 40
+            }
 
         from vgc_mcp_core.calc.meta_threats import calculate_simple_damage, _get_simple_effectiveness
 
@@ -498,6 +626,8 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
             "your_hp": your_stats["hp"],
             "threat_pokemon": threat_pokemon,
             "threat_move": threat_move,
+            "threat_spread": threat_spread,
+            "threat_stats": threat_stats,
             "move_type": move_data.type,
             "move_category": move_data.category.value,
             "damage_range": f"{damage['min_damage']}-{damage['max_damage']}",
@@ -568,15 +698,55 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
             move_data.category.value == "physical"
         )
 
-        # Threat stats (max offensive)
-        threat_stats = {
-            "hp": threat_base_stats.hp + 75,
-            "attack": threat_base_stats.attack + 80 if move_is_physical else threat_base_stats.attack + 40,
-            "defense": threat_base_stats.defense + 40,
-            "special_attack": threat_base_stats.special_attack + 80 if not move_is_physical else threat_base_stats.special_attack + 40,
-            "special_defense": threat_base_stats.special_defense + 40,
-            "speed": threat_base_stats.speed + 40
-        }
+        # Get threat's actual spread from Smogon if available
+        threat_usage = await smogon.get_pokemon_usage(threat_pokemon)
+        threat_spread = None
+
+        if threat_usage and threat_usage.get("spreads"):
+            top_spread = threat_usage["spreads"][0]
+            try:
+                threat_nature = Nature(top_spread["nature"].lower())
+                threat_evs_data = EVSpread(
+                    hp=top_spread["evs"].get("hp", 0),
+                    attack=top_spread["evs"].get("attack", 0),
+                    defense=top_spread["evs"].get("defense", 0),
+                    special_attack=top_spread["evs"].get("special_attack", 0),
+                    special_defense=top_spread["evs"].get("special_defense", 0),
+                    speed=top_spread["evs"].get("speed", 0)
+                )
+                threat_pokemon_build = PokemonBuild(
+                    name=threat_pokemon,
+                    base_stats=threat_base_stats,
+                    types=threat_types,
+                    nature=threat_nature,
+                    evs=threat_evs_data,
+                    level=50
+                )
+                threat_stats = calculate_all_stats(threat_pokemon_build)
+                threat_spread = {
+                    "nature": top_spread["nature"],
+                    "evs": top_spread["evs"],
+                    "usage": top_spread.get("usage", 0)
+                }
+            except (ValueError, KeyError):
+                threat_stats = {
+                    "hp": threat_base_stats.hp + 75,
+                    "attack": threat_base_stats.attack + 80 if move_is_physical else threat_base_stats.attack + 40,
+                    "defense": threat_base_stats.defense + 40,
+                    "special_attack": threat_base_stats.special_attack + 80 if not move_is_physical else threat_base_stats.special_attack + 40,
+                    "special_defense": threat_base_stats.special_defense + 40,
+                    "speed": threat_base_stats.speed + 40
+                }
+        else:
+            # Fallback to estimated max offensive
+            threat_stats = {
+                "hp": threat_base_stats.hp + 75,
+                "attack": threat_base_stats.attack + 80 if move_is_physical else threat_base_stats.attack + 40,
+                "defense": threat_base_stats.defense + 40,
+                "special_attack": threat_base_stats.special_attack + 80 if not move_is_physical else threat_base_stats.special_attack + 40,
+                "special_defense": threat_base_stats.special_defense + 40,
+                "speed": threat_base_stats.speed + 40
+            }
 
         stab = move_data.type.lower() in [t.lower() for t in threat_types]
 
@@ -648,6 +818,8 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                 "pokemon": pokemon_name,
                 "threat": threat_pokemon,
                 "move": threat_move,
+                "threat_spread": threat_spread,
+                "threat_stats": threat_stats,
                 "impossible": True,
                 "message": f"Cannot survive {threat_pokemon}'s {threat_move} even with max bulk investment"
             }
@@ -657,6 +829,8 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                 "nature": nature,
                 "threat": threat_pokemon,
                 "move": threat_move,
+                "threat_spread": threat_spread,
+                "threat_stats": threat_stats,
                 "move_type": move_data.type,
                 "move_category": "Physical" if move_is_physical else "Special",
                 "minimum_evs": best_spread,
