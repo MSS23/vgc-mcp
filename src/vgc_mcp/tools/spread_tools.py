@@ -690,15 +690,49 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                         survive_pokemon_ability.lower().replace(" ", "-") == "unseen-fist"
                     )
 
+                    # Calculate attacker's final stats for the spread display
+                    atk_nature_mod_atk = get_nature_modifier(atk_nature, "attack")
+                    atk_nature_mod_spa = get_nature_modifier(atk_nature, "special_attack")
+                    attacker_final_atk = calculate_stat(atk_base.attack, 31, survive_pokemon_evs if is_physical else 0, 50, atk_nature_mod_atk)
+                    attacker_final_spa = calculate_stat(atk_base.special_attack, 31, 0 if is_physical else survive_pokemon_evs, 50, atk_nature_mod_spa)
+                    attacker_final_hp = calculate_hp(atk_base.hp, 31, 0, 50)
+
+                    # Build attacker spread string (Showdown format: "252+ Atk")
+                    stat_name = "Atk" if is_physical else "SpA"
+                    nature_boost = "+" if (is_physical and atk_nature_mod_atk > 1.0) or (not is_physical and atk_nature_mod_spa > 1.0) else ""
+                    nature_penalty = "-" if (is_physical and atk_nature_mod_atk < 1.0) or (not is_physical and atk_nature_mod_spa < 1.0) else ""
+                    nature_indicator = nature_boost or nature_penalty
+                    item_str = f" {survive_pokemon_item.replace('-', ' ').title()}" if survive_pokemon_item else ""
+                    attacker_spread_str = f"{survive_pokemon_evs}{nature_indicator} {stat_name}{item_str} {survive_pokemon}"
+
+                    # Build defender spread string
+                    relevant_def_evs = best_spread["def"] if is_physical else best_spread["spd"]
+                    def_stat_name = "Def" if is_physical else "SpD"
+                    defender_spread_str = f"{best_spread['hp']} HP / {relevant_def_evs} {def_stat_name} {pokemon_name}"
+
+                    # Build analysis string
+                    analysis_str = f"{attacker_spread_str}'s {survive_move} vs {defender_spread_str}: {best_result.min_percent:.1f}-{best_result.max_percent:.1f}%"
+
                     results["benchmarks"]["survival"] = {
                         "attacker": survive_pokemon,
                         "move": survive_move,
+                        "attacker_spread": attacker_spread_str,
+                        "attacker_nature": survive_pokemon_nature,
+                        "attacker_evs": survive_pokemon_evs,
                         "attacker_ability": survive_pokemon_ability,
                         "attacker_item": survive_pokemon_item,
+                        "attacker_tera": survive_pokemon_tera_type,
+                        "attacker_final_stats": {
+                            "hp": attacker_final_hp,
+                            "attack": attacker_final_atk,
+                            "special_attack": attacker_final_spa
+                        },
                         "defender_tera": defender_tera_type,
                         "damage_range": best_result.damage_range,
+                        "damage_percent": f"{best_result.min_percent:.1f}-{best_result.max_percent:.1f}%",
                         "survives": best_result.max_percent < 100,
                         "hp_remaining": f"{100 - best_result.max_percent:.1f}%",
+                        "analysis": analysis_str,
                         "unseen_fist_warning": (
                             "WARNING: Attacker has Unseen Fist - contact moves bypass Protect!"
                             if has_unseen_fist else None
