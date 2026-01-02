@@ -537,7 +537,8 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
         def_evs: int,
         spd_evs: int,
         threat_pokemon: str,
-        threat_move: str
+        threat_move: str,
+        survival_threshold: float = 100.0
     ) -> dict:
         """
         Check if a spread survives a specific attack from a threat.
@@ -553,9 +554,13 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
             spd_evs: Special Defense EVs
             threat_pokemon: Attacking Pokemon
             threat_move: Move name
+            survival_threshold: Required survival percentage (0-100).
+                - 100 = must survive all rolls (default, "always survives")
+                - 75 = survive 75% of rolls ("most of the time")
+                - 50 = survive 50% of rolls ("sometimes")
 
         Returns:
-            Survival analysis with damage range
+            Survival analysis with damage range and survival percentage
         """
         # Validate nature first
         try:
@@ -669,16 +674,43 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
             type_effectiveness=type_eff
         )
 
-        survives = your_stats["hp"] > damage["max_damage"]
-        survives_min = your_stats["hp"] > damage["min_damage"]
+        # Calculate exact survival percentage from damage rolls
+        damage_rolls = damage.get("damage_rolls", [])
+        your_hp = your_stats["hp"]
+
+        if damage_rolls:
+            survival_count = sum(1 for r in damage_rolls if r < your_hp)
+            survival_percent = (survival_count / len(damage_rolls)) * 100
+        else:
+            # Fallback to binary check if no rolls available
+            survival_percent = 100.0 if your_hp > damage["max_damage"] else 0.0
+            survival_count = 16 if survival_percent == 100.0 else 0
+
+        # Determine survival status
+        survives_guaranteed = survival_percent == 100.0
+        survives_sometimes = 0 < survival_percent < 100.0
+        meets_threshold = survival_percent >= survival_threshold
 
         # Check if attacker has Unseen Fist (Urshifu forms)
         normalized_threat = threat_pokemon.lower().replace(" ", "-")
         has_unseen_fist = normalized_threat in ("urshifu", "urshifu-single-strike", "urshifu-rapid-strike")
 
+        # Build analysis message
+        if survives_guaranteed:
+            analysis_msg = f"Your {pokemon_name} survives all rolls from {threat_pokemon}'s {threat_move}"
+        elif survival_percent == 0:
+            analysis_msg = f"Your {pokemon_name} does NOT survive any rolls from {threat_pokemon}'s {threat_move}"
+        else:
+            threshold_status = "MEETS" if meets_threshold else "does NOT meet"
+            analysis_msg = (
+                f"Your {pokemon_name} survives {survival_percent:.1f}% of rolls "
+                f"({survival_count}/16) from {threat_pokemon}'s {threat_move}. "
+                f"{threshold_status} {survival_threshold}% threshold."
+            )
+
         result = {
             "your_pokemon": pokemon_name,
-            "your_hp": your_stats["hp"],
+            "your_hp": your_hp,
             "threat_pokemon": threat_pokemon,
             "threat_move": threat_move,
             "threat_spread": threat_spread,
@@ -687,14 +719,15 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
             "move_category": move_data.category.value,
             "damage_range": f"{damage['min_damage']}-{damage['max_damage']}",
             "damage_percent": f"{damage['min_percent']:.1f}%-{damage['max_percent']:.1f}%",
-            "survives_guaranteed": survives,
-            "survives_sometimes": survives_min and not survives,
+            "survival_percent": round(survival_percent, 1),
+            "survival_rolls": f"{survival_count}/16",
+            "survives_guaranteed": survives_guaranteed,
+            "survives_sometimes": survives_sometimes,
+            "meets_threshold": meets_threshold,
+            "threshold_requested": survival_threshold,
             "ko_result": damage["ko_chance"],
             "type_effectiveness": type_eff,
-            "analysis": (
-                f"Your {pokemon_name} {'survives' if survives else 'does NOT survive'} "
-                f"{threat_pokemon}'s {threat_move} ({damage['min_percent']:.0f}%-{damage['max_percent']:.0f}%)"
-            )
+            "analysis": analysis_msg
         }
 
         if has_unseen_fist:
@@ -711,7 +744,8 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
         nature: str,
         threat_pokemon: str,
         threat_move: str,
-        is_physical: Optional[bool] = None
+        is_physical: Optional[bool] = None,
+        survival_threshold: float = 100.0
     ) -> dict:
         """
         Find minimum bulk EVs needed to survive a specific attack.
@@ -722,9 +756,13 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
             threat_pokemon: Attacking Pokemon
             threat_move: Move name
             is_physical: Override move category detection
+            survival_threshold: Required survival percentage (0-100).
+                - 100 = must survive all rolls (default, "always survives")
+                - 75 = survive 75% of rolls ("most of the time")
+                - 50 = survive 50% of rolls ("sometimes")
 
         Returns:
-            Minimum HP and defensive EVs needed to survive
+            Minimum HP and defensive EVs needed to achieve the survival threshold
         """
         # Validate nature first
         try:
@@ -814,6 +852,8 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
 
         best_spread = None
         min_total_evs = 999
+        max_achievable_survival = 0
+        max_achievable_spread = None
 
         for hp_evs in EV_BREAKPOINTS_LV50:
             for def_evs in EV_BREAKPOINTS_LV50:
@@ -845,7 +885,34 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                     type_effectiveness=type_eff
                 )
 
-                if test_stats["hp"] > damage["max_damage"]:
+                # Calculate survival percentage from damage rolls
+                damage_rolls = damage.get("damage_rolls", [])
+                test_hp = test_stats["hp"]
+
+                if damage_rolls:
+                    survival_count = sum(1 for r in damage_rolls if r < test_hp)
+                    survival_percent = (survival_count / len(damage_rolls)) * 100
+                else:
+                    # Fallback to binary check
+                    survival_percent = 100.0 if test_hp > damage["max_damage"] else 0.0
+                    survival_count = 16 if survival_percent == 100.0 else 0
+
+                # Track max achievable survival (for when threshold is impossible)
+                if survival_percent > max_achievable_survival:
+                    max_achievable_survival = survival_percent
+                    max_achievable_spread = {
+                        "hp_evs": hp_evs,
+                        "def_evs": def_evs if move_is_physical else 0,
+                        "spd_evs": 0 if move_is_physical else def_evs,
+                        "total_evs": hp_evs + def_evs,
+                        "resulting_hp": test_hp,
+                        "survival_percent": round(survival_percent, 1),
+                        "survival_rolls": f"{survival_count}/16",
+                        "damage_taken": f"{damage['min_percent']:.0f}%-{damage['max_percent']:.0f}%"
+                    }
+
+                # Check if meets threshold
+                if survival_percent >= survival_threshold:
                     total = hp_evs + def_evs
                     if total < min_total_evs:
                         min_total_evs = total
@@ -854,7 +921,9 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                             "def_evs": def_evs if move_is_physical else 0,
                             "spd_evs": 0 if move_is_physical else def_evs,
                             "total_evs": total,
-                            "resulting_hp": test_stats["hp"],
+                            "resulting_hp": test_hp,
+                            "survival_percent": round(survival_percent, 1),
+                            "survival_rolls": f"{survival_count}/16",
                             "damage_taken": f"{damage['min_percent']:.0f}%-{damage['max_percent']:.0f}%"
                         }
                         break  # Found minimum for this HP level
@@ -869,6 +938,15 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
         has_unseen_fist = normalized_threat in ("urshifu", "urshifu-single-strike", "urshifu-rapid-strike")
 
         if not best_spread:
+            # Build message based on what's achievable
+            if max_achievable_survival > 0:
+                message = (
+                    f"Cannot achieve {survival_threshold}% survival against {threat_pokemon}'s {threat_move}. "
+                    f"Max achievable is {max_achievable_survival:.1f}% with max bulk investment."
+                )
+            else:
+                message = f"Cannot survive {threat_pokemon}'s {threat_move} even with max bulk investment"
+
             result = {
                 "pokemon": pokemon_name,
                 "threat": threat_pokemon,
@@ -876,9 +954,17 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                 "threat_spread": threat_spread,
                 "threat_stats": threat_stats,
                 "impossible": True,
-                "message": f"Cannot survive {threat_pokemon}'s {threat_move} even with max bulk investment"
+                "threshold_requested": survival_threshold,
+                "max_achievable_survival": round(max_achievable_survival, 1),
+                "max_achievable_spread": max_achievable_spread,
+                "message": message
             }
         else:
+            # Build analysis message
+            threshold_note = ""
+            if survival_threshold < 100:
+                threshold_note = f" (meets {survival_threshold}% threshold)"
+
             result = {
                 "pokemon": pokemon_name,
                 "nature": nature,
@@ -888,12 +974,15 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                 "threat_stats": threat_stats,
                 "move_type": move_data.type,
                 "move_category": "Physical" if move_is_physical else "Special",
+                "threshold_requested": survival_threshold,
                 "minimum_evs": best_spread,
                 "analysis": (
                     f"Minimum {best_spread['total_evs']} total EVs needed: "
                     f"{best_spread['hp_evs']} HP / "
                     f"{best_spread['def_evs']} Def / "
-                    f"{best_spread['spd_evs']} SpD"
+                    f"{best_spread['spd_evs']} SpD "
+                    f"to survive {best_spread['survival_percent']}% of rolls "
+                    f"({best_spread['survival_rolls']}){threshold_note}"
                 )
             }
 
