@@ -744,6 +744,23 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
             "analysis": analysis_msg
         }
 
+        # Build benchmark table for clear display
+        survival_status = "Survives" if survives_guaranteed else ("Survives sometimes" if survives_sometimes else "Does not survive")
+        threshold_status = "Yes" if meets_threshold else "No"
+        table_lines = [
+            "| Metric               | Value                                    |",
+            "|----------------------|------------------------------------------|",
+            f"| Pokemon              | {pokemon_name:<40} |",
+            f"| HP                   | {your_hp:<40} |",
+            f"| Threat               | {threat_pokemon}'s {threat_move:<20} |",
+            f"| Damage Taken         | {damage['min_percent']:.1f}-{damage['max_percent']:.1f}%{' ':<30} |",
+            f"| HP Remaining         | {hp_remaining_min_pct}-{hp_remaining_max_pct}%{' ':<30} |",
+            f"| Survival Probability | {survival_percent:.1f}% ({survival_count}/16 rolls){' ':<20} |",
+            f"| Survival Status      | {survival_status:<40} |",
+            f"| Threshold Met        | {threshold_status} ({survival_threshold}% required){' ':<20} |",
+        ]
+        result["benchmark_table"] = "\n".join(table_lines)
+
         if has_unseen_fist:
             result["unseen_fist_warning"] = (
                 "WARNING: Urshifu has Unseen Fist - contact moves bypass Protect! "
@@ -1008,6 +1025,24 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                     f"left with {best_spread['hp_remaining_percent']} HP{threshold_note}"
                 )
             }
+
+            # Build spread result table
+            table_lines = [
+                "| Stat                 | Value                                    |",
+                "|----------------------|------------------------------------------|",
+                f"| Pokemon              | {pokemon_name:<40} |",
+                f"| Nature               | {nature:<40} |",
+                f"| Threat               | {threat_pokemon}'s {threat_move:<20} |",
+                f"| HP EVs               | {best_spread['hp_evs']:<40} |",
+                f"| Def EVs              | {best_spread['def_evs']:<40} |",
+                f"| SpD EVs              | {best_spread['spd_evs']:<40} |",
+                f"| Total EVs            | {best_spread['total_evs']:<40} |",
+                f"| Resulting HP         | {best_spread['resulting_hp']:<40} |",
+                f"| Damage Taken         | {best_spread['damage_taken']:<40} |",
+                f"| HP Remaining         | {best_spread['hp_remaining_percent']:<40} |",
+                f"| Survival Rate        | {best_spread['survival_percent']}% ({best_spread['survival_rolls']}){' ':<20} |",
+            ]
+            result["spread_table"] = "\n".join(table_lines)
 
         if has_unseen_fist:
             result["unseen_fist_warning"] = (
