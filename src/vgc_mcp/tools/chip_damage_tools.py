@@ -75,6 +75,19 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             if not result.immune and result.damage > 0:
                 turns_to_faint = max_hp // result.damage
 
+            # Build summary table
+            status_str = "Immune" if result.immune else f"{result.damage} ({result.damage_percent}%)"
+            faint_str = str(turns_to_faint) if turns_to_faint else "N/A (immune)"
+            table_lines = [
+                "| Metric           | Value                                      |",
+                "|------------------|---------------------------------------------|",
+                f"| Pokemon          | {pokemon_name}                             |",
+                f"| Weather          | {weather.title() if weather else 'None'}   |",
+                f"| Max HP           | {max_hp}                                   |",
+                f"| Damage/Turn      | {status_str}                               |",
+                f"| Turns to KO      | {faint_str}                                |",
+            ]
+
             return {
                 "pokemon": pokemon_name,
                 "types": types,
@@ -89,7 +102,8 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 "immune_types": {
                     "sandstorm": list(SANDSTORM_IMMUNE_TYPES),
                     "hail": list(HAIL_IMMUNE_TYPES),
-                }.get(weather.lower(), []) if weather else []
+                }.get(weather.lower(), []) if weather else [],
+                "summary_table": "\n".join(table_lines)
             }
 
         except Exception as e:
@@ -382,6 +396,20 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             if status.lower() == "toxic" and not result["fainted"]:
                 insights.append("Toxic damage accelerates - consider switching to reset counter")
 
+            # Build summary table
+            sources_str = ", ".join([s for s in [weather, status, terrain, item] if s]) or "None"
+            table_lines = [
+                "| Metric           | Value                                      |",
+                "|------------------|---------------------------------------------|",
+                f"| Pokemon          | {pokemon_name}                             |",
+                f"| Starting HP      | {starting_hp} ({starting_hp_percent}%)     |",
+                f"| After {turns} turns  | {result['final_hp']} ({result['final_hp_percent']}%) |",
+                f"| Net Change       | {result['net_change']} HP                  |",
+                f"| Sources          | {sources_str}                              |",
+            ]
+            if result["fainted"]:
+                table_lines.append(f"| Faints On        | Turn {result['turns_simulated']}           |")
+
             return {
                 "pokemon": pokemon_name,
                 "types": types,
@@ -392,7 +420,8 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                     "item": item or "None"
                 },
                 **result,
-                "insights": insights
+                "insights": insights,
+                "summary_table": "\n".join(table_lines)
             }
 
         except Exception as e:
@@ -475,6 +504,25 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             )
 
             survives_turn = result["final_hp"] > 0
+            hp_after_attack_percent = round((hp_after_attack / max_hp) * 100, 1)
+
+            verdict_str = (
+                "Survives attack and end-of-turn effects" if survives_turn
+                else "Survives attack but faints to chip damage"
+            )
+
+            # Build summary table
+            table_lines = [
+                "| Metric           | Value                                      |",
+                "|------------------|---------------------------------------------|",
+                f"| Pokemon          | {pokemon_name}                             |",
+                f"| Max HP           | {max_hp}                                   |",
+                f"| Attack Damage    | {attack_damage} ({incoming_damage_percent}%) |",
+                f"| HP After Attack  | {hp_after_attack} ({hp_after_attack_percent}%) |",
+                f"| Chip Change      | {result['net_change']} HP                  |",
+                f"| HP After Chip    | {result['final_hp']} ({result['final_hp_percent']}%) |",
+                f"| Verdict          | {verdict_str}                              |",
+            ]
 
             return {
                 "pokemon": pokemon_name,
@@ -482,17 +530,15 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 "attack_damage": attack_damage,
                 "attack_damage_percent": incoming_damage_percent,
                 "hp_after_attack": hp_after_attack,
-                "hp_after_attack_percent": round((hp_after_attack / max_hp) * 100, 1),
+                "hp_after_attack_percent": hp_after_attack_percent,
                 "survives_attack": True,
                 "chip_change": result["net_change"],
                 "hp_after_chip": result["final_hp"],
                 "hp_after_chip_percent": result["final_hp_percent"],
                 "survives_turn": survives_turn,
-                "verdict": (
-                    "Survives attack and end-of-turn effects" if survives_turn
-                    else "Survives attack but faints to chip damage"
-                ),
-                "chip_breakdown": result["turn_breakdown"][0] if result["turn_breakdown"] else None
+                "verdict": verdict_str,
+                "chip_breakdown": result["turn_breakdown"][0] if result["turn_breakdown"] else None,
+                "summary_table": "\n".join(table_lines)
             }
 
         except Exception as e:

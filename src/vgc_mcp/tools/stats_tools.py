@@ -80,6 +80,18 @@ def register_stats_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             # Calculate stats
             stats = calculate_all_stats(pokemon)
 
+            # Build summary table with base, EVs, and final stats
+            table_lines = [
+                "| Stat           | Base | EVs  | Final |",
+                "|----------------|------|------|-------|",
+                f"| HP             | {base_stats.hp:<4} | {hp_evs:<4} | {stats['hp']:<5} |",
+                f"| Attack         | {base_stats.attack:<4} | {atk_evs:<4} | {stats['attack']:<5} |",
+                f"| Defense        | {base_stats.defense:<4} | {def_evs:<4} | {stats['defense']:<5} |",
+                f"| Sp. Attack     | {base_stats.special_attack:<4} | {spa_evs:<4} | {stats['special_attack']:<5} |",
+                f"| Sp. Defense    | {base_stats.special_defense:<4} | {spd_evs:<4} | {stats['special_defense']:<5} |",
+                f"| Speed          | {base_stats.speed:<4} | {spe_evs:<4} | {stats['speed']:<5} |",
+            ]
+
             return {
                 "pokemon": pokemon_name,
                 "level": level,
@@ -103,7 +115,8 @@ def register_stats_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                     "total": total_evs,
                     "remaining": 508 - total_evs
                 },
-                "final_stats": stats
+                "final_stats": stats,
+                "summary_table": "\n".join(table_lines)
             }
 
         except Exception as e:
@@ -150,6 +163,20 @@ def register_stats_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             max_speed = get_max_speed(base_speed, Nature.JOLLY, 31, level)
             min_speed = get_min_speed(base_speed, Nature.BRAVE, 0, level)
 
+            # Build summary table
+            table_lines = [
+                "| Metric           | Value                                      |",
+                "|------------------|---------------------------------------------|",
+                f"| Pokemon          | {pokemon_name}                             |",
+                f"| Base Speed       | {base_speed}                               |",
+                f"| Nature           | {nature}                                   |",
+                f"| Speed EVs        | {speed_evs}                                |",
+                f"| Speed IV         | {speed_iv}                                 |",
+                f"| Final Speed      | {speed}                                    |",
+                f"| Max (Jolly 252)  | {max_speed}                                |",
+                f"| Min (Brave 0 IV) | {min_speed}                                |",
+            ]
+
             return {
                 "pokemon": pokemon_name,
                 "base_speed": base_speed,
@@ -160,7 +187,8 @@ def register_stats_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 "reference": {
                     "max_speed_jolly_252ev": max_speed,
                     "min_speed_brave_0iv_0ev": min_speed
-                }
+                },
+                "summary_table": "\n".join(table_lines)
             }
 
         except Exception as e:

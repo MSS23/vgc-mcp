@@ -93,6 +93,20 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 "speed": calculate_stat(base_stats.speed, 31, spe_evs, 50, nature_mods.get("speed", 1.0)),
             }
 
+            # Build summary table
+            efficiency = "Valid" if total <= 508 and not any("wasted" in i for i in issues) else "Issues found"
+            table_lines = [
+                "| Metric           | Value                                      |",
+                "|------------------|---------------------------------------------|",
+                f"| Pokemon          | {pokemon_name}                             |",
+                f"| Nature           | {nature}                                   |",
+                f"| Total EVs        | {total}/508                                |",
+                f"| EVs Remaining    | {max(0, 508 - total)}                      |",
+                f"| Efficiency       | {efficiency}                               |",
+            ]
+            if issues and issues != ["No issues found"]:
+                table_lines.append(f"| Issues           | {len(issues)} found                        |")
+
             return {
                 "pokemon": pokemon_name,
                 "nature": nature,
@@ -101,7 +115,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 "final_stats": final_stats,
                 "issues": issues if issues else ["No issues found"],
                 "suggestions": suggestions if suggestions else ["Spread looks efficient!"],
-                "is_valid": total <= 508 and not any("wasted" in i for i in issues)
+                "is_valid": total <= 508 and not any("wasted" in i for i in issues),
+                "summary_table": "\n".join(table_lines)
             }
 
         except Exception as e:
@@ -180,12 +195,32 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                             "special_bulk": spec_bulk
                         }
 
+            # Build summary table
+            if best_spread:
+                table_lines = [
+                    "| Metric           | Value                                      |",
+                    "|------------------|---------------------------------------------|",
+                    f"| Pokemon          | {pokemon_name}                             |",
+                    f"| Nature           | {nature}                                   |",
+                    f"| HP EVs           | {best_spread['hp_evs']}                    |",
+                    f"| Defense EVs      | {best_spread['def_evs']}                   |",
+                    f"| SpDef EVs        | {best_spread['spd_evs']}                   |",
+                    f"| Final HP         | {best_spread['final_hp']}                  |",
+                    f"| Final Def        | {best_spread['final_def']}                 |",
+                    f"| Final SpD        | {best_spread['final_spd']}                 |",
+                    f"| Physical Bulk    | {best_spread['physical_bulk']}             |",
+                    f"| Special Bulk     | {best_spread['special_bulk']}              |",
+                ]
+            else:
+                table_lines = ["| No optimal spread found |"]
+
             return {
                 "pokemon": pokemon_name,
                 "nature": nature,
                 "total_bulk_evs": total_bulk_evs,
                 "defense_bias": defense_bias,
-                "optimal_spread": best_spread
+                "optimal_spread": best_spread,
+                "summary_table": "\n".join(table_lines)
             }
 
         except Exception as e:

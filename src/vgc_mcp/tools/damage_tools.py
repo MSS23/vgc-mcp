@@ -690,6 +690,31 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             if ability_notes:
                 response["ability_effects"] = ability_notes
 
+            # Build summary table for clear display
+            hp_remaining_min = max(0, result.defender_hp - result.max_damage)
+            hp_remaining_max = max(0, result.defender_hp - result.min_damage)
+            hp_remain_min_pct = round(hp_remaining_min / result.defender_hp * 100, 1)
+            hp_remain_max_pct = round(hp_remaining_max / result.defender_hp * 100, 1)
+
+            min_pct = round(result.min_damage / result.defender_hp * 100, 1)
+            max_pct = round(result.max_damage / result.defender_hp * 100, 1)
+
+            table_lines = [
+                "| Metric           | Value                                      |",
+                "|------------------|---------------------------------------------|",
+                f"| Attacker         | {attacker_name} ({move_name})              |",
+                f"| Defender         | {defender_name}                            |",
+                f"| Damage Range     | {result.min_damage}-{result.max_damage} ({min_pct}-{max_pct}%) |",
+                f"| HP Remaining     | {hp_remaining_min}-{hp_remaining_max} ({hp_remain_min_pct}-{hp_remain_max_pct}%) |",
+                f"| KO Verdict       | {result.ko_chance}                         |",
+            ]
+            if attacker_item:
+                table_lines.append(f"| Attacker Item    | {attacker_item}                            |")
+            if defender_item:
+                table_lines.append(f"| Defender Item    | {defender_item}                            |")
+
+            response["summary_table"] = "\n".join(table_lines)
+
             # Add MCP-UI resource for interactive damage display with editable spreads
             # (only available in vgc-mcp-lite)
             if HAS_UI:
@@ -835,13 +860,35 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             )
 
             if result is None:
+                table_lines = [
+                    "| Metric           | Value                                      |",
+                    "|------------------|---------------------------------------------|",
+                    f"| Attacker         | {attacker_name}                            |",
+                    f"| Defender         | {defender_name}                            |",
+                    f"| Move             | {move_name}                                |",
+                    f"| Target KO        | {target_ko_chance}%                        |",
+                    f"| Result           | Not achievable with 252 EVs                |",
+                ]
                 return {
                     "attacker": attacker_name,
                     "defender": defender_name,
                     "move": move_name,
                     "achievable": False,
-                    "message": f"Cannot achieve {target_ko_chance}% OHKO with 252 EVs. Consider items, Tera, or different move."
+                    "message": f"Cannot achieve {target_ko_chance}% OHKO with 252 EVs. Consider items, Tera, or different move.",
+                    "summary_table": "\n".join(table_lines)
                 }
+
+            # Build summary table
+            table_lines = [
+                "| Metric           | Value                                      |",
+                "|------------------|---------------------------------------------|",
+                f"| Attacker         | {attacker_name}                            |",
+                f"| Defender         | {defender_name}                            |",
+                f"| Move             | {move_name}                                |",
+                f"| Required EVs     | {result['evs_needed']} {result['stat_name']} |",
+                f"| Damage Range     | {result['damage_range']}                   |",
+                f"| KO Chance        | {result['ko_chance']:.1f}%                 |",
+            ]
 
             return {
                 "attacker": attacker_name,
@@ -851,7 +898,8 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "evs_needed": result["evs_needed"],
                 "stat": result["stat_name"],
                 "ko_chance": f"{result['ko_chance']:.1f}%",
-                "damage_range": result["damage_range"]
+                "damage_range": result["damage_range"],
+                "summary_table": "\n".join(table_lines)
             }
 
         except Exception as e:
@@ -929,13 +977,36 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             )
 
             if result is None:
+                table_lines = [
+                    "| Metric           | Value                                      |",
+                    "|------------------|---------------------------------------------|",
+                    f"| Threat           | {attacker_name}'s {move_name}              |",
+                    f"| Defender         | {defender_name}                            |",
+                    f"| Target Survival  | {target_survival_chance}%                  |",
+                    f"| Result           | Not achievable with max investment         |",
+                ]
                 return {
                     "attacker": attacker_name,
                     "defender": defender_name,
                     "move": move_name,
                     "achievable": False,
-                    "message": f"Cannot survive this attack with max investment. Consider items, Tera typing, or screens."
+                    "message": f"Cannot survive this attack with max investment. Consider items, Tera typing, or screens.",
+                    "summary_table": "\n".join(table_lines)
                 }
+
+            # Build summary table
+            total_evs = result["hp_evs"] + result["def_evs"]
+            table_lines = [
+                "| Metric           | Value                                      |",
+                "|------------------|---------------------------------------------|",
+                f"| Threat           | {attacker_name}'s {move_name}              |",
+                f"| Defender         | {defender_name}                            |",
+                f"| HP EVs           | {result['hp_evs']}                         |",
+                f"| {result['def_stat_name']} EVs      | {result['def_evs']}                         |",
+                f"| Total EVs        | {total_evs}                                |",
+                f"| Damage Range     | {result['damage_range']}                   |",
+                f"| Survival Rate    | {result['survival_chance']:.1f}%           |",
+            ]
 
             return {
                 "attacker": attacker_name,
@@ -946,7 +1017,8 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "def_evs_needed": result["def_evs"],
                 "def_stat": result["def_stat_name"],
                 "survival_chance": f"{result['survival_chance']:.1f}%",
-                "damage_range": result["damage_range"]
+                "damage_range": result["damage_range"],
+                "summary_table": "\n".join(table_lines)
             }
 
         except Exception as e:
@@ -1133,6 +1205,28 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 total_avg = avg_damage * num_hits
                 survival_chance = 100.0 if total_avg < defender_hp else 0.0
 
+            # Calculate HP remaining
+            hp_remaining_min = max(0, defender_hp - total_max)
+            hp_remaining_max = max(0, defender_hp - total_min)
+            hp_remain_min_pct = round(hp_remaining_min / defender_hp * 100, 1)
+            hp_remain_max_pct = round(hp_remaining_max / defender_hp * 100, 1)
+
+            verdict_str = "SURVIVES" if survives_guaranteed else ("MIGHT SURVIVE" if survives_possible else "FAINTS")
+
+            # Build summary table
+            table_lines = [
+                "| Metric           | Value                                      |",
+                "|------------------|---------------------------------------------|",
+                f"| Attacker         | {attacker_name}                            |",
+                f"| Defender         | {defender_name}                            |",
+                f"| Move             | {move_name} x{num_hits}                    |",
+                f"| Per Hit          | {min_per_hit}-{max_per_hit} ({min_percent_per_hit:.1f}-{max_percent_per_hit:.1f}%) |",
+                f"| Total Damage     | {total_min}-{total_max} ({total_min_percent:.1f}-{total_max_percent:.1f}%) |",
+                f"| HP Remaining     | {hp_remaining_min}-{hp_remaining_max} ({hp_remain_min_pct}-{hp_remain_max_pct}%) |",
+                f"| Survival Chance  | {survival_chance:.1f}%                     |",
+                f"| Verdict          | {verdict_str}                              |",
+            ]
+
             response = {
                 "attacker": attacker_name,
                 "defender": defender_name,
@@ -1151,10 +1245,16 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     "min_percent": f"{total_min_percent:.1f}%",
                     "max_percent": f"{total_max_percent:.1f}%"
                 },
+                "hp_remaining": {
+                    "min": hp_remaining_min,
+                    "max": hp_remaining_max,
+                    "min_percent": f"{hp_remain_min_pct}%",
+                    "max_percent": f"{hp_remain_max_pct}%"
+                },
                 "survives_guaranteed": survives_guaranteed,
                 "survives_possible": survives_possible,
                 "survival_chance": f"{survival_chance:.1f}%",
-                "verdict": "SURVIVES" if survives_guaranteed else ("MIGHT SURVIVE" if survives_possible else "FAINTS"),
+                "verdict": verdict_str,
                 "attacker_spread": {
                     "nature": attacker_nature,
                     "attack_evs": attacker_atk_evs,
@@ -1166,7 +1266,8 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     "hp_evs": defender_hp_evs,
                     "def_evs": defender_def_evs,
                     "spd_evs": defender_spd_evs
-                }
+                },
+                "summary_table": "\n".join(table_lines)
             }
 
             if attacker_attack_stage == -1:
@@ -1297,6 +1398,19 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 result = calculate_damage(attacker, max_defender, move, modifiers)
                 total_max = result.max_damage * num_hits
 
+                # Build summary table for failure case
+                def_stat_name = "Def" if is_physical else "SpD"
+                table_lines = [
+                    "| Metric           | Value                                      |",
+                    "|------------------|---------------------------------------------|",
+                    f"| Threat           | {attacker_name}'s {move_name} x{num_hits}  |",
+                    f"| Defender         | {defender_name}                            |",
+                    f"| Max Investment   | 252 HP / 252 {def_stat_name} {defender_nature} |",
+                    f"| Per Hit (max)    | {result.max_damage} ({result.max_damage/result.defender_hp*100:.1f}%) |",
+                    f"| Total (max)      | {total_max} ({total_max/result.defender_hp*100:.1f}%) |",
+                    f"| Result           | Cannot survive                             |",
+                ]
+
                 return {
                     "attacker": attacker_name,
                     "defender": defender_name,
@@ -1309,8 +1423,26 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         "per_hit": f"{result.max_damage} ({result.max_damage/result.defender_hp*100:.1f}%)",
                         "total": f"{total_max} ({total_max/result.defender_hp*100:.1f}%)"
                     },
-                    "suggestion": "Try Intimidate (-1 Attack)" if attacker_attack_stage >= 0 else "Try Reflect/Light Screen or resistance berry"
+                    "suggestion": "Try Intimidate (-1 Attack)" if attacker_attack_stage >= 0 else "Try Reflect/Light Screen or resistance berry",
+                    "summary_table": "\n".join(table_lines)
                 }
+
+            # Build summary table for success case
+            hp_remain_pct = round(best_spread["remaining_hp"] / best_spread["defender_hp"] * 100, 1)
+            def_stat_name = "Def" if is_physical else "SpD"
+            table_lines = [
+                "| Metric           | Value                                      |",
+                "|------------------|---------------------------------------------|",
+                f"| Threat           | {attacker_name}'s {move_name} x{num_hits}  |",
+                f"| Defender         | {defender_name}                            |",
+                f"| HP EVs           | {best_spread['hp_evs']}                    |",
+                f"| {def_stat_name} EVs          | {best_spread['def_evs']}                    |",
+                f"| Total EVs        | {best_spread['total_evs']}                 |",
+                f"| EVs Remaining    | {508 - best_spread['total_evs']}           |",
+                f"| Per Hit (max)    | {best_spread['per_hit_max']}               |",
+                f"| Total (max)      | {best_spread['total_max']}                 |",
+                f"| HP Remaining     | {best_spread['remaining_hp']} ({hp_remain_pct}%) |",
+            ]
 
             return {
                 "attacker": attacker_name,
@@ -1330,7 +1462,8 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     "per_hit_max": best_spread["per_hit_max"],
                     "total_max": best_spread["total_max"],
                     "hp_remaining": best_spread["remaining_hp"]
-                }
+                },
+                "summary_table": "\n".join(table_lines)
             }
 
         except Exception as e:

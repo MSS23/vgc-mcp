@@ -89,6 +89,18 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
                 result = "Speed tie - 50/50 chance to move first"
                 winner = "tie"
 
+            diff = abs(speed1 - speed2)
+
+            # Build summary table
+            table_lines = [
+                "| Metric           | Value                                      |",
+                "|------------------|---------------------------------------------|",
+                f"| Pokemon 1        | {pokemon1_name} (Speed: {speed1})          |",
+                f"| Pokemon 2        | {pokemon2_name} (Speed: {speed2})          |",
+                f"| Result           | {result}                                   |",
+                f"| Difference       | {'+' if speed1 != speed2 else ''}{diff} speed |",
+            ]
+
             return {
                 "pokemon1": {
                     "name": pokemon1_name,
@@ -104,9 +116,10 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
                     "evs": pokemon2_speed_evs,
                     "final_speed": speed2
                 },
-                "difference": abs(speed1 - speed2),
+                "difference": diff,
                 "result": result,
-                "winner": winner
+                "winner": winner,
+                "summary_table": "\n".join(table_lines)
             }
 
         except Exception as e:
@@ -148,15 +161,36 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
             if evs_needed is None:
                 # Calculate max possible
                 max_speed = calculate_speed(base_stats.speed, 31, 252, 50, parsed_nature)
+                table_lines = [
+                    "| Metric           | Value                                      |",
+                    "|------------------|---------------------------------------------|",
+                    f"| Pokemon          | {pokemon_name}                             |",
+                    f"| Target Speed     | {target_speed}                             |",
+                    f"| Max with 252 EVs | {max_speed}                                |",
+                    f"| Result           | Cannot reach target                        |",
+                ]
                 return {
                     "pokemon": pokemon_name,
                     "target_speed": target_speed,
                     "achievable": False,
                     "max_speed_with_252_evs": max_speed,
-                    "suggestion": "Try a +Speed nature (Timid/Jolly) or lower your target"
+                    "suggestion": "Try a +Speed nature (Timid/Jolly) or lower your target",
+                    "summary_table": "\n".join(table_lines)
                 }
 
             actual_speed = calculate_speed(base_stats.speed, 31, evs_needed, 50, parsed_nature)
+
+            # Build summary table
+            table_lines = [
+                "| Metric           | Value                                      |",
+                "|------------------|---------------------------------------------|",
+                f"| Pokemon          | {pokemon_name}                             |",
+                f"| Target Speed     | {target_speed}                             |",
+                f"| Required EVs     | {evs_needed} Speed                         |",
+                f"| Resulting Speed  | {actual_speed}                             |",
+                f"| Nature           | {nature}                                   |",
+                f"| EVs Remaining    | {508 - evs_needed}                         |",
+            ]
 
             return {
                 "pokemon": pokemon_name,
@@ -164,7 +198,8 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
                 "achievable": True,
                 "evs_needed": evs_needed,
                 "actual_speed": actual_speed,
-                "evs_remaining": 508 - evs_needed
+                "evs_remaining": 508 - evs_needed,
+                "summary_table": "\n".join(table_lines)
             }
 
         except Exception as e:
