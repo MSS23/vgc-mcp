@@ -367,6 +367,38 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             # Calculate damage
             result = calculate_damage(attacker, defender, move, modifiers)
 
+            # Calculate final stats for attacker
+            atk_nature_mod = get_nature_modifier(atk_nature, "attack")
+            spa_nature_mod = get_nature_modifier(atk_nature, "special_attack")
+            final_attack = calculate_stat(atk_base.attack, 31, attacker_atk_evs, 50, atk_nature_mod)
+            final_spa = calculate_stat(atk_base.special_attack, 31, attacker_spa_evs, 50, spa_nature_mod)
+
+            # Calculate final stats for defender
+            def_nature_mod = get_nature_modifier(def_nature, "defense")
+            spd_nature_mod = get_nature_modifier(def_nature, "special_defense")
+            final_hp = calculate_hp(def_base.hp, 31, defender_hp_evs, 50)
+            final_def = calculate_stat(def_base.defense, 31, defender_def_evs, 50, def_nature_mod)
+            final_spd = calculate_stat(def_base.special_defense, 31, defender_spd_evs, 50, spd_nature_mod)
+
+            # Build descriptive spread strings for analysis
+            is_physical = move.category.value == "physical"
+            relevant_atk_stat = final_attack if is_physical else final_spa
+            relevant_atk_evs = attacker_atk_evs if is_physical else attacker_spa_evs
+            stat_name = "Atk" if is_physical else "SpA"
+
+            # Build attacker spread string (e.g., "252+ Atk Mystic Water")
+            nature_boost = "+" if (is_physical and atk_nature_mod > 1.0) or (not is_physical and spa_nature_mod > 1.0) else ""
+            nature_penalty = "-" if (is_physical and atk_nature_mod < 1.0) or (not is_physical and spa_nature_mod < 1.0) else ""
+            nature_indicator = nature_boost or nature_penalty
+            item_str = f" {attacker_item.replace('-', ' ').title()}" if attacker_item else ""
+            attacker_spread_str = f"{relevant_atk_evs}{nature_indicator} {stat_name}{item_str} {attacker_name}"
+
+            # Build defender spread string (e.g., "132 HP / 196 Def")
+            relevant_def_stat = final_def if is_physical else final_spd
+            relevant_def_evs = defender_def_evs if is_physical else defender_spd_evs
+            def_stat_name = "Def" if is_physical else "SpD"
+            defender_spread_str = f"{defender_hp_evs} HP / {relevant_def_evs} {def_stat_name} {defender_name}"
+
             # Calculate damage percentages
             min_pct = round(result.damage_range[0], 1)
             max_pct = round(result.damage_range[1], 1)
@@ -379,16 +411,17 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             table_lines = [
                 "| Metric           | Value                                      |",
                 "|------------------|---------------------------------------------|",
-                f"| Attacker         | {attacker_name}                            |",
+                f"| Attacker         | {attacker_spread_str}                      |",
                 f"| Move             | {move_name} ({move.type}, {move.power} BP) |",
-                f"| Defender         | {defender_name}                            |",
+                f"| Defender         | {defender_spread_str}                      |",
                 f"| Damage Range     | {result.min_damage}-{result.max_damage} ({min_pct}-{max_pct}%) |",
                 f"| Defender HP      | {result.defender_hp}                       |",
                 f"| HP Remaining     | {max(0, hp_remain_min)}-{max(0, hp_remain_max)} ({hp_remain_min_pct}-{hp_remain_max_pct}%) |",
                 f"| KO Verdict       | {result.ko_chance}                         |",
             ]
-            if attacker_item:
-                table_lines.append(f"| Attacker Item    | {attacker_item}                            |")
+
+            # Build analysis with full spread info
+            analysis_str = f"{attacker_spread_str}'s {move_name} vs {defender_spread_str}: {min_pct}-{max_pct}% ({hp_remain_min_pct}-{hp_remain_max_pct}% remaining). {result.ko_chance}."
 
             response = {
                 "attacker": attacker_name,
@@ -412,22 +445,8 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "modifiers": result.details.get("modifiers_applied", []),
                 "type_effectiveness": result.details.get("type_effectiveness", 1.0),
                 "summary_table": "\n".join(table_lines),
-                "analysis": f"{attacker_name}'s {move_name} deals {min_pct}-{max_pct}% to {defender_name}, leaving it at {hp_remain_min_pct}-{hp_remain_max_pct}% HP. {result.ko_chance}."
+                "analysis": analysis_str
             }
-
-            # Always add full spread info for both attacker and defender
-            # Calculate final stats for attacker
-            atk_nature_mod = get_nature_modifier(atk_nature, "attack")
-            spa_nature_mod = get_nature_modifier(atk_nature, "special_attack")
-            final_attack = calculate_stat(atk_base.attack, 31, attacker_atk_evs, 50, atk_nature_mod)
-            final_spa = calculate_stat(atk_base.special_attack, 31, attacker_spa_evs, 50, spa_nature_mod)
-
-            # Calculate final stats for defender
-            def_nature_mod = get_nature_modifier(def_nature, "defense")
-            spd_nature_mod = get_nature_modifier(def_nature, "special_defense")
-            final_hp = calculate_hp(def_base.hp, 31, defender_hp_evs, 50)
-            final_def = calculate_stat(def_base.defense, 31, defender_def_evs, 50, def_nature_mod)
-            final_spd = calculate_stat(def_base.special_defense, 31, defender_spd_evs, 50, spd_nature_mod)
 
             response["attacker_spread"] = {
                 "source": attacker_spread_source,
@@ -953,24 +972,6 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
 
             verdict_str = "SURVIVES" if survives_guaranteed else ("MIGHT SURVIVE" if survives_possible else "FAINTS")
 
-            # Build summary table
-            table_lines = [
-                "| Metric           | Value                                      |",
-                "|------------------|---------------------------------------------|",
-                f"| Attacker         | {attacker_name}                            |",
-                f"| Defender         | {defender_name}                            |",
-                f"| Move             | {move_name} x{num_hits}                    |",
-                f"| Per Hit          | {min_per_hit}-{max_per_hit} ({min_percent_per_hit:.1f}-{max_percent_per_hit:.1f}%) |",
-                f"| Total Damage     | {total_min}-{total_max} ({total_min_percent:.1f}-{total_max_percent:.1f}%) |",
-                f"| HP Remaining     | {hp_remaining_min}-{hp_remaining_max} ({hp_remain_min_pct}-{hp_remain_max_pct}%) |",
-                f"| Survival Chance  | {survival_chance:.1f}%                     |",
-                f"| Verdict          | {verdict_str}                              |",
-            ]
-
-            # Build analysis prose
-            survival_word = "survives" if survives_guaranteed else ("may survive" if survives_possible else "does not survive")
-            analysis_str = f"{defender_name} {survival_word} {num_hits}x {attacker_name}'s {move_name} — takes {total_min_percent:.0f}-{total_max_percent:.0f}% total, left at {hp_remain_min_pct}-{hp_remain_max_pct}% HP"
-
             # Calculate final stats for attacker
             atk_nature_mod_atk = get_nature_modifier(atk_nature, "attack")
             atk_nature_mod_spa = get_nature_modifier(atk_nature, "special_attack")
@@ -983,6 +984,41 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             final_hp = calculate_hp(def_base.hp, 31, defender_hp_evs, 50)
             final_def = calculate_stat(def_base.defense, 31, defender_def_evs, 50, def_nature_mod_def)
             final_spd = calculate_stat(def_base.special_defense, 31, defender_spd_evs, 50, def_nature_mod_spd)
+
+            # Build descriptive spread strings for analysis
+            is_physical = move.category.value == "physical"
+            relevant_atk_evs = attacker_atk_evs if is_physical else attacker_spa_evs
+            stat_name = "Atk" if is_physical else "SpA"
+
+            # Build attacker spread string (e.g., "252+ Atk Mystic Water")
+            nature_boost = "+" if (is_physical and atk_nature_mod_atk > 1.0) or (not is_physical and atk_nature_mod_spa > 1.0) else ""
+            nature_penalty = "-" if (is_physical and atk_nature_mod_atk < 1.0) or (not is_physical and atk_nature_mod_spa < 1.0) else ""
+            nature_indicator = nature_boost or nature_penalty
+            item_str = f" {attacker_item.replace('-', ' ').title()}" if attacker_item else ""
+            attacker_spread_str = f"{relevant_atk_evs}{nature_indicator} {stat_name}{item_str} {attacker_name}"
+
+            # Build defender spread string (e.g., "132 HP / 196 Def")
+            relevant_def_evs = defender_def_evs if is_physical else defender_spd_evs
+            def_stat_name = "Def" if is_physical else "SpD"
+            defender_spread_str = f"{defender_hp_evs} HP / {relevant_def_evs} {def_stat_name} {defender_name}"
+
+            # Build summary table
+            table_lines = [
+                "| Metric           | Value                                      |",
+                "|------------------|---------------------------------------------|",
+                f"| Attacker         | {attacker_spread_str}                      |",
+                f"| Defender         | {defender_spread_str}                      |",
+                f"| Move             | {move_name} x{num_hits}                    |",
+                f"| Per Hit          | {min_per_hit}-{max_per_hit} ({min_percent_per_hit:.1f}-{max_percent_per_hit:.1f}%) |",
+                f"| Total Damage     | {total_min}-{total_max} ({total_min_percent:.1f}-{total_max_percent:.1f}%) |",
+                f"| HP Remaining     | {hp_remaining_min}-{hp_remaining_max} ({hp_remain_min_pct}-{hp_remain_max_pct}%) |",
+                f"| Survival Chance  | {survival_chance:.1f}%                     |",
+                f"| Verdict          | {verdict_str}                              |",
+            ]
+
+            # Build analysis prose with spread info
+            survival_word = "survives" if survives_guaranteed else ("may survive" if survives_possible else "does not survive")
+            analysis_str = f"{defender_spread_str} {survival_word} {num_hits}x {attacker_spread_str}'s {move_name} — takes {total_min_percent:.0f}-{total_max_percent:.0f}% total, left at {hp_remain_min_pct}-{hp_remain_max_pct}% HP"
 
             response = {
                 "attacker": attacker_name,
