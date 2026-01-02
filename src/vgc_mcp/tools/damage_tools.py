@@ -122,28 +122,57 @@ def _normalize_smogon_name(name: str) -> str:
     return smogon_to_hyphenated.get(name_lower, name_lower)
 
 
+async def _get_common_spreads(pokemon_name: str, limit: int = 3) -> list[dict]:
+    """Fetch the top common spreads for a Pokemon from Smogon usage stats.
+
+    Args:
+        pokemon_name: Name of the Pokemon
+        limit: Number of top spreads to return (default 3)
+
+    Returns:
+        List of dicts with 'nature', 'evs', 'item', 'ability', 'usage' keys.
+        Returns empty list if not found.
+    """
+    if _smogon_client is None:
+        return []
+    try:
+        usage = await _smogon_client.get_pokemon_usage(pokemon_name)
+        if usage and usage.get("spreads"):
+            spreads = usage["spreads"][:limit]
+            # Get top items and abilities with their usage percentages
+            items = usage.get("items", {})
+            abilities = usage.get("abilities", {})
+            top_item = list(items.keys())[0] if items else None
+            top_item_usage = list(items.values())[0] if items else 0
+            top_ability = list(abilities.keys())[0] if abilities else None
+            top_ability_usage = list(abilities.values())[0] if abilities else 0
+
+            result = []
+            for i, spread in enumerate(spreads):
+                result.append({
+                    "rank": i + 1,
+                    "nature": spread.get("nature", "Serious"),
+                    "evs": spread.get("evs", {}),
+                    "usage": spread.get("usage", 0),
+                    "item": top_item,
+                    "item_usage": top_item_usage,
+                    "ability": top_ability,
+                    "ability_usage": top_ability_usage,
+                })
+            return result
+    except Exception:
+        pass
+    return []
+
+
 async def _get_common_spread(pokemon_name: str) -> Optional[dict]:
     """Fetch the most common spread for a Pokemon from Smogon usage stats.
 
     Returns:
         dict with 'nature' and 'evs' keys, or None if not found
     """
-    if _smogon_client is None:
-        return None
-    try:
-        usage = await _smogon_client.get_pokemon_usage(pokemon_name)
-        if usage and usage.get("spreads"):
-            top_spread = usage["spreads"][0]
-            return {
-                "nature": top_spread.get("nature", "Serious"),
-                "evs": top_spread.get("evs", {}),
-                "usage": top_spread.get("usage", 0),
-                "item": list(usage.get("items", {}).keys())[0] if usage.get("items") else None,
-                "ability": list(usage.get("abilities", {}).keys())[0] if usage.get("abilities") else None,
-            }
-    except Exception:
-        pass
-    return None
+    spreads = await _get_common_spreads(pokemon_name, limit=1)
+    return spreads[0] if spreads else None
 
 
 def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[SmogonStatsClient] = None):
@@ -164,10 +193,12 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         defender_def_evs: Optional[int] = None,
         defender_spd_evs: Optional[int] = None,
         use_smogon_spreads: bool = True,
+        num_defender_spreads: int = 3,
         is_spread: bool = False,
         weather: Optional[str] = None,
         terrain: Optional[str] = None,
         attacker_item: Optional[str] = None,
+        defender_item: Optional[str] = None,
         attacker_ability: Optional[str] = None,
         defender_ability: Optional[str] = None,
         attacker_tera_type: Optional[str] = None,
@@ -187,9 +218,9 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         """
         Calculate damage from one Pokemon to another.
 
-        By default, uses the most common Smogon VGC spread for both Pokemon when
-        nature/EVs are not specified. This gives realistic damage calculations
-        based on how Pokemon are typically built in competitive play.
+        By default, uses the most common Smogon VGC spreads for both Pokemon when
+        nature/EVs are not specified. Calculates against the top 3 defender spreads
+        to show damage variance across common builds.
 
         Args:
             attacker_name: Attacking Pokemon's name
@@ -202,11 +233,13 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             defender_hp_evs: Defender's HP EVs. If None and use_smogon_spreads=True, uses most common.
             defender_def_evs: Defender's Defense EVs. If None and use_smogon_spreads=True, uses most common.
             defender_spd_evs: Defender's Sp. Def EVs. If None and use_smogon_spreads=True, uses most common.
-            use_smogon_spreads: If True (default), auto-fetch most common spreads from Smogon usage data
+            use_smogon_spreads: If True (default), auto-fetch common spreads from Smogon usage data
+            num_defender_spreads: Number of top defender spreads to calculate against (default 3). Set to 1 for single spread.
             is_spread: True if move is hitting multiple targets (0.75x damage)
             weather: "sun", "rain", "sand", or "snow" (affects Fire/Water moves)
             terrain: "electric", "grassy", "psychic", or "misty" (affects damage)
-            attacker_item: Item like "life-orb", "choice-band", "choice-specs". Auto-fetched if use_smogon_spreads=True.
+            attacker_item: Item like "life-orb", "choice-band". Auto-fetched if use_smogon_spreads=True.
+            defender_item: Defender's item like "assault-vest", "sitrus-berry". Auto-fetched if use_smogon_spreads=True.
             attacker_ability: Attacker's ability. Auto-detected if not specified.
             defender_ability: Defender's ability. Auto-detected if not specified.
             attacker_tera_type: Attacker's Tera type if Terastallized
@@ -224,7 +257,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             defender_booster_energy: True if defender used Booster Energy
 
         Returns:
-            Damage range, percentages, and KO probability
+            Damage calculations against top defender spreads with KO probabilities and items
         """
         try:
             # Auto-assign mask item for Ogerpon forms if not specified
@@ -250,6 +283,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             defender_spread_source = "custom"
             attacker_spread_info = None
             defender_spread_info = None
+            defender_spreads_list = []  # For multi-spread calculations
 
             # Auto-fetch Smogon spreads if enabled and values not provided
             if use_smogon_spreads:
@@ -277,7 +311,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         if attacker_ability is None and atk_spread.get("ability"):
                             attacker_ability = _normalize_smogon_name(atk_spread["ability"])
 
-                # Check if defender needs spread data
+                # Check if defender needs spread data - fetch multiple spreads for comparison
                 defender_needs_spread = (
                     defender_nature is None or
                     defender_hp_evs is None or
@@ -285,9 +319,11 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     defender_spd_evs is None
                 )
                 if defender_needs_spread:
-                    def_spread = await _get_common_spread(defender_name)
-                    if def_spread:
+                    defender_spreads_list = await _get_common_spreads(defender_name, limit=num_defender_spreads)
+                    if defender_spreads_list:
                         defender_spread_source = "smogon"
+                        # Use first spread as the primary for backwards compatibility
+                        def_spread = defender_spreads_list[0]
                         defender_spread_info = def_spread
                         if defender_nature is None:
                             defender_nature = def_spread["nature"]
@@ -300,6 +336,9 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                             defender_spd_evs = evs.get("special_defense", 0)
                         if defender_ability is None and def_spread.get("ability"):
                             defender_ability = _normalize_smogon_name(def_spread["ability"])
+                        # Also get defender item from Smogon if not specified
+                        if defender_item is None and def_spread.get("item"):
+                            defender_item = _normalize_smogon_name(def_spread["item"])
 
             # Set defaults for any remaining None values
             attacker_nature = attacker_nature or "serious"
@@ -438,6 +477,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 weather=weather,
                 terrain=terrain,
                 attacker_item=attacker_item,
+                defender_item=defender_item,
                 attacker_ability=attacker_ability,
                 defender_ability=defender_ability,
                 tera_type=attacker_tera_type,
@@ -459,14 +499,102 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 defender_quark_drive_boost=defender_quark_boost
             )
 
-            # Calculate damage
+            # Calculate damage against multiple defender spreads if available
+            results_by_spread = []
+
+            if len(defender_spreads_list) > 1:
+                # Multi-spread mode: calculate against each defender spread
+                for spread_data in defender_spreads_list:
+                    spread_nature = spread_data["nature"]
+                    spread_evs = spread_data.get("evs", {})
+                    spread_item = _normalize_smogon_name(spread_data["item"]) if spread_data.get("item") else defender_item
+                    spread_ability = _normalize_smogon_name(spread_data["ability"]) if spread_data.get("ability") else defender_ability
+
+                    # Parse the spread's nature
+                    try:
+                        spread_nature_enum = Nature(spread_nature.lower())
+                    except ValueError:
+                        spread_nature_enum = def_nature
+
+                    # Create defender build for this spread
+                    spread_defender = PokemonBuild(
+                        name=defender_name,
+                        base_stats=def_base,
+                        types=def_types,
+                        nature=spread_nature_enum,
+                        evs=EVSpread(
+                            hp=spread_evs.get("hp", 0),
+                            defense=spread_evs.get("defense", 0),
+                            special_defense=spread_evs.get("special_defense", 0)
+                        ),
+                        item=spread_item,
+                        tera_type=defender_tera_type
+                    )
+
+                    # Update modifiers with this spread's item and ability
+                    spread_modifiers = DamageModifiers(
+                        is_doubles=True,
+                        multiple_targets=is_spread,
+                        weather=weather,
+                        terrain=terrain,
+                        attacker_item=attacker_item,
+                        defender_item=spread_item,
+                        attacker_ability=attacker_ability,
+                        defender_ability=spread_ability,
+                        tera_type=attacker_tera_type,
+                        tera_active=attacker_tera_type is not None,
+                        defender_tera_type=defender_tera_type,
+                        defender_tera_active=defender_tera_type is not None,
+                        reflect_up=reflect,
+                        light_screen_up=light_screen,
+                        helping_hand=helping_hand,
+                        commander_active=commander_active,
+                        defender_commander_active=defender_commander_active,
+                        beads_of_ruin=beads_of_ruin,
+                        sword_of_ruin=sword_of_ruin,
+                        tablets_of_ruin=tablets_of_ruin,
+                        vessel_of_ruin=vessel_of_ruin,
+                        protosynthesis_boost=attacker_proto_boost,
+                        quark_drive_boost=attacker_quark_boost,
+                        defender_protosynthesis_boost=defender_proto_boost,
+                        defender_quark_drive_boost=defender_quark_boost
+                    )
+
+                    # Calculate damage for this spread
+                    spread_result = calculate_damage(attacker, spread_defender, move, spread_modifiers)
+
+                    # Format EV string
+                    ev_str = f"{spread_evs.get('hp', 0)}/{spread_evs.get('attack', 0)}/{spread_evs.get('defense', 0)}/{spread_evs.get('special_attack', 0)}/{spread_evs.get('special_defense', 0)}/{spread_evs.get('speed', 0)}"
+
+                    results_by_spread.append({
+                        "spread_rank": spread_data["rank"],
+                        "nature": spread_nature,
+                        "evs": spread_evs,
+                        "ev_string": f"{spread_nature} {ev_str}",
+                        "usage_percent": spread_data.get("usage", 0),
+                        "item": spread_item,
+                        "item_usage_percent": spread_data.get("item_usage", 0),
+                        "ability": spread_ability,
+                        "damage_range": spread_result.damage_range,
+                        "damage_min": spread_result.min_damage,
+                        "damage_max": spread_result.max_damage,
+                        "defender_hp": spread_result.defender_hp,
+                        "ko_chance": spread_result.ko_chance,
+                        "is_guaranteed_ohko": spread_result.is_guaranteed_ohko,
+                        "is_possible_ohko": spread_result.is_possible_ohko,
+                    })
+
+            # Calculate primary result (first spread or custom)
             result = calculate_damage(attacker, defender, move, modifiers)
 
+            # Build response
             response = {
                 "attacker": attacker_name,
                 "attacker_ability": attacker_ability,
                 "attacker_item": attacker_item,
                 "defender": defender_name,
+                "defender_ability": defender_ability,
+                "defender_item": defender_item,
                 "move": move_name,
                 "move_type": move.type,
                 "move_category": move.category.value,
@@ -485,21 +613,44 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "type_effectiveness": result.details.get("type_effectiveness", 1.0)
             }
 
-            # Add spread info to response so user knows what was used
+            # Add multi-spread results if available
+            if results_by_spread:
+                response["results_by_spread"] = results_by_spread
+                # Add summary
+                ohko_count = sum(1 for r in results_by_spread if r["is_guaranteed_ohko"])
+                possible_ohko_count = sum(1 for r in results_by_spread if r["is_possible_ohko"])
+                total_spreads = len(results_by_spread)
+                response["spread_summary"] = {
+                    "total_spreads": total_spreads,
+                    "guaranteed_ohko_count": ohko_count,
+                    "possible_ohko_count": possible_ohko_count,
+                    "verdict": f"Guaranteed OHKO on {ohko_count}/{total_spreads} spreads" if ohko_count > 0 else f"Possible OHKO on {possible_ohko_count}/{total_spreads} spreads" if possible_ohko_count > 0 else f"0/{total_spreads} OHKO"
+                }
+
+            # Always show attacker spread info
             if attacker_spread_source == "smogon" and attacker_spread_info:
                 response["attacker_spread"] = {
                     "source": "smogon_usage",
                     "nature": attacker_nature,
                     "evs": attacker_spread_info.get("evs", {}),
+                    "item": attacker_item,
+                    "ability": attacker_ability,
                     "usage_percent": attacker_spread_info.get("usage", 0)
                 }
-            if defender_spread_source == "smogon" and defender_spread_info:
-                response["defender_spread"] = {
-                    "source": "smogon_usage",
-                    "nature": defender_nature,
-                    "evs": defender_spread_info.get("evs", {}),
-                    "usage_percent": defender_spread_info.get("usage", 0)
-                }
+
+            # Always show defender spread info (even for custom spreads)
+            response["defender_spread"] = {
+                "source": defender_spread_source,
+                "nature": defender_nature,
+                "evs": {
+                    "hp": defender_hp_evs,
+                    "defense": defender_def_evs,
+                    "special_defense": defender_spd_evs
+                },
+                "item": defender_item,
+                "ability": defender_ability,
+                "usage_percent": defender_spread_info.get("usage", 0) if defender_spread_info else None
+            }
 
             # Add ability effect notes
             ability_notes = []
