@@ -462,19 +462,19 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         2. "Is your Pokemon Terastallizing? If so, what type?"
 
         Tera significantly changes damage calculations:
-        - Tera Water Urshifu Surging Strikes does 33% MORE damage than non-Tera
-        - Tera Normal Entei takes HALF damage from Water moves vs Fire-type Entei
+        - Same-type Tera boosts STAB moves by 33% (1.5x -> 2.0x)
+        - Tera changes defensive typing (e.g., Tera Normal removes all weaknesses)
 
         Do NOT assume no Tera - always clarify with the user first.
 
         Args:
-            pokemon_name: Your Pokemon (e.g., "entei")
+            pokemon_name: Your Pokemon
             nature: Your Pokemon's nature (e.g., "jolly", "adamant")
-            outspeed_pokemon: Pokemon to outspeed (e.g., "arcanine-hisui")
+            outspeed_pokemon: Pokemon to outspeed
             outspeed_pokemon_nature: Target's nature (default: jolly)
             outspeed_pokemon_evs: Target's speed EVs (default: 252)
-            survive_pokemon: Attacker to survive (e.g., "urshifu-rapid-strike")
-            survive_move: Move to survive (e.g., "surging-strikes")
+            survive_pokemon: Attacker to survive
+            survive_move: Move to survive
             survive_pokemon_nature: Attacker's nature (default: adamant)
             survive_pokemon_evs: Attacker's offensive EVs (default: 252)
             survive_pokemon_ability: Attacker's ability if relevant
