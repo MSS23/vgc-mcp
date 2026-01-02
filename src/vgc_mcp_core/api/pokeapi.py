@@ -11,6 +11,23 @@ from ..models.move import Move, MoveCategory, SPREAD_TARGETS, get_multi_hit_info
 from .cache import APICache
 
 
+# Map base form names to PokeAPI's explicit form naming
+# PokeAPI requires the explicit form suffix (e.g., "landorus-incarnate")
+POKEAPI_FORM_ALIASES = {
+    # Forces of Nature - PokeAPI uses explicit "-incarnate" suffix
+    "landorus": "landorus-incarnate",
+    "tornadus": "tornadus-incarnate",
+    "thundurus": "thundurus-incarnate",
+    "enamorus": "enamorus-incarnate",
+    # Urshifu - PokeAPI uses explicit "-single-strike" suffix
+    "urshifu": "urshifu-single-strike",
+    # Indeedee - PokeAPI uses explicit "-male" suffix
+    "indeedee": "indeedee-male",
+    # Basculegion - PokeAPI uses explicit "-male" suffix
+    "basculegion": "basculegion-male",
+}
+
+
 class PokeAPIError(Exception):
     """Error from PokeAPI."""
     pass
@@ -34,15 +51,24 @@ class PokeAPIClient:
             )
         return self._client
 
-    def _normalize_name(self, name: str) -> str:
+    def _normalize_name(self, name: str, apply_form_aliases: bool = True) -> str:
         """Normalize Pokemon/move names for API.
 
         Examples:
             "Flutter Mane" -> "flutter-mane"
             "Urshifu-Rapid-Strike" -> "urshifu-rapid-strike"
             "King's Rock" -> "kings-rock"
+            "Landorus" -> "landorus-incarnate" (with form aliases)
+
+        Args:
+            name: The name to normalize
+            apply_form_aliases: If True, apply POKEAPI_FORM_ALIASES mapping
         """
-        return name.lower().replace(" ", "-").replace("'", "").replace("'", "")
+        normalized = name.lower().replace(" ", "-").replace("'", "").replace("'", "")
+        # Apply form aliases for Pokemon that need explicit form suffixes in PokeAPI
+        if apply_form_aliases:
+            normalized = POKEAPI_FORM_ALIASES.get(normalized, normalized)
+        return normalized
 
     async def _fetch(self, endpoint: str) -> dict:
         """Fetch from API with caching and retry logic."""
@@ -137,7 +163,7 @@ class PokeAPIClient:
             user_name: Optional Pokemon name using the move. Used for form-dependent
                        move types like Ivy Cudgel (changes type based on Ogerpon form).
         """
-        name = self._normalize_name(str(name_or_id))
+        name = self._normalize_name(str(name_or_id), apply_form_aliases=False)
         data = await self._fetch(f"move/{name}")
 
         target = data.get("target", {}).get("name", "selected-pokemon")
@@ -186,17 +212,17 @@ class PokeAPIClient:
 
     async def get_type(self, name: str) -> dict:
         """Get type data including damage relations."""
-        name = self._normalize_name(name)
+        name = self._normalize_name(name, apply_form_aliases=False)
         return await self._fetch(f"type/{name}")
 
     async def get_ability(self, name_or_id: str | int) -> dict:
         """Get ability data."""
-        name = self._normalize_name(str(name_or_id))
+        name = self._normalize_name(str(name_or_id), apply_form_aliases=False)
         return await self._fetch(f"ability/{name}")
 
     async def get_item(self, name_or_id: str | int) -> dict:
         """Get item data."""
-        name = self._normalize_name(str(name_or_id))
+        name = self._normalize_name(str(name_or_id), apply_form_aliases=False)
         return await self._fetch(f"item/{name}")
 
     async def close(self) -> None:
