@@ -448,6 +448,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         survive_pokemon_evs: int = 252,
         survive_pokemon_ability: Optional[str] = None,
         survive_pokemon_item: Optional[str] = None,
+        survive_pokemon_tera_type: Optional[str] = None,
         defender_tera_type: Optional[str] = None,
         prioritize: str = "bulk",
         offensive_evs: int = 0
@@ -456,7 +457,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         Design an EV spread that meets specific speed and survival benchmarks.
 
         This is a ONE-CALL solution for requests like:
-        "Give me a bulky Entei that outspeeds H-Arcanine and survives Urshifu Surging Strikes"
+        "Give me a bulky Entei that outspeeds H-Arcanine and survives Tera Water Urshifu Surging Strikes"
 
         Args:
             pokemon_name: Your Pokemon (e.g., "entei")
@@ -470,6 +471,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             survive_pokemon_evs: Attacker's offensive EVs (default: 252)
             survive_pokemon_ability: Attacker's ability if relevant
             survive_pokemon_item: Attacker's item (e.g., "choice-band")
+            survive_pokemon_tera_type: Attacker's Tera type if active (e.g., "water" for Tera Water Urshifu)
             defender_tera_type: Your Pokemon's Tera type if active
             prioritize: "bulk" (max bulk after speed) or "offense" (specified offensive EVs)
             offensive_evs: Attack/SpA EVs if prioritize="offense"
@@ -567,7 +569,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                             special_attack=0 if is_physical else survive_pokemon_evs
                         ),
                         ability=survive_pokemon_ability,
-                        item=survive_pokemon_item
+                        item=survive_pokemon_item,
+                        tera_type=survive_pokemon_tera_type
                     )
 
                     # Find optimal bulk distribution to survive
@@ -582,11 +585,11 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                         def_ev = normalize_evs(min(252, def_remaining)) if is_physical else 0
                         spd_ev = normalize_evs(min(252, def_remaining)) if not is_physical else 0
 
-                        # Create defender build
+                        # Create defender build (preserve original types, Tera handled by modifiers)
                         defender = PokemonBuild(
                             name=pokemon_name,
                             base_stats=my_base,
-                            types=[defender_tera_type] if defender_tera_type else my_types,
+                            types=my_types,
                             nature=parsed_nature,
                             evs=EVSpread(
                                 hp=hp_ev,
@@ -601,8 +604,14 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                             is_doubles=True,
                             attacker_ability=survive_pokemon_ability,
                             attacker_item=survive_pokemon_item,
+                            # Attacker Tera
+                            tera_type=survive_pokemon_tera_type,
+                            tera_active=survive_pokemon_tera_type is not None,
+                            # Defender Tera
                             defender_tera_type=defender_tera_type,
-                            defender_tera_active=defender_tera_type is not None
+                            defender_tera_active=defender_tera_type is not None,
+                            # Handle always-crit moves like Surging Strikes
+                            is_critical=move.always_crit
                         )
                         result = calculate_damage(attacker, defender, move, modifiers)
 
