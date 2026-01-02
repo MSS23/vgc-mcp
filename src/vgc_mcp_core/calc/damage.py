@@ -370,6 +370,12 @@ def _calculate_variable_bp(
             return base_power * 2
         return base_power
 
+    elif variable_bp_type == "facade":
+        # Facade: 70 BP, doubled to 140 when user is burned/paralyzed/poisoned
+        if modifiers.attacker_statused or modifiers.attacker_burned:
+            return base_power * 2
+        return base_power
+
     elif variable_bp_type == "acrobatics":
         # Acrobatics: 55 BP, 110 BP when user has no held item
         if not modifiers.attacker_item:

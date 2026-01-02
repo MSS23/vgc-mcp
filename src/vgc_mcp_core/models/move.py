@@ -541,6 +541,12 @@ GEN9_SPECIAL_MOVES: dict[str, dict] = {
         "category": "special",
         "variable_bp": "hex",
     },
+    "facade": {
+        "base_power": 70,  # 140 BP when user is burned/paralyzed/poisoned
+        "type": "normal",
+        "category": "physical",
+        "variable_bp": "facade",
+    },
     "acrobatics": {
         "base_power": 55,  # 110 BP when user has no held item
         "type": "flying",
