@@ -19,6 +19,139 @@ class DamageVerdict:
     is_guaranteed: bool = False
 
 
+@dataclass
+class KOProbability:
+    """Detailed KO probability analysis."""
+    ohko_chance: float
+    twohko_chance: float
+    threehko_chance: float
+    fourhko_chance: float
+    guaranteed_ko: Optional[int]  # 1=OHKO, 2=2HKO, etc. None if >4HKO
+    rolls_that_ohko: int
+    verdict: str  # e.g., "87.5% chance to 2HKO"
+
+
+def calculate_ko_probability(
+    damage_rolls: list[int],
+    defender_hp: int,
+    max_hits: int = 4
+) -> KOProbability:
+    """
+    Calculate actual KO probabilities based on damage roll distribution.
+
+    Pokemon uses 16 damage rolls (0.85x to 1.00x), each equally likely.
+    This function calculates exact probabilities by checking all combinations.
+
+    Args:
+        damage_rolls: List of 16 damage values (one per roll)
+        defender_hp: Defender's HP
+        max_hits: Maximum hits to calculate (default 4)
+
+    Returns:
+        KOProbability with exact chances for OHKO, 2HKO, 3HKO, 4HKO
+    """
+    n_rolls = len(damage_rolls)
+    if n_rolls == 0:
+        return KOProbability(
+            ohko_chance=0, twohko_chance=0, threehko_chance=0, fourhko_chance=0,
+            guaranteed_ko=None, rolls_that_ohko=0, verdict="No damage"
+        )
+
+    # OHKO: Count rolls that deal >= HP
+    ohko_count = sum(1 for r in damage_rolls if r >= defender_hp)
+    ohko_chance = (ohko_count / n_rolls) * 100
+
+    # 2HKO: Check all 256 combinations (16 x 16)
+    twohko_count = 0
+    for r1 in damage_rolls:
+        for r2 in damage_rolls:
+            if r1 + r2 >= defender_hp:
+                twohko_count += 1
+    twohko_chance = (twohko_count / (n_rolls ** 2)) * 100
+
+    # 3HKO: Check all 4096 combinations (16^3)
+    threehko_count = 0
+    for r1 in damage_rolls:
+        for r2 in damage_rolls:
+            for r3 in damage_rolls:
+                if r1 + r2 + r3 >= defender_hp:
+                    threehko_count += 1
+    threehko_chance = (threehko_count / (n_rolls ** 3)) * 100
+
+    # 4HKO: Check all 65536 combinations (16^4)
+    fourhko_count = 0
+    for r1 in damage_rolls:
+        for r2 in damage_rolls:
+            for r3 in damage_rolls:
+                for r4 in damage_rolls:
+                    if r1 + r2 + r3 + r4 >= defender_hp:
+                        fourhko_count += 1
+    fourhko_chance = (fourhko_count / (n_rolls ** 4)) * 100
+
+    # Determine guaranteed KO (using minimum roll)
+    min_damage = min(damage_rolls)
+    guaranteed_ko = None
+    if min_damage >= defender_hp:
+        guaranteed_ko = 1
+    elif min_damage * 2 >= defender_hp:
+        guaranteed_ko = 2
+    elif min_damage * 3 >= defender_hp:
+        guaranteed_ko = 3
+    elif min_damage * 4 >= defender_hp:
+        guaranteed_ko = 4
+
+    # Generate human-readable verdict
+    verdict = _format_ko_verdict(
+        ohko_chance, twohko_chance, threehko_chance, fourhko_chance, guaranteed_ko
+    )
+
+    return KOProbability(
+        ohko_chance=round(ohko_chance, 1),
+        twohko_chance=round(twohko_chance, 1),
+        threehko_chance=round(threehko_chance, 1),
+        fourhko_chance=round(fourhko_chance, 1),
+        guaranteed_ko=guaranteed_ko,
+        rolls_that_ohko=ohko_count,
+        verdict=verdict
+    )
+
+
+def _format_ko_verdict(
+    ohko: float,
+    twohko: float,
+    threehko: float,
+    fourhko: float,
+    guaranteed: Optional[int]
+) -> str:
+    """Format KO probabilities into a human-readable verdict."""
+    if guaranteed == 1:
+        return "Guaranteed OHKO"
+    elif ohko >= 99.9:
+        return "Guaranteed OHKO"
+    elif ohko > 0:
+        return f"{ohko:.1f}% chance to OHKO"
+    elif guaranteed == 2:
+        return "Guaranteed 2HKO"
+    elif twohko >= 99.9:
+        return "Guaranteed 2HKO"
+    elif twohko > 0:
+        return f"{twohko:.1f}% chance to 2HKO"
+    elif guaranteed == 3:
+        return "Guaranteed 3HKO"
+    elif threehko >= 99.9:
+        return "Guaranteed 3HKO"
+    elif threehko > 0:
+        return f"{threehko:.1f}% chance to 3HKO"
+    elif guaranteed == 4:
+        return "Guaranteed 4HKO"
+    elif fourhko >= 99.9:
+        return "Guaranteed 4HKO"
+    elif fourhko > 0:
+        return f"{fourhko:.1f}% chance to 4HKO"
+    else:
+        return "5+ HKO"
+
+
 def calculate_ko_verdict(
     min_percent: float,
     max_percent: float,

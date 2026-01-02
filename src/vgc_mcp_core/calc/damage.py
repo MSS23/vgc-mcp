@@ -32,6 +32,7 @@ from .modifiers import (
     get_type_effectiveness,
     is_super_effective,
 )
+from ..utils.damage_verdicts import calculate_ko_probability, KOProbability
 
 
 # =============================================================================
@@ -182,6 +183,7 @@ class DamageResult:
     is_guaranteed_ohko: bool
     is_possible_ohko: bool
     details: dict
+    ko_probability: Optional[KOProbability] = None  # Detailed KO probability analysis
 
     @property
     def damage_range(self) -> str:
@@ -575,17 +577,17 @@ def calculate_damage(
     is_guaranteed_ohko = kos == 16
     is_possible_ohko = kos > 0
 
+    # Calculate detailed KO probabilities
+    ko_probs = calculate_ko_probability(rolls, defender_hp)
+
     # Check for immunity (all rolls are 0)
     is_immune = max_damage == 0
 
     if is_immune:
         ko_chance = "Immune (0 damage)"
-    elif is_guaranteed_ohko:
-        ko_chance = "Guaranteed OHKO"
-    elif kos == 0:
-        ko_chance = f"0% OHKO ({max_percent:.1f}% max)"
     else:
-        ko_chance = f"{(kos/16)*100:.1f}% OHKO"
+        # Use the detailed verdict from probability calculation
+        ko_chance = ko_probs.verdict
 
     # Add STAB to applied mods
     if stab_mod_4096 != MOD_NEUTRAL:
@@ -635,7 +637,8 @@ def calculate_damage(
             "modifiers_applied": applied_mods,
             "hit_count": hit_count,
             "always_crit": always_crit,
-        }
+        },
+        ko_probability=ko_probs if not is_immune else None
     )
 
 

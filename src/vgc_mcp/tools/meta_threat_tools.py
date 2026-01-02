@@ -21,6 +21,93 @@ from vgc_mcp_core.models.pokemon import PokemonBuild, BaseStats, EVSpread, Natur
 from vgc_mcp_core.config import EV_BREAKPOINTS_LV50
 
 
+def _format_matchup_row(r: ThreatDamageResult) -> dict:
+    """Format a single threat matchup as a table row with KO probabilities."""
+    your_dmg = r.your_damage_to_threat
+    their_dmg = r.threat_damage_to_you
+
+    # Format damage strings
+    your_dmg_str = (
+        f"{your_dmg.get('min_percent', 0):.0f}-{your_dmg.get('max_percent', 0):.0f}%"
+        if your_dmg.get('max_percent', 0) > 0
+        else "N/A"
+    )
+    their_dmg_str = (
+        f"{their_dmg.get('min_percent', 0):.0f}-{their_dmg.get('max_percent', 0):.0f}%"
+        if their_dmg.get('max_percent', 0) > 0
+        else "N/A"
+    )
+
+    # Get KO verdicts with probabilities
+    your_ko = your_dmg.get("ko_chance", "N/A")
+    their_ko = their_dmg.get("ko_chance", "N/A")
+
+    # Speed indicator
+    if "You outspeed" in r.speed_comparison:
+        speed = "faster"
+    elif "They outspeed" in r.speed_comparison:
+        speed = "slower"
+    else:
+        speed = "tie"
+
+    return {
+        "threat": r.threat_name,
+        "usage": f"{r.threat_usage_pct:.1f}%",
+        "your_dmg": your_dmg_str,
+        "your_ko": your_ko,
+        "their_dmg": their_dmg_str,
+        "their_ko": their_ko,
+        "speed": speed,
+        "verdict": r.matchup_verdict,
+        # Detailed data
+        "your_damage_detail": {
+            "range": your_dmg_str,
+            "move": your_dmg.get("move", "N/A"),
+            "ko_verdict": your_ko,
+            "ohko_chance": your_dmg.get("ohko_chance", 0),
+            "2hko_chance": your_dmg.get("twohko_chance", 0),
+            "3hko_chance": your_dmg.get("threehko_chance", 0),
+        },
+        "their_damage_detail": {
+            "range": their_dmg_str,
+            "move": their_dmg.get("move", "N/A"),
+            "ko_verdict": their_ko,
+            "ohko_chance": their_dmg.get("ohko_chance", 0),
+            "2hko_chance": their_dmg.get("twohko_chance", 0),
+            "3hko_chance": their_dmg.get("threehko_chance", 0),
+        },
+        "threat_spread": r.threat_spread,
+    }
+
+
+def _format_results_table(threat_results: list[ThreatDamageResult]) -> dict:
+    """Format all threat results into a structured table format."""
+    rows = [_format_matchup_row(r) for r in threat_results]
+
+    # Create a text table for display
+    table_lines = []
+    header = f"{'Threat':<20} {'Usage':>7} {'Your Dmg':>12} {'Your KO':>20} {'Their Dmg':>12} {'Their KO':>20} {'Speed':>7}"
+    table_lines.append(header)
+    table_lines.append("-" * len(header))
+
+    for row in rows:
+        line = (
+            f"{row['threat']:<20} "
+            f"{row['usage']:>7} "
+            f"{row['your_dmg']:>12} "
+            f"{row['your_ko']:>20} "
+            f"{row['their_dmg']:>12} "
+            f"{row['their_ko']:>20} "
+            f"{row['speed']:>7}"
+        )
+        table_lines.append(line)
+
+    return {
+        "table_text": "\n".join(table_lines),
+        "rows": rows
+    }
+
+
 def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
     """Register meta threat analysis tools with the MCP server."""
 
@@ -224,6 +311,9 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
         # Generate suggestions
         suggestions = generate_spread_suggestions(your_pokemon, threat_results)
 
+        # Format results as table
+        table_data = _format_results_table(threat_results)
+
         return {
             "pokemon": pokemon_name,
             "spread": {
@@ -242,32 +332,12 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                 "unfavorable": len(unfavorable),
                 "even": len(even)
             },
-            "favorable_matchups": [
-                {
-                    "threat": r.threat_name,
-                    "usage": r.threat_usage_pct,
-                    "threat_spread": r.threat_spread,
-                    "threat_stats": r.threat_stats,
-                    "verdict": r.matchup_verdict,
-                    "speed": r.speed_comparison,
-                    "your_damage": r.your_damage_to_threat,
-                    "their_damage": r.threat_damage_to_you
-                }
-                for r in favorable[:5]
-            ],
-            "unfavorable_matchups": [
-                {
-                    "threat": r.threat_name,
-                    "usage": r.threat_usage_pct,
-                    "threat_spread": r.threat_spread,
-                    "threat_stats": r.threat_stats,
-                    "verdict": r.matchup_verdict,
-                    "speed": r.speed_comparison,
-                    "your_damage": r.your_damage_to_threat,
-                    "their_damage": r.threat_damage_to_you
-                }
-                for r in unfavorable[:5]
-            ],
+            # Main table output with KO probabilities
+            "matchup_table": table_data["table_text"],
+            "matchups": table_data["rows"],
+            # Legacy format for compatibility
+            "favorable_matchups": [_format_matchup_row(r) for r in favorable[:5]],
+            "unfavorable_matchups": [_format_matchup_row(r) for r in unfavorable[:5]],
             "ohko_threats": ohko_threats,
             "ohko_targets": ohko_targets,
             "suggestions": suggestions,
@@ -426,6 +496,9 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
 
         suggestions = generate_spread_suggestions(pokemon, threat_results)
 
+        # Format results as table
+        table_data = _format_results_table(threat_results)
+
         return {
             "pokemon": pokemon.name,
             "spread": {
@@ -444,30 +517,12 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                 "unfavorable": len(unfavorable),
                 "even": len(even)
             },
-            "favorable_matchups": [
-                {
-                    "threat": r.threat_name,
-                    "usage": r.threat_usage_pct,
-                    "threat_spread": r.threat_spread,
-                    "threat_stats": r.threat_stats,
-                    "speed": r.speed_comparison,
-                    "your_damage": r.your_damage_to_threat.get("ko_chance", "N/A"),
-                    "their_damage": r.threat_damage_to_you.get("ko_chance", "N/A")
-                }
-                for r in favorable[:5]
-            ],
-            "unfavorable_matchups": [
-                {
-                    "threat": r.threat_name,
-                    "usage": r.threat_usage_pct,
-                    "threat_spread": r.threat_spread,
-                    "threat_stats": r.threat_stats,
-                    "speed": r.speed_comparison,
-                    "your_damage": r.your_damage_to_threat.get("ko_chance", "N/A"),
-                    "their_damage": r.threat_damage_to_you.get("ko_chance", "N/A")
-                }
-                for r in unfavorable[:5]
-            ],
+            # Main table output with KO probabilities
+            "matchup_table": table_data["table_text"],
+            "matchups": table_data["rows"],
+            # Legacy format for compatibility
+            "favorable_matchups": [_format_matchup_row(r) for r in favorable[:5]],
+            "unfavorable_matchups": [_format_matchup_row(r) for r in unfavorable[:5]],
             "ohko_threats": ohko_threats,
             "ohko_targets": ohko_targets,
             "suggestions": suggestions,

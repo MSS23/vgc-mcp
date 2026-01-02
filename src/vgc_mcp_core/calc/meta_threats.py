@@ -11,7 +11,7 @@ import math
 from ..models.pokemon import PokemonBuild, BaseStats, EVSpread, Nature
 from ..models.move import Move, MoveCategory
 from .stats import calculate_all_stats
-from ..utils.damage_verdicts import calculate_ko_verdict
+from ..utils.damage_verdicts import calculate_ko_verdict, calculate_ko_probability
 
 
 @dataclass
@@ -58,7 +58,7 @@ def calculate_simple_damage(
     move data but want to estimate damage ranges.
 
     Returns:
-        Dict with min/max damage and percentage
+        Dict with min/max damage, percentage, and KO probabilities
     """
     # Get attacking and defending stats
     atk_stat = attacker_stats["attack"] if is_physical else attacker_stats["special_attack"]
@@ -79,43 +79,51 @@ def calculate_simple_damage(
     if is_spread:
         base_damage = int(base_damage * 0.75)
 
-    # Calculate damage rolls (0.85 to 1.0)
-    min_roll = int(base_damage * 0.85)
-    max_roll = base_damage
+    # Generate all 16 damage rolls (0.85 to 1.00)
+    rolls = []
+    for i in range(16):
+        random_factor = 85 + i
+        roll = math.floor(base_damage * random_factor / 100)
 
-    # Apply STAB
-    if stab:
-        min_roll = int(min_roll * 1.5)
-        max_roll = int(max_roll * 1.5)
+        # Apply STAB
+        if stab:
+            roll = int(roll * 1.5)
 
-    # Apply type effectiveness
-    min_roll = int(min_roll * type_effectiveness)
-    max_roll = int(max_roll * type_effectiveness)
+        # Apply type effectiveness
+        roll = int(roll * type_effectiveness)
 
-    # Ensure minimum 1 damage
-    min_roll = max(1, min_roll)
-    max_roll = max(1, max_roll)
+        # Ensure minimum 1 damage
+        roll = max(1, roll)
+        rolls.append(roll)
+
+    min_roll = min(rolls)
+    max_roll = max(rolls)
 
     min_pct = (min_roll / defender_hp) * 100
     max_pct = (max_roll / defender_hp) * 100
 
-    # KO calculations using accurate verdict system
+    # Calculate accurate KO probabilities
+    ko_probs = calculate_ko_probability(rolls, defender_hp)
+
+    # KO calculations
     is_ohko = min_roll >= defender_hp
     can_ohko = max_roll >= defender_hp
-
-    # Get mathematically accurate verdict
-    verdict = calculate_ko_verdict(min_pct, max_pct)
 
     return {
         "min_damage": min_roll,
         "max_damage": max_roll,
         "min_percent": round(min_pct, 1),
         "max_percent": round(max_pct, 1),
+        "damage_rolls": rolls,
         "is_guaranteed_ohko": is_ohko,
         "is_possible_ohko": can_ohko,
-        "ko_chance": verdict.verdict,
-        "ko_description": verdict.description,
-        "chip_needed": verdict.chip_needed
+        "ko_chance": ko_probs.verdict,
+        "ohko_chance": ko_probs.ohko_chance,
+        "twohko_chance": ko_probs.twohko_chance,
+        "threehko_chance": ko_probs.threehko_chance,
+        "guaranteed_ko": ko_probs.guaranteed_ko,
+        "ko_description": ko_probs.verdict,
+        "chip_needed": None  # Could add back if needed
     }
 
 
