@@ -3,6 +3,7 @@
 from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
+from vgc_mcp_core.config import logger
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
 from vgc_mcp_core.calc.stats import calculate_speed, calculate_stat, calculate_hp, find_speed_evs
@@ -19,6 +20,23 @@ from vgc_mcp_core.config import EV_BREAKPOINTS_LV50, normalize_evs
 
 # Module-level Smogon client reference (set during registration)
 _smogon_client: Optional[SmogonStatsClient] = None
+
+
+# Known meta synergies: Pokemon -> (item, ability) defaults
+# Used as fallback when Smogon data is unavailable
+META_SYNERGIES = {
+    "landorus": ("Life Orb", "Sheer Force"),
+    "landorus-incarnate": ("Life Orb", "Sheer Force"),
+    "nidoking": ("Life Orb", "Sheer Force"),
+    "nidoqueen": ("Life Orb", "Sheer Force"),
+    "toucannon": ("Life Orb", "Sheer Force"),
+    "conkeldurr": ("Flame Orb", "Guts"),
+    "ursaluna": ("Flame Orb", "Guts"),
+    "ursaluna-bloodmoon": ("Life Orb", "Mind's Eye"),
+    "urshifu": ("Choice Band", "Unseen Fist"),
+    "urshifu-single-strike": ("Choice Band", "Unseen Fist"),
+    "urshifu-rapid-strike": ("Choice Band", "Unseen Fist"),
+}
 
 
 def _get_synergy_ability(item: str, abilities: dict) -> tuple[str, float]:
@@ -91,8 +109,8 @@ async def _get_common_spread(pokemon_name: str) -> Optional[dict]:
                 "item": top_item,
                 "ability": top_ability,
             }
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Failed to fetch Smogon spread for {pokemon_name}: {e}")
     return None
 
 
@@ -663,6 +681,15 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         if survive_pokemon_ability is None:
                             survive_pokemon_ability = smogon_spread.get("ability")
                             smogon_used = True
+
+                    # Fallback to known meta synergies if Smogon didn't provide item/ability
+                    attacker_key = survive_pokemon.lower().replace(" ", "-")
+                    if attacker_key in META_SYNERGIES:
+                        default_item, default_ability = META_SYNERGIES[attacker_key]
+                        if survive_pokemon_item is None:
+                            survive_pokemon_item = default_item
+                        if survive_pokemon_ability is None:
+                            survive_pokemon_ability = default_ability
 
                     atk_nature = Nature(survive_pokemon_nature.lower())
                     atk_nature_mod = get_nature_modifier(
