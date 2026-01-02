@@ -491,5 +491,527 @@ class TestStatDoublingAbilities:
         assert result_hp.max_damage == result_normal.max_damage
 
 
+class TestGen9Abilities:
+    """Test Gen 9 VGC-critical abilities."""
+
+    def test_rocky_payload_boosts_rock(self):
+        """Rocky Payload gives 1.5x boost to Rock moves (Ogerpon-Cornerstone)."""
+        ogerpon = PokemonBuild(
+            name="ogerpon-cornerstone",
+            base_stats=BaseStats(
+                hp=80, attack=120, defense=84,
+                special_attack=60, special_defense=96, speed=110
+            ),
+            nature=Nature.ADAMANT,
+            evs=EVSpread(attack=252, speed=252),
+            types=["Grass", "Rock"]
+        )
+
+        defender = PokemonBuild(
+            name="charizard",
+            base_stats=BaseStats(
+                hp=78, attack=84, defense=78,
+                special_attack=109, special_defense=85, speed=100
+            ),
+            nature=Nature.TIMID,
+            types=["Fire", "Flying"]
+        )
+
+        stone_edge = Move(
+            name="stone-edge",
+            type="Rock",
+            category=MoveCategory.PHYSICAL,
+            power=100,
+            accuracy=80,
+            pp=5
+        )
+
+        # Without Rocky Payload
+        mods_normal = DamageModifiers()
+        result_normal = calculate_damage(ogerpon, defender, stone_edge, mods_normal)
+
+        # With Rocky Payload
+        mods_rocky = DamageModifiers(attacker_ability="rocky-payload")
+        result_rocky = calculate_damage(ogerpon, defender, stone_edge, mods_rocky)
+
+        # Rocky Payload should do ~1.5x damage
+        assert result_rocky.max_damage > result_normal.max_damage
+        ratio = result_rocky.max_damage / result_normal.max_damage
+        assert 1.45 <= ratio <= 1.55
+
+    def test_sharpness_boosts_slicing(self):
+        """Sharpness gives 1.5x boost to slicing moves."""
+        gallade = PokemonBuild(
+            name="gallade",
+            base_stats=BaseStats(
+                hp=68, attack=125, defense=65,
+                special_attack=65, special_defense=115, speed=80
+            ),
+            nature=Nature.ADAMANT,
+            evs=EVSpread(attack=252, speed=252),
+            types=["Psychic", "Fighting"]
+        )
+
+        defender = PokemonBuild(
+            name="tyranitar",
+            base_stats=BaseStats(
+                hp=100, attack=134, defense=110,
+                special_attack=95, special_defense=100, speed=61
+            ),
+            nature=Nature.CAREFUL,
+            evs=EVSpread(hp=252),
+            types=["Rock", "Dark"]
+        )
+
+        sacred_sword = Move(
+            name="sacred-sword",
+            type="Fighting",
+            category=MoveCategory.PHYSICAL,
+            power=90,
+            accuracy=100,
+            pp=15
+        )
+
+        # Without Sharpness
+        mods_normal = DamageModifiers()
+        result_normal = calculate_damage(gallade, defender, sacred_sword, mods_normal)
+
+        # With Sharpness
+        mods_sharp = DamageModifiers(attacker_ability="sharpness")
+        result_sharp = calculate_damage(gallade, defender, sacred_sword, mods_sharp)
+
+        # Sharpness should do ~1.5x damage
+        assert result_sharp.max_damage > result_normal.max_damage
+        ratio = result_sharp.max_damage / result_normal.max_damage
+        assert 1.45 <= ratio <= 1.55
+
+    def test_strong_jaw_boosts_biting(self):
+        """Strong Jaw gives 1.5x boost to biting moves."""
+        tyrantrum = PokemonBuild(
+            name="tyrantrum",
+            base_stats=BaseStats(
+                hp=82, attack=121, defense=119,
+                special_attack=69, special_defense=59, speed=71
+            ),
+            nature=Nature.ADAMANT,
+            evs=EVSpread(attack=252, speed=252),
+            types=["Rock", "Dragon"]
+        )
+
+        defender = PokemonBuild(
+            name="garchomp",
+            base_stats=BaseStats(
+                hp=108, attack=130, defense=95,
+                special_attack=80, special_defense=85, speed=102
+            ),
+            nature=Nature.JOLLY,
+            evs=EVSpread(hp=252),
+            types=["Dragon", "Ground"]
+        )
+
+        crunch = Move(
+            name="crunch",
+            type="Dark",
+            category=MoveCategory.PHYSICAL,
+            power=80,
+            accuracy=100,
+            pp=15
+        )
+
+        # Without Strong Jaw
+        mods_normal = DamageModifiers()
+        result_normal = calculate_damage(tyrantrum, defender, crunch, mods_normal)
+
+        # With Strong Jaw
+        mods_jaw = DamageModifiers(attacker_ability="strong-jaw")
+        result_jaw = calculate_damage(tyrantrum, defender, crunch, mods_jaw)
+
+        # Strong Jaw should do ~1.5x damage
+        assert result_jaw.max_damage > result_normal.max_damage
+        ratio = result_jaw.max_damage / result_normal.max_damage
+        assert 1.45 <= ratio <= 1.55
+
+    def test_supreme_overlord_stacking(self):
+        """Supreme Overlord gives +10% per fainted ally (Kingambit)."""
+        kingambit = PokemonBuild(
+            name="kingambit",
+            base_stats=BaseStats(
+                hp=100, attack=135, defense=120,
+                special_attack=60, special_defense=85, speed=50
+            ),
+            nature=Nature.ADAMANT,
+            evs=EVSpread(attack=252, hp=252),
+            types=["Dark", "Steel"]
+        )
+
+        defender = PokemonBuild(
+            name="garchomp",
+            base_stats=BaseStats(
+                hp=108, attack=130, defense=95,
+                special_attack=80, special_defense=85, speed=102
+            ),
+            nature=Nature.JOLLY,
+            evs=EVSpread(hp=252),
+            types=["Dragon", "Ground"]
+        )
+
+        iron_head = Move(
+            name="iron-head",
+            type="Steel",
+            category=MoveCategory.PHYSICAL,
+            power=80,
+            accuracy=100,
+            pp=15
+        )
+
+        # Without Supreme Overlord (0 fainted)
+        mods_0 = DamageModifiers(attacker_ability="supreme-overlord", supreme_overlord_count=0)
+        result_0 = calculate_damage(kingambit, defender, iron_head, mods_0)
+
+        # With 3 fainted allies (+30%)
+        mods_3 = DamageModifiers(attacker_ability="supreme-overlord", supreme_overlord_count=3)
+        result_3 = calculate_damage(kingambit, defender, iron_head, mods_3)
+
+        # With 5 fainted allies (+50% max)
+        mods_5 = DamageModifiers(attacker_ability="supreme-overlord", supreme_overlord_count=5)
+        result_5 = calculate_damage(kingambit, defender, iron_head, mods_5)
+
+        # 3 allies should do more than 0
+        assert result_3.max_damage > result_0.max_damage
+        ratio_3 = result_3.max_damage / result_0.max_damage
+        assert 1.25 <= ratio_3 <= 1.35  # ~1.3x
+
+        # 5 allies should do more than 3
+        assert result_5.max_damage > result_3.max_damage
+        ratio_5 = result_5.max_damage / result_0.max_damage
+        assert 1.45 <= ratio_5 <= 1.55  # ~1.5x
+
+    def test_orichalcum_pulse_in_sun(self):
+        """Orichalcum Pulse gives 1.333x Attack in sun (Koraidon)."""
+        koraidon = PokemonBuild(
+            name="koraidon",
+            base_stats=BaseStats(
+                hp=100, attack=135, defense=115,
+                special_attack=85, special_defense=100, speed=135
+            ),
+            nature=Nature.ADAMANT,
+            evs=EVSpread(attack=252, speed=252),
+            types=["Fighting", "Dragon"]
+        )
+
+        defender = PokemonBuild(
+            name="iron-bundle",
+            base_stats=BaseStats(
+                hp=56, attack=80, defense=114,
+                special_attack=124, special_defense=60, speed=136
+            ),
+            nature=Nature.TIMID,
+            evs=EVSpread(hp=252),
+            types=["Ice", "Water"]
+        )
+
+        close_combat = Move(
+            name="close-combat",
+            type="Fighting",
+            category=MoveCategory.PHYSICAL,
+            power=120,
+            accuracy=100,
+            pp=5
+        )
+
+        # Without sun
+        mods_normal = DamageModifiers(attacker_ability="orichalcum-pulse")
+        result_normal = calculate_damage(koraidon, defender, close_combat, mods_normal)
+
+        # With sun
+        mods_sun = DamageModifiers(attacker_ability="orichalcum-pulse", weather="sun")
+        result_sun = calculate_damage(koraidon, defender, close_combat, mods_sun)
+
+        # In sun, should do ~1.333x damage
+        assert result_sun.max_damage > result_normal.max_damage
+        ratio = result_sun.max_damage / result_normal.max_damage
+        assert 1.28 <= ratio <= 1.38
+
+    def test_hadron_engine_in_electric_terrain(self):
+        """Hadron Engine gives 1.333x SpA in Electric Terrain (Miraidon)."""
+        miraidon = PokemonBuild(
+            name="miraidon",
+            base_stats=BaseStats(
+                hp=100, attack=85, defense=100,
+                special_attack=135, special_defense=115, speed=135
+            ),
+            nature=Nature.TIMID,
+            evs=EVSpread(special_attack=252, speed=252),
+            types=["Electric", "Dragon"]
+        )
+
+        defender = PokemonBuild(
+            name="incineroar",
+            base_stats=BaseStats(
+                hp=95, attack=115, defense=90,
+                special_attack=80, special_defense=90, speed=60
+            ),
+            nature=Nature.CAREFUL,
+            evs=EVSpread(hp=252, special_defense=252),
+            types=["Fire", "Dark"]
+        )
+
+        draco_meteor = Move(
+            name="draco-meteor",
+            type="Dragon",
+            category=MoveCategory.SPECIAL,
+            power=130,
+            accuracy=90,
+            pp=5
+        )
+
+        # Without terrain
+        mods_normal = DamageModifiers(attacker_ability="hadron-engine")
+        result_normal = calculate_damage(miraidon, defender, draco_meteor, mods_normal)
+
+        # With Electric Terrain
+        mods_terrain = DamageModifiers(attacker_ability="hadron-engine", terrain="electric")
+        result_terrain = calculate_damage(miraidon, defender, draco_meteor, mods_terrain)
+
+        # In terrain, should do ~1.333x damage
+        assert result_terrain.max_damage > result_normal.max_damage
+        ratio = result_terrain.max_damage / result_normal.max_damage
+        assert 1.28 <= ratio <= 1.38
+
+
+class TestGen9DefenderAbilities:
+    """Test Gen 9 defender abilities."""
+
+    def test_tera_shell_at_full_hp(self):
+        """Tera Shell makes all hits not very effective at full HP (Terapagos)."""
+        attacker = PokemonBuild(
+            name="urshifu",
+            base_stats=BaseStats(
+                hp=100, attack=130, defense=100,
+                special_attack=63, special_defense=60, speed=97
+            ),
+            nature=Nature.ADAMANT,
+            evs=EVSpread(attack=252, speed=252),
+            types=["Fighting", "Water"]
+        )
+
+        terapagos = PokemonBuild(
+            name="terapagos",
+            base_stats=BaseStats(
+                hp=90, attack=65, defense=85,
+                special_attack=120, special_defense=105, speed=85
+            ),
+            nature=Nature.CALM,
+            evs=EVSpread(hp=252, special_defense=252),
+            types=["Normal"]
+        )
+
+        close_combat = Move(
+            name="close-combat",
+            type="Fighting",
+            category=MoveCategory.PHYSICAL,
+            power=120,
+            accuracy=100,
+            pp=5
+        )
+
+        # Without Tera Shell (super effective)
+        mods_normal = DamageModifiers(defender_at_full_hp=True)
+        result_normal = calculate_damage(attacker, terapagos, close_combat, mods_normal)
+
+        # With Tera Shell at full HP (forced 0.5x)
+        mods_shell = DamageModifiers(defender_ability="tera-shell", defender_at_full_hp=True)
+        result_shell = calculate_damage(attacker, terapagos, close_combat, mods_shell)
+
+        # Tera Shell should reduce damage significantly (2x SE -> 0.5x NVE = 4x reduction)
+        assert result_shell.max_damage < result_normal.max_damage
+        ratio = result_shell.max_damage / result_normal.max_damage
+        assert 0.2 <= ratio <= 0.3  # ~0.25x (2x -> 0.5x)
+
+    def test_tera_shell_not_at_full_hp(self):
+        """Tera Shell doesn't work when not at full HP."""
+        attacker = PokemonBuild(
+            name="urshifu",
+            base_stats=BaseStats(
+                hp=100, attack=130, defense=100,
+                special_attack=63, special_defense=60, speed=97
+            ),
+            nature=Nature.ADAMANT,
+            evs=EVSpread(attack=252, speed=252),
+            types=["Fighting", "Water"]
+        )
+
+        terapagos = PokemonBuild(
+            name="terapagos",
+            base_stats=BaseStats(
+                hp=90, attack=65, defense=85,
+                special_attack=120, special_defense=105, speed=85
+            ),
+            nature=Nature.CALM,
+            evs=EVSpread(hp=252, special_defense=252),
+            types=["Normal"]
+        )
+
+        close_combat = Move(
+            name="close-combat",
+            type="Fighting",
+            category=MoveCategory.PHYSICAL,
+            power=120,
+            accuracy=100,
+            pp=5
+        )
+
+        # Without Tera Shell (super effective)
+        mods_normal = DamageModifiers(defender_at_full_hp=False)
+        result_normal = calculate_damage(attacker, terapagos, close_combat, mods_normal)
+
+        # With Tera Shell but NOT at full HP (should not activate)
+        mods_shell = DamageModifiers(defender_ability="tera-shell", defender_at_full_hp=False)
+        result_shell = calculate_damage(attacker, terapagos, close_combat, mods_shell)
+
+        # Damage should be the same
+        assert result_shell.max_damage == result_normal.max_damage
+
+    def test_purifying_salt_halves_ghost(self):
+        """Purifying Salt halves Ghost damage (Garganacl)."""
+        attacker = PokemonBuild(
+            name="dragapult",
+            base_stats=BaseStats(
+                hp=88, attack=120, defense=75,
+                special_attack=100, special_defense=75, speed=142
+            ),
+            nature=Nature.ADAMANT,
+            evs=EVSpread(attack=252, speed=252),
+            types=["Dragon", "Ghost"]
+        )
+
+        garganacl = PokemonBuild(
+            name="garganacl",
+            base_stats=BaseStats(
+                hp=100, attack=100, defense=130,
+                special_attack=45, special_defense=90, speed=35
+            ),
+            nature=Nature.CAREFUL,
+            evs=EVSpread(hp=252, special_defense=252),
+            types=["Rock"]
+        )
+
+        phantom_force = Move(
+            name="phantom-force",
+            type="Ghost",
+            category=MoveCategory.PHYSICAL,
+            power=90,
+            accuracy=100,
+            pp=10
+        )
+
+        # Without Purifying Salt
+        mods_normal = DamageModifiers()
+        result_normal = calculate_damage(attacker, garganacl, phantom_force, mods_normal)
+
+        # With Purifying Salt
+        mods_salt = DamageModifiers(defender_ability="purifying-salt")
+        result_salt = calculate_damage(attacker, garganacl, phantom_force, mods_salt)
+
+        # Purifying Salt should halve damage
+        assert result_salt.max_damage < result_normal.max_damage
+        ratio = result_salt.max_damage / result_normal.max_damage
+        assert 0.48 <= ratio <= 0.52
+
+
+class TestGen9Items:
+    """Test Gen 9 VGC items."""
+
+    def test_punching_glove_boosts_punch(self):
+        """Punching Glove gives 1.1x boost to punch moves."""
+        iron_hands = PokemonBuild(
+            name="iron-hands",
+            base_stats=BaseStats(
+                hp=154, attack=140, defense=108,
+                special_attack=50, special_defense=68, speed=50
+            ),
+            nature=Nature.ADAMANT,
+            evs=EVSpread(attack=252, hp=252),
+            types=["Fighting", "Electric"]
+        )
+
+        defender = PokemonBuild(
+            name="incineroar",
+            base_stats=BaseStats(
+                hp=95, attack=115, defense=90,
+                special_attack=80, special_defense=90, speed=60
+            ),
+            nature=Nature.CAREFUL,
+            evs=EVSpread(hp=252, defense=252),
+            types=["Fire", "Dark"]
+        )
+
+        drain_punch = Move(
+            name="drain-punch",
+            type="Fighting",
+            category=MoveCategory.PHYSICAL,
+            power=75,
+            accuracy=100,
+            pp=10
+        )
+
+        # Without Punching Glove
+        mods_normal = DamageModifiers()
+        result_normal = calculate_damage(iron_hands, defender, drain_punch, mods_normal)
+
+        # With Punching Glove
+        mods_glove = DamageModifiers(attacker_item="punching-glove")
+        result_glove = calculate_damage(iron_hands, defender, drain_punch, mods_glove)
+
+        # Punching Glove should do ~1.1x damage
+        assert result_glove.max_damage > result_normal.max_damage
+        ratio = result_glove.max_damage / result_normal.max_damage
+        assert 1.08 <= ratio <= 1.12
+
+    def test_punching_glove_no_boost_non_punch(self):
+        """Punching Glove doesn't boost non-punch moves."""
+        iron_hands = PokemonBuild(
+            name="iron-hands",
+            base_stats=BaseStats(
+                hp=154, attack=140, defense=108,
+                special_attack=50, special_defense=68, speed=50
+            ),
+            nature=Nature.ADAMANT,
+            evs=EVSpread(attack=252, hp=252),
+            types=["Fighting", "Electric"]
+        )
+
+        defender = PokemonBuild(
+            name="incineroar",
+            base_stats=BaseStats(
+                hp=95, attack=115, defense=90,
+                special_attack=80, special_defense=90, speed=60
+            ),
+            nature=Nature.CAREFUL,
+            evs=EVSpread(hp=252, defense=252),
+            types=["Fire", "Dark"]
+        )
+
+        wild_charge = Move(
+            name="wild-charge",
+            type="Electric",
+            category=MoveCategory.PHYSICAL,
+            power=90,
+            accuracy=100,
+            pp=15
+        )
+
+        # Without Punching Glove
+        mods_normal = DamageModifiers()
+        result_normal = calculate_damage(iron_hands, defender, wild_charge, mods_normal)
+
+        # With Punching Glove (shouldn't boost non-punch)
+        mods_glove = DamageModifiers(attacker_item="punching-glove")
+        result_glove = calculate_damage(iron_hands, defender, wild_charge, mods_glove)
+
+        # Damage should be the same
+        assert result_glove.max_damage == result_normal.max_damage
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

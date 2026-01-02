@@ -148,6 +148,32 @@ PUNCH_MOVES = {
     "wicked-blow", "jet-punch", "rage-fist",
 }
 
+# Slicing moves for Sharpness ability (1.5x boost)
+SLICING_MOVES = {
+    "aerial-ace", "air-cutter", "air-slash", "aqua-cutter", "behemoth-blade",
+    "ceaseless-edge", "cross-poison", "cut", "fury-cutter", "kowtow-cleave",
+    "leaf-blade", "night-slash", "population-bomb", "psycho-cut", "razor-leaf",
+    "razor-shell", "sacred-sword", "secret-sword", "slash", "solar-blade",
+    "stone-axe", "x-scissor",
+}
+
+# Biting moves for Strong Jaw ability (1.5x boost)
+BITING_MOVES = {
+    "bite", "crunch", "fire-fang", "ice-fang", "thunder-fang", "poison-fang",
+    "psychic-fangs", "hyper-fang", "super-fang", "jaw-lock", "fishious-rend",
+}
+
+# New 4096-based modifier constants
+MOD_ROCKY_PAYLOAD = 6144    # 1.5x (Rocky Payload - Rock moves)
+MOD_SHARPNESS = 6144        # 1.5x (Sharpness - slicing moves)
+MOD_STRONG_JAW = 6144       # 1.5x (Strong Jaw - biting moves)
+MOD_PUNCHING_GLOVE = 4506   # ~1.1x (Punching Glove - punch moves)
+MOD_PURIFYING_SALT = 2048   # 0.5x (Purifying Salt - Ghost damage reduction)
+MOD_TINTED_LENS = 8192      # 2.0x (Tinted Lens - on resisted hits)
+MOD_SNIPER_CRIT = 9216      # 2.25x (Sniper - crit damage instead of 1.5x)
+MOD_ORICHALCUM = 5461       # ~1.333x (Orichalcum Pulse - Attack in Sun)
+MOD_HADRON = 5461           # ~1.333x (Hadron Engine - SpA in Electric Terrain)
+
 # Resistance berries - reduce super-effective damage by 50%
 RESISTANCE_BERRIES = {
     "occa-berry": "Fire",
@@ -308,6 +334,14 @@ def calculate_damage(
         # Huge Power / Pure Power double Attack stat
         if ability in ("huge-power", "pure-power") and move.category == MoveCategory.PHYSICAL:
             attack_stat = int(attack_stat * 2)
+        # Orichalcum Pulse (1.333x Attack in Sun) - Koraidon
+        elif ability == "orichalcum-pulse" and modifiers.weather == "sun":
+            if move.category == MoveCategory.PHYSICAL:
+                attack_stat = apply_mod(attack_stat, MOD_ORICHALCUM)
+        # Hadron Engine (1.333x SpA in Electric Terrain) - Miraidon
+        elif ability == "hadron-engine" and modifiers.terrain == "electric":
+            if move.category == MoveCategory.SPECIAL:
+                attack_stat = apply_mod(attack_stat, MOD_HADRON)
 
     # Commander ability (Dondozo + Tatsugiri combo)
     # When Commander is active, Dondozo's Attack, Defense, SpA, SpD, and Speed are doubled
@@ -378,6 +412,24 @@ def calculate_damage(
             power = apply_mod(power, MOD_TOUGH_CLAWS)
         elif ability == "iron-fist" and move.name.lower().replace(" ", "-") in PUNCH_MOVES:
             power = apply_mod(power, MOD_IRON_FIST)
+        # Rocky Payload (1.5x Rock damage) - Ogerpon-Cornerstone
+        elif ability == "rocky-payload" and effective_move_type == "Rock":
+            power = apply_mod(power, MOD_ROCKY_PAYLOAD)
+        # Sharpness (1.5x slicing moves) - Gallade, Kartana, Samurott-Hisui
+        elif ability == "sharpness" and move.name.lower().replace(" ", "-") in SLICING_MOVES:
+            power = apply_mod(power, MOD_SHARPNESS)
+        # Strong Jaw (1.5x biting moves) - Dracovish, Tyrantrum, Boltund
+        elif ability == "strong-jaw" and move.name.lower().replace(" ", "-") in BITING_MOVES:
+            power = apply_mod(power, MOD_STRONG_JAW)
+        # Supreme Overlord (+10% per fainted ally, up to +50%) - Kingambit
+        elif ability == "supreme-overlord" and modifiers.supreme_overlord_count > 0:
+            # +10% per ally = 410/4096 per ally
+            boost = 4096 + (410 * min(5, modifiers.supreme_overlord_count))
+            power = apply_mod(power, boost)
+        # Tinted Lens (2x damage on resisted hits) - Yanmega, Butterfree
+        elif ability == "tinted-lens":
+            # Mark for later application after type effectiveness is calculated
+            pass  # Handled in final modifiers section
 
     # Apply -ate ability boost (1.2x) if Normal move was converted
     if ate_ability_boost:
@@ -456,6 +508,14 @@ def calculate_damage(
         defender_types = [modifiers.defender_tera_type]
     type_eff = get_type_effectiveness(effective_move_type, defender_types)
 
+    # Tera Shell (all hits not very effective at full HP) - Terapagos
+    # This forces type effectiveness to 0.5x (unless already immune)
+    if modifiers.defender_ability:
+        def_ability = modifiers.defender_ability.lower().replace(" ", "-")
+        if def_ability == "tera-shell" and modifiers.defender_at_full_hp:
+            if type_eff > 0:  # Don't override immunity
+                type_eff = 0.5
+
     # Pre-calculate final modifier chain (screens, items, abilities)
     final_mods = []
 
@@ -513,6 +573,18 @@ def calculate_damage(
         # Thick Fat (0.5x Fire and Ice damage)
         if def_ability == "thick-fat" and effective_move_type in ("Fire", "Ice"):
             final_mods.append(MOD_THICK_FAT)
+
+        # Purifying Salt (0.5x Ghost damage) - Garganacl
+        if def_ability == "purifying-salt" and effective_move_type == "Ghost":
+            final_mods.append(MOD_PURIFYING_SALT)
+
+    # Attacker item effects (final damage modifiers)
+    if modifiers.attacker_item:
+        att_item = modifiers.attacker_item.lower().replace(" ", "-")
+
+        # Punching Glove (1.1x punch moves) - Iron Hands, etc.
+        if att_item == "punching-glove" and move.name.lower().replace(" ", "-") in PUNCH_MOVES:
+            final_mods.append(MOD_PUNCHING_GLOVE)
 
     # Defender item effects
     if modifiers.defender_item:

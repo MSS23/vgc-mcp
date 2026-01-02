@@ -203,8 +203,12 @@ class DamageModifiers:
     defender_protosynthesis_boost: Optional[str] = None
     defender_quark_drive_boost: Optional[str] = None
 
-    # Defender HP status (for Multiscale, Shadow Shield)
+    # Defender HP status (for Multiscale, Shadow Shield, Tera Shell)
     defender_at_full_hp: bool = True  # Whether defender is at full HP
+
+    # Supreme Overlord (Kingambit) - fainted ally count for damage boost
+    # +10% Atk/SpA per fainted ally (up to +50% with 5 fainted)
+    supreme_overlord_count: int = 0
 
     def get_weather_modifier(self, move_type: str) -> float:
         """Get weather damage modifier for a move type."""
