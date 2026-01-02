@@ -7,7 +7,8 @@ from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
 from vgc_mcp_core.calc.damage import calculate_damage, calculate_ko_threshold, calculate_bulk_threshold
 from vgc_mcp_core.calc.modifiers import DamageModifiers
-from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, IVSpread
+from vgc_mcp_core.calc.stats import calculate_stat, calculate_hp
+from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, IVSpread, get_nature_modifier
 from vgc_mcp_core.utils.errors import error_response, ErrorCodes, pokemon_not_found_error, invalid_nature_error, api_error
 from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name, suggest_nature
 
@@ -414,21 +415,54 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "analysis": f"{attacker_name}'s {move_name} deals {min_pct}-{max_pct}% to {defender_name}, leaving it at {hp_remain_min_pct}-{hp_remain_max_pct}% HP. {result.ko_chance}."
             }
 
-            # Add spread info to response so user knows what was used
+            # Always add full spread info for both attacker and defender
+            # Calculate final stats for attacker
+            atk_nature_mod = get_nature_modifier(atk_nature, "attack")
+            spa_nature_mod = get_nature_modifier(atk_nature, "special_attack")
+            final_attack = calculate_stat(atk_base.attack, 31, attacker_atk_evs, 50, atk_nature_mod)
+            final_spa = calculate_stat(atk_base.special_attack, 31, attacker_spa_evs, 50, spa_nature_mod)
+
+            # Calculate final stats for defender
+            def_nature_mod = get_nature_modifier(def_nature, "defense")
+            spd_nature_mod = get_nature_modifier(def_nature, "special_defense")
+            final_hp = calculate_hp(def_base.hp, 31, defender_hp_evs, 50)
+            final_def = calculate_stat(def_base.defense, 31, defender_def_evs, 50, def_nature_mod)
+            final_spd = calculate_stat(def_base.special_defense, 31, defender_spd_evs, 50, spd_nature_mod)
+
+            response["attacker_spread"] = {
+                "source": attacker_spread_source,
+                "nature": attacker_nature,
+                "evs": {
+                    "attack": attacker_atk_evs,
+                    "special_attack": attacker_spa_evs
+                },
+                "item": attacker_item,
+                "ability": attacker_ability,
+                "final_stats": {
+                    "attack": final_attack,
+                    "special_attack": final_spa
+                }
+            }
             if attacker_spread_source == "smogon" and attacker_spread_info:
-                response["attacker_spread"] = {
-                    "source": "smogon_usage",
-                    "nature": attacker_nature,
-                    "evs": attacker_spread_info.get("evs", {}),
-                    "usage_percent": attacker_spread_info.get("usage", 0)
+                response["attacker_spread"]["usage_percent"] = attacker_spread_info.get("usage", 0)
+
+            response["defender_spread"] = {
+                "source": defender_spread_source,
+                "nature": defender_nature,
+                "evs": {
+                    "hp": defender_hp_evs,
+                    "defense": defender_def_evs,
+                    "special_defense": defender_spd_evs
+                },
+                "ability": defender_ability,
+                "final_stats": {
+                    "hp": final_hp,
+                    "defense": final_def,
+                    "special_defense": final_spd
                 }
+            }
             if defender_spread_source == "smogon" and defender_spread_info:
-                response["defender_spread"] = {
-                    "source": "smogon_usage",
-                    "nature": defender_nature,
-                    "evs": defender_spread_info.get("evs", {}),
-                    "usage_percent": defender_spread_info.get("usage", 0)
-                }
+                response["defender_spread"]["usage_percent"] = defender_spread_info.get("usage", 0)
 
             # Add ability effect notes
             ability_notes = []
@@ -937,6 +971,19 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             survival_word = "survives" if survives_guaranteed else ("may survive" if survives_possible else "does not survive")
             analysis_str = f"{defender_name} {survival_word} {num_hits}x {attacker_name}'s {move_name} — takes {total_min_percent:.0f}-{total_max_percent:.0f}% total, left at {hp_remain_min_pct}-{hp_remain_max_pct}% HP"
 
+            # Calculate final stats for attacker
+            atk_nature_mod_atk = get_nature_modifier(atk_nature, "attack")
+            atk_nature_mod_spa = get_nature_modifier(atk_nature, "special_attack")
+            final_attack = calculate_stat(atk_base.attack, 31, attacker_atk_evs, 50, atk_nature_mod_atk)
+            final_spa = calculate_stat(atk_base.special_attack, 31, attacker_spa_evs, 50, atk_nature_mod_spa)
+
+            # Calculate final stats for defender
+            def_nature_mod_def = get_nature_modifier(def_nature, "defense")
+            def_nature_mod_spd = get_nature_modifier(def_nature, "special_defense")
+            final_hp = calculate_hp(def_base.hp, 31, defender_hp_evs, 50)
+            final_def = calculate_stat(def_base.defense, 31, defender_def_evs, 50, def_nature_mod_def)
+            final_spd = calculate_stat(def_base.special_defense, 31, defender_spd_evs, 50, def_nature_mod_spd)
+
             response = {
                 "attacker": attacker_name,
                 "defender": defender_name,
@@ -961,15 +1008,29 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "verdict": verdict_str,
                 "attacker_spread": {
                     "nature": attacker_nature,
-                    "attack_evs": attacker_atk_evs,
-                    "spa_evs": attacker_spa_evs,
-                    "attack_stage": attacker_attack_stage
+                    "evs": {
+                        "attack": attacker_atk_evs,
+                        "special_attack": attacker_spa_evs
+                    },
+                    "item": attacker_item,
+                    "attack_stage": attacker_attack_stage,
+                    "final_stats": {
+                        "attack": final_attack,
+                        "special_attack": final_spa
+                    }
                 },
                 "defender_spread": {
                     "nature": defender_nature,
-                    "hp_evs": defender_hp_evs,
-                    "def_evs": defender_def_evs,
-                    "spd_evs": defender_spd_evs
+                    "evs": {
+                        "hp": defender_hp_evs,
+                        "defense": defender_def_evs,
+                        "special_defense": defender_spd_evs
+                    },
+                    "final_stats": {
+                        "hp": final_hp,
+                        "defense": final_def,
+                        "special_defense": final_spd
+                    }
                 },
                 "summary_table": "\n".join(table_lines),
                 "analysis": analysis_str
