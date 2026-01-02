@@ -456,8 +456,16 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         """
         Design an EV spread that meets specific speed and survival benchmarks.
 
-        This is a ONE-CALL solution for requests like:
-        "Give me a bulky Entei that outspeeds H-Arcanine and survives Tera Water Urshifu Surging Strikes"
+        IMPORTANT - ASK ABOUT TERA BEFORE CALLING:
+        Before using this tool for survival calculations, ASK the user:
+        1. "Is the attacking Pokemon Terastallized? If so, what type?"
+        2. "Is your Pokemon Terastallizing? If so, what type?"
+
+        Tera significantly changes damage calculations:
+        - Tera Water Urshifu Surging Strikes does 33% MORE damage than non-Tera
+        - Tera Normal Entei takes HALF damage from Water moves vs Fire-type Entei
+
+        Do NOT assume no Tera - always clarify with the user first.
 
         Args:
             pokemon_name: Your Pokemon (e.g., "entei")
@@ -471,8 +479,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             survive_pokemon_evs: Attacker's offensive EVs (default: 252)
             survive_pokemon_ability: Attacker's ability if relevant
             survive_pokemon_item: Attacker's item (e.g., "choice-band")
-            survive_pokemon_tera_type: Attacker's Tera type if active (e.g., "water" for Tera Water Urshifu)
-            defender_tera_type: Your Pokemon's Tera type if active
+            survive_pokemon_tera_type: Attacker's Tera type if Terastallized - ASK USER FIRST!
+            defender_tera_type: Your Pokemon's Tera type if Terastallizing - ASK USER FIRST!
             prioritize: "bulk" (max bulk after speed) or "offense" (specified offensive EVs)
             offensive_evs: Attack/SpA EVs if prioritize="offense"
 
