@@ -78,7 +78,7 @@ register_speed_tools(mcp, pokeapi)
 register_import_export_tools(mcp, pokeapi, team_manager)
 
 # EV spreads (6 tools)
-register_spread_tools(mcp, pokeapi)
+register_spread_tools(mcp, pokeapi, smogon)
 
 # Coverage (6 tools)
 register_coverage_tools(mcp, team_manager, pokeapi)

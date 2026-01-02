@@ -87,7 +87,7 @@ register_damage_tools(mcp, pokeapi, smogon)  # Pass smogon for auto-fetching com
 register_speed_analysis_tools(mcp, pokeapi, team_manager)  # Combined speed + speed control tools
 register_team_tools(mcp, pokeapi, team_manager, analyzer)
 register_usage_tools(mcp, smogon)
-register_spread_tools(mcp, pokeapi)
+register_spread_tools(mcp, pokeapi, smogon)  # Pass smogon for auto-fetching attacker spreads
 register_import_export_tools(mcp, pokeapi, team_manager)
 register_matchup_tools(mcp, team_manager)
 register_core_tools(mcp, team_manager, smogon)

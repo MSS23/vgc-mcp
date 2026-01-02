@@ -4,6 +4,7 @@ from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
+from vgc_mcp_core.api.smogon import SmogonStatsClient
 from vgc_mcp_core.calc.stats import calculate_speed, calculate_stat, calculate_hp, find_speed_evs
 from vgc_mcp_core.calc.damage import calculate_damage
 from vgc_mcp_core.calc.modifiers import DamageModifiers
@@ -16,8 +17,89 @@ from vgc_mcp_core.models.move import Move, MoveCategory
 from vgc_mcp_core.config import EV_BREAKPOINTS_LV50, normalize_evs
 
 
-def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
+# Module-level Smogon client reference (set during registration)
+_smogon_client: Optional[SmogonStatsClient] = None
+
+
+def _get_synergy_ability(item: str, abilities: dict) -> tuple[str, float]:
+    """Get the best ability to pair with an item based on known synergies.
+
+    Args:
+        item: The item being used
+        abilities: Dict of ability_name -> usage_percent
+
+    Returns:
+        Tuple of (ability_name, usage_percent)
+    """
+    if not abilities:
+        return (None, 0)
+
+    # Normalize item name for matching
+    item_lower = (item or "").lower().replace("-", " ").replace("_", " ")
+
+    # Known synergies: item -> preferred abilities (in order of preference)
+    synergies = {
+        "life orb": ["Sheer Force"],  # Sheer Force cancels Life Orb recoil
+        "choice band": ["Huge Power", "Pure Power", "Gorilla Tactics"],
+        "choice specs": ["Adaptability"],
+        "assault vest": ["Regenerator"],
+        "rocky helmet": ["Rough Skin", "Iron Barbs"],
+        "leftovers": ["Regenerator", "Poison Heal"],
+        "black sludge": ["Regenerator", "Poison Heal"],
+        "flame orb": ["Guts", "Marvel Scale"],
+        "toxic orb": ["Poison Heal", "Guts", "Marvel Scale"],
+        "booster energy": ["Protosynthesis", "Quark Drive"],
+    }
+
+    # Check if this item has known synergies
+    preferred_abilities = synergies.get(item_lower, [])
+
+    for preferred in preferred_abilities:
+        preferred_lower = preferred.lower()
+        for ability, usage in abilities.items():
+            if ability.lower() == preferred_lower:
+                return (ability, usage)
+
+    # No synergy found - return the most common ability
+    top_ability = list(abilities.keys())[0]
+    return (top_ability, abilities[top_ability])
+
+
+async def _get_common_spread(pokemon_name: str) -> Optional[dict]:
+    """Fetch the most common spread for a Pokemon from Smogon usage stats.
+
+    Returns:
+        dict with 'nature', 'evs', 'item', 'ability' keys, or None if not found
+    """
+    if _smogon_client is None:
+        return None
+    try:
+        usage = await _smogon_client.get_pokemon_usage(pokemon_name)
+        if usage and usage.get("spreads"):
+            top_spread = usage["spreads"][0]
+            items = usage.get("items", {})
+            abilities = usage.get("abilities", {})
+            top_item = list(items.keys())[0] if items else None
+
+            # Get ability based on item synergy (e.g., Life Orb -> Sheer Force)
+            top_ability, _ = _get_synergy_ability(top_item, abilities)
+
+            return {
+                "nature": top_spread.get("nature", "Serious"),
+                "evs": top_spread.get("evs", {}),
+                "usage": top_spread.get("usage", 0),
+                "item": top_item,
+                "ability": top_ability,
+            }
+    except Exception:
+        pass
+    return None
+
+
+def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[SmogonStatsClient] = None):
     """Register EV spread optimization tools with the MCP server."""
+    global _smogon_client
+    _smogon_client = smogon
 
     @mcp.tool()
     async def check_spread_efficiency(
@@ -552,9 +634,33 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                     atk_base = await pokeapi.get_base_stats(survive_pokemon)
                     atk_types = await pokeapi.get_pokemon_types(survive_pokemon)
                     move = await pokeapi.get_move(survive_move)
-                    atk_nature = Nature(survive_pokemon_nature.lower())
 
                     is_physical = move.category == MoveCategory.PHYSICAL
+
+                    # Fetch attacker's most common spread from Smogon if not specified
+                    smogon_spread = await _get_common_spread(survive_pokemon)
+                    smogon_used = False
+
+                    if smogon_spread:
+                        # Use Smogon spread if user didn't override
+                        if survive_pokemon_nature == "adamant":  # default value - replace with Smogon
+                            survive_pokemon_nature = smogon_spread.get("nature", survive_pokemon_nature)
+                            smogon_used = True
+                        if survive_pokemon_evs == 252:  # default value - replace with Smogon
+                            evs = smogon_spread.get("evs", {})
+                            if is_physical:
+                                survive_pokemon_evs = evs.get("attack", 252)
+                            else:
+                                survive_pokemon_evs = evs.get("special_attack", 252)
+                            smogon_used = True
+                        if survive_pokemon_item is None:
+                            survive_pokemon_item = smogon_spread.get("item")
+                            smogon_used = True
+                        if survive_pokemon_ability is None:
+                            survive_pokemon_ability = smogon_spread.get("ability")
+                            smogon_used = True
+
+                    atk_nature = Nature(survive_pokemon_nature.lower())
                     atk_nature_mod = get_nature_modifier(
                         atk_nature,
                         "attack" if is_physical else "special_attack"
@@ -677,6 +783,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                             "attack": attacker_final_atk,
                             "special_attack": attacker_final_spa
                         },
+                        "smogon_spread_used": smogon_used,
                         "defender_tera": defender_tera_type,
                         "damage_range": best_result.damage_range,
                         "damage_percent": f"{best_result.min_percent:.1f}-{best_result.max_percent:.1f}%",
@@ -701,6 +808,22 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 remaining_evs -= hp_evs
                 def_evs = normalize_evs(min(252, remaining_evs // 2))
                 spd_evs = normalize_evs(min(252, remaining_evs - def_evs))
+
+            # Ensure EVs total 508 - add any leftover to HP
+            total_used = hp_evs + atk_evs + def_evs + spd_evs + speed_evs_needed
+            if total_used < 508:
+                leftover = 508 - total_used
+                hp_evs = min(252, hp_evs + leftover)
+                # If HP is maxed out, try to add to SpD
+                total_used = hp_evs + atk_evs + def_evs + spd_evs + speed_evs_needed
+                if total_used < 508:
+                    leftover = 508 - total_used
+                    spd_evs = min(252, spd_evs + leftover)
+                    # If SpD is maxed, add to Def
+                    total_used = hp_evs + atk_evs + def_evs + spd_evs + speed_evs_needed
+                    if total_used < 508:
+                        leftover = 508 - total_used
+                        def_evs = min(252, def_evs + leftover)
 
             # 4. Calculate final stats
             speed_mod = get_nature_modifier(parsed_nature, "speed")
