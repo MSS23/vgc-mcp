@@ -809,21 +809,60 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 def_evs = normalize_evs(min(252, remaining_evs // 2))
                 spd_evs = normalize_evs(min(252, remaining_evs - def_evs))
 
-            # Ensure EVs total 508 - add any leftover to HP
+            # Ensure EVs total 508 - distribute leftover based on user intent
             total_used = hp_evs + atk_evs + def_evs + spd_evs + speed_evs_needed
+
             if total_used < 508:
                 leftover = 508 - total_used
-                hp_evs = min(252, hp_evs + leftover)
-                # If HP is maxed out, try to add to SpD
-                total_used = hp_evs + atk_evs + def_evs + spd_evs + speed_evs_needed
-                if total_used < 508:
-                    leftover = 508 - total_used
-                    spd_evs = min(252, spd_evs + leftover)
-                    # If SpD is maxed, add to Def
-                    total_used = hp_evs + atk_evs + def_evs + spd_evs + speed_evs_needed
-                    if total_used < 508:
-                        leftover = 508 - total_used
-                        def_evs = min(252, def_evs + leftover)
+
+                # Priority 1: Speed creep (if user provided speed benchmark)
+                # User cares about speed - add more to beat others targeting same tier
+                if leftover > 0 and outspeed_pokemon and speed_evs_needed < 252:
+                    extra_spe = min(252 - speed_evs_needed, leftover)
+                    speed_evs_needed += extra_spe
+                    leftover -= extra_spe
+
+                # Priority 2: HP (most efficient for mixed bulk)
+                if leftover > 0:
+                    extra_hp = min(252 - hp_evs, leftover)
+                    hp_evs += extra_hp
+                    leftover -= extra_hp
+
+                # Priority 3: Defenses based on context
+                if leftover > 0:
+                    if survive_pokemon and survive_move:
+                        # Continue optimizing the defense we calculated for
+                        try:
+                            move_check = await pokeapi.get_move(survive_move)
+                            is_phys_move = move_check.category == MoveCategory.PHYSICAL
+                            if is_phys_move:
+                                extra_def = min(252 - def_evs, leftover)
+                                def_evs += extra_def
+                                leftover -= extra_def
+                                # Any remaining to SpD
+                                if leftover > 0:
+                                    spd_evs = min(252, spd_evs + leftover)
+                            else:
+                                extra_spd = min(252 - spd_evs, leftover)
+                                spd_evs += extra_spd
+                                leftover -= extra_spd
+                                # Any remaining to Def
+                                if leftover > 0:
+                                    def_evs = min(252, def_evs + leftover)
+                        except Exception:
+                            # Fallback: split evenly
+                            half = leftover // 2
+                            extra_def = min(252 - def_evs, half)
+                            def_evs += extra_def
+                            leftover -= extra_def
+                            spd_evs = min(252, spd_evs + leftover)
+                    else:
+                        # No survival benchmark - split evenly between Def/SpD
+                        half = leftover // 2
+                        extra_def = min(252 - def_evs, half)
+                        def_evs += extra_def
+                        leftover -= extra_def
+                        spd_evs = min(252, spd_evs + leftover)
 
             # 4. Calculate final stats
             speed_mod = get_nature_modifier(parsed_nature, "speed")
