@@ -1,7 +1,7 @@
 """Tests for Showdown paste parsing."""
 
 import pytest
-from vgc_mcp.formats.showdown import (
+from vgc_mcp_core.formats.showdown import (
     parse_showdown_pokemon,
     parse_showdown_team,
     export_pokemon_to_showdown,
@@ -11,7 +11,7 @@ from vgc_mcp.formats.showdown import (
     parsed_to_nature,
     ShowdownParseError,
 )
-from vgc_mcp.models.pokemon import Nature
+from vgc_mcp_core.models.pokemon import Nature
 
 
 class TestShowdownParser:

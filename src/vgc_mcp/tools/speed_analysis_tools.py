@@ -1,83 +1,43 @@
-"""MCP tools for speed comparisons, calculations, and tier visualization."""
+"""MCP tools for speed analysis, comparisons, tiers, and speed control.
+
+This module consolidates:
+- Basic speed calculations and comparisons
+- Speed tier visualization and meta analysis
+- Speed control analysis (Trick Room, Tailwind, drops)
+"""
 
 from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
+from vgc_mcp_core.team.manager import TeamManager
 from vgc_mcp_core.calc.stats import calculate_speed, find_speed_evs
-from vgc_mcp_core.calc.speed import SPEED_BENCHMARKS, calculate_speed_tier
+from vgc_mcp_core.calc.speed import (
+    SPEED_BENCHMARKS,
+    META_SPEED_TIERS,
+    calculate_speed_tier,
+)
+from vgc_mcp_core.calc.speed_control import (
+    analyze_trick_room,
+    analyze_tailwind,
+    analyze_speed_drop,
+    analyze_paralysis,
+    get_speed_control_summary,
+    get_team_speeds,
+    apply_speed_modifier,
+    apply_stage_modifier,
+)
 from vgc_mcp_core.models.pokemon import Nature
+from vgc_mcp_core.config import EV_BREAKPOINTS_LV50
 
 # Note: MCP-UI is only available in vgc-mcp-lite, not the full server
 HAS_UI = False
 
 
-# Common VGC Pokemon with their base speeds and common speed investments
-META_SPEED_TIERS = {
-    # Ultra fast (200+)
-    "regieleki": {"base": 200, "common_speeds": [277, 252, 200]},
+def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_manager: TeamManager):
+    """Register all speed analysis tools with the MCP server."""
 
-    # Very fast (135-150)
-    "electrode-hisui": {"base": 150, "common_speeds": [222, 202]},
-    "dragapult": {"base": 142, "common_speeds": [213, 194]},
-    "iron-bundle": {"base": 136, "common_speeds": [205, 187, 136]},
-    "flutter-mane": {"base": 135, "common_speeds": [205, 187, 157]},
-    "miraidon": {"base": 135, "common_speeds": [205, 187]},
-    "koraidon": {"base": 135, "common_speeds": [205, 187]},
-    "meowscarada": {"base": 123, "common_speeds": [192, 175]},
-
-    # Fast (100-120)
-    "chien-pao": {"base": 135, "common_speeds": [205, 187]},
-    "iron-moth": {"base": 110, "common_speeds": [178, 162]},
-    "raging-bolt": {"base": 110, "common_speeds": [178, 162, 110]},
-    "gouging-fire": {"base": 110, "common_speeds": [178, 162]},
-    "walking-wake": {"base": 109, "common_speeds": [177, 161]},
-    "entei": {"base": 100, "common_speeds": [167, 152, 157]},
-    "urshifu": {"base": 97, "common_speeds": [163, 148]},
-    "urshifu-rapid-strike": {"base": 97, "common_speeds": [163, 148]},
-    "landorus": {"base": 101, "common_speeds": [168, 153]},
-    "garchomp": {"base": 102, "common_speeds": [169, 154]},
-    "arcanine": {"base": 95, "common_speeds": [161, 146, 95]},
-    "arcanine-hisui": {"base": 95, "common_speeds": [161, 146, 95]},
-
-    # Medium (70-95)
-    "ogerpon": {"base": 110, "common_speeds": [178, 162]},
-    "ogerpon-wellspring": {"base": 110, "common_speeds": [178, 162]},
-    "ogerpon-hearthflame": {"base": 110, "common_speeds": [178, 162]},
-    "ogerpon-cornerstone": {"base": 110, "common_speeds": [178, 162]},
-    "kingambit": {"base": 50, "common_speeds": [70, 50]},
-    "gholdengo": {"base": 84, "common_speeds": [150, 136]},
-    "palafin": {"base": 100, "common_speeds": [167, 152]},
-    "annihilape": {"base": 90, "common_speeds": [156, 142]},
-    "dragonite": {"base": 80, "common_speeds": [145, 132, 80]},
-    "gyarados": {"base": 81, "common_speeds": [146, 133]},
-    "pelipper": {"base": 65, "common_speeds": [126, 85]},
-
-    # Slow (50-70)
-    "rillaboom": {"base": 85, "common_speeds": [150, 137, 85]},
-    "incineroar": {"base": 60, "common_speeds": [123, 92, 60]},
-    "amoonguss": {"base": 30, "common_speeds": [31, 30]},
-    "porygon2": {"base": 60, "common_speeds": [92, 60]},
-    "dondozo": {"base": 35, "common_speeds": [75, 35]},
-    "torkoal": {"base": 20, "common_speeds": [40, 20]},
-
-    # Very Slow / Trick Room (under 50)
-    "iron-hands": {"base": 50, "common_speeds": [70, 50]},
-    "ursaluna": {"base": 50, "common_speeds": [70, 50]},
-    "ursaluna-bloodmoon": {"base": 52, "common_speeds": [73, 52]},
-    "calyrex-ice": {"base": 50, "common_speeds": [70, 50, 36]},
-    "calyrex-shadow": {"base": 150, "common_speeds": [222, 202]},
-    "glimmora": {"base": 70, "common_speeds": [134, 122]},
-    "hatterene": {"base": 29, "common_speeds": [49, 29]},
-    "indeedee-f": {"base": 95, "common_speeds": [161, 146]},
-    "farigiraf": {"base": 60, "common_speeds": [123, 60]},
-    "kyogre": {"base": 90, "common_speeds": [156, 142]},
-    "groudon": {"base": 90, "common_speeds": [156, 142]},
-}
-
-
-def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
-    """Register speed-related tools with the MCP server."""
+    # ========== Basic Speed Calculations ==========
 
     @mcp.tool()
     async def compare_speed(
@@ -210,6 +170,8 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         except Exception as e:
             return {"error": str(e)}
 
+    # ========== Speed Tier Analysis ==========
+
     @mcp.tool()
     async def get_speed_tiers(
         min_base_speed: int = 50,
@@ -312,8 +274,6 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
 
         except Exception as e:
             return {"error": str(e)}
-
-    # ========== Speed Tier Visualization Tools (merged from speed_tier_tools.py) ==========
 
     @mcp.tool()
     async def visualize_speed_tiers(
@@ -427,31 +387,6 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             "mode": mode
         }
 
-        # Add MCP-UI resource for interactive speed tier display (only in vgc-mcp-lite)
-        if HAS_UI:
-            try:
-                if your_pokemon:
-                    # Get the first user Pokemon as the primary one
-                    primary = your_pokemon[0]
-                    # Build speed tiers list for UI
-                    speed_tier_list = [
-                        {"name": p["name"], "speed": p["speed"], "common": not p["is_yours"]}
-                        for p in all_pokemon
-                    ]
-                    ui_resource = create_speed_tier_resource(
-                        pokemon_name=primary["name"],
-                        pokemon_speed=primary["speed"],
-                        speed_tiers=speed_tier_list,
-                        modifiers={
-                            "tailwind": include_tailwind,
-                            "trick_room": include_trick_room,
-                        },
-                    )
-                    result = add_ui_metadata(result, ui_resource)
-            except Exception:
-                # UI is optional
-                pass
-
         return result
 
     @mcp.tool()
@@ -550,8 +485,6 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 data = await pokeapi.get_pokemon(pokemon_name)
                 base_speed = data["base_stats"]["speed"]
 
-                from vgc_mcp_core.config import EV_BREAKPOINTS_LV50
-
                 evs_needed = None
                 for ev in EV_BREAKPOINTS_LV50:
                     speed = calculate_speed(base_speed, 31, ev, 50, nature_enum)
@@ -600,3 +533,229 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         results["pokemon_below"] = results["pokemon_below"][:10]
 
         return results
+
+    # ========== Speed Control Analysis (Trick Room, Tailwind, etc.) ==========
+
+    @mcp.tool()
+    async def analyze_team_trick_room() -> dict:
+        """
+        Analyze how the current team performs under Trick Room.
+
+        Shows:
+        - Move order in Trick Room (slowest first)
+        - Which Pokemon benefit from TR
+        - What each Pokemon "outspeeds" in TR
+        - Whether team has TR setters
+
+        Returns:
+            Trick Room analysis with move order and recommendations
+        """
+        try:
+            if team_manager.size == 0:
+                return {"error": "No Pokemon on team. Add Pokemon first."}
+
+            analysis = analyze_trick_room(team_manager.team)
+
+            return {
+                "condition": analysis.condition,
+                "move_order": analysis.move_order,
+                "speeds": [
+                    {
+                        "name": t.name,
+                        "speed": t.final_speed,
+                        "notes": t.notes
+                    }
+                    for t in analysis.team_speeds
+                ],
+                "outspeeds_in_tr": {
+                    name: targets[:5]  # Limit for readability
+                    for name, targets in analysis.outspeeds.items()
+                },
+                "notes": analysis.notes
+            }
+
+        except Exception as e:
+            return {"error": str(e)}
+
+    @mcp.tool()
+    async def analyze_team_tailwind() -> dict:
+        """
+        Analyze how the current team performs with Tailwind active.
+
+        Tailwind doubles Speed for 4 turns.
+
+        Shows:
+        - Speeds after 2x boost
+        - What each Pokemon outspeeds with Tailwind
+        - Whether team has Tailwind setters
+
+        Returns:
+            Tailwind analysis with boosted speeds
+        """
+        try:
+            if team_manager.size == 0:
+                return {"error": "No Pokemon on team. Add Pokemon first."}
+
+            analysis = analyze_tailwind(team_manager.team)
+
+            return {
+                "condition": analysis.condition,
+                "move_order": analysis.move_order,
+                "speeds": [
+                    {
+                        "name": t.name,
+                        "base_speed": t.final_speed,
+                        "with_tailwind": t.modified_speed
+                    }
+                    for t in analysis.team_speeds
+                ],
+                "outspeeds_with_tailwind": {
+                    name: targets[:5]
+                    for name, targets in analysis.outspeeds.items()
+                },
+                "notes": analysis.notes
+            }
+
+        except Exception as e:
+            return {"error": str(e)}
+
+    @mcp.tool()
+    async def analyze_speed_drops(stages: int = -1) -> dict:
+        """
+        Analyze what your team can outspeed after using Icy Wind/Electroweb.
+
+        Args:
+            stages: Number of speed stages dropped on opponent (default -1)
+                   -1 = Icy Wind, Electroweb, Rock Tomb
+                   -2 = Scary Face, Cotton Spore
+
+        Returns:
+            Analysis of what your team outspeeds after speed control
+        """
+        try:
+            if team_manager.size == 0:
+                return {"error": "No Pokemon on team. Add Pokemon first."}
+
+            # Clamp stages
+            stages = max(-6, min(0, stages))
+
+            analysis = analyze_speed_drop(team_manager.team, stages)
+
+            return {
+                "condition": analysis.condition,
+                "your_speeds": [
+                    {"name": t.name, "speed": t.final_speed}
+                    for t in analysis.team_speeds
+                ],
+                "outspeeds_after_drop": analysis.outspeeds,
+                "notes": analysis.notes
+            }
+
+        except Exception as e:
+            return {"error": str(e)}
+
+    @mcp.tool()
+    async def analyze_paralysis_matchup() -> dict:
+        """
+        Analyze what your team outspeeds when opponents are paralyzed.
+
+        Paralysis halves Speed.
+
+        Returns:
+            Analysis of matchups vs paralyzed opponents
+        """
+        try:
+            if team_manager.size == 0:
+                return {"error": "No Pokemon on team. Add Pokemon first."}
+
+            analysis = analyze_paralysis(team_manager.team)
+
+            return {
+                "condition": analysis.condition,
+                "your_speeds": [
+                    {"name": t.name, "speed": t.final_speed}
+                    for t in analysis.team_speeds
+                ],
+                "outspeeds_paralyzed": analysis.outspeeds,
+                "notes": analysis.notes
+            }
+
+        except Exception as e:
+            return {"error": str(e)}
+
+    @mcp.tool()
+    async def get_full_speed_analysis() -> dict:
+        """
+        Get comprehensive speed control analysis for the team.
+
+        Includes:
+        - Base speed tiers
+        - Trick Room analysis
+        - Tailwind analysis
+        - Icy Wind/Electroweb impact
+
+        Returns:
+            Complete speed control breakdown
+        """
+        try:
+            if team_manager.size == 0:
+                return {"error": "No Pokemon on team. Add Pokemon first."}
+
+            return get_speed_control_summary(team_manager.team)
+
+        except Exception as e:
+            return {"error": str(e)}
+
+    @mcp.tool()
+    async def calculate_speed_after_modifier(
+        base_speed: int,
+        modifier_type: str,
+        stages: int = 0
+    ) -> dict:
+        """
+        Calculate what a speed stat becomes after various modifiers.
+
+        Args:
+            base_speed: The Pokemon's current Speed stat
+            modifier_type: "tailwind", "paralysis", "stage", or "none"
+            stages: Stat stages (-6 to +6) if modifier_type is "stage"
+
+        Returns:
+            Modified speed and what it outspeeds
+        """
+        try:
+            if modifier_type == "tailwind":
+                modified = apply_speed_modifier(base_speed, 2.0)
+                condition = "with Tailwind (2x)"
+            elif modifier_type == "paralysis":
+                modified = apply_speed_modifier(base_speed, 0.5)
+                condition = "while paralyzed (0.5x)"
+            elif modifier_type == "stage":
+                stages = max(-6, min(6, stages))
+                modified = apply_stage_modifier(base_speed, stages)
+                condition = f"at {stages:+d} stages"
+            else:
+                modified = base_speed
+                condition = "unmodified"
+
+            # Find what this outspeeds
+            outspeeds = []
+            underspeeds = []
+
+            for mon, data in SPEED_BENCHMARKS.items():
+                if "max_positive" in data:
+                    if modified > data["max_positive"]:
+                        outspeeds.append(f"Max Speed {mon.replace('-', ' ').title()}")
+                    elif modified < data["max_positive"]:
+                        underspeeds.append(f"Max Speed {mon.replace('-', ' ').title()}")
+
+            return {
+                "original_speed": base_speed,
+                "modified_speed": modified,
+                "condition": condition,
+                "outspeeds": outspeeds[:10],
+                "underspeeds": underspeeds[:5]
+            }
+
+        except Exception as e:
+            return {"error": str(e)}

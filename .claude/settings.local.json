@@ -30,7 +30,15 @@
       "Bash(git init:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push)"
+      "Bash(git push)",
+      "Bash(cat:*)",
+      "Bash(fi)",
+      "Bash(for f in /c/Users/msidh/Documents/ChatGPT App/mcp vgc/src/vgc_mcp/tools/*_tools.py)",
+      "Bash(for f in /c/Users/msidh/Documents/ChatGPT App/mcp vgc/src/vgc_mcp_lite/tools/*_tools.py)",
+      "Bash(cd:*)",
+      "Bash(del \"c:\\\\Users\\\\msidh\\\\Documents\\\\ChatGPT App\\\\mcp vgc\\\\src\\\\vgc_mcp\\\\tools\\\\speed_tools.py\")",
+      "Bash(del \"c:\\\\Users\\\\msidh\\\\Documents\\\\ChatGPT App\\\\mcp vgc\\\\src\\\\vgc_mcp\\\\tools\\\\speed_control_tools.py\")",
+      "Bash(timeout 5 python:*)"
     ]
   }
 }

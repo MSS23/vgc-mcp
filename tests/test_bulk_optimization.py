@@ -1,7 +1,7 @@
 """Tests for bulk optimization with diminishing returns."""
 
 import pytest
-from vgc_mcp.calc.bulk_optimization import (
+from vgc_mcp_core.calc.bulk_optimization import (
     calculate_optimal_bulk_distribution,
     calculate_hp,
     calculate_defense_stat,

@@ -1,14 +1,14 @@
 """Tests for core builder functionality."""
 
 import pytest
-from vgc_mcp.team.core_builder import (
+from vgc_mcp_core.team.core_builder import (
     get_pokemon_role,
     get_type_synergy,
     analyze_core_synergy,
     POKEMON_ROLES,
 )
-from vgc_mcp.models.pokemon import PokemonBuild, BaseStats, Nature, EVSpread
-from vgc_mcp.models.team import Team
+from vgc_mcp_core.models.pokemon import PokemonBuild, BaseStats, Nature, EVSpread
+from vgc_mcp_core.models.team import Team
 
 
 def make_pokemon(name: str, types: list[str]) -> PokemonBuild:

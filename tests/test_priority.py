@@ -1,7 +1,7 @@
 """Tests for priority move and turn order analysis."""
 
 import pytest
-from vgc_mcp.calc.priority import (
+from vgc_mcp_core.calc.priority import (
     get_move_priority,
     determine_turn_order,
     get_priority_moves_by_bracket,

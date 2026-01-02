@@ -1,7 +1,7 @@
 """Tests for speed control analysis."""
 
 import pytest
-from vgc_mcp.calc.speed_control import (
+from vgc_mcp_core.calc.speed_control import (
     analyze_trick_room,
     analyze_tailwind,
     analyze_speed_drop,
@@ -12,8 +12,8 @@ from vgc_mcp.calc.speed_control import (
     get_speed_control_summary,
     SPEED_STAGE_MULTIPLIERS,
 )
-from vgc_mcp.models.pokemon import PokemonBuild, BaseStats, Nature, EVSpread
-from vgc_mcp.models.team import Team, TeamSlot
+from vgc_mcp_core.models.pokemon import PokemonBuild, BaseStats, Nature, EVSpread
+from vgc_mcp_core.models.team import Team, TeamSlot
 
 
 def make_pokemon(name: str, base_speed: int, speed_evs: int = 0, nature: Nature = Nature.SERIOUS) -> PokemonBuild:

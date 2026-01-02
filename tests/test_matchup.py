@@ -1,7 +1,7 @@
 """Tests for matchup analysis."""
 
 import pytest
-from vgc_mcp.calc.matchup import (
+from vgc_mcp_core.calc.matchup import (
     analyze_single_matchup,
     analyze_threat_matchup,
     find_team_threats,
@@ -11,9 +11,9 @@ from vgc_mcp.calc.matchup import (
     create_threat_move,
     COMMON_THREATS,
 )
-from vgc_mcp.models.pokemon import PokemonBuild, BaseStats, Nature, EVSpread
-from vgc_mcp.models.move import Move, MoveCategory
-from vgc_mcp.models.team import Team
+from vgc_mcp_core.models.pokemon import PokemonBuild, BaseStats, Nature, EVSpread
+from vgc_mcp_core.models.move import Move, MoveCategory
+from vgc_mcp_core.models.team import Team
 
 
 def make_pokemon(

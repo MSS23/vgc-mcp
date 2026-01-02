@@ -1,7 +1,7 @@
 """Tests for speed probability calculations."""
 
 import pytest
-from vgc_mcp.calc.speed_probability import (
+from vgc_mcp_core.calc.speed_probability import (
     calculate_speed_stat,
     parse_spread_to_speed,
     calculate_outspeed_probability,

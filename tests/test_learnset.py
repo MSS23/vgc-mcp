@@ -1,7 +1,7 @@
 """Tests for move legality and learnset validation."""
 
 import pytest
-from vgc_mcp.validation.learnset import (
+from vgc_mcp_core.validation.learnset import (
     normalize_move_name,
     categorize_learn_method,
     MoveValidationResult,

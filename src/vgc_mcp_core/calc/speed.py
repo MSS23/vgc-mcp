@@ -188,10 +188,81 @@ SPEED_BENCHMARKS = {
 }
 
 
+# VGC Meta Speed Tiers - Common competitive speeds for VGC Pokemon
+# This data tracks what speed investments are commonly used in VGC
+META_SPEED_TIERS = {
+    # Ultra fast (200+)
+    "regieleki": {"base": 200, "common_speeds": [277, 252, 200]},
+
+    # Very fast (135-150)
+    "electrode-hisui": {"base": 150, "common_speeds": [222, 202]},
+    "dragapult": {"base": 142, "common_speeds": [213, 194]},
+    "iron-bundle": {"base": 136, "common_speeds": [205, 187, 136]},
+    "flutter-mane": {"base": 135, "common_speeds": [205, 187, 157]},
+    "miraidon": {"base": 135, "common_speeds": [205, 187]},
+    "koraidon": {"base": 135, "common_speeds": [205, 187]},
+    "meowscarada": {"base": 123, "common_speeds": [192, 175]},
+    "chien-pao": {"base": 135, "common_speeds": [205, 187]},
+    "calyrex-shadow": {"base": 150, "common_speeds": [222, 202]},
+
+    # Fast (100-120)
+    "iron-moth": {"base": 110, "common_speeds": [178, 162]},
+    "raging-bolt": {"base": 110, "common_speeds": [178, 162, 110]},
+    "gouging-fire": {"base": 110, "common_speeds": [178, 162]},
+    "walking-wake": {"base": 109, "common_speeds": [177, 161]},
+    "ogerpon": {"base": 110, "common_speeds": [178, 162]},
+    "ogerpon-wellspring": {"base": 110, "common_speeds": [178, 162]},
+    "ogerpon-hearthflame": {"base": 110, "common_speeds": [178, 162]},
+    "ogerpon-cornerstone": {"base": 110, "common_speeds": [178, 162]},
+    "entei": {"base": 100, "common_speeds": [167, 152, 157]},
+    "urshifu": {"base": 97, "common_speeds": [163, 148]},
+    "urshifu-rapid-strike": {"base": 97, "common_speeds": [163, 148]},
+    "landorus": {"base": 101, "common_speeds": [168, 153]},
+    "garchomp": {"base": 102, "common_speeds": [169, 154]},
+    "arcanine": {"base": 95, "common_speeds": [161, 146, 95]},
+    "arcanine-hisui": {"base": 95, "common_speeds": [161, 146, 95]},
+    "palafin": {"base": 100, "common_speeds": [167, 152]},
+    "indeedee-f": {"base": 95, "common_speeds": [161, 146]},
+
+    # Medium (70-95)
+    "annihilape": {"base": 90, "common_speeds": [156, 142]},
+    "gholdengo": {"base": 84, "common_speeds": [150, 136]},
+    "rillaboom": {"base": 85, "common_speeds": [150, 137, 85]},
+    "dragonite": {"base": 80, "common_speeds": [145, 132, 80]},
+    "gyarados": {"base": 81, "common_speeds": [146, 133]},
+    "kyogre": {"base": 90, "common_speeds": [156, 142]},
+    "groudon": {"base": 90, "common_speeds": [156, 142]},
+    "glimmora": {"base": 70, "common_speeds": [134, 122]},
+
+    # Slow (50-70)
+    "pelipper": {"base": 65, "common_speeds": [126, 85]},
+    "incineroar": {"base": 60, "common_speeds": [123, 92, 60]},
+    "porygon2": {"base": 60, "common_speeds": [92, 60]},
+    "farigiraf": {"base": 60, "common_speeds": [123, 60]},
+
+    # Very Slow / Trick Room (under 50)
+    "kingambit": {"base": 50, "common_speeds": [70, 50]},
+    "iron-hands": {"base": 50, "common_speeds": [70, 50]},
+    "ursaluna": {"base": 50, "common_speeds": [70, 50]},
+    "ursaluna-bloodmoon": {"base": 52, "common_speeds": [73, 52]},
+    "calyrex-ice": {"base": 50, "common_speeds": [70, 50, 36]},
+    "dondozo": {"base": 35, "common_speeds": [75, 35]},
+    "amoonguss": {"base": 30, "common_speeds": [31, 30]},
+    "hatterene": {"base": 29, "common_speeds": [49, 29]},
+    "torkoal": {"base": 20, "common_speeds": [40, 20]},
+}
+
+
 def get_speed_tier_info(pokemon_name: str) -> Optional[dict]:
     """Get speed benchmark info for a Pokemon."""
     name = pokemon_name.lower().replace(" ", "-")
     return SPEED_BENCHMARKS.get(name)
+
+
+def get_meta_speed_tier(pokemon_name: str) -> Optional[dict]:
+    """Get VGC meta speed tier info for a Pokemon (includes common speeds)."""
+    name = pokemon_name.lower().replace(" ", "-")
+    return META_SPEED_TIERS.get(name)
 
 
 def calculate_speed_tier(

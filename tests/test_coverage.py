@@ -1,7 +1,7 @@
 """Tests for move-based coverage analysis."""
 
 import pytest
-from vgc_mcp.calc.coverage import (
+from vgc_mcp_core.calc.coverage import (
     analyze_move_coverage,
     find_coverage_holes,
     check_quad_weaknesses,

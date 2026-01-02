@@ -108,6 +108,7 @@ MOD_WEATHER_NERF = 2048  # 0.5x (Fire in Rain, Water in Sun)
 MOD_CRIT = 6144          # 1.5x (critical hit)
 MOD_STAB = 6144          # 1.5x (Same Type Attack Bonus)
 MOD_STAB_BOOSTED = 8192  # 2.0x (Tera STAB into same type, or Adaptability)
+MOD_STAB_TERA_ADAPT = 9216  # 2.25x (Tera STAB into same type WITH Adaptability)
 MOD_STAB_TERA_NEW = 6144 # 1.5x (Tera into different type)
 MOD_BURN = 2048          # 0.5x (burned, physical move)
 MOD_LIFE_ORB = 5324      # ~1.3x (Life Orb boost)
@@ -126,6 +127,15 @@ MOD_FLUFFY_CONTACT = 2048    # 0.5x (Fluffy on contact moves)
 MOD_FLUFFY_FIRE = 8192       # 2.0x (Fluffy weakness to Fire)
 MOD_THICK_FAT = 2048         # 0.5x (Thick Fat on Fire/Ice moves)
 MOD_RESISTANCE_BERRY = 2048  # 0.5x (Resistance berries on super effective)
+MOD_ATE_ABILITY = 4915       # ~1.2x (Aerilate, Pixilate, Refrigerate, Galvanize)
+
+# Type-changing abilities that convert Normal moves to another type
+ATE_ABILITIES: dict[str, str] = {
+    "aerilate": "Flying",
+    "pixilate": "Fairy",
+    "refrigerate": "Ice",
+    "galvanize": "Electric",
+}
 
 
 # Punch moves for Iron Fist ability
@@ -240,6 +250,16 @@ def calculate_damage(
             is_possible_ohko=False,
             details={"reason": "Status move"}
         )
+
+    # Handle type-changing abilities (Aerilate, Pixilate, Refrigerate, Galvanize)
+    # These change Normal-type moves to another type and apply a 1.2x power boost
+    effective_move_type = move.type.capitalize()
+    ate_ability_boost = False
+    if modifiers.attacker_ability:
+        ability = modifiers.attacker_ability.lower().replace(" ", "-")
+        if ability in ATE_ABILITIES and move.type.capitalize() == "Normal":
+            effective_move_type = ATE_ABILITIES[ability]
+            ate_ability_boost = True
 
     # Calculate stats
     attacker_stats = calculate_all_stats(attacker)
@@ -357,9 +377,26 @@ def calculate_damage(
         elif ability == "iron-fist" and move.name.lower().replace(" ", "-") in PUNCH_MOVES:
             power = apply_mod(power, MOD_IRON_FIST)
 
+    # Apply -ate ability boost (1.2x) if Normal move was converted
+    if ate_ability_boost:
+        power = apply_mod(power, MOD_ATE_ABILITY)
+
+    # Tera BP boost: Tera-type moves with base power < 60 are boosted to 60
+    # This is checked AFTER Technician but does NOT apply to:
+    # - Multi-hit moves (like Bone Rush, Icicle Spear)
+    # - Increased priority moves (like Quick Attack, Aqua Jet)
+    if modifiers.tera_active and modifiers.tera_type:
+        tera_type = modifiers.tera_type.capitalize()
+        if effective_move_type == tera_type:
+            is_multi_hit = multi_hit_info is not None
+            is_priority = move.priority > 0
+            if power < 60 and not is_multi_hit and not is_priority:
+                power = 60
+
     # Apply type-boosting item to base power (NOT final damage)
     # This matches Showdown's behavior where items like Charcoal, masks go into bpMods
-    bp_item_mod_4096 = _get_type_boost_item_mod_4096(modifiers.attacker_item, move.type)
+    # Use effective_move_type to account for type-changing abilities
+    bp_item_mod_4096 = _get_type_boost_item_mod_4096(modifiers.attacker_item, effective_move_type)
     if bp_item_mod_4096 != MOD_NEUTRAL:
         power = apply_mod(power, bp_item_mod_4096)
 
@@ -383,14 +420,19 @@ def calculate_damage(
         applied_mods.append("Spread (0.75x)")
 
     # 2. Weather modifier (6144/4096 = 1.5x boost, 2048/4096 = 0.5x nerf)
-    weather_mod_4096 = _get_weather_mod_4096(modifiers.weather, move.type)
+    weather_mod_4096 = _get_weather_mod_4096(modifiers.weather, effective_move_type)
     if weather_mod_4096 != MOD_NEUTRAL:
         base_damage = apply_mod(base_damage, weather_mod_4096)
         weather_mult = weather_mod_4096 / 4096
         applied_mods.append(f"Weather ({weather_mult:.1f}x)")
 
     # 2.5. Terrain modifier (applied after weather, before crit)
-    terrain_mod_4096 = _get_terrain_mod_4096(modifiers.terrain, move.type, move.category == MoveCategory.PHYSICAL)
+    terrain_mod_4096 = _get_terrain_mod_4096(
+        modifiers.terrain,
+        effective_move_type,
+        modifiers.attacker_grounded,
+        modifiers.defender_grounded
+    )
     if terrain_mod_4096 != MOD_NEUTRAL:
         base_damage = apply_mod(base_damage, terrain_mod_4096)
         terrain_name = modifiers.terrain.capitalize() if modifiers.terrain else "Terrain"
@@ -403,13 +445,14 @@ def calculate_damage(
         applied_mods.append("Critical (1.5x)")
 
     # Pre-calculate STAB modifier (4096-based)
-    stab_mod_4096 = _get_stab_mod_4096(attacker, move, modifiers)
+    # Pass effective_move_type to account for type-changing abilities
+    stab_mod_4096 = _get_stab_mod_4096(attacker, move, modifiers, effective_move_type)
 
-    # Pre-calculate type effectiveness
+    # Pre-calculate type effectiveness using effective move type
     defender_types = defender.types
     if modifiers.defender_tera_active and modifiers.defender_tera_type:
         defender_types = [modifiers.defender_tera_type]
-    type_eff = get_type_effectiveness(move.type, defender_types)
+    type_eff = get_type_effectiveness(effective_move_type, defender_types)
 
     # Pre-calculate final modifier chain (screens, items, abilities)
     final_mods = []
@@ -425,7 +468,7 @@ def calculate_damage(
         final_mods.append(screen_mod_4096)
 
     # Item modifiers (Life Orb, type-boosting items)
-    item_mod_4096 = _get_item_mod_4096(modifiers.attacker_item, move.type)
+    item_mod_4096 = _get_item_mod_4096(modifiers.attacker_item, effective_move_type)
     if item_mod_4096 != MOD_NEUTRAL:
         final_mods.append(item_mod_4096)
 
@@ -462,11 +505,11 @@ def calculate_damage(
         if def_ability == "fluffy":
             if move.makes_contact:
                 final_mods.append(MOD_FLUFFY_CONTACT)
-            if move.type.capitalize() == "Fire":
+            if effective_move_type == "Fire":
                 final_mods.append(MOD_FLUFFY_FIRE)
 
         # Thick Fat (0.5x Fire and Ice damage)
-        if def_ability == "thick-fat" and move.type.capitalize() in ("Fire", "Ice"):
+        if def_ability == "thick-fat" and effective_move_type in ("Fire", "Ice"):
             final_mods.append(MOD_THICK_FAT)
 
     # Defender item effects
@@ -476,7 +519,7 @@ def calculate_damage(
         # Resistance berries (0.5x super-effective damage of matching type)
         if def_item in RESISTANCE_BERRIES:
             berry_type = RESISTANCE_BERRIES[def_item]
-            if move.type.capitalize() == berry_type and type_eff >= 2.0:
+            if effective_move_type == berry_type and type_eff >= 2.0:
                 final_mods.append(MOD_RESISTANCE_BERRY)
 
     # Chain all final modifiers together
@@ -601,11 +644,15 @@ def calculate_damage(
 # =============================================================================
 
 def _get_weather_mod_4096(weather: str | None, move_type: str) -> int:
-    """Get weather modifier as 4096-based value."""
+    """Get weather modifier as 4096-based value.
+
+    Handles regular weather (sun, rain) and primal weather (harsh_sun, heavy_rain).
+    Primal weather completely nullifies opposing type moves (returns 0).
+    """
     if not weather:
         return MOD_NEUTRAL
 
-    weather = weather.lower()
+    weather = weather.lower().replace("-", "_")
     move_type = move_type.capitalize()
 
     if weather == "sun":
@@ -618,12 +665,39 @@ def _get_weather_mod_4096(weather: str | None, move_type: str) -> int:
             return MOD_WEATHER_BOOST
         elif move_type == "Fire":
             return MOD_WEATHER_NERF
+    elif weather == "harsh_sun":
+        # Primal Groudon's Desolate Land
+        if move_type == "Fire":
+            return MOD_WEATHER_BOOST  # 1.5x boost to Fire
+        elif move_type == "Water":
+            return 0  # Water moves completely fail
+    elif weather == "heavy_rain":
+        # Primal Kyogre's Primordial Sea
+        if move_type == "Water":
+            return MOD_WEATHER_BOOST  # 1.5x boost to Water
+        elif move_type == "Fire":
+            return 0  # Fire moves completely fail
 
     return MOD_NEUTRAL
 
 
-def _get_terrain_mod_4096(terrain: str | None, move_type: str, is_physical: bool) -> int:
-    """Get terrain modifier as 4096-based value."""
+def _get_terrain_mod_4096(
+    terrain: str | None,
+    move_type: str,
+    attacker_grounded: bool,
+    defender_grounded: bool = True
+) -> int:
+    """Get terrain modifier as 4096-based value.
+
+    Handles terrain boosts (Electric, Grassy, Psychic) and Misty Terrain's
+    Dragon-type damage reduction.
+
+    Args:
+        terrain: Active terrain (electric, grassy, psychic, misty)
+        move_type: Type of the attacking move
+        attacker_grounded: Whether the attacker is grounded (for boosts)
+        defender_grounded: Whether the defender is grounded (for Misty reduction)
+    """
     if not terrain:
         return MOD_NEUTRAL
 
@@ -631,20 +705,41 @@ def _get_terrain_mod_4096(terrain: str | None, move_type: str, is_physical: bool
     move_type = move_type.capitalize()
 
     # Terrain boosts are 5325/4096 (~1.3x) in Gen 9
-    MOD_TERRAIN = 5325
+    MOD_TERRAIN_BOOST = 5325
+    # Misty Terrain reduces Dragon damage by 50% = 2048/4096
+    MOD_TERRAIN_NERF = 2048
 
-    if terrain == "electric" and move_type == "Electric":
-        return MOD_TERRAIN
-    elif terrain == "grassy" and move_type == "Grass":
-        return MOD_TERRAIN
-    elif terrain == "psychic" and move_type == "Psychic":
-        return MOD_TERRAIN
+    # Terrain boosts only apply if attacker is grounded
+    if attacker_grounded:
+        if terrain == "electric" and move_type == "Electric":
+            return MOD_TERRAIN_BOOST
+        elif terrain == "grassy" and move_type == "Grass":
+            return MOD_TERRAIN_BOOST
+        elif terrain == "psychic" and move_type == "Psychic":
+            return MOD_TERRAIN_BOOST
+
+    # Misty Terrain reduces Dragon damage if DEFENDER is grounded
+    if terrain == "misty" and move_type == "Dragon" and defender_grounded:
+        return MOD_TERRAIN_NERF
 
     return MOD_NEUTRAL
 
 
 def _get_screen_mod_4096(modifiers: DamageModifiers, is_physical: bool) -> int:
-    """Get screen modifier as 4096-based value."""
+    """Get screen modifier as 4096-based value.
+
+    Handles Reflect (physical), Light Screen (special), and Aurora Veil (both).
+    Aurora Veil is checked first and applies to both physical and special moves.
+    Critical hits ignore screens (handled elsewhere in damage calc).
+    """
+    # Aurora Veil protects against both physical and special
+    if modifiers.aurora_veil_up:
+        if modifiers.is_doubles:
+            return MOD_SCREEN_DOUBLES  # 2732/4096 = ~0.667x
+        else:
+            return MOD_SCREEN_SINGLES  # 2048/4096 = 0.5x
+
+    # Reflect for physical, Light Screen for special
     has_screen = (is_physical and modifiers.reflect_up) or (not is_physical and modifiers.light_screen_up)
 
     if not has_screen:
@@ -749,10 +844,26 @@ def _get_item_mod_4096(item: str | None, move_type: str) -> int:
 def _get_stab_mod_4096(
     attacker: PokemonBuild,
     move: Move,
-    modifiers: DamageModifiers
+    modifiers: DamageModifiers,
+    effective_move_type: str | None = None
 ) -> int:
-    """Calculate STAB modifier as 4096-based value including Tera considerations."""
-    move_type = move.type.capitalize()
+    """Calculate STAB modifier as 4096-based value including Tera considerations.
+
+    Tera STAB mechanics (Gen 9):
+    - Tera into same type: 2x STAB (or 2.25x with Adaptability)
+    - Tera into new type: 1.5x STAB (or 2x with Adaptability)
+    - Original type moves still get 1.5x when Terastallized
+    - Adaptability only boosts moves matching the Tera type when Terastallized
+
+    Args:
+        attacker: The attacking Pokemon
+        move: The move being used
+        modifiers: Damage modifiers
+        effective_move_type: The effective type of the move (after type-changing abilities)
+                           If None, uses move.type
+    """
+    # Use effective type if provided (for type-changing abilities like Aerilate)
+    move_type = (effective_move_type or move.type).capitalize()
     original_types = [t.capitalize() for t in attacker.types]
 
     tera_type = None
@@ -763,13 +874,18 @@ def _get_stab_mod_4096(
     if tera_type:
         if move_type == tera_type:
             if move_type in original_types:
-                # Tera into same type = 2x STAB (8192/4096)
-                return MOD_STAB_BOOSTED
+                # Tera into same type = 2x STAB, or 2.25x with Adaptability
+                if modifiers.has_adaptability:
+                    return MOD_STAB_TERA_ADAPT  # 2.25x (9216/4096)
+                return MOD_STAB_BOOSTED  # 2x (8192/4096)
             else:
-                # Tera into new type = 1.5x (6144/4096)
-                return MOD_STAB
+                # Tera into new type = 1.5x, or 2x with Adaptability
+                if modifiers.has_adaptability:
+                    return MOD_STAB_BOOSTED  # 2x (8192/4096)
+                return MOD_STAB  # 1.5x (6144/4096)
         elif move_type in original_types:
             # Original type moves still get 1.5x STAB when Terastallized
+            # Note: Adaptability does NOT boost original type moves when Tera is active
             return MOD_STAB
     else:
         # Not Terastallized
@@ -779,17 +895,6 @@ def _get_stab_mod_4096(
             return MOD_STAB  # 1.5x normal STAB
 
     return MOD_NEUTRAL
-
-
-# Legacy function for backwards compatibility
-def _get_stab_modifier(
-    attacker: PokemonBuild,
-    move: Move,
-    modifiers: DamageModifiers
-) -> float:
-    """Calculate STAB modifier including Tera considerations (legacy float version)."""
-    mod_4096 = _get_stab_mod_4096(attacker, move, modifiers)
-    return mod_4096 / 4096
 
 
 def calculate_ko_threshold(

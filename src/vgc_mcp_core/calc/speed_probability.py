@@ -111,6 +111,7 @@ def calculate_outspeed_probability(
 
     This uses the actual Smogon usage data to determine what % of the time
     you will outspeed the opponent based on their common spread choices.
+    Results are normalized to 100% for accurate probability representation.
 
     Args:
         your_speed: Your Pokemon's calculated speed stat
@@ -122,7 +123,7 @@ def calculate_outspeed_probability(
         target_pokemon: Name of target Pokemon for display
 
     Returns:
-        SpeedTierResult with outspeed/tie/underspeed probabilities
+        SpeedTierResult with outspeed/tie/underspeed probabilities (normalized to 100%)
     """
     if not target_spreads:
         return SpeedTierResult(
@@ -166,28 +167,39 @@ def calculate_outspeed_probability(
     # Sort distribution by speed (descending)
     speed_distribution.sort(key=lambda x: x["speed"], reverse=True)
 
-    # Generate analysis text
-    if outspeed_total >= 95:
-        analysis = f"You outspeed virtually all {target_pokemon} spreads ({outspeed_total:.1f}%)"
-    elif outspeed_total >= 75:
-        analysis = f"You outspeed most {target_pokemon} spreads ({outspeed_total:.1f}%)"
-    elif outspeed_total >= 50:
-        analysis = f"Speed is contested - you outspeed {outspeed_total:.1f}% of {target_pokemon}"
-    elif outspeed_total >= 25:
-        analysis = f"Most {target_pokemon} outspeed you ({underspeed_total:.1f}% faster)"
+    # Normalize to 100% (spreads may not sum to exactly 100%)
+    total_usage = outspeed_total + tie_total + underspeed_total
+    if total_usage > 0:
+        outspeed_pct = (outspeed_total / total_usage) * 100
+        tie_pct = (tie_total / total_usage) * 100
+        underspeed_pct = (underspeed_total / total_usage) * 100
     else:
-        analysis = f"Nearly all {target_pokemon} outspeed you ({underspeed_total:.1f}%)"
+        outspeed_pct = 0.0
+        tie_pct = 0.0
+        underspeed_pct = 100.0
 
-    if tie_total >= 5:
-        analysis += f" - significant tie chance ({tie_total:.1f}%)"
+    # Generate analysis text
+    if outspeed_pct >= 95:
+        analysis = f"You outspeed virtually all {target_pokemon} spreads ({outspeed_pct:.1f}%)"
+    elif outspeed_pct >= 75:
+        analysis = f"You outspeed most {target_pokemon} spreads ({outspeed_pct:.1f}%)"
+    elif outspeed_pct >= 50:
+        analysis = f"Speed is contested - you outspeed {outspeed_pct:.1f}% of {target_pokemon}"
+    elif outspeed_pct >= 25:
+        analysis = f"Most {target_pokemon} outspeed you ({underspeed_pct:.1f}% faster)"
+    else:
+        analysis = f"Nearly all {target_pokemon} outspeed you ({underspeed_pct:.1f}%)"
+
+    if tie_pct >= 5:
+        analysis += f" - significant tie chance ({tie_pct:.1f}%)"
 
     return SpeedTierResult(
         your_speed=your_speed,
         target_pokemon=target_pokemon,
         target_base_speed=target_base_speed,
-        outspeed_probability=round(outspeed_total, 1),
-        speed_tie_probability=round(tie_total, 1),
-        underspeed_probability=round(underspeed_total, 1),
+        outspeed_probability=round(outspeed_pct, 1),
+        speed_tie_probability=round(tie_pct, 1),
+        underspeed_probability=round(underspeed_pct, 1),
         target_speed_distribution=speed_distribution,
         analysis=analysis
     )

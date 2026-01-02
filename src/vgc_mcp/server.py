@@ -40,12 +40,11 @@ from vgc_mcp_core.team.analysis import TeamAnalyzer
 
 from .tools.stats_tools import register_stats_tools
 from .tools.damage_tools import register_damage_tools
-from .tools.speed_tools import register_speed_tools
+from .tools.speed_analysis_tools import register_speed_analysis_tools
 from .tools.team_tools import register_team_tools
 from .tools.usage_tools import register_usage_tools
 from .tools.spread_tools import register_spread_tools
 from .tools.import_export_tools import register_import_export_tools
-from .tools.speed_control_tools import register_speed_control_tools
 from .tools.matchup_tools import register_matchup_tools
 from .tools.core_tools import register_core_tools
 from .tools.legality_tools import register_legality_tools
@@ -85,12 +84,11 @@ analyzer = TeamAnalyzer()
 # Register all tools
 register_stats_tools(mcp, pokeapi)
 register_damage_tools(mcp, pokeapi, smogon)  # Pass smogon for auto-fetching common spreads
-register_speed_tools(mcp, pokeapi)
+register_speed_analysis_tools(mcp, pokeapi, team_manager)  # Combined speed + speed control tools
 register_team_tools(mcp, pokeapi, team_manager, analyzer)
 register_usage_tools(mcp, smogon)
 register_spread_tools(mcp, pokeapi)
 register_import_export_tools(mcp, pokeapi, team_manager)
-register_speed_control_tools(mcp, team_manager)
 register_matchup_tools(mcp, team_manager)
 register_core_tools(mcp, team_manager, smogon)
 

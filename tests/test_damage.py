@@ -1,7 +1,7 @@
 """Tests for damage calculations."""
 
 import pytest
-from vgc_mcp_core.calc.damage import calculate_damage, _get_stab_modifier
+from vgc_mcp_core.calc.damage import calculate_damage, _get_stab_mod_4096
 from vgc_mcp_core.calc.modifiers import (
     DamageModifiers,
     get_type_effectiveness,
@@ -129,8 +129,8 @@ class TestSTABModifier:
         )
 
         mods = DamageModifiers()
-        stab = _get_stab_modifier(attacker, fire_blast, mods)
-        assert stab == 1.5
+        stab = _get_stab_mod_4096(attacker, fire_blast, mods)
+        assert stab == 6144  # 1.5x in 4096 scale
 
     def test_no_stab_different_type(self):
         """No STAB for non-matching type."""
@@ -155,8 +155,8 @@ class TestSTABModifier:
         )
 
         mods = DamageModifiers()
-        stab = _get_stab_modifier(attacker, solar_beam, mods)
-        assert stab == 1.0
+        stab = _get_stab_mod_4096(attacker, solar_beam, mods)
+        assert stab == 4096  # 1.0x in 4096 scale
 
     def test_tera_stab_same_type(self):
         """Tera into same type = 2x STAB."""
@@ -181,8 +181,8 @@ class TestSTABModifier:
         )
 
         mods = DamageModifiers(tera_type="Fire", tera_active=True)
-        stab = _get_stab_modifier(attacker, fire_blast, mods)
-        assert stab == 2.0
+        stab = _get_stab_mod_4096(attacker, fire_blast, mods)
+        assert stab == 8192  # 2.0x in 4096 scale
 
     def test_tera_stab_new_type(self):
         """Tera into new type = 1.5x STAB."""
@@ -207,8 +207,8 @@ class TestSTABModifier:
         )
 
         mods = DamageModifiers(tera_type="Grass", tera_active=True)
-        stab = _get_stab_modifier(attacker, solar_beam, mods)
-        assert stab == 1.5
+        stab = _get_stab_mod_4096(attacker, solar_beam, mods)
+        assert stab == 6144  # 1.5x in 4096 scale
 
 
 class TestWeatherModifiers:
