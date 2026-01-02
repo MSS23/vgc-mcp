@@ -1671,7 +1671,7 @@ def _create_static_damage_calc_ui(
 
             <!-- Arrow and move -->
             <div style="text-align: center; padding: 0 16px;">
-                <div style="font-size: 24px; color: #4da6ff;">→</div>
+                <div style="font-size: 24px; color: #4da6ff;">&rarr;</div>
                 <div style="font-size: 14px; font-weight: 600;">{move}</div>
                 {move_type_html}
             </div>
@@ -3790,8 +3790,8 @@ body {{
     <div class="matrix">
         <div class="matrix-header">
             <div>Threat</div>
-            <div>You → Them</div>
-            <div>They → You</div>
+            <div>You &rarr; Them</div>
+            <div>They &rarr; You</div>
             <div>Usage</div>
         </div>
         {"".join(f'''
@@ -4760,7 +4760,7 @@ body {{
                     <div class="flow-name">{weather.get('setter', 'None')}</div>
                     <div class="flow-role">Setter</div>
                 </div>
-                <div class="flow-arrow">→</div>
+                <div class="flow-arrow">&rarr;</div>
                 {"".join(f'''
                 <div class="flow-node abuser">
                     <img src="{get_sprite_url(abuser)}" class="flow-sprite">
@@ -4786,7 +4786,7 @@ body {{
                     <div class="flow-name">{terrain.get('setter', 'None')}</div>
                     <div class="flow-role">Setter</div>
                 </div>
-                <div class="flow-arrow">→</div>
+                <div class="flow-arrow">&rarr;</div>
                 {"".join(f'''
                 <div class="flow-node abuser">
                     <img src="{get_sprite_url(abuser)}" class="flow-sprite">

@@ -39,7 +39,8 @@
       "Bash(del \"c:\\\\Users\\\\msidh\\\\Documents\\\\ChatGPT App\\\\mcp vgc\\\\src\\\\vgc_mcp\\\\tools\\\\speed_tools.py\")",
       "Bash(del \"c:\\\\Users\\\\msidh\\\\Documents\\\\ChatGPT App\\\\mcp vgc\\\\src\\\\vgc_mcp\\\\tools\\\\speed_control_tools.py\")",
       "Bash(timeout 5 python:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(C:Python313python.exe -m py_compile \"c:\\\\Users\\\\msidh\\\\Documents\\\\ChatGPT App\\\\mcp vgc\\\\src\\\\vgc_mcp_lite\\\\ui\\\\components.py\")"
     ]
   }
 }
