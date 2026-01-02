@@ -714,6 +714,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 table_lines.append(f"| Defender Item    | {defender_item}                            |")
 
             response["summary_table"] = "\n".join(table_lines)
+            response["analysis"] = f"{attacker_name}'s {move_name} deals {min_pct}-{max_pct}% to {defender_name}, leaving it at {hp_remain_min_pct}-{hp_remain_max_pct}% HP. {result.ko_chance}."
 
             # Add MCP-UI resource for interactive damage display with editable spreads
             # (only available in vgc-mcp-lite)
@@ -899,7 +900,8 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "stat": result["stat_name"],
                 "ko_chance": f"{result['ko_chance']:.1f}%",
                 "damage_range": result["damage_range"],
-                "summary_table": "\n".join(table_lines)
+                "summary_table": "\n".join(table_lines),
+                "analysis": f"Need {result['evs_needed']} {result['stat_name']} EVs to {result['ko_chance']:.0f}% OHKO {defender_name} with {move_name}"
             }
 
         except Exception as e:
@@ -1018,7 +1020,8 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "def_stat": result["def_stat_name"],
                 "survival_chance": f"{result['survival_chance']:.1f}%",
                 "damage_range": result["damage_range"],
-                "summary_table": "\n".join(table_lines)
+                "summary_table": "\n".join(table_lines),
+                "analysis": f"Need {result['hp_evs']} HP / {result['def_evs']} {result['def_stat_name']} EVs to survive {attacker_name}'s {move_name} — takes {result['damage_range']}"
             }
 
         except Exception as e:
@@ -1227,6 +1230,10 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 f"| Verdict          | {verdict_str}                              |",
             ]
 
+            # Build analysis prose
+            survival_word = "survives" if survives_guaranteed else ("may survive" if survives_possible else "does not survive")
+            analysis_str = f"{defender_name} {survival_word} {num_hits}x {attacker_name}'s {move_name} — takes {total_min_percent:.0f}-{total_max_percent:.0f}% total, left at {hp_remain_min_pct}-{hp_remain_max_pct}% HP"
+
             response = {
                 "attacker": attacker_name,
                 "defender": defender_name,
@@ -1267,7 +1274,8 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     "def_evs": defender_def_evs,
                     "spd_evs": defender_spd_evs
                 },
-                "summary_table": "\n".join(table_lines)
+                "summary_table": "\n".join(table_lines),
+                "analysis": analysis_str
             }
 
             if attacker_attack_stage == -1:
@@ -1463,7 +1471,8 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     "total_max": best_spread["total_max"],
                     "hp_remaining": best_spread["remaining_hp"]
                 },
-                "summary_table": "\n".join(table_lines)
+                "summary_table": "\n".join(table_lines),
+                "analysis": f"Need {best_spread['hp_evs']} HP / {best_spread['def_evs']} {def_stat_name} EVs to survive {num_hits}x {move_name} from {attacker_name}, left at {hp_remain_pct}% HP"
             }
 
         except Exception as e:

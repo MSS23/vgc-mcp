@@ -9,6 +9,10 @@ from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, IVSpread
 from vgc_mcp_core.utils.errors import error_response, ErrorCodes, pokemon_not_found_error, invalid_nature_error, invalid_evs_error, api_error
 from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name, suggest_nature
 
+# MCP-UI support (enabled in vgc-mcp-lite)
+from ..ui.resources import create_summary_table_resource, create_stats_card_resource, add_ui_metadata
+HAS_UI = True
+
 
 def register_stats_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
     """Register stat calculation tools with the MCP server."""
@@ -80,7 +84,22 @@ def register_stats_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             # Calculate stats
             stats = calculate_all_stats(pokemon)
 
-            return {
+            # Build summary table with base, EVs, and final stats
+            table_lines = [
+                "| Stat           | Base | EVs  | Final |",
+                "|----------------|------|------|-------|",
+                f"| HP             | {base_stats.hp:<4} | {hp_evs:<4} | {stats['hp']:<5} |",
+                f"| Attack         | {base_stats.attack:<4} | {atk_evs:<4} | {stats['attack']:<5} |",
+                f"| Defense        | {base_stats.defense:<4} | {def_evs:<4} | {stats['defense']:<5} |",
+                f"| Sp. Attack     | {base_stats.special_attack:<4} | {spa_evs:<4} | {stats['special_attack']:<5} |",
+                f"| Sp. Defense    | {base_stats.special_defense:<4} | {spd_evs:<4} | {stats['special_defense']:<5} |",
+                f"| Speed          | {base_stats.speed:<4} | {spe_evs:<4} | {stats['speed']:<5} |",
+            ]
+
+            # Build analysis prose
+            analysis_str = f"{pokemon_name} at Lv{level}: {stats['hp']} HP / {stats['attack']} Atk / {stats['defense']} Def / {stats['special_attack']} SpA / {stats['special_defense']} SpD / {stats['speed']} Spe ({nature} nature)"
+
+            result = {
                 "pokemon": pokemon_name,
                 "level": level,
                 "nature": nature,
@@ -103,8 +122,42 @@ def register_stats_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                     "total": total_evs,
                     "remaining": 508 - total_evs
                 },
-                "final_stats": stats
+                "final_stats": stats,
+                "summary_table": "\n".join(table_lines),
+                "analysis": analysis_str
             }
+
+            # Add MCP-UI stats card visualization
+            if HAS_UI:
+                try:
+                    ui_resource = create_stats_card_resource(
+                        pokemon_name=pokemon_name,
+                        base_stats={
+                            "hp": base_stats.hp,
+                            "attack": base_stats.attack,
+                            "defense": base_stats.defense,
+                            "special_attack": base_stats.special_attack,
+                            "special_defense": base_stats.special_defense,
+                            "speed": base_stats.speed,
+                        },
+                        evs={
+                            "hp": hp_evs,
+                            "attack": atk_evs,
+                            "defense": def_evs,
+                            "special_attack": spa_evs,
+                            "special_defense": spd_evs,
+                            "speed": spe_evs,
+                        },
+                        final_stats=stats,
+                        nature=nature,
+                        level=level,
+                        types=types,
+                    )
+                    result = add_ui_metadata(result, ui_resource)
+                except Exception:
+                    pass  # UI is optional
+
+            return result
 
         except Exception as e:
             error_str = str(e).lower()
@@ -150,7 +203,24 @@ def register_stats_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             max_speed = get_max_speed(base_speed, Nature.JOLLY, 31, level)
             min_speed = get_min_speed(base_speed, Nature.BRAVE, 0, level)
 
-            return {
+            # Build summary table
+            table_lines = [
+                "| Metric           | Value                                      |",
+                "|------------------|---------------------------------------------|",
+                f"| Pokemon          | {pokemon_name}                             |",
+                f"| Base Speed       | {base_speed}                               |",
+                f"| Nature           | {nature}                                   |",
+                f"| Speed EVs        | {speed_evs}                                |",
+                f"| Speed IV         | {speed_iv}                                 |",
+                f"| Final Speed      | {speed}                                    |",
+                f"| Max (Jolly 252)  | {max_speed}                                |",
+                f"| Min (Brave 0 IV) | {min_speed}                                |",
+            ]
+
+            # Build analysis prose
+            analysis_str = f"{pokemon_name} reaches {speed} Speed ({min_speed} min, {max_speed} max possible)"
+
+            result = {
                 "pokemon": pokemon_name,
                 "base_speed": base_speed,
                 "nature": nature,
@@ -160,8 +230,35 @@ def register_stats_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 "reference": {
                     "max_speed_jolly_252ev": max_speed,
                     "min_speed_brave_0iv_0ev": min_speed
-                }
+                },
+                "summary_table": "\n".join(table_lines),
+                "analysis": analysis_str
             }
+
+            # Add MCP-UI summary table
+            if HAS_UI:
+                try:
+                    table_rows = [
+                        {"metric": "Pokemon", "value": pokemon_name},
+                        {"metric": "Base Speed", "value": str(base_speed)},
+                        {"metric": "Nature", "value": nature},
+                        {"metric": "Speed EVs", "value": str(speed_evs)},
+                        {"metric": "Speed IV", "value": str(speed_iv)},
+                        {"metric": "Final Speed", "value": str(speed)},
+                        {"metric": "Max (Jolly 252)", "value": str(max_speed)},
+                        {"metric": "Min (Brave 0 IV)", "value": str(min_speed)},
+                    ]
+                    ui_resource = create_summary_table_resource(
+                        title="Speed Calculation",
+                        rows=table_rows,
+                        highlight_rows=["Final Speed"],
+                        analysis=f"{pokemon_name} reaches {speed} Speed ({min_speed} min, {max_speed} max possible)",
+                    )
+                    result = add_ui_metadata(result, ui_resource)
+                except Exception:
+                    pass  # UI is optional
+
+            return result
 
         except Exception as e:
             error_str = str(e).lower()

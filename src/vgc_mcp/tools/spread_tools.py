@@ -107,6 +107,13 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             if issues and issues != ["No issues found"]:
                 table_lines.append(f"| Issues           | {len(issues)} found                        |")
 
+            # Build analysis prose
+            issue_count = len([i for i in issues if "wasted" in i.lower() or "exceed" in i.lower()])
+            if issue_count > 0:
+                analysis_str = f"{pokemon_name}'s spread uses {total}/508 EVs — {issue_count} issue(s) found"
+            else:
+                analysis_str = f"{pokemon_name}'s spread uses {total}/508 EVs — {max(0, 508 - total)} remaining"
+
             return {
                 "pokemon": pokemon_name,
                 "nature": nature,
@@ -116,7 +123,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 "issues": issues if issues else ["No issues found"],
                 "suggestions": suggestions if suggestions else ["Spread looks efficient!"],
                 "is_valid": total <= 508 and not any("wasted" in i for i in issues),
-                "summary_table": "\n".join(table_lines)
+                "summary_table": "\n".join(table_lines),
+                "analysis": analysis_str
             }
 
         except Exception as e:
@@ -214,13 +222,20 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             else:
                 table_lines = ["| No optimal spread found |"]
 
+            # Build analysis prose
+            if best_spread:
+                analysis_str = f"Optimal bulk: {best_spread['hp_evs']} HP / {best_spread['def_evs']} Def / {best_spread['spd_evs']} SpD for {pokemon_name}"
+            else:
+                analysis_str = f"No optimal spread found for {pokemon_name}"
+
             return {
                 "pokemon": pokemon_name,
                 "nature": nature,
                 "total_bulk_evs": total_bulk_evs,
                 "defense_bias": defense_bias,
                 "optimal_spread": best_spread,
-                "summary_table": "\n".join(table_lines)
+                "summary_table": "\n".join(table_lines),
+                "analysis": analysis_str
             }
 
         except Exception as e:

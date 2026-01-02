@@ -92,6 +92,9 @@ def register_stats_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 f"| Speed          | {base_stats.speed:<4} | {spe_evs:<4} | {stats['speed']:<5} |",
             ]
 
+            # Build analysis prose
+            analysis_str = f"{pokemon_name} at Lv{level}: {stats['hp']} HP / {stats['attack']} Atk / {stats['defense']} Def / {stats['special_attack']} SpA / {stats['special_defense']} SpD / {stats['speed']} Spe ({nature} nature)"
+
             return {
                 "pokemon": pokemon_name,
                 "level": level,
@@ -116,7 +119,8 @@ def register_stats_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                     "remaining": 508 - total_evs
                 },
                 "final_stats": stats,
-                "summary_table": "\n".join(table_lines)
+                "summary_table": "\n".join(table_lines),
+                "analysis": analysis_str
             }
 
         except Exception as e:
@@ -177,6 +181,9 @@ def register_stats_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 f"| Min (Brave 0 IV) | {min_speed}                                |",
             ]
 
+            # Build analysis prose
+            analysis_str = f"{pokemon_name} reaches {speed} Speed ({min_speed} min, {max_speed} max possible)"
+
             return {
                 "pokemon": pokemon_name,
                 "base_speed": base_speed,
@@ -188,7 +195,8 @@ def register_stats_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                     "max_speed_jolly_252ev": max_speed,
                     "min_speed_brave_0iv_0ev": min_speed
                 },
-                "summary_table": "\n".join(table_lines)
+                "summary_table": "\n".join(table_lines),
+                "analysis": analysis_str
             }
 
         except Exception as e:

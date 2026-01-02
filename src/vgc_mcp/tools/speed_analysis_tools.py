@@ -101,6 +101,15 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
                 f"| Difference       | {'+' if speed1 != speed2 else ''}{diff} speed |",
             ]
 
+            # Build analysis prose
+            if winner == "tie":
+                analysis_str = f"Speed tie between {pokemon1_name} and {pokemon2_name} at {speed1}"
+            else:
+                faster = pokemon1_name if speed1 > speed2 else pokemon2_name
+                faster_speed = max(speed1, speed2)
+                slower_speed = min(speed1, speed2)
+                analysis_str = f"{faster} outspeeds ({faster_speed} vs {slower_speed})"
+
             return {
                 "pokemon1": {
                     "name": pokemon1_name,
@@ -119,7 +128,8 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
                 "difference": diff,
                 "result": result,
                 "winner": winner,
-                "summary_table": "\n".join(table_lines)
+                "summary_table": "\n".join(table_lines),
+                "analysis": analysis_str
             }
 
         except Exception as e:
@@ -199,7 +209,8 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
                 "evs_needed": evs_needed,
                 "actual_speed": actual_speed,
                 "evs_remaining": 508 - evs_needed,
-                "summary_table": "\n".join(table_lines)
+                "summary_table": "\n".join(table_lines),
+                "analysis": f"Need {evs_needed} Speed EVs to reach {actual_speed}, outspeeding target speed {target_speed}"
             }
 
         except Exception as e:

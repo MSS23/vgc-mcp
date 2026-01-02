@@ -5371,3 +5371,665 @@ body {{
 </div>
 </body>
 </html>'''
+
+
+def create_summary_table_ui(
+    title: str,
+    rows: list[dict[str, str]],
+    highlight_rows: list[str] | None = None,
+    analysis: str | None = None,
+) -> str:
+    """Create a styled summary table UI HTML.
+
+    Args:
+        title: Table title (e.g., "Damage Calculation")
+        rows: List of dicts with 'metric' and 'value' keys
+        highlight_rows: List of metric names to highlight
+        analysis: Optional prose summary to show above table
+
+    Returns:
+        HTML string for the summary table UI
+    """
+    styles = get_shared_styles()
+    highlight_rows = highlight_rows or []
+
+    # Build table rows
+    rows_html = ""
+    for row in rows:
+        metric = row.get("metric", "")
+        value = row.get("value", "")
+        is_highlight = metric in highlight_rows
+
+        row_class = "highlight" if is_highlight else ""
+        rows_html += f"""
+        <tr class="{row_class}">
+            <td class="metric-cell">{metric}</td>
+            <td class="value-cell">{value}</td>
+        </tr>
+        """
+
+    # Analysis section
+    analysis_html = ""
+    if analysis:
+        analysis_html = f"""
+        <div class="analysis-box">
+            <span class="analysis-icon">💡</span>
+            <span class="analysis-text">{analysis}</span>
+        </div>
+        """
+
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        {styles}
+        .summary-table {{
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }}
+        .summary-table th {{
+            background: var(--bg-secondary);
+            padding: 10px 12px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid var(--accent-blue);
+        }}
+        .summary-table td {{
+            padding: 8px 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }}
+        .summary-table tr:hover {{
+            background: rgba(77, 166, 255, 0.1);
+        }}
+        .summary-table tr.highlight {{
+            background: rgba(77, 166, 255, 0.2);
+        }}
+        .summary-table tr.highlight td {{
+            font-weight: 600;
+        }}
+        .metric-cell {{
+            color: var(--text-secondary);
+            width: 40%;
+        }}
+        .value-cell {{
+            color: var(--text-primary);
+            font-weight: 500;
+        }}
+        .analysis-box {{
+            background: rgba(76, 175, 80, 0.15);
+            border-left: 3px solid var(--accent-green);
+            padding: 10px 12px;
+            margin-bottom: 12px;
+            border-radius: 0 6px 6px 0;
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }}
+        .analysis-icon {{
+            font-size: 16px;
+        }}
+        .analysis-text {{
+            color: var(--text-primary);
+            font-size: 13px;
+            line-height: 1.4;
+        }}
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">{title}</span>
+        </div>
+        {analysis_html}
+        <table class="summary-table">
+            <thead>
+                <tr>
+                    <th>Metric</th>
+                    <th>Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                {rows_html}
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>"""
+
+
+def create_speed_outspeed_graph_ui(
+    pokemon_name: str,
+    pokemon_speed: int,
+    target_pokemon: str,
+    target_spreads: list[dict[str, Any]],
+    outspeed_percent: float,
+) -> str:
+    """Create a cumulative speed outspeed graph UI HTML.
+
+    Shows what percentage of a target Pokemon's common spreads you outspeed.
+
+    Args:
+        pokemon_name: Your Pokemon's name
+        pokemon_speed: Your Pokemon's speed stat
+        target_pokemon: The target Pokemon to compare against
+        target_spreads: List of dicts with 'speed' and 'usage' (percentage) keys
+        outspeed_percent: Percentage of spreads outsped (0-100)
+
+    Returns:
+        HTML string for the speed outspeed graph UI
+    """
+    styles = get_shared_styles()
+
+    # Sort spreads by speed
+    sorted_spreads = sorted(target_spreads, key=lambda x: x.get("speed", 0))
+
+    # Calculate cumulative percentages and build bar data
+    bars_html = ""
+    cumulative = 0
+    speed_marks = []
+
+    for spread in sorted_spreads:
+        speed = spread.get("speed", 0)
+        usage = spread.get("usage", 0)
+        cumulative += usage
+
+        # Determine if we outspeed this spread
+        outspeeds = pokemon_speed > speed
+        bar_class = "outsped" if outspeeds else "not-outsped"
+
+        # Add to marks for display
+        speed_marks.append({
+            "speed": speed,
+            "cumulative": cumulative,
+            "outspeeds": outspeeds,
+            "usage": usage,
+        })
+
+        # Create visual bar segment
+        bars_html += f"""
+        <div class="spread-bar {bar_class}" style="width: {usage}%;" title="{speed} Spe: {usage:.1f}% usage">
+            <span class="speed-label">{speed}</span>
+        </div>
+        """
+
+    # Result color
+    if outspeed_percent >= 80:
+        result_class = "excellent"
+        result_emoji = "🟢"
+    elif outspeed_percent >= 50:
+        result_class = "good"
+        result_emoji = "🟡"
+    else:
+        result_class = "poor"
+        result_emoji = "🔴"
+
+    # Create speed tier list
+    tiers_html = ""
+    for mark in speed_marks:
+        tier_class = "outsped" if mark["outspeeds"] else "not-outsped"
+        check = "✓" if mark["outspeeds"] else "✗"
+        tiers_html += f"""
+        <div class="tier-row {tier_class}">
+            <span class="tier-check">{check}</span>
+            <span class="tier-speed">{mark['speed']} Spe</span>
+            <span class="tier-usage">{mark['usage']:.1f}%</span>
+        </div>
+        """
+
+    # Add marker for your Pokemon
+    marker_position = outspeed_percent
+
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        {styles}
+        .outspeed-container {{
+            padding: 4px;
+        }}
+        .result-banner {{
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+            margin-bottom: 16px;
+        }}
+        .result-banner.excellent {{ border-left: 4px solid #4caf50; }}
+        .result-banner.good {{ border-left: 4px solid #ff9800; }}
+        .result-banner.poor {{ border-left: 4px solid #f44336; }}
+        .result-percent {{
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }}
+        .result-text {{
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }}
+        .graph-container {{
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }}
+        .graph-title {{
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+        }}
+        .bar-chart {{
+            display: flex;
+            height: 40px;
+            border-radius: 6px;
+            overflow: hidden;
+            position: relative;
+        }}
+        .spread-bar {{
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            color: white;
+            min-width: 20px;
+            transition: transform 0.2s;
+        }}
+        .spread-bar:hover {{
+            transform: scaleY(1.1);
+        }}
+        .spread-bar.outsped {{
+            background: linear-gradient(135deg, #4caf50, #2e7d32);
+        }}
+        .spread-bar.not-outsped {{
+            background: linear-gradient(135deg, #f44336, #c62828);
+        }}
+        .speed-label {{
+            font-weight: 600;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+        }}
+        .marker {{
+            position: absolute;
+            top: -8px;
+            left: {marker_position}%;
+            transform: translateX(-50%);
+            background: var(--accent-blue);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+            white-space: nowrap;
+        }}
+        .marker::after {{
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-left: 4px solid transparent;
+            border-right: 4px solid transparent;
+            border-top: 4px solid var(--accent-blue);
+        }}
+        .tier-list {{
+            max-height: 200px;
+            overflow-y: auto;
+        }}
+        .tier-row {{
+            display: flex;
+            align-items: center;
+            padding: 6px 8px;
+            border-radius: 4px;
+            margin-bottom: 4px;
+            font-size: 12px;
+        }}
+        .tier-row.outsped {{
+            background: rgba(76, 175, 80, 0.15);
+        }}
+        .tier-row.not-outsped {{
+            background: rgba(244, 67, 54, 0.15);
+        }}
+        .tier-check {{
+            width: 20px;
+            font-weight: 600;
+        }}
+        .tier-row.outsped .tier-check {{ color: #4caf50; }}
+        .tier-row.not-outsped .tier-check {{ color: #f44336; }}
+        .tier-speed {{
+            flex: 1;
+            color: var(--text-primary);
+        }}
+        .tier-usage {{
+            color: var(--text-secondary);
+        }}
+        .legend {{
+            display: flex;
+            gap: 16px;
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-top: 8px;
+        }}
+        .legend-item {{
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }}
+        .legend-dot {{
+            width: 10px;
+            height: 10px;
+            border-radius: 2px;
+        }}
+        .legend-dot.green {{ background: #4caf50; }}
+        .legend-dot.red {{ background: #f44336; }}
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Speed Matchup vs {target_pokemon}</span>
+        </div>
+        <div class="outspeed-container">
+            <div class="result-banner {result_class}">
+                <div class="result-percent">{result_emoji} {outspeed_percent:.1f}%</div>
+                <div class="result-text">
+                    {pokemon_name} ({pokemon_speed} Spe) outspeeds {outspeed_percent:.1f}% of {target_pokemon} spreads
+                </div>
+            </div>
+
+            <div class="graph-container">
+                <div class="graph-title">Speed Distribution (by usage)</div>
+                <div style="position: relative; padding-top: 16px;">
+                    <div class="marker">▼ {pokemon_name}</div>
+                    <div class="bar-chart">
+                        {bars_html}
+                    </div>
+                </div>
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="legend-dot green"></div>
+                        <span>Outsped</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-dot red"></div>
+                        <span>Not outsped</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="graph-container">
+                <div class="graph-title">Speed Tiers ({len(target_spreads)} common spreads)</div>
+                <div class="tier-list">
+                    {tiers_html}
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>"""
+
+
+def create_multi_hit_survival_ui(
+    defender_name: str,
+    attacker_name: str,
+    move_name: str,
+    num_hits: int,
+    per_hit_min: float,
+    per_hit_max: float,
+    total_min: float,
+    total_max: float,
+    hp_remaining_min: float,
+    hp_remaining_max: float,
+    survival_chance: float,
+    survives: bool,
+) -> str:
+    """Create a multi-hit survival visualization UI.
+
+    Args:
+        defender_name: Defending Pokemon
+        attacker_name: Attacking Pokemon
+        move_name: Move name
+        num_hits: Number of hits
+        per_hit_min: Min damage per hit (%)
+        per_hit_max: Max damage per hit (%)
+        total_min: Total min damage (%)
+        total_max: Total max damage (%)
+        hp_remaining_min: Min HP remaining (%)
+        hp_remaining_max: Max HP remaining (%)
+        survival_chance: Chance to survive (0-100)
+        survives: Whether guaranteed to survive
+
+    Returns:
+        HTML string for the multi-hit survival UI
+    """
+    styles = get_shared_styles()
+
+    # Survival status
+    if survives:
+        status_class = "survives"
+        status_text = "Survives"
+        status_emoji = "✓"
+    elif survival_chance > 0:
+        status_class = "possible"
+        status_text = f"{survival_chance:.1f}% to survive"
+        status_emoji = "?"
+    else:
+        status_class = "faints"
+        status_text = "Faints"
+        status_emoji = "✗"
+
+    # Build hit visualization
+    hits_html = ""
+    for i in range(num_hits):
+        hits_html += f"""
+        <div class="hit-segment" style="width: {100/num_hits}%;">
+            <div class="hit-bar" style="height: {min(100, per_hit_max)}%;"></div>
+            <div class="hit-label">Hit {i+1}</div>
+        </div>
+        """
+
+    # HP bar
+    hp_remaining_avg = (hp_remaining_min + hp_remaining_max) / 2
+    hp_color = "#4caf50" if hp_remaining_avg > 50 else ("#ff9800" if hp_remaining_avg > 25 else "#f44336")
+
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        {styles}
+        .survival-container {{
+            padding: 4px;
+        }}
+        .matchup-header {{
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }}
+        .pokemon-side {{
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }}
+        .pokemon-sprite {{
+            width: 50px;
+            height: 50px;
+            object-fit: contain;
+        }}
+        .pokemon-name {{
+            font-weight: 600;
+            font-size: 14px;
+        }}
+        .move-badge {{
+            background: var(--bg-secondary);
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            color: var(--accent-blue);
+        }}
+        .status-banner {{
+            text-align: center;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+        }}
+        .status-banner.survives {{
+            background: rgba(76, 175, 80, 0.2);
+            border: 1px solid #4caf50;
+        }}
+        .status-banner.possible {{
+            background: rgba(255, 152, 0, 0.2);
+            border: 1px solid #ff9800;
+        }}
+        .status-banner.faints {{
+            background: rgba(244, 67, 54, 0.2);
+            border: 1px solid #f44336;
+        }}
+        .status-emoji {{
+            font-size: 24px;
+        }}
+        .status-text {{
+            font-size: 16px;
+            font-weight: 600;
+            margin-top: 4px;
+        }}
+        .hits-visualization {{
+            display: flex;
+            height: 80px;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 16px;
+        }}
+        .hit-segment {{
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end;
+            border-right: 1px solid rgba(255,255,255,0.1);
+        }}
+        .hit-segment:last-child {{
+            border-right: none;
+        }}
+        .hit-bar {{
+            width: 80%;
+            background: linear-gradient(to top, #f44336, #ff9800);
+            border-radius: 4px 4px 0 0;
+            transition: height 0.3s;
+        }}
+        .hit-label {{
+            font-size: 10px;
+            color: var(--text-secondary);
+            padding: 4px;
+        }}
+        .hp-section {{
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 12px;
+        }}
+        .hp-label {{
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }}
+        .hp-bar-container {{
+            height: 24px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+        }}
+        .hp-bar {{
+            height: 100%;
+            background: {hp_color};
+            border-radius: 12px;
+            transition: width 0.3s;
+        }}
+        .hp-text {{
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 12px;
+            font-weight: 600;
+            color: white;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+        }}
+        .damage-stats {{
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 16px;
+        }}
+        .stat-box {{
+            background: var(--bg-secondary);
+            padding: 10px;
+            border-radius: 6px;
+            text-align: center;
+        }}
+        .stat-label {{
+            font-size: 10px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }}
+        .stat-value {{
+            font-size: 16px;
+            font-weight: 600;
+            margin-top: 4px;
+        }}
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Multi-Hit Survival Analysis</span>
+        </div>
+        <div class="survival-container">
+            <div class="matchup-header">
+                <div class="pokemon-side">
+                    <img src="{get_sprite_url(attacker_name)}" class="pokemon-sprite" onerror="this.style.display='none'">
+                    <span class="pokemon-name">{attacker_name}</span>
+                </div>
+                <div class="move-badge">{move_name} x{num_hits}</div>
+                <div class="pokemon-side">
+                    <span class="pokemon-name">{defender_name}</span>
+                    <img src="{get_sprite_url(defender_name)}" class="pokemon-sprite" onerror="this.style.display='none'">
+                </div>
+            </div>
+
+            <div class="status-banner {status_class}">
+                <div class="status-emoji">{status_emoji}</div>
+                <div class="status-text">{status_text}</div>
+            </div>
+
+            <div class="hits-visualization">
+                {hits_html}
+            </div>
+
+            <div class="hp-section">
+                <div class="hp-label">HP Remaining after {num_hits} hits</div>
+                <div class="hp-bar-container">
+                    <div class="hp-bar" style="width: {max(0, hp_remaining_avg)}%;"></div>
+                    <span class="hp-text">{hp_remaining_min:.0f}-{hp_remaining_max:.0f}%</span>
+                </div>
+            </div>
+
+            <div class="damage-stats">
+                <div class="stat-box">
+                    <div class="stat-label">Per Hit</div>
+                    <div class="stat-value">{per_hit_min:.1f}-{per_hit_max:.1f}%</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Total Damage</div>
+                    <div class="stat-value">{total_min:.1f}-{total_max:.1f}%</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>"""

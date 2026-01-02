@@ -32,6 +32,9 @@ from .components import (
     create_bring_selector_ui,
     create_ability_synergy_ui,
     create_team_report_ui,
+    create_summary_table_ui,
+    create_speed_outspeed_graph_ui,
+    create_multi_hit_survival_ui,
 )
 
 
@@ -627,3 +630,146 @@ def add_ui_metadata(
         "ui/resource": ui_resource,
     }
     return result
+
+
+def create_summary_table_resource(
+    title: str,
+    rows: list[dict[str, str]],
+    highlight_rows: list[str] | None = None,
+    analysis: str | None = None,
+) -> dict[str, Any]:
+    """Create a summary table UI resource.
+
+    Args:
+        title: Table title (e.g., "Damage Calculation")
+        rows: List of dicts with 'metric' and 'value' keys
+        highlight_rows: List of metric names to highlight
+        analysis: Optional prose summary to show above table
+
+    Returns:
+        UI resource dict
+    """
+    html = create_summary_table_ui(
+        title=title,
+        rows=rows,
+        highlight_rows=highlight_rows,
+        analysis=analysis,
+    )
+
+    # Create URI-safe title
+    uri_title = title.lower().replace(" ", "-").replace("/", "-")
+
+    return create_ui_resource({
+        "uri": f"ui://vgc/summary-table/{uri_title}",
+        "content": {
+            "type": "rawHtml",
+            "htmlString": html,
+        },
+        "encoding": "text",
+    })
+
+
+def create_speed_outspeed_graph_resource(
+    pokemon_name: str,
+    pokemon_speed: int,
+    target_pokemon: str,
+    target_spreads: list[dict[str, Any]],
+    outspeed_percent: float,
+) -> dict[str, Any]:
+    """Create a speed outspeed graph UI resource.
+
+    Shows what percentage of a target Pokemon's common spreads you outspeed.
+
+    Args:
+        pokemon_name: Your Pokemon's name
+        pokemon_speed: Your Pokemon's speed stat
+        target_pokemon: The target Pokemon to compare against
+        target_spreads: List of dicts with 'speed' and 'usage' (percentage) keys
+        outspeed_percent: Percentage of spreads outsped (0-100)
+
+    Returns:
+        UI resource dict
+    """
+    html = create_speed_outspeed_graph_ui(
+        pokemon_name=pokemon_name,
+        pokemon_speed=pokemon_speed,
+        target_pokemon=target_pokemon,
+        target_spreads=target_spreads,
+        outspeed_percent=outspeed_percent,
+    )
+
+    # Create URI-safe names
+    uri_pokemon = pokemon_name.lower().replace(" ", "-")
+    uri_target = target_pokemon.lower().replace(" ", "-")
+
+    return create_ui_resource({
+        "uri": f"ui://vgc/speed-outspeed/{uri_pokemon}-vs-{uri_target}",
+        "content": {
+            "type": "rawHtml",
+            "htmlString": html,
+        },
+        "encoding": "text",
+    })
+
+
+def create_multi_hit_survival_resource(
+    defender_name: str,
+    attacker_name: str,
+    move_name: str,
+    num_hits: int,
+    per_hit_min: float,
+    per_hit_max: float,
+    total_min: float,
+    total_max: float,
+    hp_remaining_min: float,
+    hp_remaining_max: float,
+    survival_chance: float,
+    survives: bool,
+) -> dict[str, Any]:
+    """Create a multi-hit survival visualization UI resource.
+
+    Args:
+        defender_name: Defending Pokemon
+        attacker_name: Attacking Pokemon
+        move_name: Move name
+        num_hits: Number of hits
+        per_hit_min: Min damage per hit (%)
+        per_hit_max: Max damage per hit (%)
+        total_min: Total min damage (%)
+        total_max: Total max damage (%)
+        hp_remaining_min: Min HP remaining (%)
+        hp_remaining_max: Max HP remaining (%)
+        survival_chance: Chance to survive (0-100)
+        survives: Whether guaranteed to survive
+
+    Returns:
+        UI resource dict
+    """
+    html = create_multi_hit_survival_ui(
+        defender_name=defender_name,
+        attacker_name=attacker_name,
+        move_name=move_name,
+        num_hits=num_hits,
+        per_hit_min=per_hit_min,
+        per_hit_max=per_hit_max,
+        total_min=total_min,
+        total_max=total_max,
+        hp_remaining_min=hp_remaining_min,
+        hp_remaining_max=hp_remaining_max,
+        survival_chance=survival_chance,
+        survives=survives,
+    )
+
+    # Create URI-safe names
+    uri_attacker = attacker_name.lower().replace(" ", "-")
+    uri_defender = defender_name.lower().replace(" ", "-")
+    uri_move = move_name.lower().replace(" ", "-")
+
+    return create_ui_resource({
+        "uri": f"ui://vgc/multi-hit/{uri_attacker}-{uri_move}-x{num_hits}-vs-{uri_defender}",
+        "content": {
+            "type": "rawHtml",
+            "htmlString": html,
+        },
+        "encoding": "text",
+    })

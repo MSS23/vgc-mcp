@@ -14,6 +14,9 @@ This module provides interactive UI components for:
 - Bring/Leave Selector for team preview
 - Ability Synergy Network visualization
 - Team Report Card with grades
+- Summary Table for structured data display
+- Speed Outspeed Graph for cumulative distribution
+- Multi-Hit Survival visualization
 """
 
 from .resources import (
@@ -25,6 +28,9 @@ from .resources import (
     create_bring_selector_resource,
     create_ability_synergy_resource,
     create_team_report_resource,
+    create_summary_table_resource,
+    create_speed_outspeed_graph_resource,
+    create_multi_hit_survival_resource,
 )
 from .components import (
     create_damage_calc_ui,
@@ -41,6 +47,9 @@ from .components import (
     create_bring_selector_ui,
     create_ability_synergy_ui,
     create_team_report_ui,
+    create_summary_table_ui,
+    create_speed_outspeed_graph_ui,
+    create_multi_hit_survival_ui,
 )
 
 __all__ = [
@@ -55,18 +64,24 @@ __all__ = [
     "create_usage_stats_ui",
     "create_speed_outspeed_ui",
     "create_speed_outspeed_resource",
-    # New components
+    # Stats and visualization components
     "create_stats_card_ui",
     "create_threat_matrix_ui",
     "create_turn_order_ui",
     "create_bring_selector_ui",
     "create_ability_synergy_ui",
     "create_team_report_ui",
-    # New resource wrappers
+    "create_summary_table_ui",
+    "create_speed_outspeed_graph_ui",
+    "create_multi_hit_survival_ui",
+    # Resource wrappers
     "create_stats_card_resource",
     "create_threat_matrix_resource",
     "create_turn_order_resource",
     "create_bring_selector_resource",
     "create_ability_synergy_resource",
     "create_team_report_resource",
+    "create_summary_table_resource",
+    "create_speed_outspeed_graph_resource",
+    "create_multi_hit_survival_resource",
 ]

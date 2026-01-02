@@ -12,7 +12,13 @@ from vgc_mcp_core.utils.errors import error_response, ErrorCodes, pokemon_not_fo
 from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name, suggest_nature
 
 # MCP-UI support (enabled in vgc-mcp-lite)
-from ..ui.resources import create_damage_calc_resource, create_interactive_damage_calc_resource, add_ui_metadata
+from ..ui.resources import (
+    create_damage_calc_resource,
+    create_interactive_damage_calc_resource,
+    create_summary_table_resource,
+    create_multi_hit_survival_resource,
+    add_ui_metadata,
+)
 HAS_UI = True
 
 
@@ -360,6 +366,29 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             # Calculate damage
             result = calculate_damage(attacker, defender, move, modifiers)
 
+            # Calculate damage percentages
+            min_pct = round(result.damage_range[0], 1)
+            max_pct = round(result.damage_range[1], 1)
+            hp_remain_min = result.defender_hp - result.max_damage
+            hp_remain_max = result.defender_hp - result.min_damage
+            hp_remain_min_pct = round(max(0, hp_remain_min) / result.defender_hp * 100, 1)
+            hp_remain_max_pct = round(max(0, hp_remain_max) / result.defender_hp * 100, 1)
+
+            # Build summary table
+            table_lines = [
+                "| Metric           | Value                                      |",
+                "|------------------|---------------------------------------------|",
+                f"| Attacker         | {attacker_name}                            |",
+                f"| Move             | {move_name} ({move.type}, {move.power} BP) |",
+                f"| Defender         | {defender_name}                            |",
+                f"| Damage Range     | {result.min_damage}-{result.max_damage} ({min_pct}-{max_pct}%) |",
+                f"| Defender HP      | {result.defender_hp}                       |",
+                f"| HP Remaining     | {max(0, hp_remain_min)}-{max(0, hp_remain_max)} ({hp_remain_min_pct}-{hp_remain_max_pct}%) |",
+                f"| KO Verdict       | {result.ko_chance}                         |",
+            ]
+            if attacker_item:
+                table_lines.append(f"| Attacker Item    | {attacker_item}                            |")
+
             response = {
                 "attacker": attacker_name,
                 "attacker_ability": attacker_ability,
@@ -380,7 +409,9 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "is_possible_ohko": result.is_possible_ohko,
                 "all_rolls": result.rolls,
                 "modifiers": result.details.get("modifiers_applied", []),
-                "type_effectiveness": result.details.get("type_effectiveness", 1.0)
+                "type_effectiveness": result.details.get("type_effectiveness", 1.0),
+                "summary_table": "\n".join(table_lines),
+                "analysis": f"{attacker_name}'s {move_name} deals {min_pct}-{max_pct}% to {defender_name}, leaving it at {hp_remain_min_pct}-{hp_remain_max_pct}% HP. {result.ko_chance}."
             }
 
             # Add spread info to response so user knows what was used
@@ -880,6 +911,32 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 total_avg = avg_damage * num_hits
                 survival_chance = 100.0 if total_avg < defender_hp else 0.0
 
+            # Calculate HP remaining
+            hp_remaining_min = max(0, defender_hp - total_max)
+            hp_remaining_max = max(0, defender_hp - total_min)
+            hp_remain_min_pct = round(hp_remaining_min / defender_hp * 100, 1)
+            hp_remain_max_pct = round(hp_remaining_max / defender_hp * 100, 1)
+
+            verdict_str = "SURVIVES" if survives_guaranteed else ("MIGHT SURVIVE" if survives_possible else "FAINTS")
+
+            # Build summary table
+            table_lines = [
+                "| Metric           | Value                                      |",
+                "|------------------|---------------------------------------------|",
+                f"| Attacker         | {attacker_name}                            |",
+                f"| Defender         | {defender_name}                            |",
+                f"| Move             | {move_name} x{num_hits}                    |",
+                f"| Per Hit          | {min_per_hit}-{max_per_hit} ({min_percent_per_hit:.1f}-{max_percent_per_hit:.1f}%) |",
+                f"| Total Damage     | {total_min}-{total_max} ({total_min_percent:.1f}-{total_max_percent:.1f}%) |",
+                f"| HP Remaining     | {hp_remaining_min}-{hp_remaining_max} ({hp_remain_min_pct}-{hp_remain_max_pct}%) |",
+                f"| Survival Chance  | {survival_chance:.1f}%                     |",
+                f"| Verdict          | {verdict_str}                              |",
+            ]
+
+            # Build analysis prose
+            survival_word = "survives" if survives_guaranteed else ("may survive" if survives_possible else "does not survive")
+            analysis_str = f"{defender_name} {survival_word} {num_hits}x {attacker_name}'s {move_name} — takes {total_min_percent:.0f}-{total_max_percent:.0f}% total, left at {hp_remain_min_pct}-{hp_remain_max_pct}% HP"
+
             response = {
                 "attacker": attacker_name,
                 "defender": defender_name,
@@ -901,7 +958,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "survives_guaranteed": survives_guaranteed,
                 "survives_possible": survives_possible,
                 "survival_chance": f"{survival_chance:.1f}%",
-                "verdict": "SURVIVES" if survives_guaranteed else ("MIGHT SURVIVE" if survives_possible else "FAINTS"),
+                "verdict": verdict_str,
                 "attacker_spread": {
                     "nature": attacker_nature,
                     "attack_evs": attacker_atk_evs,
@@ -913,13 +970,40 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     "hp_evs": defender_hp_evs,
                     "def_evs": defender_def_evs,
                     "spd_evs": defender_spd_evs
-                }
+                },
+                "summary_table": "\n".join(table_lines),
+                "analysis": analysis_str
             }
 
             if attacker_attack_stage == -1:
                 response["notes"] = ["Attacker at -1 Attack (Intimidate)"]
             elif attacker_attack_stage < 0:
                 response["notes"] = [f"Attacker at {attacker_attack_stage} Attack"]
+
+            # Add MCP-UI multi-hit survival visualization
+            if HAS_UI:
+                try:
+                    # Calculate HP remaining percentages
+                    hp_remaining_min = max(0, 100 - total_max_percent)
+                    hp_remaining_max = max(0, 100 - total_min_percent)
+
+                    ui_resource = create_multi_hit_survival_resource(
+                        defender_name=defender_name,
+                        attacker_name=attacker_name,
+                        move_name=move_name,
+                        num_hits=num_hits,
+                        per_hit_min=min_percent_per_hit,
+                        per_hit_max=max_percent_per_hit,
+                        total_min=total_min_percent,
+                        total_max=total_max_percent,
+                        hp_remaining_min=hp_remaining_min,
+                        hp_remaining_max=hp_remaining_max,
+                        survival_chance=survival_chance,
+                        survives=survives_guaranteed,
+                    )
+                    response = add_ui_metadata(response, ui_resource)
+                except Exception:
+                    pass  # UI is optional
 
             return response
 

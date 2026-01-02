@@ -88,6 +88,14 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 f"| Turns to KO      | {faint_str}                                |",
             ]
 
+            # Build analysis prose
+            if result.immune:
+                analysis_str = f"{pokemon_name} is immune to {weather.title() if weather else 'weather'} damage"
+            elif turns_to_faint:
+                analysis_str = f"{pokemon_name} takes {result.damage} ({result.damage_percent}%) per turn from {weather.title()}, KO'd in {turns_to_faint} turns"
+            else:
+                analysis_str = f"{pokemon_name} takes {result.damage} ({result.damage_percent}%) per turn from {weather.title() if weather else 'weather'}"
+
             return {
                 "pokemon": pokemon_name,
                 "types": types,
@@ -103,7 +111,8 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                     "sandstorm": list(SANDSTORM_IMMUNE_TYPES),
                     "hail": list(HAIL_IMMUNE_TYPES),
                 }.get(weather.lower(), []) if weather else [],
-                "summary_table": "\n".join(table_lines)
+                "summary_table": "\n".join(table_lines),
+                "analysis": analysis_str
             }
 
         except Exception as e:
@@ -410,6 +419,10 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             if result["fainted"]:
                 table_lines.append(f"| Faints On        | Turn {result['turns_simulated']}           |")
 
+            # Build analysis prose
+            net_sign = "+" if result['net_change'] >= 0 else ""
+            analysis_str = f"{pokemon_name} goes from {starting_hp_percent}% to {result['final_hp_percent']}% over {turns} turns — net {net_sign}{result['net_change']} HP"
+
             return {
                 "pokemon": pokemon_name,
                 "types": types,
@@ -421,7 +434,8 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 },
                 **result,
                 "insights": insights,
-                "summary_table": "\n".join(table_lines)
+                "summary_table": "\n".join(table_lines),
+                "analysis": analysis_str
             }
 
         except Exception as e:
@@ -538,7 +552,8 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 "survives_turn": survives_turn,
                 "verdict": verdict_str,
                 "chip_breakdown": result["turn_breakdown"][0] if result["turn_breakdown"] else None,
-                "summary_table": "\n".join(table_lines)
+                "summary_table": "\n".join(table_lines),
+                "analysis": verdict_str
             }
 
         except Exception as e:

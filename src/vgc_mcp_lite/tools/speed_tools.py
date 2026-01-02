@@ -9,7 +9,12 @@ from vgc_mcp_core.calc.speed import SPEED_BENCHMARKS, calculate_speed_tier
 from vgc_mcp_core.models.pokemon import Nature
 
 # MCP-UI support (enabled in vgc-mcp-lite)
-from ..ui.resources import create_speed_tier_resource, add_ui_metadata
+from ..ui.resources import (
+    create_speed_tier_resource,
+    create_summary_table_resource,
+    create_speed_outspeed_graph_resource,
+    add_ui_metadata,
+)
 HAS_UI = True
 
 
@@ -130,7 +135,28 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 result = "Speed tie - 50/50 chance to move first"
                 winner = "tie"
 
-            return {
+            diff = abs(speed1 - speed2)
+
+            # Build summary table
+            table_lines = [
+                "| Metric           | Value                                      |",
+                "|------------------|---------------------------------------------|",
+                f"| Pokemon 1        | {pokemon1_name} (Speed: {speed1})          |",
+                f"| Pokemon 2        | {pokemon2_name} (Speed: {speed2})          |",
+                f"| Result           | {result}                                   |",
+                f"| Difference       | {'+' if speed1 != speed2 else ''}{diff} speed |",
+            ]
+
+            # Build analysis prose
+            if winner == "tie":
+                analysis_str = f"Speed tie between {pokemon1_name} and {pokemon2_name} at {speed1}"
+            else:
+                faster = pokemon1_name if speed1 > speed2 else pokemon2_name
+                faster_speed = max(speed1, speed2)
+                slower_speed = min(speed1, speed2)
+                analysis_str = f"{faster} outspeeds ({faster_speed} vs {slower_speed})"
+
+            result_dict = {
                 "pokemon1": {
                     "name": pokemon1_name,
                     "base_speed": base1.speed,
@@ -145,10 +171,33 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                     "evs": pokemon2_speed_evs,
                     "final_speed": speed2
                 },
-                "difference": abs(speed1 - speed2),
+                "difference": diff,
                 "result": result,
-                "winner": winner
+                "winner": winner,
+                "summary_table": "\n".join(table_lines),
+                "analysis": analysis_str
             }
+
+            # Add MCP-UI summary table
+            if HAS_UI:
+                try:
+                    table_rows = [
+                        {"metric": "Pokemon 1", "value": f"{pokemon1_name} ({speed1} Spe)"},
+                        {"metric": "Pokemon 2", "value": f"{pokemon2_name} ({speed2} Spe)"},
+                        {"metric": "Speed Difference", "value": str(abs(speed1 - speed2))},
+                        {"metric": "Result", "value": result},
+                    ]
+                    ui_resource = create_summary_table_resource(
+                        title="Speed Comparison",
+                        rows=table_rows,
+                        highlight_rows=["Result"],
+                        analysis=result,
+                    )
+                    result_dict = add_ui_metadata(result_dict, ui_resource)
+                except Exception:
+                    pass  # UI is optional
+
+            return result_dict
 
         except Exception as e:
             return {"error": str(e)}
@@ -189,24 +238,97 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             if evs_needed is None:
                 # Calculate max possible
                 max_speed = calculate_speed(base_stats.speed, 31, 252, 50, parsed_nature)
-                return {
+
+                # Build summary table
+                table_lines = [
+                    "| Metric           | Value                                      |",
+                    "|------------------|---------------------------------------------|",
+                    f"| Pokemon          | {pokemon_name}                             |",
+                    f"| Target Speed     | {target_speed}                             |",
+                    f"| Nature           | {nature}                                   |",
+                    f"| Max Achievable   | {max_speed} (252 EVs)                      |",
+                    f"| Result           | Cannot reach target                        |",
+                ]
+
+                result_dict = {
                     "pokemon": pokemon_name,
                     "target_speed": target_speed,
                     "achievable": False,
                     "max_speed_with_252_evs": max_speed,
-                    "suggestion": "Try a +Speed nature (Timid/Jolly) or lower your target"
+                    "suggestion": "Try a +Speed nature (Timid/Jolly) or lower your target",
+                    "summary_table": "\n".join(table_lines),
+                    "analysis": f"{pokemon_name} cannot reach {target_speed} Speed with {nature} nature. Max achievable is {max_speed}."
                 }
+
+                # Add MCP-UI summary table
+                if HAS_UI:
+                    try:
+                        table_rows = [
+                            {"metric": "Pokemon", "value": pokemon_name},
+                            {"metric": "Target Speed", "value": str(target_speed)},
+                            {"metric": "Nature", "value": nature},
+                            {"metric": "Max Achievable", "value": f"{max_speed} (252 EVs)"},
+                            {"metric": "Result", "value": "Cannot reach target"},
+                        ]
+                        ui_resource = create_summary_table_resource(
+                            title="Speed EV Calculation",
+                            rows=table_rows,
+                            highlight_rows=["Result"],
+                            analysis=f"{pokemon_name} cannot reach {target_speed} Speed with {nature} nature. Max achievable is {max_speed}.",
+                        )
+                        result_dict = add_ui_metadata(result_dict, ui_resource)
+                    except Exception:
+                        pass
+
+                return result_dict
 
             actual_speed = calculate_speed(base_stats.speed, 31, evs_needed, 50, parsed_nature)
 
-            return {
+            # Build summary table
+            table_lines = [
+                "| Metric           | Value                                      |",
+                "|------------------|---------------------------------------------|",
+                f"| Pokemon          | {pokemon_name}                             |",
+                f"| Target Speed     | {target_speed}                             |",
+                f"| Nature           | {nature}                                   |",
+                f"| EVs Needed       | {evs_needed}                               |",
+                f"| Actual Speed     | {actual_speed}                             |",
+                f"| EVs Remaining    | {508 - evs_needed}                         |",
+            ]
+
+            result_dict = {
                 "pokemon": pokemon_name,
                 "target_speed": target_speed,
                 "achievable": True,
                 "evs_needed": evs_needed,
                 "actual_speed": actual_speed,
-                "evs_remaining": 508 - evs_needed
+                "evs_remaining": 508 - evs_needed,
+                "summary_table": "\n".join(table_lines),
+                "analysis": f"Need {evs_needed} Speed EVs to reach {actual_speed}, outspeeding target speed {target_speed}"
             }
+
+            # Add MCP-UI summary table
+            if HAS_UI:
+                try:
+                    table_rows = [
+                        {"metric": "Pokemon", "value": pokemon_name},
+                        {"metric": "Target Speed", "value": str(target_speed)},
+                        {"metric": "Nature", "value": nature},
+                        {"metric": "EVs Needed", "value": str(evs_needed)},
+                        {"metric": "Actual Speed", "value": str(actual_speed)},
+                        {"metric": "EVs Remaining", "value": str(508 - evs_needed)},
+                    ]
+                    ui_resource = create_summary_table_resource(
+                        title="Speed EV Calculation",
+                        rows=table_rows,
+                        highlight_rows=["EVs Needed", "Actual Speed"],
+                        analysis=f"{pokemon_name} needs {evs_needed} Speed EVs to reach {actual_speed} Speed (target: {target_speed}).",
+                    )
+                    result_dict = add_ui_metadata(result_dict, ui_resource)
+                except Exception:
+                    pass
+
+            return result_dict
 
         except Exception as e:
             return {"error": str(e)}
@@ -601,3 +723,130 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         results["pokemon_below"] = results["pokemon_below"][:10]
 
         return results
+
+    @mcp.tool()
+    async def analyze_outspeed_probability(
+        pokemon_name: str,
+        target_pokemon: str,
+        nature: str = "serious",
+        speed_evs: int = 0
+    ) -> dict:
+        """
+        Analyze what percentage of a target Pokemon's common spreads you outspeed.
+        Shows a cumulative distribution graph of outspeed probability.
+
+        Args:
+            pokemon_name: Your Pokemon's name
+            target_pokemon: The target Pokemon to compare against
+            nature: Your Pokemon's nature
+            speed_evs: Your Pokemon's Speed EVs
+
+        Returns:
+            Analysis showing what percentage of target spreads you outspeed
+        """
+        try:
+            # Get base stats for your Pokemon
+            base_stats = await pokeapi.get_base_stats(pokemon_name)
+
+            try:
+                parsed_nature = Nature(nature.lower())
+            except ValueError:
+                return {"error": f"Invalid nature: {nature}"}
+
+            # Calculate your speed
+            your_speed = calculate_speed(base_stats.speed, 31, speed_evs, 50, parsed_nature)
+
+            # Get target Pokemon's common spreads from META_SPEED_TIERS
+            target_lower = target_pokemon.lower().replace(" ", "-")
+            target_data = META_SPEED_TIERS.get(target_lower)
+
+            if not target_data:
+                # If not in meta tiers, calculate standard spreads
+                try:
+                    target_base = await pokeapi.get_base_stats(target_pokemon)
+                    target_spreads = [
+                        {"speed": calculate_speed(target_base.speed, 31, 252, 50, Nature.JOLLY), "usage": 35},
+                        {"speed": calculate_speed(target_base.speed, 31, 252, 50, Nature.SERIOUS), "usage": 25},
+                        {"speed": calculate_speed(target_base.speed, 31, 0, 50, Nature.SERIOUS), "usage": 20},
+                        {"speed": calculate_speed(target_base.speed, 31, 0, 50, Nature.BRAVE), "usage": 20},
+                    ]
+                except Exception:
+                    return {"error": f"Could not find data for {target_pokemon}"}
+            else:
+                # Build spreads from common_speeds
+                common_speeds = target_data["common_speeds"]
+                usage_per = 100 // len(common_speeds) if common_speeds else 100
+                target_spreads = [
+                    {"speed": s, "usage": usage_per}
+                    for s in common_speeds
+                ]
+
+            # Calculate outspeed percentage
+            total_usage = sum(s["usage"] for s in target_spreads)
+            outsped_usage = sum(
+                s["usage"] for s in target_spreads
+                if your_speed > s["speed"]
+            )
+            tied_usage = sum(
+                s["usage"] for s in target_spreads
+                if your_speed == s["speed"]
+            )
+
+            outspeed_percent = (outsped_usage / total_usage * 100) if total_usage > 0 else 0
+            tie_percent = (tied_usage / total_usage * 100) if total_usage > 0 else 0
+
+            # Determine result description
+            if outspeed_percent >= 100:
+                result_text = f"{pokemon_name} outspeeds all common {target_pokemon} spreads"
+            elif outspeed_percent > 50:
+                result_text = f"{pokemon_name} outspeeds most common {target_pokemon} spreads"
+            elif outspeed_percent > 0:
+                result_text = f"{pokemon_name} outspeeds some common {target_pokemon} spreads"
+            else:
+                result_text = f"{pokemon_name} is outsped by all common {target_pokemon} spreads"
+
+            # Build summary table
+            spreads_str = ", ".join([str(s["speed"]) for s in target_spreads[:3]])
+            table_lines = [
+                "| Metric           | Value                                      |",
+                "|------------------|---------------------------------------------|",
+                f"| Your Pokemon     | {pokemon_name} ({your_speed} Spe)          |",
+                f"| Target Pokemon   | {target_pokemon}                           |",
+                f"| Target Spreads   | {spreads_str}...                           |",
+                f"| Outspeed %       | {round(outspeed_percent, 1)}%              |",
+                f"| Tie %            | {round(tie_percent, 1)}%                   |",
+                f"| Result           | {result_text}                              |",
+            ]
+
+            result_dict = {
+                "pokemon": pokemon_name,
+                "your_speed": your_speed,
+                "nature": nature,
+                "speed_evs": speed_evs,
+                "target_pokemon": target_pokemon,
+                "target_spreads": target_spreads,
+                "outspeed_percent": round(outspeed_percent, 1),
+                "tie_percent": round(tie_percent, 1),
+                "result": result_text,
+                "summary_table": "\n".join(table_lines),
+                "analysis": f"{pokemon_name} ({your_speed} Speed) outspeeds {round(outspeed_percent, 1)}% of {target_pokemon} spreads"
+            }
+
+            # Add MCP-UI outspeed graph
+            if HAS_UI:
+                try:
+                    ui_resource = create_speed_outspeed_graph_resource(
+                        pokemon_name=pokemon_name,
+                        pokemon_speed=your_speed,
+                        target_pokemon=target_pokemon,
+                        target_spreads=target_spreads,
+                        outspeed_percent=outspeed_percent,
+                    )
+                    result_dict = add_ui_metadata(result_dict, ui_resource)
+                except Exception:
+                    pass  # UI is optional
+
+            return result_dict
+
+        except Exception as e:
+            return {"error": str(e)}
