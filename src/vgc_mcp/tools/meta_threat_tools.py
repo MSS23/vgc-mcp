@@ -691,13 +691,23 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
         survives_sometimes = 0 < survival_percent < 100.0
         meets_threshold = survival_percent >= survival_threshold
 
+        # Calculate HP remaining after taking damage (for clear communication)
+        # Use min/max damage to show HP remaining range
+        hp_remaining_min = max(0, your_hp - damage["max_damage"])
+        hp_remaining_max = max(0, your_hp - damage["min_damage"])
+        hp_remaining_min_pct = round((hp_remaining_min / your_hp) * 100, 1)
+        hp_remaining_max_pct = round((hp_remaining_max / your_hp) * 100, 1)
+
         # Check if attacker has Unseen Fist (Urshifu forms)
         normalized_threat = threat_pokemon.lower().replace(" ", "-")
         has_unseen_fist = normalized_threat in ("urshifu", "urshifu-single-strike", "urshifu-rapid-strike")
 
-        # Build analysis message
+        # Build analysis message with HP remaining for clarity
         if survives_guaranteed:
-            analysis_msg = f"Your {pokemon_name} survives all rolls from {threat_pokemon}'s {threat_move}"
+            analysis_msg = (
+                f"Your {pokemon_name} survives all rolls from {threat_pokemon}'s {threat_move}, "
+                f"left with {hp_remaining_min_pct}-{hp_remaining_max_pct}% HP"
+            )
         elif survival_percent == 0:
             analysis_msg = f"Your {pokemon_name} does NOT survive any rolls from {threat_pokemon}'s {threat_move}"
         else:
@@ -705,6 +715,7 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
             analysis_msg = (
                 f"Your {pokemon_name} survives {survival_percent:.1f}% of rolls "
                 f"({survival_count}/16) from {threat_pokemon}'s {threat_move}. "
+                f"When surviving, left with {hp_remaining_min_pct}-{hp_remaining_max_pct}% HP. "
                 f"{threshold_status} {survival_threshold}% threshold."
             )
 
@@ -719,6 +730,9 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
             "move_category": move_data.category.value,
             "damage_range": f"{damage['min_damage']}-{damage['max_damage']}",
             "damage_percent": f"{damage['min_percent']:.1f}%-{damage['max_percent']:.1f}%",
+            # HP remaining after taking the hit (clearer than damage percent for survival discussions)
+            "hp_remaining_range": f"{hp_remaining_min}-{hp_remaining_max}",
+            "hp_remaining_percent": f"{hp_remaining_min_pct}-{hp_remaining_max_pct}%",
             "survival_percent": round(survival_percent, 1),
             "survival_rolls": f"{survival_count}/16",
             "survives_guaranteed": survives_guaranteed,
@@ -897,6 +911,12 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                     survival_percent = 100.0 if test_hp > damage["max_damage"] else 0.0
                     survival_count = 16 if survival_percent == 100.0 else 0
 
+                # Calculate HP remaining for clearer output
+                hp_remaining_min = max(0, test_hp - damage["max_damage"])
+                hp_remaining_max = max(0, test_hp - damage["min_damage"])
+                hp_remaining_min_pct = round((hp_remaining_min / test_hp) * 100, 1)
+                hp_remaining_max_pct = round((hp_remaining_max / test_hp) * 100, 1)
+
                 # Track max achievable survival (for when threshold is impossible)
                 if survival_percent > max_achievable_survival:
                     max_achievable_survival = survival_percent
@@ -908,7 +928,8 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                         "resulting_hp": test_hp,
                         "survival_percent": round(survival_percent, 1),
                         "survival_rolls": f"{survival_count}/16",
-                        "damage_taken": f"{damage['min_percent']:.0f}%-{damage['max_percent']:.0f}%"
+                        "damage_taken": f"{damage['min_percent']:.0f}%-{damage['max_percent']:.0f}%",
+                        "hp_remaining_percent": f"{hp_remaining_min_pct}-{hp_remaining_max_pct}%"
                     }
 
                 # Check if meets threshold
@@ -924,7 +945,8 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                             "resulting_hp": test_hp,
                             "survival_percent": round(survival_percent, 1),
                             "survival_rolls": f"{survival_count}/16",
-                            "damage_taken": f"{damage['min_percent']:.0f}%-{damage['max_percent']:.0f}%"
+                            "damage_taken": f"{damage['min_percent']:.0f}%-{damage['max_percent']:.0f}%",
+                            "hp_remaining_percent": f"{hp_remaining_min_pct}-{hp_remaining_max_pct}%"
                         }
                         break  # Found minimum for this HP level
             if best_spread and best_spread["total_evs"] == min_total_evs:
@@ -960,7 +982,7 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                 "message": message
             }
         else:
-            # Build analysis message
+            # Build analysis message with HP remaining for clarity
             threshold_note = ""
             if survival_threshold < 100:
                 threshold_note = f" (meets {survival_threshold}% threshold)"
@@ -982,7 +1004,8 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                     f"{best_spread['def_evs']} Def / "
                     f"{best_spread['spd_evs']} SpD "
                     f"to survive {best_spread['survival_percent']}% of rolls "
-                    f"({best_spread['survival_rolls']}){threshold_note}"
+                    f"({best_spread['survival_rolls']}), "
+                    f"left with {best_spread['hp_remaining_percent']} HP{threshold_note}"
                 )
             }
 
