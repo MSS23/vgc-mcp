@@ -1131,7 +1131,7 @@ body::before {{
                     <optgroup label="Current Move">
                         {current_move_option}
                     </optgroup>
-                    {f'<optgroup label="⭐ {attacker} Smogon Moves">{smogon_options}</optgroup>' if smogon_options else ''}
+                    {f'<optgroup label="&#11088; {attacker} Smogon Moves">{smogon_options}</optgroup>' if smogon_options else ''}
                     <optgroup label="Physical Moves">
                         {physical_options}
                     </optgroup>
@@ -2036,13 +2036,13 @@ def create_matchup_summary_ui(
         # Verdict styling
         if verdict == "favorable":
             row_color = "rgba(76, 175, 80, 0.1)"
-            indicator = "🟢"
+            indicator = "&#128994;"
         elif verdict == "unfavorable":
             row_color = "rgba(244, 67, 54, 0.1)"
-            indicator = "🔴"
+            indicator = "&#128308;"
         else:
             row_color = "transparent"
-            indicator = "🟡"
+            indicator = "&#128993;"
 
         rows_html += f"""
         <div style="display: flex; align-items: center; padding: 8px; background: {row_color}; border-radius: 4px; margin: 4px 0;">
@@ -2074,9 +2074,9 @@ def create_matchup_summary_ui(
         <div class="card-header">
             <span class="card-title">{pokemon_name} Matchups</span>
             <div style="font-size: 12px;">
-                <span style="color: #4caf50;">✓ {favorable}</span>
+                <span style="color: #4caf50;">&#10003; {favorable}</span>
                 <span style="color: #888; margin: 0 8px;">~ {neutral}</span>
-                <span style="color: #f44336;">✗ {unfavorable}</span>
+                <span style="color: #f44336;">&#10007; {unfavorable}</span>
             </div>
         </div>
         <div style="max-height: 350px; overflow-y: auto;">
@@ -4066,10 +4066,10 @@ body {{
         <div class="title">Turn Order</div>
         <div class="toggles">
             <div class="toggle {'active' if trick_room else ''}" onclick="toggleTR(this)">
-                <span class="toggle-icon">🔄</span> Trick Room
+                <span class="toggle-icon">&#128260;</span> Trick Room
             </div>
             <div class="toggle tailwind" onclick="toggleTailwind(this)">
-                <span class="toggle-icon">💨</span> Tailwind
+                <span class="toggle-icon">&#128168;</span> Tailwind
             </div>
         </div>
     </div>
@@ -4398,7 +4398,7 @@ body {{
     <div class="selection-grid">
         <div class="selection-column">
             <div class="column-header bring">
-                <span>✓</span> Bring <span class="count">{len(bring)}/4</span>
+                <span>&#10003;</span> Bring <span class="count">{len(bring)}/4</span>
             </div>
             <div class="pokemon-list">
                 {"".join(f'''
@@ -4422,7 +4422,7 @@ body {{
 
         <div class="selection-column">
             <div class="column-header leave">
-                <span>✗</span> Leave <span class="count">{len(leave)}</span>
+                <span>&#10007;</span> Leave <span class="count">{len(leave)}</span>
             </div>
             <div class="pokemon-list">
                 {"".join(f'''
@@ -4502,8 +4502,8 @@ def create_ability_synergy_ui(
     conflicts = synergies.get("conflicts", [])
     combos = synergies.get("combos", [])
 
-    weather_icons = {"sun": "☀️", "rain": "🌧️", "sand": "🏜️", "snow": "❄️", "hail": "❄️"}
-    terrain_icons = {"electric": "⚡", "grassy": "🌿", "psychic": "🔮", "misty": "💨"}
+    weather_icons = {"sun": "☀️", "rain": "&#127783;️", "sand": "&#127964;️", "snow": "&#10052;️", "hail": "&#10052;️"}
+    terrain_icons = {"electric": "⚡", "grassy": "&#127807;", "psychic": "&#128302;", "misty": "&#128168;"}
 
     return f'''<!DOCTYPE html>
 <html>
@@ -4733,7 +4733,7 @@ body {{
 <body>
 <div class="container">
     <div class="title">
-        <span class="title-icon">🔗</span>
+        <span class="title-icon">&#128279;</span>
         Ability Synergy
     </div>
 
@@ -4750,7 +4750,7 @@ body {{
     {f'''
     <div class="synergy-section">
         <div class="section-header weather">
-            <span class="section-icon">{weather_icons.get(weather.get('type', ''), '🌤️')}</span>
+            <span class="section-icon">{weather_icons.get(weather.get('type', ''), '&#127780;️')}</span>
             {weather.get('type', 'Weather').title()} Mode
         </div>
         <div class="section-content">
@@ -4776,7 +4776,7 @@ body {{
     {f'''
     <div class="synergy-section">
         <div class="section-header terrain">
-            <span class="section-icon">{terrain_icons.get(terrain.get('type', ''), '🌍')}</span>
+            <span class="section-icon">{terrain_icons.get(terrain.get('type', ''), '&#127757;')}</span>
             {terrain.get('type', 'Terrain').title()} Terrain
         </div>
         <div class="section-content">
@@ -4802,7 +4802,7 @@ body {{
     {f'''
     <div class="synergy-section">
         <div class="section-header intimidate">
-            <span class="section-icon">😤</span>
+            <span class="section-icon">&#128548;</span>
             Intimidate Coverage
         </div>
         <div class="section-content">
@@ -4837,7 +4837,7 @@ body {{
     {f'''
     <div class="synergy-section">
         <div class="section-header combos">
-            <span class="section-icon">✨</span>
+            <span class="section-icon">&#10024;</span>
             Ability Combos
         </div>
         <div class="section-content">
@@ -4878,7 +4878,7 @@ body {{
 
     {f'''
     <div class="empty-state" style="margin-top:20px;">
-        ✓ No major synergies or conflicts detected
+        &#10003; No major synergies or conflicts detected
     </div>
     ''' if not weather.get('setter') and not terrain.get('setter') and not combos and not conflicts else ''}
 </div>
@@ -4907,7 +4907,7 @@ def _build_suggestions_section(suggestions: list[dict], get_priority_class) -> s
     return f'''
     <div class="section">
         <div class="section-header">
-            <span class="section-icon">💡</span>
+            <span class="section-icon">&#128161;</span>
             Suggestions
         </div>
         <div class="section-content">
@@ -4924,7 +4924,7 @@ def _build_legality_section(legality_issues: list[dict]) -> str:
     items_html = ''
     for i in legality_issues[:5]:
         severity = i.get("severity", "warning")
-        icon = "❌" if severity == "error" else "⚠️"
+        icon = "&#10060;" if severity == "error" else "⚠️"
         items_html += f'''
             <div class="legality-item {severity}">
                 <span class="legality-icon">{icon}</span>
@@ -5273,7 +5273,7 @@ body {{
         <div class="team-title">{team_name}</div>
         <div class="grade-display">{grade}</div>
         <div class="ready-badge {'ready' if tournament_ready else 'not-ready'}">
-            {'✓ Tournament Ready' if tournament_ready else '✗ Not Tournament Ready'}
+            {'&#10003; Tournament Ready' if tournament_ready else '&#10007; Not Tournament Ready'}
         </div>
         <div class="team-preview">
             {"".join(f'<img src="{get_sprite_url(p.get("name", ""))}" class="team-mon" onerror="this.style.display=\'none\'">' for p in team[:6])}
@@ -5282,7 +5282,7 @@ body {{
 
     <div class="section">
         <div class="section-header">
-            <span class="section-icon">📊</span>
+            <span class="section-icon">&#128202;</span>
             Analysis
         </div>
         <div class="section-content">
@@ -5290,13 +5290,13 @@ body {{
                 <div>
                     <div class="col-title strengths">Strengths</div>
                     <ul class="point-list">
-                        {"".join(f'<li class="point-item"><span class="point-icon strength">✓</span>{s}</li>' for s in strengths[:5]) or '<li class="point-item" style="color:#64748b">No major strengths identified</li>'}
+                        {"".join(f'<li class="point-item"><span class="point-icon strength">&#10003;</span>{s}</li>' for s in strengths[:5]) or '<li class="point-item" style="color:#64748b">No major strengths identified</li>'}
                     </ul>
                 </div>
                 <div>
                     <div class="col-title weaknesses">Weaknesses</div>
                     <ul class="point-list">
-                        {"".join(f'<li class="point-item"><span class="point-icon weakness">✗</span>{w}</li>' for w in weaknesses[:5]) or '<li class="point-item" style="color:#64748b">No major weaknesses identified</li>'}
+                        {"".join(f'<li class="point-item"><span class="point-icon weakness">&#10007;</span>{w}</li>' for w in weaknesses[:5]) or '<li class="point-item" style="color:#64748b">No major weaknesses identified</li>'}
                     </ul>
                 </div>
             </div>
@@ -5309,7 +5309,7 @@ body {{
 
     <div class="section">
         <div class="section-header">
-            <span class="section-icon">🎯</span>
+            <span class="section-icon">&#127919;</span>
             Type Coverage
         </div>
         <div class="section-content">
@@ -5360,10 +5360,10 @@ body {{
             </div>
             <div class="control-badges">
                 <div class="control-badge {'active' if speed_control.get('has_trick_room') else 'inactive'}">
-                    🔄 Trick Room
+                    &#128260; Trick Room
                 </div>
                 <div class="control-badge {'active' if speed_control.get('has_tailwind') else 'inactive'}">
-                    💨 Tailwind
+                    &#128168; Tailwind
                 </div>
             </div>
         </div>
@@ -5413,7 +5413,7 @@ def create_summary_table_ui(
     if analysis:
         analysis_html = f"""
         <div class="analysis-box">
-            <span class="analysis-icon">💡</span>
+            <span class="analysis-icon">&#128161;</span>
             <span class="analysis-text">{analysis}</span>
         </div>
         """
@@ -5558,19 +5558,19 @@ def create_speed_outspeed_graph_ui(
     # Result color
     if outspeed_percent >= 80:
         result_class = "excellent"
-        result_emoji = "🟢"
+        result_emoji = "&#128994;"
     elif outspeed_percent >= 50:
         result_class = "good"
-        result_emoji = "🟡"
+        result_emoji = "&#128993;"
     else:
         result_class = "poor"
-        result_emoji = "🔴"
+        result_emoji = "&#128308;"
 
     # Create speed tier list
     tiers_html = ""
     for mark in speed_marks:
         tier_class = "outsped" if mark["outspeeds"] else "not-outsped"
-        check = "✓" if mark["outspeeds"] else "✗"
+        check = "&#10003;" if mark["outspeeds"] else "&#10007;"
         tiers_html += f"""
         <div class="tier-row {tier_class}">
             <span class="tier-check">{check}</span>
@@ -5811,7 +5811,7 @@ def create_multi_hit_survival_ui(
     if survives:
         status_class = "survives"
         status_text = "Survives"
-        status_emoji = "✓"
+        status_emoji = "&#10003;"
     elif survival_chance > 0:
         status_class = "possible"
         status_text = f"{survival_chance:.1f}% to survive"
@@ -5819,7 +5819,7 @@ def create_multi_hit_survival_ui(
     else:
         status_class = "faints"
         status_text = "Faints"
-        status_emoji = "✗"
+        status_emoji = "&#10007;"
 
     # Build hit visualization
     hits_html = ""

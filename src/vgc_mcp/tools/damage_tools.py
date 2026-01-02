@@ -7,7 +7,8 @@ from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
 from vgc_mcp_core.calc.damage import calculate_damage, calculate_ko_threshold, calculate_bulk_threshold
 from vgc_mcp_core.calc.modifiers import DamageModifiers
-from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, IVSpread
+from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, IVSpread, get_nature_modifier
+from vgc_mcp_core.calc.stats import calculate_stat, calculate_hp
 from vgc_mcp_core.utils.errors import error_response, ErrorCodes, pokemon_not_found_error, invalid_nature_error, api_error
 from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name, suggest_nature
 
@@ -714,7 +715,29 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 table_lines.append(f"| Defender Item    | {defender_item}                            |")
 
             response["summary_table"] = "\n".join(table_lines)
-            response["analysis"] = f"{attacker_name}'s {move_name} deals {min_pct}-{max_pct}% to {defender_name}, leaving it at {hp_remain_min_pct}-{hp_remain_max_pct}% HP. {result.ko_chance}."
+
+            # Build descriptive spread strings for analysis (Showdown format)
+            is_physical = move.category.value == "physical"
+            relevant_atk_evs = attacker_atk_evs if is_physical else attacker_spa_evs
+            stat_name = "Atk" if is_physical else "SpA"
+
+            # Get nature modifiers for attacker
+            atk_nature_mod = get_nature_modifier(atk_nature, "attack")
+            spa_nature_mod = get_nature_modifier(atk_nature, "special_attack")
+
+            # Build attacker spread string (e.g., "252+ Atk Mystic Water")
+            nature_boost = "+" if (is_physical and atk_nature_mod > 1.0) or (not is_physical and spa_nature_mod > 1.0) else ""
+            nature_penalty = "-" if (is_physical and atk_nature_mod < 1.0) or (not is_physical and spa_nature_mod < 1.0) else ""
+            nature_indicator = nature_boost or nature_penalty
+            item_str = f" {attacker_item.replace('-', ' ').title()}" if attacker_item else ""
+            attacker_spread_str = f"{relevant_atk_evs}{nature_indicator} {stat_name}{item_str} {attacker_name}"
+
+            # Build defender spread string (e.g., "132 HP / 196 Def")
+            relevant_def_evs = defender_def_evs if is_physical else defender_spd_evs
+            def_stat_name = "Def" if is_physical else "SpD"
+            defender_spread_str = f"{defender_hp_evs} HP / {relevant_def_evs} {def_stat_name} {defender_name}"
+
+            response["analysis"] = f"{attacker_spread_str}'s {move_name} vs {defender_spread_str}: {min_pct}-{max_pct}% ({hp_remain_min_pct}-{hp_remain_max_pct}% remaining). {result.ko_chance}."
 
             # Add MCP-UI resource for interactive damage display with editable spreads
             # (only available in vgc-mcp-lite)
@@ -1230,9 +1253,29 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 f"| Verdict          | {verdict_str}                              |",
             ]
 
-            # Build analysis prose
+            # Build analysis prose with spread details (Showdown format)
             survival_word = "survives" if survives_guaranteed else ("may survive" if survives_possible else "does not survive")
-            analysis_str = f"{defender_name} {survival_word} {num_hits}x {attacker_name}'s {move_name} — takes {total_min_percent:.0f}-{total_max_percent:.0f}% total, left at {hp_remain_min_pct}-{hp_remain_max_pct}% HP"
+            is_physical = move.category.value == "physical"
+            relevant_atk_evs = attacker_atk_evs if is_physical else attacker_spa_evs
+            stat_name = "Atk" if is_physical else "SpA"
+
+            # Get nature modifiers for attacker
+            atk_nature_mod = get_nature_modifier(atk_nature, "attack")
+            spa_nature_mod = get_nature_modifier(atk_nature, "special_attack")
+
+            # Build attacker spread string (e.g., "252+ Atk Mystic Water")
+            nature_boost = "+" if (is_physical and atk_nature_mod > 1.0) or (not is_physical and spa_nature_mod > 1.0) else ""
+            nature_penalty = "-" if (is_physical and atk_nature_mod < 1.0) or (not is_physical and spa_nature_mod < 1.0) else ""
+            nature_indicator = nature_boost or nature_penalty
+            item_str = f" {attacker_item.replace('-', ' ').title()}" if attacker_item else ""
+            attacker_spread_str = f"{relevant_atk_evs}{nature_indicator} {stat_name}{item_str} {attacker_name}"
+
+            # Build defender spread string (e.g., "132 HP / 196 Def")
+            relevant_def_evs = defender_def_evs if is_physical else defender_spd_evs
+            def_stat_name = "Def" if is_physical else "SpD"
+            defender_spread_str = f"{defender_hp_evs} HP / {relevant_def_evs} {def_stat_name} {defender_name}"
+
+            analysis_str = f"{defender_spread_str} {survival_word} {num_hits}x {attacker_spread_str}'s {move_name} — takes {total_min_percent:.0f}-{total_max_percent:.0f}% total, left at {hp_remain_min_pct}-{hp_remain_max_pct}% HP"
 
             response = {
                 "attacker": attacker_name,
