@@ -123,3 +123,43 @@ def make_pokemon(name, types, base_hp=80, ...):
 - `httpx` - Async HTTP client for APIs
 - `pydantic` - Data validation
 - `diskcache` - Persistent API caching
+
+## Smogon Data Source
+
+Usage stats are pulled from Smogon's chaos JSON files:
+- **URL**: `https://www.smogon.com/stats/{YYYY-MM}/chaos/{format}-{rating}.json`
+- **Rating**: 1760 (highest available ELO cutoff)
+- **Available ratings**: 0, 1500, 1630, 1760
+- **Auto-detection**: Finds latest available month automatically
+
+## Damage Calculation Output Format
+
+When presenting damage calculation results to users, format them as markdown tables for readability:
+
+**Header format:**
+```
+Your [Pokemon Name]
+[Nature] | [HP] HP / [Atk] Atk / [Def] Def / [SpD] SpD / [Spe] Spe | [Item]
+```
+
+**Damage dealt table:**
+| Target | Their Spread | Item | Damage | Result |
+|--------|--------------|------|--------|--------|
+| Rillaboom | Adamant 252/116/4/0/60/76 | Assault Vest | 130-154% | OHKO |
+
+**Damage taken table:**
+| Attacker | Their Spread | Item | Move | Damage |
+|----------|--------------|------|------|--------|
+| Tornadus | Timid 36/0/12/204/4/252 | Covert Cloak | Bleakwind Storm | 85-100% |
+
+**Result column values:**
+- OHKO (guaranteed one-hit KO)
+- X% OHKO (probability)
+- 2HKO, 3HKO for multi-hit KOs
+- "Resists" for low damage (<30%)
+
+**Include a "Key Takeaways" section** summarizing:
+- Biggest threats (moves that can OHKO or come close)
+- Pokemon you OHKO reliably
+- Notable type resistances/immunities
+- Weather/terrain interactions
