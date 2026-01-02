@@ -1860,7 +1860,7 @@ def create_speed_tier_ui(
             tiers_html += f"""
             <div class="speed-tier current">
                 <span class="speed-value">{pokemon_speed}</span>
-                <span class="speed-pokemon">{pokemon_name} ★</span>
+                <span class="speed-pokemon">{pokemon_name} &#9733;</span>
             </div>
             """
 
@@ -1879,7 +1879,7 @@ def create_speed_tier_ui(
         tiers_html += f"""
         <div class="speed-tier current">
             <span class="speed-value">{pokemon_speed}</span>
-            <span class="speed-pokemon">{pokemon_name} ★</span>
+            <span class="speed-pokemon">{pokemon_name} &#9733;</span>
         </div>
         """
 
@@ -4502,8 +4502,8 @@ def create_ability_synergy_ui(
     conflicts = synergies.get("conflicts", [])
     combos = synergies.get("combos", [])
 
-    weather_icons = {"sun": "☀️", "rain": "&#127783;️", "sand": "&#127964;️", "snow": "&#10052;️", "hail": "&#10052;️"}
-    terrain_icons = {"electric": "⚡", "grassy": "&#127807;", "psychic": "&#128302;", "misty": "&#128168;"}
+    weather_icons = {"sun": "&#9728;", "rain": "&#127783;️", "sand": "&#127964;️", "snow": "&#10052;️", "hail": "&#10052;️"}
+    terrain_icons = {"electric": "&#9889;", "grassy": "&#127807;", "psychic": "&#128302;", "misty": "&#128168;"}
 
     return f'''<!DOCTYPE html>
 <html>
@@ -4849,8 +4849,8 @@ body {{
                 <div class="combo-info">
                     <div class="combo-effect">{c.get('effect', '')}</div>
                     <div class="combo-rating">
-                        {"".join(f'<span class="rating-star">★</span>' for _ in range(c.get('rating', 3)))}
-                        {"".join(f'<span class="rating-star empty">★</span>' for _ in range(5 - c.get('rating', 3)))}
+                        {"".join(f'<span class="rating-star">&#9733;</span>' for _ in range(c.get('rating', 3)))}
+                        {"".join(f'<span class="rating-star empty">&#9733;</span>' for _ in range(5 - c.get('rating', 3)))}
                     </div>
                 </div>
             </div>
@@ -4862,13 +4862,13 @@ body {{
     {f'''
     <div class="synergy-section">
         <div class="section-header conflicts">
-            <span class="section-icon">⚠️</span>
+            <span class="section-icon">&#9888;</span>
             Conflicts
         </div>
         <div class="section-content">
             {"".join(f'''
             <div class="conflict-item">
-                <span class="conflict-icon">⚠️</span>
+                <span class="conflict-icon">&#9888;</span>
                 <span class="conflict-text">{c.get('reason', '')}</span>
             </div>
             ''' for c in conflicts)}
@@ -4924,7 +4924,7 @@ def _build_legality_section(legality_issues: list[dict]) -> str:
     items_html = ''
     for i in legality_issues[:5]:
         severity = i.get("severity", "warning")
-        icon = "&#10060;" if severity == "error" else "⚠️"
+        icon = "&#10060;" if severity == "error" else "&#9888;"
         items_html += f'''
             <div class="legality-item {severity}">
                 <span class="legality-icon">{icon}</span>
@@ -4937,7 +4937,7 @@ def _build_legality_section(legality_issues: list[dict]) -> str:
     return f'''
     <div class="section">
         <div class="section-header">
-            <span class="section-icon">⚠️</span>
+            <span class="section-icon">&#9888;</span>
             Legality Issues
         </div>
         <div class="section-content">
@@ -5338,7 +5338,7 @@ body {{
 
     <div class="section">
         <div class="section-header">
-            <span class="section-icon">⚡</span>
+            <span class="section-icon">&#9889;</span>
             Speed Control
         </div>
         <div class="section-content">
