@@ -210,6 +210,28 @@ class DamageModifiers:
     # +10% Atk/SpA per fainted ally (up to +50% with 5 fainted)
     supreme_overlord_count: int = 0
 
+    # Variable BP move support
+    # For Eruption/Water Spout: current and max HP
+    attacker_current_hp: Optional[int] = None
+    attacker_max_hp: Optional[int] = None
+    # For Hex/Infernal Parade: target is statused
+    defender_statused: bool = False
+    # For Guts/Facade: attacker is statused (burn, poison, paralysis)
+    attacker_statused: bool = False
+    # For Analytic: moving last in turn order
+    moving_last: bool = False
+    # For Steely Spirit: ally has Steely Spirit ability
+    ally_steely_spirit: bool = False
+    # For Stored Power/Power Trip: total positive stat stages
+    total_positive_stages: int = 0
+    # For weight-based moves: attacker and defender weights in kg
+    attacker_weight: Optional[float] = None
+    defender_weight: Optional[float] = None
+    # For Rage Fist: times the user has been hit this battle
+    times_hit: int = 0
+    # For Last Respects: number of fainted party members
+    fainted_party_count: int = 0
+
     def get_weather_modifier(self, move_type: str) -> float:
         """Get weather damage modifier for a move type."""
         move_type = move_type.capitalize()

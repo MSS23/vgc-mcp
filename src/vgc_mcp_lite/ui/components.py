@@ -48,6 +48,38 @@ def get_sprite_url(pokemon_name: str, animated: bool = True) -> str:
         return f"https://img.pokemondb.net/sprites/home/normal/{normalized}.png"
 
 
+# SVG placeholder for broken sprites - simple pokeball silhouette
+SPRITE_PLACEHOLDER = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'%3E%3Ccircle cx='48' cy='48' r='40' fill='%23333' stroke='%23555' stroke-width='3'/%3E%3Cline x1='8' y1='48' x2='88' y2='48' stroke='%23555' stroke-width='3'/%3E%3Ccircle cx='48' cy='48' r='10' fill='%23555' stroke='%23666' stroke-width='2'/%3E%3C/svg%3E"
+
+
+def get_sprite_html(
+    pokemon_name: str,
+    size: int = 80,
+    css_class: str = "pokemon-sprite",
+    animated: bool = True
+) -> str:
+    """Create a sprite img element with proper fallback handling.
+
+    Includes onerror fallback to static sprite and placeholder if both fail.
+
+    Args:
+        pokemon_name: Name of the Pokemon
+        size: Size in pixels (default 80)
+        css_class: CSS class for the img element
+        animated: Whether to try animated sprite first
+
+    Returns:
+        HTML img element string with fallback chain
+    """
+    primary_url = get_sprite_url(pokemon_name, animated=True)
+    fallback_url = get_sprite_url(pokemon_name, animated=False)
+
+    # Escape quotes in pokemon name for alt text
+    safe_name = pokemon_name.replace("'", "&#39;").replace('"', "&quot;")
+
+    return f'''<img src="{primary_url}" alt="{safe_name}" class="{css_class}" style="width:{size}px;height:{size}px;" onerror="if(this.src!=='{fallback_url}'){{this.src='{fallback_url}';}}else{{this.src='{SPRITE_PLACEHOLDER}';this.style.opacity='0.4';}}">'''
+
+
 def get_type_color(type_name: str) -> str:
     """Get CSS color for a Pokemon type."""
     type_colors = {
@@ -1150,7 +1182,7 @@ body::before {{
             <!-- Attacker -->
             <div class="pokemon-card attacker">
                 <div class="card-header">
-                    <img src="{get_sprite_url(attacker)}" class="pokemon-sprite" alt="{attacker}">
+                    {get_sprite_html(attacker, size=80, css_class="pokemon-sprite")}
                     <div class="pokemon-details">
                         <div class="pokemon-name">{attacker}</div>
                         <span class="role-badge attacker">Attacker</span>
@@ -1207,7 +1239,7 @@ body::before {{
             <!-- Defender -->
             <div class="pokemon-card defender">
                 <div class="card-header">
-                    <img src="{get_sprite_url(defender)}" class="pokemon-sprite" alt="{defender}">
+                    {get_sprite_html(defender, size=80, css_class="pokemon-sprite")}
                     <div class="pokemon-details">
                         <div class="pokemon-name">{defender}</div>
                         <span class="role-badge defender">Defender</span>
@@ -1664,7 +1696,7 @@ def _create_static_damage_calc_ui(
         <div class="flex gap-2 items-center" style="margin-bottom: 16px;">
             <!-- Attacker -->
             <div style="flex: 1; text-align: center;">
-                <img src="{get_sprite_url(attacker)}" class="pokemon-sprite" alt="{attacker}" style="width: 80px; height: 80px;">
+                {get_sprite_html(attacker, size=80, css_class="pokemon-sprite")}
                 <div class="pokemon-name">{attacker}</div>
                 {attacker_item_html}
             </div>
@@ -1678,7 +1710,7 @@ def _create_static_damage_calc_ui(
 
             <!-- Defender -->
             <div style="flex: 1; text-align: center;">
-                <img src="{get_sprite_url(defender)}" class="pokemon-sprite" alt="{defender}" style="width: 80px; height: 80px;">
+                {get_sprite_html(defender, size=80, css_class="pokemon-sprite")}
                 <div class="pokemon-name">{defender}</div>
                 {defender_item_html}
             </div>
@@ -1706,7 +1738,7 @@ def create_team_roster_ui(
     team: list[dict[str, Any]],
     team_name: Optional[str] = None,
 ) -> str:
-    """Create team roster UI HTML.
+    """Create team roster UI HTML with glassmorphism and staggered animations.
 
     Args:
         team: List of Pokemon dicts with keys: name, item, ability, moves, evs, types, tera_type
@@ -1715,9 +1747,7 @@ def create_team_roster_ui(
     Returns:
         HTML string for the team roster UI
     """
-    styles = get_shared_styles()
-
-    # Build Pokemon cards
+    # Build Pokemon cards with staggered animation delays
     cards_html = ""
     for i, pokemon in enumerate(team):
         name = pokemon.get("name", "Unknown")
@@ -1727,20 +1757,26 @@ def create_team_roster_ui(
         evs = pokemon.get("evs", {})
         types = pokemon.get("types", [])
         tera_type = pokemon.get("tera_type")
+        nature = pokemon.get("nature", "")
 
-        # Type badges
+        # Get primary type for card gradient
+        primary_type = types[0].lower() if types else "normal"
+
+        # Type badges with enhanced styling
         type_badges = " ".join(
-            f'<span class="type-badge type-{t.lower()}">{t}</span>'
+            f'<span class="type-badge-modern type-{t.lower()}">{t}</span>'
             for t in types
         )
 
-        # Tera type if different
+        # Tera type badge with crystalline effect
         tera_html = ""
-        if tera_type and tera_type.lower() not in [t.lower() for t in types]:
+        if tera_type:
             tera_color = get_type_color(tera_type)
-            tera_html = f'<span class="type-badge" style="background: {tera_color}; border: 1px dashed white;">Tera {tera_type}</span>'
+            tera_html = f'''<span class="tera-badge" style="--tera-color: {tera_color};">
+                <span class="tera-icon">&#10022;</span> Tera {tera_type}
+            </span>'''
 
-        # Moves
+        # Moves with type colors
         moves_html = ""
         for move_data in moves[:4]:
             if isinstance(move_data, dict):
@@ -1750,51 +1786,413 @@ def create_team_roster_ui(
                 move_name = str(move_data)
                 move_type = "normal"
             move_color = get_type_color(move_type)
-            moves_html += f'<span class="move-tag" style="background: {move_color};">{move_name}</span>'
+            moves_html += f'<span class="move-pill" style="--move-color: {move_color};">{move_name}</span>'
 
-        # EVs summary
+        # EVs summary with stat colors
         ev_parts = []
+        stat_colors = {
+            "hp": "#ff5959", "attack": "#f5ac78", "defense": "#fae078",
+            "special_attack": "#9db7f5", "special_defense": "#a7db8d", "speed": "#fa92b2"
+        }
         for stat, val in evs.items():
             if val and val > 0:
                 stat_abbr = {"hp": "HP", "attack": "Atk", "defense": "Def", "special_attack": "SpA", "special_defense": "SpD", "speed": "Spe"}.get(stat, stat)
-                ev_parts.append(f"{val} {stat_abbr}")
-        evs_text = " / ".join(ev_parts[:3]) if ev_parts else "No EVs"
+                color = stat_colors.get(stat, "#888")
+                ev_parts.append(f'<span style="color: {color};">{val} {stat_abbr}</span>')
+        evs_html = " / ".join(ev_parts[:3]) if ev_parts else '<span style="color: #666;">No EVs</span>'
         if len(ev_parts) > 3:
-            evs_text += f" (+{len(ev_parts) - 3} more)"
+            evs_html += f' <span style="color: #666;">(+{len(ev_parts) - 3})</span>'
+
+        # Animation delay based on card index
+        delay = i * 0.1
 
         cards_html += f"""
-        <div class="pokemon-card">
-            <img src="{get_sprite_url(name)}" class="pokemon-sprite" alt="{name}">
-            <div class="pokemon-info">
-                <div class="pokemon-name">{name}</div>
-                <div style="margin: 4px 0;">{type_badges} {tera_html}</div>
-                <div class="pokemon-item">@ {item}</div>
-                <div style="font-size: 11px; color: #a0a0a0;">{ability}</div>
-                <div class="move-list mt-2">{moves_html}</div>
-                <div style="font-size: 11px; color: #666; margin-top: 4px;">{evs_text}</div>
+        <div class="team-card" style="animation-delay: {delay}s; --type-color: {get_type_color(primary_type)};">
+            <div class="card-shine"></div>
+            <div class="card-content">
+                <div class="sprite-wrapper">
+                    {get_sprite_html(name, size=72, css_class="team-sprite")}
+                </div>
+                <div class="pokemon-details">
+                    <div class="pokemon-header">
+                        <span class="poke-name">{name}</span>
+                        {f'<span class="nature-tag">{nature}</span>' if nature else ''}
+                    </div>
+                    <div class="types-row">{type_badges} {tera_html}</div>
+                    <div class="item-row">
+                        <span class="item-icon">&#128188;</span>
+                        <span class="item-name">{item}</span>
+                    </div>
+                    <div class="ability-row">{ability}</div>
+                    <div class="moves-grid">{moves_html}</div>
+                    <div class="evs-row">{evs_html}</div>
+                </div>
             </div>
         </div>
         """
 
-    # Team header
-    header_text = team_name if team_name else f"Team ({len(team)}/6)"
+    # Team header with count
+    header_text = team_name if team_name else "Team Roster"
     slots_remaining = 6 - len(team)
-    slots_html = f'<span class="text-muted">{slots_remaining} slots remaining</span>' if slots_remaining > 0 else ""
+    slots_badge = f'<span class="slots-badge">{len(team)}/6</span>'
+    empty_slots = ""
+    if slots_remaining > 0:
+        empty_slots = f'<span class="empty-slots">{slots_remaining} slot{"s" if slots_remaining != 1 else ""} remaining</span>'
 
     return f"""<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>{styles}</style>
+    <style>
+* {{
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}}
+
+body {{
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: linear-gradient(135deg, #0c0c14 0%, #12121f 50%, #0a0a12 100%);
+    color: #e4e4e7;
+    line-height: 1.5;
+    min-height: 100vh;
+    padding: 24px;
+}}
+
+/* Ambient background glow */
+body::before {{
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image:
+        radial-gradient(circle at 20% 30%, rgba(99, 102, 241, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 80% 70%, rgba(139, 92, 246, 0.06) 0%, transparent 40%);
+    pointer-events: none;
+    z-index: -1;
+}}
+
+/* Keyframe animations */
+@keyframes fadeSlideIn {{
+    0% {{ opacity: 0; transform: translateY(30px) scale(0.95); }}
+    100% {{ opacity: 1; transform: translateY(0) scale(1); }}
+}}
+
+@keyframes shimmer {{
+    0% {{ background-position: -200% 0; }}
+    100% {{ background-position: 200% 0; }}
+}}
+
+@keyframes spriteBounce {{
+    0%, 100% {{ transform: translateY(0); }}
+    50% {{ transform: translateY(-6px); }}
+}}
+
+@keyframes pulseGlow {{
+    0%, 100% {{ box-shadow: 0 0 20px var(--type-color, rgba(99, 102, 241, 0.3)); }}
+    50% {{ box-shadow: 0 0 35px var(--type-color, rgba(99, 102, 241, 0.5)); }}
+}}
+
+/* Container */
+.roster-container {{
+    max-width: 1200px;
+    margin: 0 auto;
+}}
+
+/* Header */
+.roster-header {{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 28px;
+    padding: 20px 24px;
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}}
+
+.header-title {{
+    font-size: 24px;
+    font-weight: 700;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}}
+
+.slots-badge {{
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}}
+
+.empty-slots {{
+    font-size: 13px;
+    color: #71717a;
+}}
+
+/* Team grid */
+.team-grid-modern {{
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 20px;
+}}
+
+@media (max-width: 720px) {{
+    .team-grid-modern {{
+        grid-template-columns: 1fr;
+    }}
+}}
+
+/* Team card - glassmorphism */
+.team-card {{
+    background: rgba(255, 255, 255, 0.02);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    overflow: hidden;
+    position: relative;
+    animation: fadeSlideIn 0.6s cubic-bezier(0.4, 0, 0.2, 1) backwards;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow:
+        0 4px 24px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}}
+
+.team-card:hover {{
+    transform: translateY(-6px);
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow:
+        0 20px 40px rgba(0, 0, 0, 0.3),
+        0 0 30px var(--type-color, rgba(99, 102, 241, 0.15));
+}}
+
+/* Card shine effect */
+.card-shine {{
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+        135deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.03) 40%,
+        rgba(255, 255, 255, 0.08) 50%,
+        rgba(255, 255, 255, 0.03) 60%,
+        transparent 100%
+    );
+    background-size: 200% 200%;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    pointer-events: none;
+}}
+
+.team-card:hover .card-shine {{
+    opacity: 1;
+    animation: shimmer 2s ease-in-out infinite;
+}}
+
+.card-content {{
+    display: flex;
+    gap: 16px;
+    padding: 20px;
+    position: relative;
+    z-index: 1;
+}}
+
+/* Sprite wrapper */
+.sprite-wrapper {{
+    flex-shrink: 0;
+    width: 96px;
+    height: 96px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.05) 0%, transparent 70%);
+    border-radius: 16px;
+}}
+
+.team-sprite {{
+    width: 80px;
+    height: 80px;
+    image-rendering: auto;
+    filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.4));
+    transition: transform 0.3s ease;
+}}
+
+.team-card:hover .team-sprite {{
+    animation: spriteBounce 0.6s ease;
+}}
+
+/* Pokemon details */
+.pokemon-details {{
+    flex: 1;
+    min-width: 0;
+}}
+
+.pokemon-header {{
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}}
+
+.poke-name {{
+    font-size: 18px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: -0.02em;
+}}
+
+.nature-tag {{
+    font-size: 10px;
+    padding: 3px 8px;
+    background: rgba(139, 92, 246, 0.2);
+    color: #a78bfa;
+    border-radius: 6px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}}
+
+/* Type badges */
+.types-row {{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+}}
+
+.type-badge-modern {{
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}}
+
+/* Type colors */
+.type-normal {{ background: linear-gradient(135deg, #A8A878, #8a8a5c); }}
+.type-fire {{ background: linear-gradient(135deg, #F08030, #c4682a); }}
+.type-water {{ background: linear-gradient(135deg, #6890F0, #5070c0); }}
+.type-electric {{ background: linear-gradient(135deg, #F8D030, #c4a828); }}
+.type-grass {{ background: linear-gradient(135deg, #78C850, #5ca040); }}
+.type-ice {{ background: linear-gradient(135deg, #98D8D8, #70b0b0); }}
+.type-fighting {{ background: linear-gradient(135deg, #C03028, #901820); }}
+.type-poison {{ background: linear-gradient(135deg, #A040A0, #803080); }}
+.type-ground {{ background: linear-gradient(135deg, #E0C068, #b09048); }}
+.type-flying {{ background: linear-gradient(135deg, #A890F0, #8070c0); }}
+.type-psychic {{ background: linear-gradient(135deg, #F85888, #c04060); }}
+.type-bug {{ background: linear-gradient(135deg, #A8B820, #889010); }}
+.type-rock {{ background: linear-gradient(135deg, #B8A038, #907820); }}
+.type-ghost {{ background: linear-gradient(135deg, #705898, #504070); }}
+.type-dragon {{ background: linear-gradient(135deg, #7038F8, #5028c0); }}
+.type-dark {{ background: linear-gradient(135deg, #705848, #503830); }}
+.type-steel {{ background: linear-gradient(135deg, #B8B8D0, #9090a8); }}
+.type-fairy {{ background: linear-gradient(135deg, #EE99AC, #c07088); }}
+
+/* Tera badge */
+.tera-badge {{
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+    border: 1px dashed var(--tera-color, #fff);
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--tera-color, #fff);
+}}
+
+.tera-icon {{
+    font-size: 12px;
+}}
+
+/* Item row */
+.item-row {{
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #a1a1aa;
+    margin-bottom: 4px;
+}}
+
+.item-icon {{
+    font-size: 14px;
+}}
+
+.item-name {{
+    font-weight: 500;
+}}
+
+/* Ability row */
+.ability-row {{
+    font-size: 11px;
+    color: #71717a;
+    font-style: italic;
+    margin-bottom: 10px;
+}}
+
+/* Moves grid */
+.moves-grid {{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+}}
+
+.move-pill {{
+    padding: 4px 10px;
+    background: var(--move-color, #888);
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #fff;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}}
+
+.move-pill:hover {{
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}}
+
+/* EVs row */
+.evs-row {{
+    font-size: 11px;
+    color: #888;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+}}
+    </style>
 </head>
 <body>
-    <div class="card">
-        <div class="card-header">
-            <span class="card-title">{header_text}</span>
-            {slots_html}
+    <div class="roster-container">
+        <div class="roster-header">
+            <div class="header-title">
+                {header_text}
+                {slots_badge}
+            </div>
+            {empty_slots}
         </div>
-        <div class="team-grid">
+        <div class="team-grid-modern">
             {cards_html}
         </div>
     </div>
@@ -1808,7 +2206,7 @@ def create_speed_tier_ui(
     speed_tiers: list[dict[str, Any]],
     modifiers: Optional[dict[str, bool]] = None,
 ) -> str:
-    """Create speed tier analyzer UI HTML.
+    """Create speed tier analyzer UI HTML with race track visualization.
 
     Args:
         pokemon_name: Name of the Pokemon being analyzed
@@ -1819,90 +2217,565 @@ def create_speed_tier_ui(
     Returns:
         HTML string for the speed tier UI
     """
-    styles = get_shared_styles()
     modifiers = modifiers or {}
 
-    # Build modifier badges
-    mod_badges = ""
-    if modifiers.get("tailwind"):
-        mod_badges += '<span class="ko-badge" style="background: #4da6ff;">Tailwind (2x)</span> '
-    if modifiers.get("trick_room"):
-        mod_badges += '<span class="ko-badge" style="background: #f85888;">Trick Room</span> '
-    if modifiers.get("paralysis"):
-        mod_badges += '<span class="ko-badge" style="background: #f8d030; color: #333;">Paralyzed (0.5x)</span> '
-    if modifiers.get("choice_scarf"):
-        mod_badges += '<span class="ko-badge" style="background: #ff9800;">Choice Scarf (1.5x)</span> '
+    # Calculate max speed for positioning
+    all_speeds = [t.get("speed", 0) for t in speed_tiers] + [pokemon_speed]
+    max_speed = max(all_speeds) if all_speeds else 200
+    min_speed = min(all_speeds) if all_speeds else 0
+
+    # Build modifier toggle buttons
+    mod_buttons = ""
+    tailwind_active = "active" if modifiers.get("tailwind") else ""
+    trick_room_active = "active" if modifiers.get("trick_room") else ""
+    scarf_active = "active" if modifiers.get("choice_scarf") else ""
+    paralysis_active = "active" if modifiers.get("paralysis") else ""
+
+    mod_buttons = f"""
+    <div class="modifier-toggles">
+        <button class="mod-btn tailwind {tailwind_active}" data-mod="tailwind">
+            <span class="mod-icon">&#127744;</span> Tailwind
+        </button>
+        <button class="mod-btn trick-room {trick_room_active}" data-mod="trick_room">
+            <span class="mod-icon">&#128302;</span> Trick Room
+        </button>
+        <button class="mod-btn scarf {scarf_active}" data-mod="choice_scarf">
+            <span class="mod-icon">&#129507;</span> Scarf
+        </button>
+        <button class="mod-btn paralysis {paralysis_active}" data-mod="paralysis">
+            <span class="mod-icon">&#9889;</span> Paralyzed
+        </button>
+    </div>
+    """
 
     # Sort tiers by speed (descending, or ascending for Trick Room)
-    sorted_tiers = sorted(speed_tiers, key=lambda x: x.get("speed", 0), reverse=not modifiers.get("trick_room"))
+    is_trick_room = modifiers.get("trick_room", False)
+    sorted_tiers = sorted(speed_tiers, key=lambda x: x.get("speed", 0), reverse=not is_trick_room)
 
-    # Build tier rows
-    tiers_html = ""
-    user_found = False
+    # Build race track lanes
+    lanes_html = ""
+    position = 1
 
-    for tier in sorted_tiers:
+    # Add user's Pokemon to the mix for sorting
+    all_pokemon = sorted_tiers.copy()
+    user_entry = {"name": pokemon_name, "speed": pokemon_speed, "is_user": True}
+    all_pokemon.append(user_entry)
+
+    # Re-sort with user included
+    all_pokemon = sorted(all_pokemon, key=lambda x: x.get("speed", 0), reverse=not is_trick_room)
+
+    for i, tier in enumerate(all_pokemon):
         tier_name = tier.get("name", "Unknown")
         tier_speed = tier.get("speed", 0)
         is_common = tier.get("common", False)
+        is_user = tier.get("is_user", False)
 
-        # Determine if this is faster/slower than user's Pokemon
-        if modifiers.get("trick_room"):
-            is_faster = tier_speed < pokemon_speed
+        # Calculate position percentage (how far along the track)
+        if max_speed > min_speed:
+            if is_trick_room:
+                # In Trick Room, lower speed = further along
+                position_pct = 100 - ((tier_speed - min_speed) / (max_speed - min_speed) * 100)
+            else:
+                position_pct = (tier_speed - min_speed) / (max_speed - min_speed) * 100
         else:
-            is_faster = tier_speed > pokemon_speed
+            position_pct = 50
 
-        # Check if this is the user's Pokemon position
-        is_current = tier_name.lower() == pokemon_name.lower()
+        # Determine lane class
+        if is_user:
+            lane_class = "user-lane"
+            indicator = "&#9733;"
+        elif is_trick_room:
+            lane_class = "faster-lane" if tier_speed < pokemon_speed else "slower-lane"
+            indicator = "&#9679;" if is_common else ""
+        else:
+            lane_class = "faster-lane" if tier_speed > pokemon_speed else "slower-lane"
+            indicator = "&#9679;" if is_common else ""
 
-        # Insert user's Pokemon in correct position
-        if not user_found and not is_faster and not is_current:
-            user_found = True
-            tiers_html += f"""
-            <div class="speed-tier current">
-                <span class="speed-value">{pokemon_speed}</span>
-                <span class="speed-pokemon">{pokemon_name} &#9733;</span>
+        # Speed tie detection
+        speed_tie = ""
+        if tier_speed == pokemon_speed and not is_user:
+            speed_tie = '<span class="speed-tie-badge">SPEED TIE</span>'
+            lane_class = "tie-lane"
+
+        # Animation delay based on position
+        delay = i * 0.05
+
+        lanes_html += f"""
+        <div class="race-lane {lane_class}" style="animation-delay: {delay}s;">
+            <div class="lane-position">#{position}</div>
+            <div class="lane-sprite">
+                {get_sprite_html(tier_name, size=48, css_class="racer-sprite")}
             </div>
-            """
-
-        tier_class = "current" if is_current else ("faster" if is_faster else "slower")
-        common_badge = '<span style="font-size: 10px; color: #4caf50;">●</span>' if is_common else ""
-
-        tiers_html += f"""
-        <div class="speed-tier {tier_class}">
-            <span class="speed-value">{tier_speed}</span>
-            <span class="speed-pokemon">{tier_name} {common_badge}</span>
+            <div class="lane-info">
+                <span class="racer-name">{tier_name} {indicator}</span>
+                {speed_tie}
+            </div>
+            <div class="lane-track">
+                <div class="track-bar">
+                    <div class="track-fill" style="width: {position_pct}%;"></div>
+                    <div class="track-marker" style="left: {position_pct}%;"></div>
+                </div>
+            </div>
+            <div class="lane-speed">{tier_speed}</div>
         </div>
         """
+        position += 1
 
-    # If user's Pokemon is slowest, add at end
-    if not user_found:
-        tiers_html += f"""
-        <div class="speed-tier current">
-            <span class="speed-value">{pokemon_speed}</span>
-            <span class="speed-pokemon">{pokemon_name} &#9733;</span>
-        </div>
-        """
+    # Speed stat summary
+    faster_count = sum(1 for t in speed_tiers if (t.get("speed", 0) > pokemon_speed) != is_trick_room)
+    slower_count = sum(1 for t in speed_tiers if (t.get("speed", 0) < pokemon_speed) != is_trick_room)
+    tie_count = sum(1 for t in speed_tiers if t.get("speed", 0) == pokemon_speed)
 
     return f"""<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>{styles}</style>
+    <style>
+* {{
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}}
+
+body {{
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: linear-gradient(135deg, #0c0c14 0%, #12121f 50%, #0a0a12 100%);
+    color: #e4e4e7;
+    line-height: 1.5;
+    min-height: 100vh;
+    padding: 24px;
+}}
+
+/* Keyframes */
+@keyframes slideIn {{
+    0% {{ opacity: 0; transform: translateX(-20px); }}
+    100% {{ opacity: 1; transform: translateX(0); }}
+}}
+
+@keyframes fillTrack {{
+    0% {{ width: 0%; }}
+    100% {{ width: var(--fill-width, 50%); }}
+}}
+
+@keyframes pulse {{
+    0%, 100% {{ transform: scale(1); }}
+    50% {{ transform: scale(1.1); }}
+}}
+
+@keyframes bounce {{
+    0%, 100% {{ transform: translateY(0); }}
+    50% {{ transform: translateY(-4px); }}
+}}
+
+/* Container */
+.speed-container {{
+    max-width: 900px;
+    margin: 0 auto;
+}}
+
+/* Header */
+.speed-header {{
+    padding: 24px;
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    margin-bottom: 20px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}}
+
+.header-top {{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+}}
+
+.header-title {{
+    font-size: 24px;
+    font-weight: 700;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}}
+
+.header-title::before {{
+    content: "&#127939;";
+    font-size: 28px;
+}}
+
+.speed-summary {{
+    display: flex;
+    gap: 16px;
+}}
+
+.summary-stat {{
+    padding: 8px 16px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 600;
+}}
+
+.summary-stat.faster {{
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+}}
+
+.summary-stat.slower {{
+    background: rgba(34, 197, 94, 0.15);
+    color: #4ade80;
+    border: 1px solid rgba(34, 197, 94, 0.2);
+}}
+
+.summary-stat.ties {{
+    background: rgba(251, 191, 36, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(251, 191, 36, 0.2);
+}}
+
+/* Modifier toggles */
+.modifier-toggles {{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}}
+
+.mod-btn {{
+    padding: 10px 18px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.03);
+    color: #71717a;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}}
+
+.mod-btn:hover {{
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: #a1a1aa;
+}}
+
+.mod-btn.active {{
+    color: #fff;
+}}
+
+.mod-btn.tailwind.active {{
+    background: linear-gradient(135deg, rgba(96, 165, 250, 0.3), rgba(59, 130, 246, 0.2));
+    border-color: rgba(96, 165, 250, 0.4);
+    box-shadow: 0 0 20px rgba(96, 165, 250, 0.2);
+}}
+
+.mod-btn.trick-room.active {{
+    background: linear-gradient(135deg, rgba(248, 88, 136, 0.3), rgba(236, 72, 153, 0.2));
+    border-color: rgba(248, 88, 136, 0.4);
+    box-shadow: 0 0 20px rgba(248, 88, 136, 0.2);
+}}
+
+.mod-btn.scarf.active {{
+    background: linear-gradient(135deg, rgba(251, 146, 60, 0.3), rgba(249, 115, 22, 0.2));
+    border-color: rgba(251, 146, 60, 0.4);
+    box-shadow: 0 0 20px rgba(251, 146, 60, 0.2);
+}}
+
+.mod-btn.paralysis.active {{
+    background: linear-gradient(135deg, rgba(250, 204, 21, 0.3), rgba(234, 179, 8, 0.2));
+    border-color: rgba(250, 204, 21, 0.4);
+    box-shadow: 0 0 20px rgba(250, 204, 21, 0.2);
+    color: #333;
+}}
+
+.mod-icon {{
+    font-size: 16px;
+}}
+
+/* Race track */
+.race-track {{
+    background: rgba(255, 255, 255, 0.02);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}}
+
+.track-header {{
+    display: grid;
+    grid-template-columns: 50px 64px 1fr 2fr 80px;
+    gap: 12px;
+    padding: 12px 20px;
+    background: rgba(255, 255, 255, 0.02);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #52525b;
+}}
+
+.lanes-container {{
+    max-height: 500px;
+    overflow-y: auto;
+}}
+
+/* Race lane */
+.race-lane {{
+    display: grid;
+    grid-template-columns: 50px 64px 1fr 2fr 80px;
+    gap: 12px;
+    padding: 12px 20px;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    animation: slideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) backwards;
+    transition: background 0.3s ease;
+}}
+
+.race-lane:hover {{
+    background: rgba(255, 255, 255, 0.03);
+}}
+
+.race-lane:last-child {{
+    border-bottom: none;
+}}
+
+/* Lane position */
+.lane-position {{
+    font-size: 14px;
+    font-weight: 700;
+    color: #52525b;
+}}
+
+/* Lane sprite */
+.lane-sprite {{
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}}
+
+.racer-sprite {{
+    width: 40px;
+    height: 40px;
+    image-rendering: auto;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+    transition: transform 0.3s ease;
+}}
+
+.race-lane:hover .racer-sprite {{
+    animation: bounce 0.5s ease;
+}}
+
+/* Lane info */
+.lane-info {{
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}}
+
+.racer-name {{
+    font-size: 14px;
+    font-weight: 600;
+    color: #e4e4e7;
+}}
+
+.speed-tie-badge {{
+    display: inline-block;
+    padding: 2px 8px;
+    background: linear-gradient(135deg, rgba(251, 191, 36, 0.3), rgba(234, 179, 8, 0.2));
+    border: 1px solid rgba(251, 191, 36, 0.4);
+    border-radius: 6px;
+    font-size: 9px;
+    font-weight: 700;
+    color: #fbbf24;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    animation: pulse 2s infinite;
+}}
+
+/* Lane track visualization */
+.lane-track {{
+    position: relative;
+}}
+
+.track-bar {{
+    height: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+    overflow: visible;
+    position: relative;
+}}
+
+.track-fill {{
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}}
+
+.track-marker {{
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    transition: left 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}}
+
+/* Lane speed value */
+.lane-speed {{
+    font-size: 18px;
+    font-weight: 800;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}}
+
+/* Lane type styling */
+.faster-lane .track-fill {{
+    background: linear-gradient(90deg, rgba(239, 68, 68, 0.3), rgba(239, 68, 68, 0.6));
+}}
+.faster-lane .track-marker {{
+    background: linear-gradient(135deg, #f87171, #ef4444);
+}}
+.faster-lane .lane-speed {{
+    color: #f87171;
+}}
+.faster-lane .lane-position {{
+    color: #f87171;
+}}
+
+.slower-lane .track-fill {{
+    background: linear-gradient(90deg, rgba(34, 197, 94, 0.3), rgba(34, 197, 94, 0.6));
+}}
+.slower-lane .track-marker {{
+    background: linear-gradient(135deg, #4ade80, #22c55e);
+}}
+.slower-lane .lane-speed {{
+    color: #4ade80;
+}}
+.slower-lane .lane-position {{
+    color: #4ade80;
+}}
+
+.user-lane {{
+    background: rgba(99, 102, 241, 0.08);
+}}
+.user-lane .track-fill {{
+    background: linear-gradient(90deg, rgba(99, 102, 241, 0.4), rgba(139, 92, 246, 0.7));
+}}
+.user-lane .track-marker {{
+    background: linear-gradient(135deg, #a78bfa, #8b5cf6);
+    box-shadow: 0 0 16px rgba(139, 92, 246, 0.5);
+}}
+.user-lane .lane-speed {{
+    color: #a78bfa;
+}}
+.user-lane .lane-position {{
+    color: #a78bfa;
+}}
+.user-lane .racer-name {{
+    color: #fff;
+}}
+
+.tie-lane {{
+    background: rgba(251, 191, 36, 0.05);
+}}
+.tie-lane .track-fill {{
+    background: linear-gradient(90deg, rgba(251, 191, 36, 0.3), rgba(251, 191, 36, 0.6));
+}}
+.tie-lane .track-marker {{
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+}}
+.tie-lane .lane-speed {{
+    color: #fbbf24;
+}}
+
+/* Scrollbar */
+.lanes-container::-webkit-scrollbar {{
+    width: 8px;
+}}
+.lanes-container::-webkit-scrollbar-track {{
+    background: rgba(0, 0, 0, 0.2);
+}}
+.lanes-container::-webkit-scrollbar-thumb {{
+    background: rgba(99, 102, 241, 0.4);
+    border-radius: 4px;
+}}
+.lanes-container::-webkit-scrollbar-thumb:hover {{
+    background: rgba(99, 102, 241, 0.6);
+}}
+
+/* Legend */
+.track-legend {{
+    display: flex;
+    gap: 20px;
+    padding: 16px 20px;
+    background: rgba(255, 255, 255, 0.02);
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    font-size: 12px;
+}}
+
+.legend-item {{
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #71717a;
+}}
+
+.legend-dot {{
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}}
+
+.legend-dot.faster {{ background: #f87171; }}
+.legend-dot.yours {{ background: #a78bfa; }}
+.legend-dot.slower {{ background: #4ade80; }}
+.legend-dot.tie {{ background: #fbbf24; }}
+    </style>
 </head>
 <body>
-    <div class="card">
-        <div class="card-header">
-            <span class="card-title">Speed Tier Analysis</span>
-            <div>{mod_badges}</div>
+    <div class="speed-container">
+        <div class="speed-header">
+            <div class="header-top">
+                <div class="header-title">Speed Tier Analysis</div>
+                <div class="speed-summary">
+                    <span class="summary-stat faster">{faster_count} Faster</span>
+                    <span class="summary-stat ties">{tie_count} Ties</span>
+                    <span class="summary-stat slower">{slower_count} Slower</span>
+                </div>
+            </div>
+            {mod_buttons}
         </div>
-        <div style="font-size: 12px; color: #a0a0a0; margin-bottom: 8px;">
-            <span style="color: #f44336;">●</span> Faster
-            <span style="color: #4da6ff; margin-left: 12px;">●</span> Your Pokemon
-            <span style="color: #4caf50; margin-left: 12px;">●</span> Slower
-        </div>
-        <div style="max-height: 400px; overflow-y: auto;">
-            {tiers_html}
+
+        <div class="race-track">
+            <div class="track-header">
+                <span>Rank</span>
+                <span>Pokemon</span>
+                <span>Name</span>
+                <span>Position</span>
+                <span>Speed</span>
+            </div>
+            <div class="lanes-container">
+                {lanes_html}
+            </div>
+            <div class="track-legend">
+                <div class="legend-item"><span class="legend-dot faster"></span> Outspeeds you</div>
+                <div class="legend-item"><span class="legend-dot yours"></span> Your Pokemon</div>
+                <div class="legend-item"><span class="legend-dot slower"></span> You outspeed</div>
+                <div class="legend-item"><span class="legend-dot tie"></span> Speed tie</div>
+            </div>
         </div>
     </div>
 </body>
@@ -2047,8 +2920,8 @@ def create_matchup_summary_ui(
         rows_html += f"""
         <div style="display: flex; align-items: center; padding: 8px; background: {row_color}; border-radius: 4px; margin: 4px 0;">
             <span style="font-size: 16px; margin-right: 8px;">{indicator}</span>
-            <img src="{get_sprite_url(opponent)}" style="width: 40px; height: 40px; margin-right: 8px;">
-            <div style="flex: 1;">
+            {get_sprite_html(opponent, size=40, css_class="matchup-sprite")}
+            <div style="flex: 1; margin-left: 8px;">
                 <div style="font-weight: 500;">{opponent}</div>
                 <div style="font-size: 11px; color: #a0a0a0;">
                     Takes: {dmg_taken} | Deals: {dmg_dealt}
@@ -2120,7 +2993,7 @@ def create_threat_analysis_ui(
             return f'<div class="empty-list">{empty_msg}</div>'
         items = "".join(
             f'''<div class="pokemon-chip">
-                <img src="{get_sprite_url(p)}" class="chip-sprite" alt="{p}">
+                {get_sprite_html(p, size=32, css_class="chip-sprite")}
                 <span>{p}</span>
             </div>'''
             for p in pokemon_list
@@ -2345,7 +3218,7 @@ body {{
 <body>
     <div class="threat-container">
         <div class="threat-header">
-            <img src="{get_sprite_url(threat_name)}" class="threat-sprite" alt="{threat_name}">
+            {get_sprite_html(threat_name, size=64, css_class="threat-sprite")}
             <div class="threat-info">
                 <div class="threat-name">{threat_name.replace('-', ' ').title()}</div>
                 <div class="threat-stats">
@@ -2824,7 +3697,7 @@ def create_speed_outspeed_ui(
     """
     import json
 
-    sprite_url = get_sprite_url(pokemon_name)
+    sprite_html = get_sprite_html(pokemon_name, size=72, css_class="sprite")
     format_name = format_info.get("format", "VGC") if format_info else "VGC"
     format_month = format_info.get("month", "") if format_info else ""
 
@@ -3087,7 +3960,7 @@ input[type="range"]::-webkit-slider-thumb {{
 <body>
 <div class="container">
     <div class="header">
-        <img src="{sprite_url}" class="sprite" alt="{pokemon_name}">
+        {sprite_html}
         <div class="info">
             <div class="name">{pokemon_name}</div>
             <div class="speed-display">Speed: <span class="val" id="speed-val">{current_speed}</span></div>
@@ -3295,7 +4168,7 @@ def create_stats_card_ui(
     import json
     import math
 
-    sprite_url = get_sprite_url(pokemon_name)
+    sprite_html = get_sprite_html(pokemon_name, size=96, css_class="sprite")
 
     # Nature modifiers
     nature_mods = {
@@ -3561,7 +4434,7 @@ body {{
 <body>
 <div class="card">
     <div class="header">
-        <img src="{sprite_url}" class="sprite" alt="{pokemon_name}">
+        {sprite_html}
         <div class="info">
             <div class="name">{pokemon_name}</div>
             <div class="types">{type_badges}</div>
@@ -3625,7 +4498,7 @@ def create_threat_matrix_ui(
     """
     import json
 
-    sprite_url = pokemon_sprite or get_sprite_url(pokemon_name)
+    sprite_html = get_sprite_html(pokemon_name, size=72, css_class="sprite") if not pokemon_sprite else f'<img src="{pokemon_sprite}" class="sprite" alt="{pokemon_name}" style="width:72px;height:72px;">'
     threats_json = json.dumps(threats[:10])  # Top 10 threats
 
     def get_ko_class(damage_min: float, damage_max: float) -> tuple[str, str]:
@@ -3793,7 +4666,7 @@ body {{
 <body>
 <div class="container">
     <div class="header">
-        <img src="{sprite_url}" class="sprite" alt="{pokemon_name}">
+        {sprite_html}
         <div class="title">
             <div class="name">{pokemon_name}</div>
             <div class="subtitle">vs Top Meta Threats</div>
@@ -3811,7 +4684,7 @@ body {{
         {"".join(f'''
         <div class="threat-row">
             <div class="threat-info">
-                <img src="{get_sprite_url(t.get('name', ''))}" class="threat-sprite" onerror="this.style.display='none'">
+                {get_sprite_html(t.get('name', ''), size=40, css_class="threat-sprite")}
                 <div>
                     <div class="threat-name">{t.get('name', 'Unknown')}</div>
                     <div class="threat-speed">{t.get('their_speed', '?')} Spe</div>
@@ -4094,7 +4967,7 @@ body {{
             <div class="turn-number {'opponent' if p.get('team') == 'opponent' else ''}">{i + 1}</div>
             <div class="turn-content">
                 <div class="turn-header">
-                    <img src="{get_sprite_url(p.get('name', ''))}" class="pokemon-sprite" onerror="this.style.display='none'">
+                    {get_sprite_html(p.get('name', ''), size=40, css_class="pokemon-sprite")}
                     <span class="pokemon-name">{p.get('name', 'Unknown')}</span>
                     <span class="speed-stat">{get_effective_speed(p)} Spe</span>
                     {get_priority_badge(p.get('priority', 0))}
@@ -4402,7 +5275,7 @@ body {{
         <div class="opponent-grid">
             {"".join(f'''
             <div class="opp-pokemon">
-                <img src="{get_sprite_url(p.get('name', ''))}" class="opp-sprite" onerror="this.style.display='none'">
+                {get_sprite_html(p.get('name', ''), size=48, css_class="opp-sprite")}
                 <span class="opp-name">{p.get('name', 'Unknown')}</span>
             </div>
             ''' for p in opponent_team)}
@@ -4417,7 +5290,7 @@ body {{
             <div class="pokemon-list">
                 {"".join(f'''
                 <div class="pokemon-card selected" data-name="{p.get('name', '')}">
-                    <img src="{get_sprite_url(p.get('name', ''))}" class="card-sprite" onerror="this.style.display='none'">
+                    {get_sprite_html(p.get('name', ''), size=48, css_class="card-sprite")}
                     <div class="card-info">
                         <div class="card-name">{p.get('name', 'Unknown')}</div>
                         <div class="card-item">{p.get('item', '')}</div>
@@ -4441,7 +5314,7 @@ body {{
             <div class="pokemon-list">
                 {"".join(f'''
                 <div class="pokemon-card" data-name="{p.get('name', '')}">
-                    <img src="{get_sprite_url(p.get('name', ''))}" class="card-sprite" onerror="this.style.display='none'">
+                    {get_sprite_html(p.get('name', ''), size=48, css_class="card-sprite")}
                     <div class="card-info">
                         <div class="card-name">{p.get('name', 'Unknown')}</div>
                         <div class="card-item">{p.get('item', '')}</div>
@@ -4466,13 +5339,13 @@ body {{
             <div class="strat-section">
                 <div class="strat-label">Lead</div>
                 <div class="strat-pokemon">
-                    {"".join(f'<div class="strat-mon"><img src="{get_sprite_url(name)}" class="strat-sprite">{name}</div>' for name in recommendations.get('lead_pair', []))}
+                    {"".join(f'<div class="strat-mon">{get_sprite_html(name, size=32, css_class="strat-sprite")}{name}</div>' for name in recommendations.get('lead_pair', []))}
                 </div>
             </div>
             <div class="strat-section">
                 <div class="strat-label">Back</div>
                 <div class="strat-pokemon">
-                    {"".join(f'<div class="strat-mon"><img src="{get_sprite_url(name)}" class="strat-sprite">{name}</div>' for name in recommendations.get('back_pair', []))}
+                    {"".join(f'<div class="strat-mon">{get_sprite_html(name, size=32, css_class="strat-sprite")}{name}</div>' for name in recommendations.get('back_pair', []))}
                 </div>
             </div>
             <div class="strategy-text">{recommendations.get('strategy', '')}</div>
@@ -4754,7 +5627,7 @@ body {{
     <div class="team-bar">
         {"".join(f'''
         <div class="team-member">
-            <img src="{get_sprite_url(p.get('name', ''))}" class="team-sprite" onerror="this.style.display='none'">
+            {get_sprite_html(p.get('name', ''), size=48, css_class="team-sprite")}
             <div class="team-name">{p.get('name', 'Unknown')}</div>
             <div class="team-ability">{p.get('ability', '')}</div>
         </div>
@@ -4770,14 +5643,14 @@ body {{
         <div class="section-content">
             <div class="flow-diagram">
                 <div class="flow-node setter">
-                    <img src="{get_sprite_url(weather.get('setter', ''))}" class="flow-sprite">
+                    {get_sprite_html(weather.get('setter', ''), size=48, css_class="flow-sprite")}
                     <div class="flow-name">{weather.get('setter', 'None')}</div>
                     <div class="flow-role">Setter</div>
                 </div>
                 <div class="flow-arrow">&rarr;</div>
                 {"".join(f'''
                 <div class="flow-node abuser">
-                    <img src="{get_sprite_url(abuser)}" class="flow-sprite">
+                    {get_sprite_html(abuser, size=48, css_class="flow-sprite")}
                     <div class="flow-name">{abuser}</div>
                     <div class="flow-role">Abuser</div>
                 </div>
@@ -4796,14 +5669,14 @@ body {{
         <div class="section-content">
             <div class="flow-diagram">
                 <div class="flow-node setter">
-                    <img src="{get_sprite_url(terrain.get('setter', ''))}" class="flow-sprite">
+                    {get_sprite_html(terrain.get('setter', ''), size=48, css_class="flow-sprite")}
                     <div class="flow-name">{terrain.get('setter', 'None')}</div>
                     <div class="flow-role">Setter</div>
                 </div>
                 <div class="flow-arrow">&rarr;</div>
                 {"".join(f'''
                 <div class="flow-node abuser">
-                    <img src="{get_sprite_url(abuser)}" class="flow-sprite">
+                    {get_sprite_html(abuser, size=48, css_class="flow-sprite")}
                     <div class="flow-name">{abuser}</div>
                     <div class="flow-role">Abuser</div>
                 </div>
@@ -4826,7 +5699,7 @@ body {{
                     <div class="blocker-list">
                         {"".join(f'''
                         <div class="blocker-item">
-                            <img src="{get_sprite_url(name)}" class="blocker-sprite">
+                            {get_sprite_html(name, size=32, css_class="blocker-sprite")}
                             {name}
                         </div>
                         ''' for name in intimidate.get('blockers', [])) or '<span style="color:#64748b;font-size:0.8rem;">None</span>'}
@@ -4837,7 +5710,7 @@ body {{
                     <div class="blocker-list">
                         {"".join(f'''
                         <div class="blocker-item">
-                            <img src="{get_sprite_url(name)}" class="blocker-sprite">
+                            {get_sprite_html(name, size=32, css_class="blocker-sprite")}
                             {name}
                         </div>
                         ''' for name in intimidate.get('punishers', [])) or '<span style="color:#64748b;font-size:0.8rem;">None</span>'}
@@ -4858,7 +5731,7 @@ body {{
             {"".join(f'''
             <div class="combo-item">
                 <div class="combo-pokemon">
-                    {"".join(f'<img src="{get_sprite_url(name)}" class="combo-sprite">' for name in c.get('pokemon', [])[:2])}
+                    {"".join(f'{get_sprite_html(name, size=32, css_class="combo-sprite")}' for name in c.get('pokemon', [])[:2])}
                 </div>
                 <div class="combo-info">
                     <div class="combo-effect">{c.get('effect', '')}</div>
@@ -5290,7 +6163,7 @@ body {{
             {'&#10003; Tournament Ready' if tournament_ready else '&#10007; Not Tournament Ready'}
         </div>
         <div class="team-preview">
-            {"".join(f'<img src="{get_sprite_url(p.get("name", ""))}" class="team-mon" onerror="this.style.display=\'none\'">' for p in team[:6])}
+            {"".join(f'{get_sprite_html(p.get("name", ""), size=48, css_class="team-mon")}' for p in team[:6])}
         </div>
     </div>
 
@@ -5358,14 +6231,14 @@ body {{
         <div class="section-content">
             <div class="speed-info">
                 <div class="speed-card">
-                    <img src="{get_sprite_url(speed_control.get('fastest', ''))}" class="speed-sprite" onerror="this.style.display='none'">
+                    {get_sprite_html(speed_control.get('fastest', ''), size=48, css_class="speed-sprite")}
                     <div>
                         <div class="speed-label">Fastest</div>
                         <div class="speed-name">{speed_control.get('fastest', 'N/A')}</div>
                     </div>
                 </div>
                 <div class="speed-card">
-                    <img src="{get_sprite_url(speed_control.get('slowest', ''))}" class="speed-sprite" onerror="this.style.display='none'">
+                    {get_sprite_html(speed_control.get('slowest', ''), size=48, css_class="speed-sprite")}
                     <div>
                         <div class="speed-label">Slowest</div>
                         <div class="speed-name">{speed_control.get('slowest', 'N/A')}</div>
@@ -6006,13 +6879,13 @@ def create_multi_hit_survival_ui(
         <div class="survival-container">
             <div class="matchup-header">
                 <div class="pokemon-side">
-                    <img src="{get_sprite_url(attacker_name)}" class="pokemon-sprite" onerror="this.style.display='none'">
+                    {get_sprite_html(attacker_name, size=48, css_class="pokemon-sprite")}
                     <span class="pokemon-name">{attacker_name}</span>
                 </div>
                 <div class="move-badge">{move_name} x{num_hits}</div>
                 <div class="pokemon-side">
                     <span class="pokemon-name">{defender_name}</span>
-                    <img src="{get_sprite_url(defender_name)}" class="pokemon-sprite" onerror="this.style.display='none'">
+                    {get_sprite_html(defender_name, size=48, css_class="pokemon-sprite")}
                 </div>
             </div>
 
@@ -6044,6 +6917,816 @@ def create_multi_hit_survival_ui(
                 </div>
             </div>
         </div>
+    </div>
+</body>
+</html>"""
+
+
+def create_calc_history_ui(
+    calculations: list[dict[str, Any]],
+) -> str:
+    """Create calculation history UI HTML.
+
+    Args:
+        calculations: List of calc dicts with keys: attacker, defender, move, damage_min, damage_max, ko_chance, timestamp
+
+    Returns:
+        HTML string for the calc history UI
+    """
+    # Build history entries
+    entries_html = ""
+    for i, calc in enumerate(calculations[:10]):  # Show last 10
+        attacker = calc.get("attacker", "Unknown")
+        defender = calc.get("defender", "Unknown")
+        move = calc.get("move", "Unknown")
+        dmg_min = calc.get("damage_min", 0)
+        dmg_max = calc.get("damage_max", 0)
+        ko_chance = calc.get("ko_chance", "")
+        timestamp = calc.get("timestamp", "")
+
+        # KO badge styling
+        ko_class = "survive"
+        if "OHKO" in ko_chance.upper():
+            ko_class = "ohko"
+        elif "2HKO" in ko_chance.upper():
+            ko_class = "2hko"
+        elif "3HKO" in ko_chance.upper():
+            ko_class = "3hko"
+
+        delay = i * 0.05
+
+        entries_html += f"""
+        <div class="history-entry" style="animation-delay: {delay}s;">
+            <div class="entry-pokemon">
+                {get_sprite_html(attacker, size=40, css_class="entry-sprite")}
+                <span class="entry-arrow">&#10140;</span>
+                {get_sprite_html(defender, size=40, css_class="entry-sprite")}
+            </div>
+            <div class="entry-details">
+                <div class="entry-move">{move}</div>
+                <div class="entry-damage">{dmg_min:.1f}% - {dmg_max:.1f}%</div>
+            </div>
+            <div class="entry-ko-badge {ko_class}">{ko_chance}</div>
+        </div>
+        """
+
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+* {{
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}}
+
+body {{
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: linear-gradient(135deg, #0c0c14 0%, #12121f 50%, #0a0a12 100%);
+    color: #e4e4e7;
+    line-height: 1.5;
+    min-height: 100vh;
+    padding: 24px;
+}}
+
+@keyframes fadeSlideIn {{
+    0% {{ opacity: 0; transform: translateX(-10px); }}
+    100% {{ opacity: 1; transform: translateX(0); }}
+}}
+
+.history-container {{
+    max-width: 600px;
+    margin: 0 auto;
+}}
+
+.history-header {{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px;
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 20px 20px 0 0;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom: none;
+}}
+
+.history-title {{
+    font-size: 18px;
+    font-weight: 700;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}}
+
+.history-title::before {{
+    content: "&#128202;";
+    font-size: 20px;
+}}
+
+.history-count {{
+    font-size: 12px;
+    color: #71717a;
+}}
+
+.history-list {{
+    background: rgba(255, 255, 255, 0.02);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 0 0 20px 20px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    overflow: hidden;
+}}
+
+.history-entry {{
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    animation: fadeSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) backwards;
+    transition: background 0.3s ease;
+    cursor: pointer;
+}}
+
+.history-entry:hover {{
+    background: rgba(255, 255, 255, 0.04);
+}}
+
+.history-entry:last-child {{
+    border-bottom: none;
+}}
+
+.entry-pokemon {{
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}}
+
+.entry-sprite {{
+    width: 40px;
+    height: 40px;
+    image-rendering: auto;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}}
+
+.entry-arrow {{
+    font-size: 16px;
+    color: #6366f1;
+}}
+
+.entry-details {{
+    flex: 1;
+}}
+
+.entry-move {{
+    font-size: 14px;
+    font-weight: 600;
+    color: #e4e4e7;
+}}
+
+.entry-damage {{
+    font-size: 12px;
+    color: #71717a;
+}}
+
+.entry-ko-badge {{
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}}
+
+.entry-ko-badge.ohko {{
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(220, 38, 38, 0.15));
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}}
+
+.entry-ko-badge.2hko {{
+    background: linear-gradient(135deg, rgba(249, 115, 22, 0.2), rgba(234, 88, 12, 0.15));
+    color: #fb923c;
+    border: 1px solid rgba(249, 115, 22, 0.3);
+}}
+
+.entry-ko-badge.3hko {{
+    background: linear-gradient(135deg, rgba(234, 179, 8, 0.2), rgba(202, 138, 4, 0.15));
+    color: #fbbf24;
+    border: 1px solid rgba(234, 179, 8, 0.3);
+}}
+
+.entry-ko-badge.survive {{
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(22, 163, 74, 0.15));
+    color: #4ade80;
+    border: 1px solid rgba(34, 197, 94, 0.3);
+}}
+
+.empty-state {{
+    text-align: center;
+    padding: 40px 20px;
+    color: #52525b;
+}}
+
+.empty-icon {{
+    font-size: 40px;
+    margin-bottom: 12px;
+}}
+
+.empty-text {{
+    font-size: 14px;
+}}
+    </style>
+</head>
+<body>
+    <div class="history-container">
+        <div class="history-header">
+            <div class="history-title">Calculation History</div>
+            <span class="history-count">{len(calculations)} calculations</span>
+        </div>
+        <div class="history-list">
+            {entries_html if entries_html else '<div class="empty-state"><div class="empty-icon">&#128203;</div><div class="empty-text">No calculations yet</div></div>'}
+        </div>
+    </div>
+</body>
+</html>"""
+
+
+def create_team_synergy_ui(
+    team: list[dict[str, Any]],
+    synergies: dict[str, Any],
+) -> str:
+    """Create team synergy visualization UI HTML.
+
+    Args:
+        team: List of Pokemon dicts with keys: name, types, ability, item
+        synergies: Dict with keys: weather_setters, terrain_setters, speed_control, redirectors, etc.
+
+    Returns:
+        HTML string for the team synergy UI
+    """
+    # Build synergy categories
+    weather = synergies.get("weather_setters", [])
+    terrain = synergies.get("terrain_setters", [])
+    speed_ctrl = synergies.get("speed_control", [])
+    redirectors = synergies.get("redirectors", [])
+    fake_out = synergies.get("fake_out_users", [])
+    intimidate = synergies.get("intimidate", [])
+    priority = synergies.get("priority_users", [])
+
+    def build_synergy_row(label: str, icon: str, pokemon_list: list[str], color: str) -> str:
+        if not pokemon_list:
+            return ""
+        sprites = "".join(
+            get_sprite_html(p, size=40, css_class="synergy-sprite")
+            for p in pokemon_list
+        )
+        return f"""
+        <div class="synergy-row">
+            <div class="synergy-label" style="--synergy-color: {color};">
+                <span class="synergy-icon">{icon}</span>
+                <span>{label}</span>
+            </div>
+            <div class="synergy-pokemon">{sprites}</div>
+        </div>
+        """
+
+    synergy_rows = ""
+    synergy_rows += build_synergy_row("Weather Control", "&#9748;", weather, "#60a5fa")
+    synergy_rows += build_synergy_row("Terrain Control", "&#127793;", terrain, "#4ade80")
+    synergy_rows += build_synergy_row("Speed Control", "&#128168;", speed_ctrl, "#f472b6")
+    synergy_rows += build_synergy_row("Redirectors", "&#127919;", redirectors, "#fbbf24")
+    synergy_rows += build_synergy_row("Fake Out", "&#9995;", fake_out, "#fb923c")
+    synergy_rows += build_synergy_row("Intimidate", "&#128567;", intimidate, "#f87171")
+    synergy_rows += build_synergy_row("Priority Moves", "&#9889;", priority, "#a78bfa")
+
+    # Type coverage summary
+    team_types = []
+    for p in team:
+        team_types.extend(p.get("types", []))
+    unique_types = list(set(t.lower() for t in team_types))
+
+    type_coverage_html = ""
+    for t in unique_types:
+        type_coverage_html += f'<span class="type-mini type-{t}">{t.title()}</span>'
+
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+* {{
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}}
+
+body {{
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: linear-gradient(135deg, #0c0c14 0%, #12121f 50%, #0a0a12 100%);
+    color: #e4e4e7;
+    line-height: 1.5;
+    min-height: 100vh;
+    padding: 24px;
+}}
+
+@keyframes fadeIn {{
+    0% {{ opacity: 0; transform: translateY(10px); }}
+    100% {{ opacity: 1; transform: translateY(0); }}
+}}
+
+.synergy-container {{
+    max-width: 700px;
+    margin: 0 auto;
+}}
+
+.synergy-header {{
+    padding: 24px;
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    margin-bottom: 20px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}}
+
+.header-title {{
+    font-size: 24px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}}
+
+.header-title::before {{
+    content: "&#128279;";
+    font-size: 28px;
+}}
+
+.type-coverage {{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}}
+
+.type-mini {{
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #fff;
+}}
+
+/* Type colors */
+.type-normal {{ background: linear-gradient(135deg, #A8A878, #8a8a5c); }}
+.type-fire {{ background: linear-gradient(135deg, #F08030, #c4682a); }}
+.type-water {{ background: linear-gradient(135deg, #6890F0, #5070c0); }}
+.type-electric {{ background: linear-gradient(135deg, #F8D030, #c4a828); }}
+.type-grass {{ background: linear-gradient(135deg, #78C850, #5ca040); }}
+.type-ice {{ background: linear-gradient(135deg, #98D8D8, #70b0b0); }}
+.type-fighting {{ background: linear-gradient(135deg, #C03028, #901820); }}
+.type-poison {{ background: linear-gradient(135deg, #A040A0, #803080); }}
+.type-ground {{ background: linear-gradient(135deg, #E0C068, #b09048); }}
+.type-flying {{ background: linear-gradient(135deg, #A890F0, #8070c0); }}
+.type-psychic {{ background: linear-gradient(135deg, #F85888, #c04060); }}
+.type-bug {{ background: linear-gradient(135deg, #A8B820, #889010); }}
+.type-rock {{ background: linear-gradient(135deg, #B8A038, #907820); }}
+.type-ghost {{ background: linear-gradient(135deg, #705898, #504070); }}
+.type-dragon {{ background: linear-gradient(135deg, #7038F8, #5028c0); }}
+.type-dark {{ background: linear-gradient(135deg, #705848, #503830); }}
+.type-steel {{ background: linear-gradient(135deg, #B8B8D0, #9090a8); }}
+.type-fairy {{ background: linear-gradient(135deg, #EE99AC, #c07088); }}
+
+.synergy-card {{
+    background: rgba(255, 255, 255, 0.02);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}}
+
+.synergy-row {{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    animation: fadeIn 0.4s ease backwards;
+}}
+
+.synergy-row:last-child {{
+    border-bottom: none;
+}}
+
+.synergy-label {{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--synergy-color, #e4e4e7);
+}}
+
+.synergy-icon {{
+    font-size: 20px;
+}}
+
+.synergy-pokemon {{
+    display: flex;
+    gap: 4px;
+}}
+
+.synergy-sprite {{
+    width: 40px;
+    height: 40px;
+    image-rendering: auto;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+    transition: transform 0.2s ease;
+    cursor: pointer;
+}}
+
+.synergy-sprite:hover {{
+    transform: scale(1.15);
+}}
+
+.empty-synergy {{
+    text-align: center;
+    padding: 40px 20px;
+    color: #52525b;
+    font-size: 14px;
+}}
+    </style>
+</head>
+<body>
+    <div class="synergy-container">
+        <div class="synergy-header">
+            <div class="header-title">Team Synergy</div>
+            <div class="type-coverage">
+                {type_coverage_html if type_coverage_html else '<span style="color: #52525b;">No types found</span>'}
+            </div>
+        </div>
+
+        <div class="synergy-card">
+            {synergy_rows if synergy_rows else '<div class="empty-synergy">No synergies detected. Add Pokemon with weather abilities, terrains, Tailwind, etc.</div>'}
+        </div>
+    </div>
+</body>
+</html>"""
+
+
+def create_battle_preview_ui(
+    your_leads: list[dict[str, Any]],
+    opponent_leads: list[dict[str, Any]],
+    turn_preview: Optional[list[dict[str, Any]]] = None,
+) -> str:
+    """Create battle preview UI HTML showing lead matchup.
+
+    Args:
+        your_leads: List of your lead Pokemon dicts (2 Pokemon)
+        opponent_leads: List of opponent lead Pokemon dicts (2 Pokemon)
+        turn_preview: Optional list of predicted actions/outcomes
+
+    Returns:
+        HTML string for the battle preview UI
+    """
+    # Build your side
+    your_html = ""
+    for i, pokemon in enumerate(your_leads[:2]):
+        name = pokemon.get("name", "Unknown")
+        types = pokemon.get("types", [])
+        item = pokemon.get("item", "")
+        delay = i * 0.1
+
+        type_badges = "".join(
+            f'<span class="preview-type type-{t.lower()}">{t[:3]}</span>'
+            for t in types
+        )
+
+        your_html += f"""
+        <div class="preview-pokemon your-side" style="animation-delay: {delay}s;">
+            {get_sprite_html(name, size=56, css_class="preview-sprite")}
+            <div class="preview-name">{name}</div>
+            <div class="preview-types">{type_badges}</div>
+            {f'<div class="preview-item">@ {item}</div>' if item else ''}
+        </div>
+        """
+
+    # Build opponent side
+    opp_html = ""
+    for i, pokemon in enumerate(opponent_leads[:2]):
+        name = pokemon.get("name", "Unknown")
+        types = pokemon.get("types", [])
+        delay = i * 0.1 + 0.2
+
+        type_badges = "".join(
+            f'<span class="preview-type type-{t.lower()}">{t[:3]}</span>'
+            for t in types
+        )
+
+        opp_html += f"""
+        <div class="preview-pokemon opp-side" style="animation-delay: {delay}s;">
+            {get_sprite_html(name, size=56, css_class="preview-sprite")}
+            <div class="preview-name">{name}</div>
+            <div class="preview-types">{type_badges}</div>
+        </div>
+        """
+
+    # Build turn preview if provided
+    turn_html = ""
+    if turn_preview:
+        for action in turn_preview[:4]:
+            actor = action.get("actor", "")
+            move = action.get("move", "")
+            target = action.get("target", "")
+            result = action.get("result", "")
+
+            turn_html += f"""
+            <div class="turn-action">
+                <span class="action-actor">{actor}</span>
+                <span class="action-move">{move}</span>
+                <span class="action-arrow">&#10140;</span>
+                <span class="action-target">{target}</span>
+                {f'<span class="action-result">{result}</span>' if result else ''}
+            </div>
+            """
+
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+* {{
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}}
+
+body {{
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: linear-gradient(135deg, #0c0c14 0%, #12121f 50%, #0a0a12 100%);
+    color: #e4e4e7;
+    line-height: 1.5;
+    min-height: 100vh;
+    padding: 24px;
+}}
+
+@keyframes slideInLeft {{
+    0% {{ opacity: 0; transform: translateX(-30px); }}
+    100% {{ opacity: 1; transform: translateX(0); }}
+}}
+
+@keyframes slideInRight {{
+    0% {{ opacity: 0; transform: translateX(30px); }}
+    100% {{ opacity: 1; transform: translateX(0); }}
+}}
+
+@keyframes vsGlow {{
+    0%, 100% {{ box-shadow: 0 0 20px rgba(239, 68, 68, 0.4); }}
+    50% {{ box-shadow: 0 0 40px rgba(239, 68, 68, 0.6); }}
+}}
+
+.battle-container {{
+    max-width: 800px;
+    margin: 0 auto;
+}}
+
+.battle-header {{
+    text-align: center;
+    padding: 20px;
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 20px 20px 0 0;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom: none;
+}}
+
+.battle-title {{
+    font-size: 24px;
+    font-weight: 700;
+    color: #fff;
+}}
+
+.battle-field {{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 40px;
+    padding: 40px;
+    background: linear-gradient(180deg, rgba(34, 197, 94, 0.05) 0%, rgba(59, 130, 246, 0.05) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    position: relative;
+}}
+
+.field-side {{
+    display: flex;
+    gap: 20px;
+}}
+
+.preview-pokemon {{
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(10px);
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 16px;
+    text-align: center;
+    min-width: 120px;
+}}
+
+.your-side {{
+    animation: slideInLeft 0.5s cubic-bezier(0.4, 0, 0.2, 1) backwards;
+    border-color: rgba(96, 165, 250, 0.3);
+}}
+
+.opp-side {{
+    animation: slideInRight 0.5s cubic-bezier(0.4, 0, 0.2, 1) backwards;
+    border-color: rgba(248, 113, 113, 0.3);
+}}
+
+.preview-sprite {{
+    width: 80px;
+    height: 80px;
+    image-rendering: auto;
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
+}}
+
+.opp-side .preview-sprite {{
+    transform: scaleX(-1);
+}}
+
+.preview-name {{
+    font-size: 14px;
+    font-weight: 700;
+    color: #fff;
+    margin-top: 8px;
+}}
+
+.preview-types {{
+    display: flex;
+    justify-content: center;
+    gap: 4px;
+    margin-top: 6px;
+}}
+
+.preview-type {{
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 9px;
+    font-weight: 700;
+    color: #fff;
+}}
+
+/* Type colors */
+.type-normal {{ background: #A8A878; }}
+.type-fire {{ background: #F08030; }}
+.type-water {{ background: #6890F0; }}
+.type-electric {{ background: #F8D030; }}
+.type-grass {{ background: #78C850; }}
+.type-ice {{ background: #98D8D8; }}
+.type-fighting {{ background: #C03028; }}
+.type-poison {{ background: #A040A0; }}
+.type-ground {{ background: #E0C068; }}
+.type-flying {{ background: #A890F0; }}
+.type-psychic {{ background: #F85888; }}
+.type-bug {{ background: #A8B820; }}
+.type-rock {{ background: #B8A038; }}
+.type-ghost {{ background: #705898; }}
+.type-dragon {{ background: #7038F8; }}
+.type-dark {{ background: #705848; }}
+.type-steel {{ background: #B8B8D0; }}
+.type-fairy {{ background: #EE99AC; }}
+
+.preview-item {{
+    font-size: 11px;
+    color: #71717a;
+    margin-top: 4px;
+}}
+
+.vs-badge {{
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: 800;
+    color: #fff;
+    animation: vsGlow 2s ease-in-out infinite;
+    z-index: 10;
+}}
+
+.turn-preview {{
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 0 0 20px 20px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-top: none;
+    padding: 20px;
+}}
+
+.turn-title {{
+    font-size: 12px;
+    font-weight: 700;
+    color: #52525b;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+}}
+
+.turn-action {{
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    font-size: 13px;
+}}
+
+.action-actor {{
+    font-weight: 600;
+    color: #60a5fa;
+}}
+
+.action-move {{
+    font-weight: 600;
+    color: #e4e4e7;
+}}
+
+.action-arrow {{
+    color: #6366f1;
+}}
+
+.action-target {{
+    color: #f87171;
+}}
+
+.action-result {{
+    margin-left: auto;
+    font-size: 11px;
+    color: #71717a;
+    padding: 2px 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+}}
+
+.side-label {{
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+    text-align: center;
+}}
+
+.side-label.your {{ color: #60a5fa; }}
+.side-label.opp {{ color: #f87171; }}
+    </style>
+</head>
+<body>
+    <div class="battle-container">
+        <div class="battle-header">
+            <div class="battle-title">Battle Preview</div>
+        </div>
+
+        <div class="battle-field">
+            <div class="your-side-wrapper">
+                <div class="side-label your">Your Leads</div>
+                <div class="field-side">
+                    {your_html}
+                </div>
+            </div>
+
+            <div class="vs-badge">VS</div>
+
+            <div class="opp-side-wrapper">
+                <div class="side-label opp">Opponent</div>
+                <div class="field-side">
+                    {opp_html}
+                </div>
+            </div>
+        </div>
+
+        {f'<div class="turn-preview"><div class="turn-title">Predicted Turn 1</div>{turn_html}</div>' if turn_html else ''}
     </div>
 </body>
 </html>"""

@@ -138,6 +138,63 @@ ATE_ABILITIES: dict[str, str] = {
     "galvanize": "Electric",
 }
 
+# Type immunity abilities - maps ability to list of immune types
+IMMUNITY_ABILITIES: dict[str, list[str]] = {
+    "levitate": ["Ground"],
+    "flash-fire": ["Fire"],
+    "volt-absorb": ["Electric"],
+    "motor-drive": ["Electric"],
+    "lightning-rod": ["Electric"],
+    "water-absorb": ["Water"],
+    "storm-drain": ["Water"],
+    "dry-skin": ["Water"],
+    "sap-sipper": ["Grass"],
+    "earth-eater": ["Ground"],
+    "well-baked-body": ["Fire"],
+    "wind-rider": [],  # Only immune to wind moves, handled separately
+    "bulletproof": [],  # Immune to ball/bomb moves, handled separately
+    "soundproof": [],  # Immune to sound moves, handled separately
+}
+
+# Wind moves for Wind Rider ability
+WIND_MOVES = {
+    "bleakwind-storm", "fairy-wind", "gust", "hurricane", "petal-blizzard",
+    "sandstorm", "tailwind", "twister", "whirlwind", "wildbolt-storm",
+}
+
+# Sound moves for Soundproof ability
+SOUND_MOVES = {
+    "boomburst", "bug-buzz", "chatter", "clanging-scales", "clangorous-soul",
+    "clangorous-soulblaze", "confide", "disarming-voice", "echoed-voice",
+    "eerie-spell", "grass-whistle", "growl", "heal-bell", "howl", "hyper-voice",
+    "metal-sound", "noble-roar", "overdrive", "parting-shot", "perish-song",
+    "relic-song", "roar", "round", "screech", "shadow-force", "sing",
+    "snarl", "snore", "sonic-boom", "sparkling-aria", "supersonic",
+    "torch-song", "uproar",
+}
+
+# Ball/Bomb moves for Bulletproof ability
+BALL_BOMB_MOVES = {
+    "acid-spray", "aura-sphere", "barrage", "beak-blast", "bullet-seed",
+    "egg-bomb", "electro-ball", "energy-ball", "focus-blast", "gyro-ball",
+    "ice-ball", "magnet-bomb", "mist-ball", "mud-bomb", "octazooka",
+    "pollen-puff", "pyro-ball", "rock-blast", "rock-wrecker", "seed-bomb",
+    "shadow-ball", "sludge-bomb", "weather-ball", "zap-cannon",
+}
+
+# Pulse moves for Mega Launcher ability (1.5x)
+PULSE_MOVES = {
+    "aura-sphere", "dark-pulse", "dragon-pulse", "heal-pulse",
+    "origin-pulse", "terrain-pulse", "water-pulse",
+}
+
+# Recoil moves for Reckless ability (1.2x)
+RECOIL_MOVES = {
+    "brave-bird", "double-edge", "flare-blitz", "head-charge",
+    "head-smash", "high-jump-kick", "submission", "take-down",
+    "volt-tackle", "wild-charge", "wood-hammer", "wave-crash",
+}
+
 
 # Punch moves for Iron Fist ability
 PUNCH_MOVES = {
@@ -174,6 +231,31 @@ MOD_SNIPER_CRIT = 9216      # 2.25x (Sniper - crit damage instead of 1.5x)
 MOD_ORICHALCUM = 5461       # ~1.333x (Orichalcum Pulse - Attack in Sun)
 MOD_HADRON = 5461           # ~1.333x (Hadron Engine - SpA in Electric Terrain)
 
+# New offensive ability modifiers
+MOD_GUTS = 6144             # 1.5x (Guts - Attack when statused)
+MOD_SAND_FORCE = 5325       # ~1.3x (Sand Force - Ground/Rock/Steel in sand)
+MOD_MEGA_LAUNCHER = 6144    # 1.5x (Mega Launcher - pulse moves)
+MOD_STEELY_SPIRIT = 6144    # 1.5x (Steely Spirit - Steel moves)
+MOD_TRANSISTOR = 6144       # 1.5x (Transistor - Electric moves in Gen 9)
+MOD_DRAGONS_MAW = 6144      # 1.5x (Dragon's Maw - Dragon moves)
+MOD_RECKLESS = 4915         # ~1.2x (Reckless - recoil moves)
+MOD_ANALYTIC = 5325         # ~1.3x (Analytic - moving last)
+MOD_WATER_BUBBLE_ATK = 8192 # 2.0x (Water Bubble - Water moves)
+MOD_NEUROFORCE = 5120       # 1.25x (Neuroforce - super effective)
+MOD_PUNK_ROCK_ATK = 5325    # ~1.3x (Punk Rock - sound moves)
+
+# New defensive ability modifiers
+MOD_HEATPROOF = 2048        # 0.5x (Heatproof - Fire damage)
+MOD_WATER_BUBBLE_DEF = 2048 # 0.5x (Water Bubble - Fire damage taken)
+MOD_DRY_SKIN_FIRE = 5120    # 1.25x (Dry Skin - Fire damage taken)
+MOD_FUR_COAT = 2048         # 0.5x (Fur Coat - physical damage)
+MOD_PUNK_ROCK_DEF = 2048    # 0.5x (Punk Rock - sound damage taken)
+
+# New item modifiers
+MOD_MUSCLE_BAND = 4506      # ~1.1x (Muscle Band - physical moves)
+MOD_WISE_GLASSES = 4506     # ~1.1x (Wise Glasses - special moves)
+MOD_NORMAL_GEM = 6144       # 1.5x (Normal Gem - first Normal move, one-time use)
+
 # Resistance berries - reduce super-effective damage by 50%
 RESISTANCE_BERRIES = {
     "occa-berry": "Fire",
@@ -194,6 +276,129 @@ RESISTANCE_BERRIES = {
     "babiri-berry": "Steel",
     "roseli-berry": "Fairy",
 }
+
+
+# =============================================================================
+# Variable base power calculations
+# =============================================================================
+
+def _calculate_variable_bp(
+    move_name: str,
+    base_power: int,
+    special_move_data: dict,
+    attacker_speed: int,
+    defender_speed: int,
+    modifiers: "DamageModifiers",
+) -> int:
+    """
+    Calculate variable base power for special moves.
+
+    Args:
+        move_name: Normalized move name
+        base_power: Move's base power from data
+        special_move_data: Special move data dict from GEN9_SPECIAL_MOVES
+        attacker_speed: Attacker's calculated Speed stat
+        defender_speed: Defender's calculated Speed stat
+        modifiers: Current damage modifiers
+
+    Returns:
+        Calculated base power
+    """
+    variable_bp_type = special_move_data.get("variable_bp")
+
+    if not variable_bp_type:
+        # Check for scaling moves (Rage Fist, Last Respects)
+        scaling_type = special_move_data.get("scaling")
+        if scaling_type == "times_hit":
+            # Rage Fist: +50 BP per time hit, capped at 350
+            return min(350, base_power + (50 * modifiers.times_hit))
+        elif scaling_type == "fainted_allies":
+            # Last Respects: +50 BP per fainted party member, capped at 300
+            return min(300, base_power + (50 * modifiers.fainted_party_count))
+        return base_power
+
+    if variable_bp_type == "gyro_ball":
+        # Gyro Ball: BP = min(150, 1 + floor(25 * target_speed / user_speed))
+        if attacker_speed <= 0:
+            return 150
+        return min(150, 1 + math.floor(25 * defender_speed / attacker_speed))
+
+    elif variable_bp_type == "electro_ball":
+        # Electro Ball: BP based on speed ratio (user speed / target speed)
+        if defender_speed <= 0:
+            return 150
+        ratio = attacker_speed / defender_speed
+        if ratio >= 4:
+            return 150
+        elif ratio >= 3:
+            return 120
+        elif ratio >= 2:
+            return 80
+        elif ratio >= 1:
+            return 60
+        else:
+            return 40
+
+    elif variable_bp_type == "hp_scaling":
+        # Eruption/Water Spout: BP = max(1, floor(150 * current_hp / max_hp))
+        if modifiers.attacker_current_hp is not None and modifiers.attacker_max_hp:
+            return max(1, math.floor(150 * modifiers.attacker_current_hp / modifiers.attacker_max_hp))
+        return base_power  # Return base (150) if HP not specified
+
+    elif variable_bp_type == "reversal":
+        # Reversal/Flail: BP scales inversely with remaining HP %
+        if modifiers.attacker_current_hp is not None and modifiers.attacker_max_hp:
+            hp_percent = modifiers.attacker_current_hp / modifiers.attacker_max_hp
+            if hp_percent <= 0.0417:  # <= 4.17%
+                return 200
+            elif hp_percent <= 0.1042:  # <= 10.42%
+                return 150
+            elif hp_percent <= 0.2083:  # <= 20.83%
+                return 100
+            elif hp_percent <= 0.3542:  # <= 35.42%
+                return 80
+            elif hp_percent <= 0.6875:  # <= 68.75%
+                return 40
+            else:
+                return 20
+        return 20  # Default to minimum if HP not specified
+
+    elif variable_bp_type == "hex":
+        # Hex: 65 BP, doubled to 130 when target is statused
+        # Infernal Parade: 60 BP, doubled to 120 when target is statused
+        if modifiers.defender_statused:
+            return base_power * 2
+        return base_power
+
+    elif variable_bp_type == "acrobatics":
+        # Acrobatics: 55 BP, 110 BP when user has no held item
+        if not modifiers.attacker_item:
+            return 110
+        return base_power
+
+    elif variable_bp_type == "stored_power":
+        # Stored Power/Power Trip: 20 + 20 per positive stat stage
+        return 20 + (20 * modifiers.total_positive_stages)
+
+    elif variable_bp_type == "weight_ratio":
+        # Heavy Slam/Heat Crash: BP based on weight ratio (user / target)
+        if modifiers.attacker_weight and modifiers.defender_weight:
+            if modifiers.defender_weight <= 0:
+                return 120
+            ratio = modifiers.attacker_weight / modifiers.defender_weight
+            if ratio >= 5:
+                return 120
+            elif ratio >= 4:
+                return 100
+            elif ratio >= 3:
+                return 80
+            elif ratio >= 2:
+                return 60
+            else:
+                return 40
+        return 60  # Default if weights not specified
+
+    return base_power
 
 
 @dataclass
@@ -289,20 +494,110 @@ def calculate_damage(
             effective_move_type = ATE_ABILITIES[ability]
             ate_ability_boost = True
 
+    # Get normalized move name for immunity checks
+    move_name_normalized = move.name.lower().replace(" ", "-")
+
+    # Check for ability-based type immunities
+    if modifiers.defender_ability:
+        def_ability = modifiers.defender_ability.lower().replace(" ", "-")
+
+        # Check type-based immunities
+        if def_ability in IMMUNITY_ABILITIES:
+            immune_types = IMMUNITY_ABILITIES[def_ability]
+            if effective_move_type in immune_types:
+                return DamageResult(
+                    min_damage=0,
+                    max_damage=0,
+                    min_percent=0,
+                    max_percent=0,
+                    rolls=[0] * 16,
+                    defender_hp=1,
+                    ko_chance=f"Immune ({def_ability.replace('-', ' ').title()})",
+                    is_guaranteed_ohko=False,
+                    is_possible_ohko=False,
+                    details={"reason": f"Immune due to {def_ability.replace('-', ' ').title()}"}
+                )
+
+        # Wind Rider immunity to wind moves
+        if def_ability == "wind-rider" and move_name_normalized in WIND_MOVES:
+            return DamageResult(
+                min_damage=0, max_damage=0, min_percent=0, max_percent=0,
+                rolls=[0] * 16, defender_hp=1,
+                ko_chance="Immune (Wind Rider)",
+                is_guaranteed_ohko=False, is_possible_ohko=False,
+                details={"reason": "Immune due to Wind Rider"}
+            )
+
+        # Soundproof immunity to sound moves
+        if def_ability == "soundproof" and move_name_normalized in SOUND_MOVES:
+            return DamageResult(
+                min_damage=0, max_damage=0, min_percent=0, max_percent=0,
+                rolls=[0] * 16, defender_hp=1,
+                ko_chance="Immune (Soundproof)",
+                is_guaranteed_ohko=False, is_possible_ohko=False,
+                details={"reason": "Immune due to Soundproof"}
+            )
+
+        # Bulletproof immunity to ball/bomb moves
+        if def_ability == "bulletproof" and move_name_normalized in BALL_BOMB_MOVES:
+            return DamageResult(
+                min_damage=0, max_damage=0, min_percent=0, max_percent=0,
+                rolls=[0] * 16, defender_hp=1,
+                ko_chance="Immune (Bulletproof)",
+                is_guaranteed_ohko=False, is_possible_ohko=False,
+                details={"reason": "Immune due to Bulletproof"}
+            )
+
+    # Check for Air Balloon item immunity to Ground
+    if modifiers.defender_item:
+        def_item = modifiers.defender_item.lower().replace(" ", "-")
+        if def_item == "air-balloon" and effective_move_type == "Ground":
+            return DamageResult(
+                min_damage=0, max_damage=0, min_percent=0, max_percent=0,
+                rolls=[0] * 16, defender_hp=1,
+                ko_chance="Immune (Air Balloon)",
+                is_guaranteed_ohko=False, is_possible_ohko=False,
+                details={"reason": "Immune due to Air Balloon"}
+            )
+
     # Calculate stats
     attacker_stats = calculate_all_stats(attacker)
     defender_stats = calculate_all_stats(defender)
 
+    # Check for special move mechanics from GEN9_SPECIAL_MOVES
+    # (move_name_normalized already defined above for immunity checks)
+    special_move_data = GEN9_SPECIAL_MOVES.get(move_name_normalized, {})
+
     # Determine attacking and defending stats
-    if move.category == MoveCategory.PHYSICAL:
+    # Handle stat-swapping moves first
+    if special_move_data.get("uses_target_attack"):
+        # Foul Play: Uses defender's Attack stat for damage
+        attack_stat_name = "attack"
+        attack_stat = defender_stats["attack"]
+        defense_stat_name = "defense" if move.category == MoveCategory.PHYSICAL else "special_defense"
+        defense_stat = defender_stats[defense_stat_name]
+    elif special_move_data.get("uses_user_defense"):
+        # Body Press: Uses user's Defense stat instead of Attack
+        attack_stat_name = "defense"
+        attack_stat = attacker_stats["defense"]
+        defense_stat_name = "defense"
+        defense_stat = defender_stats["defense"]
+    elif special_move_data.get("targets_physical_defense"):
+        # Psyshock, Psystrike, Secret Sword: Special moves that target physical Defense
+        attack_stat_name = "special_attack"
+        attack_stat = attacker_stats["special_attack"]
+        defense_stat_name = "defense"
+        defense_stat = defender_stats["defense"]
+    elif move.category == MoveCategory.PHYSICAL:
         attack_stat_name = "attack"
         defense_stat_name = "defense"
+        attack_stat = attacker_stats[attack_stat_name]
+        defense_stat = defender_stats[defense_stat_name]
     else:
         attack_stat_name = "special_attack"
         defense_stat_name = "special_defense"
-
-    attack_stat = attacker_stats[attack_stat_name]
-    defense_stat = defender_stats[defense_stat_name]
+        attack_stat = attacker_stats[attack_stat_name]
+        defense_stat = defender_stats[defense_stat_name]
 
     # Apply stat stage modifiers
     if move.category == MoveCategory.PHYSICAL:
@@ -328,12 +623,25 @@ def calculate_damage(
         elif item == "choice-specs" and move.category == MoveCategory.SPECIAL:
             attack_stat = int(attack_stat * 1.5)
 
-    # Apply stat-doubling abilities
+    # Apply stat-modifying abilities
     if modifiers.attacker_ability:
         ability = modifiers.attacker_ability.lower().replace(" ", "-")
         # Huge Power / Pure Power double Attack stat
         if ability in ("huge-power", "pure-power") and move.category == MoveCategory.PHYSICAL:
             attack_stat = int(attack_stat * 2)
+        # Guts (1.5x Attack when statused) - Ursaluna, Conkeldurr, Heracross
+        elif ability == "guts" and modifiers.attacker_statused and move.category == MoveCategory.PHYSICAL:
+            attack_stat = apply_mod(attack_stat, MOD_GUTS)
+        # Gorilla Tactics (1.5x Attack, locked into move) - Darmanitan-Galar
+        elif ability == "gorilla-tactics" and move.category == MoveCategory.PHYSICAL:
+            attack_stat = int(attack_stat * 1.5)
+        # Flare Boost (1.5x SpA when burned) - Drifloon/Drifblim
+        elif ability == "flare-boost" and modifiers.attacker_burned and move.category == MoveCategory.SPECIAL:
+            attack_stat = int(attack_stat * 1.5)
+        # Toxic Boost (1.5x Atk when poisoned) - Zangoose
+        elif ability == "toxic-boost" and modifiers.attacker_statused and move.category == MoveCategory.PHYSICAL:
+            # Note: Toxic Boost is specifically for poison, but we use attacker_statused for simplicity
+            attack_stat = int(attack_stat * 1.5)
         # Orichalcum Pulse (1.333x Attack in Sun) - Koraidon
         elif ability == "orichalcum-pulse" and modifiers.weather == "sun":
             if move.category == MoveCategory.PHYSICAL:
@@ -398,8 +706,19 @@ def calculate_damage(
         if def_item == "assault-vest" and move.category == MoveCategory.SPECIAL:
             defense_stat = int(defense_stat * 1.5)
 
-    # Get base power
+    # Get base power (may be variable for special moves)
     power = move.power
+
+    # Calculate variable base power for special moves (Gyro Ball, Eruption, etc.)
+    if special_move_data:
+        power = _calculate_variable_bp(
+            move_name_normalized,
+            power,
+            special_move_data,
+            attacker_stats.get("speed", 100),  # Use calculated speed stats
+            defender_stats.get("speed", 100),
+            modifiers,
+        )
 
     # Apply power modifiers from abilities (Technician, etc.)
     if modifiers.attacker_ability:
@@ -430,6 +749,38 @@ def calculate_damage(
         elif ability == "tinted-lens":
             # Mark for later application after type effectiveness is calculated
             pass  # Handled in final modifiers section
+        # Mega Launcher (1.5x pulse moves) - Blastoise, Clawitzer
+        elif ability == "mega-launcher" and move_name_normalized in PULSE_MOVES:
+            power = apply_mod(power, MOD_MEGA_LAUNCHER)
+        # Reckless (1.2x recoil moves) - Bouffalant, Staraptor
+        elif ability == "reckless" and move_name_normalized in RECOIL_MOVES:
+            power = apply_mod(power, MOD_RECKLESS)
+        # Sand Force (1.3x Ground/Rock/Steel in sand) - Excadrill, Landorus
+        elif ability == "sand-force" and modifiers.weather == "sand":
+            if effective_move_type in ("Ground", "Rock", "Steel"):
+                power = apply_mod(power, MOD_SAND_FORCE)
+        # Steely Spirit (1.5x Steel moves) - Perrserker, Duraludon
+        elif ability == "steely-spirit" and effective_move_type == "Steel":
+            power = apply_mod(power, MOD_STEELY_SPIRIT)
+        # Transistor (1.5x Electric in Gen 9) - Regieleki
+        elif ability == "transistor" and effective_move_type == "Electric":
+            power = apply_mod(power, MOD_TRANSISTOR)
+        # Dragon's Maw (1.5x Dragon) - Regidrago
+        elif ability == "dragons-maw" and effective_move_type == "Dragon":
+            power = apply_mod(power, MOD_DRAGONS_MAW)
+        # Water Bubble (2x Water moves) - Araquanid
+        elif ability == "water-bubble" and effective_move_type == "Water":
+            power = apply_mod(power, MOD_WATER_BUBBLE_ATK)
+        # Punk Rock (1.3x sound moves) - Toxtricity
+        elif ability == "punk-rock" and move_name_normalized in SOUND_MOVES:
+            power = apply_mod(power, MOD_PUNK_ROCK_ATK)
+        # Analytic (1.3x when moving last) - Magnezone, Porygon-Z
+        elif ability == "analytic" and modifiers.moving_last:
+            power = apply_mod(power, MOD_ANALYTIC)
+
+    # Ally Steely Spirit boost (1.5x Steel if ally has Steely Spirit)
+    if modifiers.ally_steely_spirit and effective_move_type == "Steel":
+        power = apply_mod(power, MOD_STEELY_SPIRIT)
 
     # Apply -ate ability boost (1.2x) if Normal move was converted
     if ate_ability_boost:
@@ -521,7 +872,12 @@ def calculate_damage(
 
     # Burn (2048/4096 = 0.5x on physical unless Guts/Facade)
     if modifiers.attacker_burned and move.category == MoveCategory.PHYSICAL:
-        if not modifiers.has_guts and move.name.lower() != "facade":
+        # Check for Guts ability which negates burn penalty
+        has_guts_ability = (
+            modifiers.attacker_ability and
+            modifiers.attacker_ability.lower().replace(" ", "-") == "guts"
+        )
+        if not modifiers.has_guts and not has_guts_ability and move.name.lower() != "facade":
             final_mods.append(MOD_BURN)
 
     # Screens
@@ -578,13 +934,52 @@ def calculate_damage(
         if def_ability == "purifying-salt" and effective_move_type == "Ghost":
             final_mods.append(MOD_PURIFYING_SALT)
 
+        # Heatproof (0.5x Fire damage) - Bronzong
+        if def_ability == "heatproof" and effective_move_type == "Fire":
+            final_mods.append(MOD_HEATPROOF)
+
+        # Water Bubble (0.5x Fire damage taken) - Araquanid
+        if def_ability == "water-bubble" and effective_move_type == "Fire":
+            final_mods.append(MOD_WATER_BUBBLE_DEF)
+
+        # Dry Skin (1.25x Fire damage taken) - Toxicroak, Heliolisk
+        if def_ability == "dry-skin" and effective_move_type == "Fire":
+            final_mods.append(MOD_DRY_SKIN_FIRE)
+
+        # Fur Coat (0.5x physical damage) - Alolan Persian, Furfrou
+        if def_ability == "fur-coat" and move.category == MoveCategory.PHYSICAL:
+            final_mods.append(MOD_FUR_COAT)
+
+        # Punk Rock (0.5x sound damage taken) - Toxtricity
+        if def_ability == "punk-rock" and move_name_normalized in SOUND_MOVES:
+            final_mods.append(MOD_PUNK_ROCK_DEF)
+
+        # Neuroforce (1.25x on super-effective) - Necrozma-Ultra
+        # Note: This is an offensive ability for the attacker
+    if modifiers.attacker_ability:
+        att_ability = modifiers.attacker_ability.lower().replace(" ", "-")
+        if att_ability == "neuroforce" and type_eff >= 2.0:
+            final_mods.append(MOD_NEUROFORCE)
+
     # Attacker item effects (final damage modifiers)
     if modifiers.attacker_item:
         att_item = modifiers.attacker_item.lower().replace(" ", "-")
 
         # Punching Glove (1.1x punch moves) - Iron Hands, etc.
-        if att_item == "punching-glove" and move.name.lower().replace(" ", "-") in PUNCH_MOVES:
+        if att_item == "punching-glove" and move_name_normalized in PUNCH_MOVES:
             final_mods.append(MOD_PUNCHING_GLOVE)
+
+        # Muscle Band (1.1x physical moves)
+        if att_item == "muscle-band" and move.category == MoveCategory.PHYSICAL:
+            final_mods.append(MOD_MUSCLE_BAND)
+
+        # Wise Glasses (1.1x special moves)
+        if att_item == "wise-glasses" and move.category == MoveCategory.SPECIAL:
+            final_mods.append(MOD_WISE_GLASSES)
+
+        # Normal Gem (1.5x first Normal move - one-time use)
+        if att_item == "normal-gem" and effective_move_type == "Normal":
+            final_mods.append(MOD_NORMAL_GEM)
 
     # Defender item effects
     if modifiers.defender_item:

@@ -459,6 +459,119 @@ def get_move_type_for_user(move_name: str, user_name: str, default_type: str) ->
 
 # Gen 9 signature moves with special mechanics
 GEN9_SPECIAL_MOVES: dict[str, dict] = {
+    # Stat-swapping moves
+    "foul-play": {
+        "base_power": 95,
+        "type": "dark",
+        "category": "physical",
+        "uses_target_attack": True,  # Uses defender's Attack stat for damage
+    },
+    "body-press": {
+        "base_power": 80,
+        "type": "fighting",
+        "category": "physical",
+        "uses_user_defense": True,  # Uses user's Defense stat instead of Attack
+    },
+    "psyshock": {
+        "base_power": 80,
+        "type": "psychic",
+        "category": "special",
+        "targets_physical_defense": True,  # Special move that targets Defense
+    },
+    "psystrike": {
+        "base_power": 100,
+        "type": "psychic",
+        "category": "special",
+        "targets_physical_defense": True,  # Special move that targets Defense
+    },
+    "secret-sword": {
+        "base_power": 85,
+        "type": "fighting",
+        "category": "special",
+        "targets_physical_defense": True,  # Special move that targets Defense
+    },
+    # Variable base power moves
+    "gyro-ball": {
+        "base_power": 1,  # Calculated: min(150, 1 + floor(25 * target_speed / user_speed))
+        "type": "steel",
+        "category": "physical",
+        "variable_bp": "gyro_ball",
+    },
+    "electro-ball": {
+        "base_power": 1,  # Calculated based on speed ratio
+        "type": "electric",
+        "category": "special",
+        "variable_bp": "electro_ball",
+    },
+    "eruption": {
+        "base_power": 150,  # Calculated: max(1, floor(150 * current_hp / max_hp))
+        "type": "fire",
+        "category": "special",
+        "variable_bp": "hp_scaling",
+        "spread": True,
+    },
+    "water-spout": {
+        "base_power": 150,  # Calculated: max(1, floor(150 * current_hp / max_hp))
+        "type": "water",
+        "category": "special",
+        "variable_bp": "hp_scaling",
+        "spread": True,
+    },
+    "reversal": {
+        "base_power": 1,  # Calculated based on remaining HP
+        "type": "fighting",
+        "category": "physical",
+        "variable_bp": "reversal",
+    },
+    "flail": {
+        "base_power": 1,  # Calculated based on remaining HP
+        "type": "normal",
+        "category": "physical",
+        "variable_bp": "reversal",
+    },
+    "hex": {
+        "base_power": 65,  # 130 BP when target is statused
+        "type": "ghost",
+        "category": "special",
+        "variable_bp": "hex",
+    },
+    "infernal-parade": {
+        "base_power": 60,  # 120 BP when target is statused
+        "type": "ghost",
+        "category": "special",
+        "variable_bp": "hex",
+    },
+    "acrobatics": {
+        "base_power": 55,  # 110 BP when user has no held item
+        "type": "flying",
+        "category": "physical",
+        "variable_bp": "acrobatics",
+    },
+    "stored-power": {
+        "base_power": 20,  # +20 BP per positive stat stage
+        "type": "psychic",
+        "category": "special",
+        "variable_bp": "stored_power",
+    },
+    "power-trip": {
+        "base_power": 20,  # +20 BP per positive stat stage
+        "type": "dark",
+        "category": "physical",
+        "variable_bp": "stored_power",
+    },
+    "heavy-slam": {
+        "base_power": 1,  # Calculated based on weight ratio
+        "type": "steel",
+        "category": "physical",
+        "variable_bp": "weight_ratio",
+    },
+    "heat-crash": {
+        "base_power": 1,  # Calculated based on weight ratio
+        "type": "fire",
+        "category": "physical",
+        "variable_bp": "weight_ratio",
+    },
+    # Scaling moves
     "rage-fist": {
         "base_power": 50,
         "type": "ghost",
