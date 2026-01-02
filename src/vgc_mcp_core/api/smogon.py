@@ -10,6 +10,30 @@ from ..config import settings, logger
 from ..rules.regulation_loader import get_regulation_config, RegulationConfig
 
 
+# Map form names to Smogon's naming convention
+# Smogon uses the base form name for certain Pokemon
+FORM_ALIASES = {
+    # Forces of Nature - base form is Incarnate
+    "landorus-incarnate": "landorus",
+    "tornadus-incarnate": "tornadus",
+    "thundurus-incarnate": "thundurus",
+    "enamorus-incarnate": "enamorus",
+    # Urshifu - base form is Single Strike
+    "urshifu-single-strike": "urshifu",
+    # Ogerpon - base form is Teal Mask
+    "ogerpon-teal-mask": "ogerpon",
+    "ogerpon-teal": "ogerpon",
+    # Indeedee - base form is Male
+    "indeedee-m": "indeedee",
+    "indeedee-male": "indeedee",
+    # Basculegion - base form is Male
+    "basculegion-m": "basculegion",
+    "basculegion-male": "basculegion",
+    # Ursaluna - base form is regular (not Bloodmoon)
+    "ursaluna-normal": "ursaluna",
+}
+
+
 class SmogonStatsError(Exception):
     """Error fetching Smogon stats."""
     pass
@@ -144,6 +168,10 @@ class SmogonStatsClient:
     ) -> Optional[dict]:
         """Get usage stats for a specific Pokemon."""
         stats = await self.get_usage_stats(format_name, rating)
+
+        # Apply form aliases (e.g., "landorus-incarnate" -> "landorus")
+        name_lower = pokemon_name.lower().replace(" ", "-")
+        pokemon_name = FORM_ALIASES.get(name_lower, pokemon_name)
 
         # Normalize name for matching
         name_normalized = pokemon_name.lower().replace(" ", "").replace("-", "")

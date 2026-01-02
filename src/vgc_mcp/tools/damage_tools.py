@@ -123,6 +123,50 @@ def _normalize_smogon_name(name: str) -> str:
     return smogon_to_hyphenated.get(name_lower, name_lower)
 
 
+def _get_synergy_ability(item: str, abilities: dict) -> tuple[str, float]:
+    """Get the best ability to pair with an item based on known synergies.
+
+    Args:
+        item: The item being used
+        abilities: Dict of ability_name -> usage_percent
+
+    Returns:
+        Tuple of (ability_name, usage_percent)
+    """
+    if not abilities:
+        return (None, 0)
+
+    # Normalize item name for matching
+    item_lower = (item or "").lower().replace("-", " ").replace("_", " ")
+
+    # Known synergies: item -> preferred abilities (in order of preference)
+    synergies = {
+        "life orb": ["Sheer Force"],  # Sheer Force cancels Life Orb recoil
+        "choice band": ["Huge Power", "Pure Power", "Gorilla Tactics"],
+        "choice specs": ["Adaptability"],
+        "assault vest": ["Regenerator"],
+        "rocky helmet": ["Rough Skin", "Iron Barbs"],
+        "leftovers": ["Regenerator", "Poison Heal"],
+        "black sludge": ["Regenerator", "Poison Heal"],
+        "flame orb": ["Guts", "Marvel Scale"],
+        "toxic orb": ["Poison Heal", "Guts", "Marvel Scale"],
+        "booster energy": ["Protosynthesis", "Quark Drive"],
+    }
+
+    # Check if this item has known synergies
+    preferred_abilities = synergies.get(item_lower, [])
+
+    for preferred in preferred_abilities:
+        preferred_lower = preferred.lower()
+        for ability, usage in abilities.items():
+            if ability.lower() == preferred_lower:
+                return (ability, usage)
+
+    # No synergy found - return the most common ability
+    top_ability = list(abilities.keys())[0]
+    return (top_ability, abilities[top_ability])
+
+
 async def _get_common_spreads(pokemon_name: str, limit: int = 3) -> list[dict]:
     """Fetch the top common spreads for a Pokemon from Smogon usage stats.
 
@@ -140,13 +184,14 @@ async def _get_common_spreads(pokemon_name: str, limit: int = 3) -> list[dict]:
         usage = await _smogon_client.get_pokemon_usage(pokemon_name)
         if usage and usage.get("spreads"):
             spreads = usage["spreads"][:limit]
-            # Get top items and abilities with their usage percentages
+            # Get items and abilities with their usage percentages
             items = usage.get("items", {})
             abilities = usage.get("abilities", {})
             top_item = list(items.keys())[0] if items else None
             top_item_usage = list(items.values())[0] if items else 0
-            top_ability = list(abilities.keys())[0] if abilities else None
-            top_ability_usage = list(abilities.values())[0] if abilities else 0
+
+            # Get ability based on item synergy (e.g., Life Orb -> Sheer Force)
+            top_ability, top_ability_usage = _get_synergy_ability(top_item, abilities)
 
             result = []
             for i, spread in enumerate(spreads):
@@ -593,9 +638,13 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "attacker": attacker_name,
                 "attacker_ability": attacker_ability,
                 "attacker_item": attacker_item,
+                "attacker_tera_type": attacker_tera_type,
+                "attacker_tera_active": attacker_tera_type is not None,
                 "defender": defender_name,
                 "defender_ability": defender_ability,
                 "defender_item": defender_item,
+                "defender_tera_type": defender_tera_type,
+                "defender_tera_active": defender_tera_type is not None,
                 "move": move_name,
                 "move_type": move.type,
                 "move_category": move.category.value,
@@ -636,6 +685,8 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     "evs": attacker_spread_info.get("evs", {}),
                     "item": attacker_item,
                     "ability": attacker_ability,
+                    "tera_type": attacker_tera_type,
+                    "tera_active": attacker_tera_type is not None,
                     "usage_percent": attacker_spread_info.get("usage", 0)
                 }
 
@@ -650,6 +701,8 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 },
                 "item": defender_item,
                 "ability": defender_ability,
+                "tera_type": defender_tera_type,
+                "tera_active": defender_tera_type is not None,
                 "usage_percent": defender_spread_info.get("usage", 0) if defender_spread_info else None
             }
 
@@ -690,6 +743,23 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
 
             if ability_notes:
                 response["ability_effects"] = ability_notes
+
+            # Build condensed summary with all key info at a glance
+            def _format_evs(evs_dict: dict) -> str:
+                """Format EVs as HP/Atk/Def/SpA/SpD/Spe string."""
+                return f"{evs_dict.get('hp', 0)}/{evs_dict.get('attack', 0)}/{evs_dict.get('defense', 0)}/{evs_dict.get('special_attack', 0)}/{evs_dict.get('special_defense', 0)}/{evs_dict.get('speed', 0)}"
+
+            atk_evs_dict = attacker_spread_info.get("evs", {}) if attacker_spread_info else {"attack": attacker_atk_evs, "special_attack": attacker_spa_evs}
+            def_evs_dict = {"hp": defender_hp_evs, "defense": defender_def_evs, "special_defense": defender_spd_evs}
+
+            atk_tera_str = f" [Tera {attacker_tera_type.title()}]" if attacker_tera_type else ""
+            def_tera_str = f" [Tera {defender_tera_type.title()}]" if defender_tera_type else ""
+
+            response["condensed_summary"] = {
+                "attacker_line": f"{attacker_name} ({attacker_nature.title()} {_format_evs(atk_evs_dict)}) @ {attacker_item or 'No item'} [{attacker_ability}]{atk_tera_str}",
+                "defender_line": f"{defender_name} ({defender_nature.title()} {_format_evs(def_evs_dict)}) @ {defender_item or 'No item'} [{defender_ability}]{def_tera_str}",
+                "move_line": f"{move_name} ({move.power} BP, {move.type.title()}, {move.category.value.title()})",
+            }
 
             # Build summary table for clear display
             hp_remaining_min = max(0, result.defender_hp - result.max_damage)
