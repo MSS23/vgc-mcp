@@ -168,9 +168,16 @@ class SmogonStatsClient:
                     self._current_month = m
                     self._check_for_data_upgrade(m)  # Track data freshness
 
+                    # Format month for display (e.g., "2025-12" -> "December 2025")
+                    try:
+                        month_display = datetime.strptime(m, "%Y-%m").strftime("%B %Y")
+                    except ValueError:
+                        month_display = m
+
                     data["_meta"] = {
                         "format": fmt,
                         "month": m,
+                        "month_display": f"{month_display} Usage Stats",
                         "rating": rating
                     }
 
