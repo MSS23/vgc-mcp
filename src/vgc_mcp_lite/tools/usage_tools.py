@@ -45,6 +45,15 @@ def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
 
             # Add interactive UI (only in vgc-mcp-lite)
             if HAS_UI:
+                # Extract regulation from format string (e.g., "gen9vgc2025regf" -> "Reg F")
+                meta = usage.get("_meta", {})
+                format_str = meta.get("format", "")
+                reg_suffix = format_str[-4:] if len(format_str) >= 4 else ""
+                if reg_suffix.startswith("reg") and len(reg_suffix) == 4:
+                    reg_name = f"VGC Reg {reg_suffix[-1].upper()}"
+                else:
+                    reg_name = "VGC"
+
                 ui_resource = create_usage_stats_resource(
                     pokemon_name=usage.get("pokemon", pokemon_name),
                     usage_percent=usage.get("usage_percent", 0),
@@ -54,6 +63,9 @@ def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
                     spreads=usage.get("spreads", []),
                     tera_types=usage.get("tera_types"),
                     teammates=usage.get("teammates"),
+                    rating=rating,
+                    format_name=reg_name,
+                    month_display=meta.get("month_display", ""),
                 )
                 return add_ui_metadata(usage, ui_resource)
             return usage

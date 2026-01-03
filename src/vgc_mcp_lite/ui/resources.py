@@ -205,7 +205,8 @@ def create_usage_stats_resource(
     tera_types: list[dict[str, Any]] | None = None,
     teammates: list[dict[str, Any]] | None = None,
     rating: int = 1760,
-    format_name: str = "VGC Reg G",
+    format_name: str = "VGC",
+    month_display: str = "",
 ) -> dict[str, Any]:
     """Create a usage statistics UI resource.
 
@@ -222,6 +223,7 @@ def create_usage_stats_resource(
         teammates=teammates,
         rating=rating,
         format_name=format_name,
+        month_display=month_display,
     )
 
     return create_ui_resource({

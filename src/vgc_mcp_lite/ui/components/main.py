@@ -4083,7 +4083,8 @@ def create_usage_stats_ui(
     tera_types: list[dict[str, Any]] | None = None,
     teammates: list[dict[str, Any]] | None = None,
     rating: int = 1760,
-    format_name: str = "VGC Reg G",
+    format_name: str = "VGC",
+    month_display: str = "",
 ) -> str:
     """Create an interactive usage statistics UI component.
 
@@ -4099,7 +4100,8 @@ def create_usage_stats_ui(
         tera_types: Optional list of tera type dicts with 'type' and 'percent' keys
         teammates: Optional list of teammate dicts with 'name' and 'percent' keys
         rating: ELO rating cutoff (0, 1500, 1630, 1760)
-        format_name: Format name for display
+        format_name: Format name for display (e.g., "VGC Reg F")
+        month_display: Month display string (e.g., "December 2025 Usage Stats")
     """
     # Generate sprite HTML
     sprite_html = get_sprite_html(pokemon_name, size=96, css_class="usage-sprite")
@@ -4265,6 +4267,58 @@ def create_usage_stats_ui(
             font-size: 12px;
             color: #a0a0a0;
             margin-top: 8px;
+        }}
+
+        .header-row {{
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            margin-top: 8px;
+            flex-wrap: wrap;
+        }}
+
+        .elo-selector {{
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }}
+
+        .elo-selector label {{
+            font-size: 12px;
+            color: #a0a0a0;
+        }}
+
+        .elo-selector select {{
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            padding: 4px 8px;
+            font-size: 12px;
+            color: #e0e0e0;
+            cursor: pointer;
+        }}
+
+        .elo-selector select:hover {{
+            border-color: rgba(255, 255, 255, 0.4);
+        }}
+
+        .month-display {{
+            font-size: 11px;
+            color: #808080;
+            margin-top: 4px;
+        }}
+
+        .rating-notice {{
+            display: none;
+            background: rgba(74, 144, 217, 0.2);
+            border: 1px solid rgba(74, 144, 217, 0.4);
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 11px;
+            color: #8ab4f8;
+            margin-top: 8px;
+            text-align: center;
         }}
 
         .grid {{
@@ -4456,7 +4510,20 @@ def create_usage_stats_ui(
             {sprite_html}
             <div class="pokemon-name">{pokemon_name}</div>
             <div class="usage-badge">{usage_percent:.2f}% Usage</div>
-            <div class="format-badge">{format_name}</div>
+            <div class="header-row">
+                <div class="format-badge">{format_name}</div>
+                <div class="elo-selector">
+                    <label>ELO Rating:</label>
+                    <select id="elo-select" onchange="changeRating(this.value)">
+                        <option value="0" {'selected' if rating == 0 else ''}>All</option>
+                        <option value="1500" {'selected' if rating == 1500 else ''}>1500+</option>
+                        <option value="1630" {'selected' if rating == 1630 else ''}>1630+</option>
+                        <option value="1760" {'selected' if rating == 1760 else ''}>1760+</option>
+                    </select>
+                </div>
+            </div>
+            {f'<div class="month-display">{month_display}</div>' if month_display else ''}
+            <div id="rating-notice" class="rating-notice"></div>
         </div>
 
         <div class="grid">
@@ -4484,6 +4551,21 @@ def create_usage_stats_ui(
             {teammates_html}
         </div>
     </div>
+    <script>
+        const currentRating = {rating};
+        const pokemonName = "{pokemon_name}";
+
+        function changeRating(newRating) {{
+            newRating = parseInt(newRating);
+            if (newRating !== currentRating) {{
+                const notice = document.getElementById('rating-notice');
+                notice.innerHTML = 'To see ' + newRating + '+ ELO data, ask Claude:<br><code>get_usage_stats("' + pokemonName + '", rating=' + newRating + ')</code>';
+                notice.style.display = 'block';
+            }} else {{
+                document.getElementById('rating-notice').style.display = 'none';
+            }}
+        }}
+    </script>
 </body>
 </html>'''
 
