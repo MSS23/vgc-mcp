@@ -166,6 +166,8 @@ def main_http(host: str = "0.0.0.0", port: int = None):
     from starlette.applications import Starlette
     from starlette.routing import Mount, Route
     from starlette.responses import JSONResponse, Response
+    from starlette.middleware import Middleware
+    from starlette.middleware.cors import CORSMiddleware
 
     # Create SSE transport - note the trailing slash for Mount compatibility
     sse = SseServerTransport("/messages/")
@@ -193,6 +195,15 @@ def main_http(host: str = "0.0.0.0", port: int = None):
             Route("/health", endpoint=health_check, methods=["GET"]),
             Route("/sse", endpoint=handle_sse),
             Mount("/messages/", app=sse.handle_post_message),
+        ],
+        middleware=[
+            Middleware(
+                CORSMiddleware,
+                allow_origins=["*"],
+                allow_methods=["*"],
+                allow_headers=["*"],
+                allow_credentials=True,
+            )
         ]
     )
 
