@@ -21,19 +21,8 @@ from .components import (
     create_damage_calc_ui,
     create_team_roster_ui,
     create_speed_tier_ui,
-    create_matchup_summary_ui,
-    create_threat_analysis_ui,
     create_usage_stats_ui,
-    create_speed_outspeed_ui,
     create_stats_card_ui,
-    create_threat_matrix_ui,
-    create_turn_order_ui,
-    create_bring_selector_ui,
-    create_ability_synergy_ui,
-    create_team_report_ui,
-    create_summary_table_ui,
-    create_speed_outspeed_graph_ui,
-    create_multi_hit_survival_ui,
     create_pokemon_build_card_ui,
 )
 
@@ -204,66 +193,6 @@ def create_speed_tier_resource(
     })
 
 
-def create_matchup_summary_resource(
-    pokemon_name: str,
-    matchups: list[dict[str, Any]],
-) -> dict[str, Any]:
-    """Create a matchup summary UI resource.
-
-    Returns a dict with the UI resource showing matchup analysis.
-    """
-    html = create_matchup_summary_ui(
-        pokemon_name=pokemon_name,
-        matchups=matchups,
-    )
-
-    return create_ui_resource({
-        "uri": f"ui://vgc/matchups/{pokemon_name.lower()}",
-        "content": {
-            "type": "rawHtml",
-            "htmlString": html,
-        },
-        "encoding": "text",
-    })
-
-
-def create_threat_analysis_resource(
-    threat_name: str,
-    threat_speed: int,
-    ohko_by: list[str],
-    twohko_by: list[str],
-    checks: list[str],
-    counters: list[str],
-    threatened: list[str],
-    survives: list[str],
-    notes: list[str] | None = None,
-) -> dict[str, Any]:
-    """Create a threat analysis UI resource.
-
-    Returns a dict with the UI resource showing threat matchup analysis.
-    """
-    html = create_threat_analysis_ui(
-        threat_name=threat_name,
-        threat_speed=threat_speed,
-        ohko_by=ohko_by,
-        twohko_by=twohko_by,
-        checks=checks,
-        counters=counters,
-        threatened=threatened,
-        survives=survives,
-        notes=notes,
-    )
-
-    return create_ui_resource({
-        "uri": f"ui://vgc/threat/{threat_name.lower()}",
-        "content": {
-            "type": "rawHtml",
-            "htmlString": html,
-        },
-        "encoding": "text",
-    })
-
-
 def create_usage_stats_resource(
     pokemon_name: str,
     usage_percent: float,
@@ -273,6 +202,8 @@ def create_usage_stats_resource(
     spreads: list[dict[str, Any]],
     tera_types: list[dict[str, Any]] | None = None,
     teammates: list[dict[str, Any]] | None = None,
+    rating: int = 1760,
+    format_name: str = "VGC Reg G",
 ) -> dict[str, Any]:
     """Create a usage statistics UI resource.
 
@@ -287,70 +218,12 @@ def create_usage_stats_resource(
         spreads=spreads,
         tera_types=tera_types,
         teammates=teammates,
+        rating=rating,
+        format_name=format_name,
     )
 
     return create_ui_resource({
         "uri": f"ui://vgc/usage/{pokemon_name.lower()}",
-        "content": {
-            "type": "rawHtml",
-            "htmlString": html,
-        },
-        "encoding": "text",
-    })
-
-
-def create_speed_outspeed_resource(
-    pokemon_name: str,
-    base_speed: int,
-    current_speed: int,
-    nature: str,
-    speed_evs: int,
-    speed_distribution: list[dict[str, Any]],
-    outspeed_percentage: float,
-    mode: str = "meta",
-    target_pokemon: str | None = None,
-    format_info: dict[str, Any] | None = None,
-    pokemon_base_speeds: dict[str, int] | None = None,
-) -> dict[str, Any]:
-    """Create a speed outspeed percentage UI resource.
-
-    Returns a dict with the UI resource showing what % of the meta
-    (or a specific target) your Pokemon outspeeds, with an interactive
-    slider to adjust Speed EVs.
-
-    Args:
-        pokemon_name: Your Pokemon's name
-        base_speed: Base speed stat
-        current_speed: Current calculated speed stat
-        nature: Current nature
-        speed_evs: Current Speed EVs
-        speed_distribution: Pre-computed distribution from build_speed_distribution_data()
-        outspeed_percentage: Initial outspeed percentage
-        mode: "meta" for meta-wide, "single" for single target
-        target_pokemon: Target Pokemon name (for single mode)
-        format_info: Format metadata (name, month)
-        pokemon_base_speeds: Dict mapping Pokemon names to their base speed stats
-    """
-    html = create_speed_outspeed_ui(
-        pokemon_name=pokemon_name,
-        base_speed=base_speed,
-        current_speed=current_speed,
-        nature=nature,
-        speed_evs=speed_evs,
-        speed_distribution=speed_distribution,
-        outspeed_percentage=outspeed_percentage,
-        mode=mode,
-        target_pokemon=target_pokemon,
-        format_info=format_info,
-        pokemon_base_speeds=pokemon_base_speeds,
-    )
-
-    uri_suffix = f"{pokemon_name.lower()}"
-    if mode == "single" and target_pokemon:
-        uri_suffix = f"{pokemon_name.lower()}-vs-{target_pokemon.lower()}"
-
-    return create_ui_resource({
-        "uri": f"ui://vgc/speed/outspeed/{uri_suffix}",
         "content": {
             "type": "rawHtml",
             "htmlString": html,
@@ -407,31 +280,198 @@ def create_stats_card_resource(
     })
 
 
-def create_threat_matrix_resource(
+def create_summary_table_resource(
+    title: str,
+    rows: list[dict[str, str]],
+    highlight_rows: list[str] | None = None,
+    analysis: str | None = None,
+) -> dict[str, Any]:
+    """Create a summary table UI resource.
+
+    Returns a dict with the UI resource showing a simple key-value table.
+
+    Args:
+        title: Table title
+        rows: List of dicts with "metric" and "value" keys
+        highlight_rows: List of metric names to highlight
+        analysis: Optional analysis text to show below table
+    """
+    highlight_set = set(highlight_rows or [])
+
+    # Build simple HTML table
+    table_rows = []
+    for row in rows:
+        metric = row.get("metric", "")
+        value = row.get("value", "")
+        is_highlight = metric in highlight_set
+        style = "background: #e8f5e9; font-weight: bold;" if is_highlight else ""
+        table_rows.append(
+            f'<tr style="{style}"><td style="padding: 8px; border: 1px solid #ddd;">{metric}</td>'
+            f'<td style="padding: 8px; border: 1px solid #ddd;">{value}</td></tr>'
+        )
+
+    html = f"""
+    <div style="font-family: system-ui, sans-serif; max-width: 400px;">
+        <h3 style="margin: 0 0 12px 0; color: #333;">{title}</h3>
+        <table style="border-collapse: collapse; width: 100%;">
+            <thead>
+                <tr style="background: #f5f5f5;">
+                    <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Metric</th>
+                    <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                {"".join(table_rows)}
+            </tbody>
+        </table>
+        {f'<p style="margin-top: 12px; color: #666; font-size: 14px;">{analysis}</p>' if analysis else ""}
+    </div>
+    """
+
+    return create_ui_resource({
+        "uri": f"ui://vgc/summary/{title.lower().replace(' ', '-')}",
+        "content": {
+            "type": "rawHtml",
+            "htmlString": html,
+        },
+        "encoding": "text",
+    })
+
+
+def create_multi_hit_survival_resource(
+    pokemon_name: str,
+    attacker_name: str,
+    move_name: str,
+    hits_to_ko: int,
+    damage_per_hit: tuple[float, float],
+    total_damage: tuple[float, float],
+    hp: int,
+) -> dict[str, Any]:
+    """Create a multi-hit survival analysis UI resource.
+
+    Args:
+        pokemon_name: Defending Pokemon name
+        attacker_name: Attacking Pokemon name
+        move_name: Multi-hit move name
+        hits_to_ko: Number of hits needed to KO
+        damage_per_hit: (min, max) damage percentage per hit
+        total_damage: (min, max) total damage percentage
+        hp: Defender's HP stat
+    """
+    html = f"""
+    <div style="font-family: system-ui, sans-serif; max-width: 400px; padding: 16px; border: 1px solid #ddd; border-radius: 8px;">
+        <h3 style="margin: 0 0 12px 0; color: #333;">Multi-Hit Survival</h3>
+        <p style="margin: 4px 0;"><strong>{attacker_name}</strong> using <strong>{move_name}</strong></p>
+        <p style="margin: 4px 0;">vs <strong>{pokemon_name}</strong> ({hp} HP)</p>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 12px 0;">
+        <p style="margin: 4px 0;">Damage per hit: {damage_per_hit[0]:.1f}% - {damage_per_hit[1]:.1f}%</p>
+        <p style="margin: 4px 0;">Total damage: {total_damage[0]:.1f}% - {total_damage[1]:.1f}%</p>
+        <p style="margin: 4px 0; font-weight: bold; color: {'#c62828' if hits_to_ko <= 3 else '#2e7d32'};">
+            Hits to KO: {hits_to_ko}
+        </p>
+    </div>
+    """
+
+    return create_ui_resource({
+        "uri": f"ui://vgc/survival/{pokemon_name.lower()}-vs-{attacker_name.lower()}",
+        "content": {
+            "type": "rawHtml",
+            "htmlString": html,
+        },
+        "encoding": "text",
+    })
+
+
+def create_speed_outspeed_graph_resource(
     pokemon_name: str,
     pokemon_speed: int,
+    outspeed_data: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Create a speed outspeed graph UI resource.
+
+    Args:
+        pokemon_name: Pokemon name
+        pokemon_speed: Current speed stat
+        outspeed_data: List of Pokemon with speed comparisons
+    """
+    rows_html = ""
+    for entry in outspeed_data[:10]:
+        name = entry.get("name", "Unknown")
+        speed = entry.get("speed", 0)
+        outspeed = "faster" if pokemon_speed > speed else ("tied" if pokemon_speed == speed else "slower")
+        color = "#2e7d32" if outspeed == "faster" else ("#f57c00" if outspeed == "tied" else "#c62828")
+        rows_html += f'<tr><td style="padding: 6px; border-bottom: 1px solid #eee;">{name}</td><td style="padding: 6px; border-bottom: 1px solid #eee;">{speed}</td><td style="padding: 6px; border-bottom: 1px solid #eee; color: {color};">{outspeed}</td></tr>'
+
+    html = f"""
+    <div style="font-family: system-ui, sans-serif; max-width: 500px;">
+        <h3 style="margin: 0 0 12px 0; color: #333;">{pokemon_name} Speed Analysis ({pokemon_speed} Spe)</h3>
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="background: #f5f5f5;">
+                    <th style="padding: 8px; text-align: left;">Pokemon</th>
+                    <th style="padding: 8px; text-align: left;">Speed</th>
+                    <th style="padding: 8px; text-align: left;">Result</th>
+                </tr>
+            </thead>
+            <tbody>
+                {rows_html}
+            </tbody>
+        </table>
+    </div>
+    """
+
+    return create_ui_resource({
+        "uri": f"ui://vgc/speed/outspeed/{pokemon_name.lower()}",
+        "content": {
+            "type": "rawHtml",
+            "htmlString": html,
+        },
+        "encoding": "text",
+    })
+
+
+def create_threat_analysis_resource(
+    pokemon_name: str,
     threats: list[dict[str, Any]],
-    pokemon_sprite: str | None = None,
+    counters: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Create a threat matchup matrix UI resource.
-
-    Returns a dict with the UI resource showing damage matchups vs threats.
+    """Create a threat analysis UI resource.
 
     Args:
-        pokemon_name: Your Pokemon's name
-        pokemon_speed: Your Pokemon's speed stat
-        threats: List of threat dicts with damage data
-        pokemon_sprite: Optional sprite URL
+        pokemon_name: Pokemon being analyzed
+        threats: List of threatening Pokemon with damage info
+        counters: List of Pokemon this one threatens (optional)
     """
-    html = create_threat_matrix_ui(
-        pokemon_name=pokemon_name,
-        pokemon_speed=pokemon_speed,
-        threats=threats,
-        pokemon_sprite=pokemon_sprite,
-    )
+    threats_html = ""
+    for threat in threats[:5]:
+        name = threat.get("name", "Unknown")
+        move = threat.get("move", "")
+        damage = threat.get("damage", "?%")
+        threats_html += f'<li style="margin: 4px 0;"><strong>{name}</strong> - {move}: {damage}</li>'
+
+    counters_html = ""
+    if counters:
+        counters_html = "<h4 style='margin: 12px 0 8px 0;'>Threatens:</h4><ul style='margin: 0; padding-left: 20px;'>"
+        for counter in counters[:5]:
+            name = counter.get("name", "Unknown")
+            move = counter.get("move", "")
+            damage = counter.get("damage", "?%")
+            counters_html += f'<li style="margin: 4px 0;"><strong>{name}</strong> - {move}: {damage}</li>'
+        counters_html += "</ul>"
+
+    html = f"""
+    <div style="font-family: system-ui, sans-serif; max-width: 400px; padding: 16px; border: 1px solid #ddd; border-radius: 8px;">
+        <h3 style="margin: 0 0 12px 0; color: #333;">{pokemon_name} Threat Analysis</h3>
+        <h4 style="margin: 0 0 8px 0; color: #c62828;">Threatened by:</h4>
+        <ul style="margin: 0; padding-left: 20px;">
+            {threats_html if threats_html else '<li>No major threats identified</li>'}
+        </ul>
+        {counters_html}
+    </div>
+    """
 
     return create_ui_resource({
-        "uri": f"ui://vgc/threat-matrix/{pokemon_name.lower()}",
+        "uri": f"ui://vgc/threats/{pokemon_name.lower()}",
         "content": {
             "type": "rawHtml",
             "htmlString": html,
@@ -440,139 +480,85 @@ def create_threat_matrix_resource(
     })
 
 
-def create_turn_order_resource(
-    pokemon_list: list[dict[str, Any]],
-    trick_room: bool = False,
-    tailwind_pokemon: list[str] | None = None,
-    paralysis_pokemon: list[str] | None = None,
+def create_coverage_resource(
+    pokemon_name: str,
+    moves: list[dict[str, Any]],
+    coverage: dict[str, float],
 ) -> dict[str, Any]:
-    """Create a turn order timeline UI resource.
-
-    Returns a dict with the UI resource showing turn order with priority.
+    """Create a coverage heatmap UI resource.
 
     Args:
-        pokemon_list: List of Pokemon dicts {name, speed, priority, move, team}
-        trick_room: Whether Trick Room is active
-        tailwind_pokemon: List of Pokemon names benefiting from Tailwind
-        paralysis_pokemon: List of Pokemon names affected by paralysis
+        pokemon_name: Pokemon or team name
+        moves: List of moves with name and type
+        coverage: Dict mapping type names to effectiveness values
     """
-    html = create_turn_order_ui(
-        pokemon_list=pokemon_list,
-        trick_room=trick_room,
-        tailwind_pokemon=tailwind_pokemon,
-        paralysis_pokemon=paralysis_pokemon,
-    )
+    # Type color palette
+    type_colors = {
+        "normal": "#A8A878", "fire": "#F08030", "water": "#6890F0",
+        "electric": "#F8D030", "grass": "#78C850", "ice": "#98D8D8",
+        "fighting": "#C03028", "poison": "#A040A0", "ground": "#E0C068",
+        "flying": "#A890F0", "psychic": "#F85888", "bug": "#A8B820",
+        "rock": "#B8A038", "ghost": "#705898", "dragon": "#7038F8",
+        "dark": "#705848", "steel": "#B8B8D0", "fairy": "#EE99AC",
+    }
+
+    # Build coverage grid cells
+    cells_html = ""
+    for type_name, eff in sorted(coverage.items()):
+        bg_color = type_colors.get(type_name.lower(), "#888")
+        # Effectiveness overlay
+        if eff >= 2.0:
+            eff_color = "rgba(0, 200, 0, 0.3)"  # Green for SE
+            eff_text = f"{eff}x"
+        elif eff < 1.0 and eff > 0:
+            eff_color = "rgba(200, 0, 0, 0.3)"  # Red for NVE
+            eff_text = f"{eff}x"
+        elif eff == 0:
+            eff_color = "rgba(0, 0, 0, 0.5)"  # Dark for immune
+            eff_text = "0x"
+        else:
+            eff_color = "transparent"
+            eff_text = "1x"
+
+        cells_html += f'''
+        <div style="
+            background: linear-gradient({eff_color}, {eff_color}), {bg_color};
+            color: white;
+            padding: 8px;
+            border-radius: 4px;
+            text-align: center;
+            text-shadow: 1px 1px 2px black;
+            font-size: 12px;
+        ">
+            <div style="font-weight: bold;">{type_name.title()}</div>
+            <div>{eff_text}</div>
+        </div>
+        '''
+
+    # Build moves list
+    moves_html = ""
+    for move in moves[:4]:
+        move_name = move.get("name", "Unknown")
+        move_type = move.get("type", "normal")
+        moves_html += f'<span style="background: {type_colors.get(move_type.lower(), "#888")}; color: white; padding: 4px 8px; border-radius: 4px; margin: 2px; display: inline-block; text-shadow: 1px 1px 2px black;">{move_name}</span>'
+
+    html = f"""
+    <div style="font-family: system-ui, sans-serif; max-width: 500px;">
+        <h3 style="margin: 0 0 12px 0; color: #333;">{pokemon_name} Coverage</h3>
+        <div style="margin-bottom: 12px;">
+            {moves_html if moves_html else '<em>No moves</em>'}
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px;">
+            {cells_html}
+        </div>
+        <p style="margin-top: 12px; font-size: 12px; color: #666;">
+            Green = Super Effective | Red = Not Very Effective | Dark = Immune
+        </p>
+    </div>
+    """
 
     return create_ui_resource({
-        "uri": "ui://vgc/turn-order",
-        "content": {
-            "type": "rawHtml",
-            "htmlString": html,
-        },
-        "encoding": "text",
-    })
-
-
-def create_bring_selector_resource(
-    your_team: list[dict[str, Any]],
-    opponent_team: list[dict[str, Any]],
-    recommendations: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    """Create a bring/leave selector UI resource.
-
-    Returns a dict with the UI resource for team preview selection.
-
-    Args:
-        your_team: List of your team Pokemon dicts {name, types, item, ability}
-        opponent_team: List of opponent Pokemon dicts
-        recommendations: AI recommendations {bring: [], leave: [], reasoning}
-    """
-    html = create_bring_selector_ui(
-        your_team=your_team,
-        opponent_team=opponent_team,
-        recommendations=recommendations,
-    )
-
-    return create_ui_resource({
-        "uri": "ui://vgc/bring-selector",
-        "content": {
-            "type": "rawHtml",
-            "htmlString": html,
-        },
-        "encoding": "text",
-    })
-
-
-def create_ability_synergy_resource(
-    team: list[dict[str, Any]],
-    synergies: dict[str, Any],
-) -> dict[str, Any]:
-    """Create an ability synergy network UI resource.
-
-    Returns a dict with the UI resource showing ability interactions.
-
-    Args:
-        team: List of team Pokemon dicts {name, ability, types}
-        synergies: Synergy data dict with weather, terrain, intimidate, combos, conflicts
-    """
-    html = create_ability_synergy_ui(
-        team=team,
-        synergies=synergies,
-    )
-
-    return create_ui_resource({
-        "uri": "ui://vgc/ability-synergy",
-        "content": {
-            "type": "rawHtml",
-            "htmlString": html,
-        },
-        "encoding": "text",
-    })
-
-
-def create_team_report_resource(
-    team_name: str,
-    grade: str,
-    tournament_ready: bool,
-    strengths: list[str],
-    weaknesses: list[str],
-    suggestions: list[dict[str, Any]],
-    legality_issues: list[dict[str, Any]],
-    type_coverage: dict[str, Any],
-    speed_control: dict[str, Any],
-    team: list[dict[str, Any]],
-) -> dict[str, Any]:
-    """Create a team report card UI resource.
-
-    Returns a dict with the UI resource showing comprehensive team analysis.
-
-    Args:
-        team_name: Team name or identifier
-        grade: Letter grade (A+, A, B+, B, etc.)
-        tournament_ready: Whether team is legal for tournament
-        strengths: List of strength descriptions
-        weaknesses: List of weakness descriptions
-        suggestions: List of suggestion dicts {action, reason, priority}
-        legality_issues: List of issue dicts {issue, severity, fix}
-        type_coverage: Dict with super_effective, weak_to, resists
-        speed_control: Dict with has_trick_room, has_tailwind, fastest, slowest
-        team: List of team Pokemon for display
-    """
-    html = create_team_report_ui(
-        team_name=team_name,
-        grade=grade,
-        tournament_ready=tournament_ready,
-        strengths=strengths,
-        weaknesses=weaknesses,
-        suggestions=suggestions,
-        legality_issues=legality_issues,
-        type_coverage=type_coverage,
-        speed_control=speed_control,
-        team=team,
-    )
-
-    return create_ui_resource({
-        "uri": "ui://vgc/team-report",
+        "uri": f"ui://vgc/coverage/{pokemon_name.lower().replace(' ', '-')}",
         "content": {
             "type": "rawHtml",
             "htmlString": html,
@@ -605,146 +591,3 @@ def add_ui_metadata(
         "ui/resource": ui_resource,
     }
     return result
-
-
-def create_summary_table_resource(
-    title: str,
-    rows: list[dict[str, str]],
-    highlight_rows: list[str] | None = None,
-    analysis: str | None = None,
-) -> dict[str, Any]:
-    """Create a summary table UI resource.
-
-    Args:
-        title: Table title (e.g., "Damage Calculation")
-        rows: List of dicts with 'metric' and 'value' keys
-        highlight_rows: List of metric names to highlight
-        analysis: Optional prose summary to show above table
-
-    Returns:
-        UI resource dict
-    """
-    html = create_summary_table_ui(
-        title=title,
-        rows=rows,
-        highlight_rows=highlight_rows,
-        analysis=analysis,
-    )
-
-    # Create URI-safe title
-    uri_title = title.lower().replace(" ", "-").replace("/", "-")
-
-    return create_ui_resource({
-        "uri": f"ui://vgc/summary-table/{uri_title}",
-        "content": {
-            "type": "rawHtml",
-            "htmlString": html,
-        },
-        "encoding": "text",
-    })
-
-
-def create_speed_outspeed_graph_resource(
-    pokemon_name: str,
-    pokemon_speed: int,
-    target_pokemon: str,
-    target_spreads: list[dict[str, Any]],
-    outspeed_percent: float,
-) -> dict[str, Any]:
-    """Create a speed outspeed graph UI resource.
-
-    Shows what percentage of a target Pokemon's common spreads you outspeed.
-
-    Args:
-        pokemon_name: Your Pokemon's name
-        pokemon_speed: Your Pokemon's speed stat
-        target_pokemon: The target Pokemon to compare against
-        target_spreads: List of dicts with 'speed' and 'usage' (percentage) keys
-        outspeed_percent: Percentage of spreads outsped (0-100)
-
-    Returns:
-        UI resource dict
-    """
-    html = create_speed_outspeed_graph_ui(
-        pokemon_name=pokemon_name,
-        pokemon_speed=pokemon_speed,
-        target_pokemon=target_pokemon,
-        target_spreads=target_spreads,
-        outspeed_percent=outspeed_percent,
-    )
-
-    # Create URI-safe names
-    uri_pokemon = pokemon_name.lower().replace(" ", "-")
-    uri_target = target_pokemon.lower().replace(" ", "-")
-
-    return create_ui_resource({
-        "uri": f"ui://vgc/speed-outspeed/{uri_pokemon}-vs-{uri_target}",
-        "content": {
-            "type": "rawHtml",
-            "htmlString": html,
-        },
-        "encoding": "text",
-    })
-
-
-def create_multi_hit_survival_resource(
-    defender_name: str,
-    attacker_name: str,
-    move_name: str,
-    num_hits: int,
-    per_hit_min: float,
-    per_hit_max: float,
-    total_min: float,
-    total_max: float,
-    hp_remaining_min: float,
-    hp_remaining_max: float,
-    survival_chance: float,
-    survives: bool,
-) -> dict[str, Any]:
-    """Create a multi-hit survival visualization UI resource.
-
-    Args:
-        defender_name: Defending Pokemon
-        attacker_name: Attacking Pokemon
-        move_name: Move name
-        num_hits: Number of hits
-        per_hit_min: Min damage per hit (%)
-        per_hit_max: Max damage per hit (%)
-        total_min: Total min damage (%)
-        total_max: Total max damage (%)
-        hp_remaining_min: Min HP remaining (%)
-        hp_remaining_max: Max HP remaining (%)
-        survival_chance: Chance to survive (0-100)
-        survives: Whether guaranteed to survive
-
-    Returns:
-        UI resource dict
-    """
-    html = create_multi_hit_survival_ui(
-        defender_name=defender_name,
-        attacker_name=attacker_name,
-        move_name=move_name,
-        num_hits=num_hits,
-        per_hit_min=per_hit_min,
-        per_hit_max=per_hit_max,
-        total_min=total_min,
-        total_max=total_max,
-        hp_remaining_min=hp_remaining_min,
-        hp_remaining_max=hp_remaining_max,
-        survival_chance=survival_chance,
-        survives=survives,
-    )
-
-    # Create URI-safe names
-    uri_attacker = attacker_name.lower().replace(" ", "-")
-    uri_defender = defender_name.lower().replace(" ", "-")
-    uri_move = move_name.lower().replace(" ", "-")
-
-    return create_ui_resource({
-        "uri": f"ui://vgc/multi-hit/{uri_attacker}-{uri_move}-x{num_hits}-vs-{uri_defender}",
-        "content": {
-            "type": "rawHtml",
-            "htmlString": html,
-        },
-        "encoding": "text",
-    })

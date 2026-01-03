@@ -464,3 +464,102 @@ def calculate_speed_creep_evs(
         "cannot_achieve": True,
         "analysis": f"Max Speed ({max_speed} with 252 EVs) only outspeeds {actual_pct:.1f}% of target spreads. Consider a +Speed nature."
     }
+
+
+def calculate_outspeed_from_distribution(
+    your_speed: int,
+    speed_distribution: list[dict],
+    target_pokemon: str = "Target",
+    target_base_speed: int = 0
+) -> SpeedTierResult:
+    """
+    Calculate probability of outspeeding based on pre-calculated speed distribution.
+
+    This uses the output from smogon.get_speed_distribution() which already has
+    calculated final speeds with usage percentages.
+
+    Args:
+        your_speed: Your Pokemon's calculated speed stat
+        speed_distribution: List of dicts from get_speed_distribution(), each with:
+            - speed: int (final calculated speed stat)
+            - usage: float (percentage 0-100)
+        target_pokemon: Name of target Pokemon for display
+        target_base_speed: Target Pokemon's base speed stat (for display)
+
+    Returns:
+        SpeedTierResult with outspeed/tie/underspeed probabilities (normalized to 100%)
+    """
+    if not speed_distribution:
+        return SpeedTierResult(
+            your_speed=your_speed,
+            target_pokemon=target_pokemon,
+            target_base_speed=target_base_speed,
+            outspeed_probability=0.0,
+            speed_tie_probability=0.0,
+            underspeed_probability=100.0,
+            target_speed_distribution=[],
+            analysis=f"No spread data available for {target_pokemon}"
+        )
+
+    outspeed_total = 0.0
+    tie_total = 0.0
+    underspeed_total = 0.0
+
+    target_speed_distribution = []
+
+    for entry in speed_distribution:
+        target_speed = entry.get("speed", 0)
+        usage_pct = entry.get("usage", 0)
+
+        speed_info = {
+            "speed": target_speed,
+            "usage_pct": usage_pct,
+        }
+        target_speed_distribution.append(speed_info)
+
+        if your_speed > target_speed:
+            outspeed_total += usage_pct
+        elif your_speed == target_speed:
+            tie_total += usage_pct
+        else:
+            underspeed_total += usage_pct
+
+    # Sort distribution by speed (descending)
+    target_speed_distribution.sort(key=lambda x: x["speed"], reverse=True)
+
+    # Normalize to 100%
+    total_usage = outspeed_total + tie_total + underspeed_total
+    if total_usage > 0:
+        outspeed_pct = (outspeed_total / total_usage) * 100
+        tie_pct = (tie_total / total_usage) * 100
+        underspeed_pct = (underspeed_total / total_usage) * 100
+    else:
+        outspeed_pct = 0.0
+        tie_pct = 0.0
+        underspeed_pct = 100.0
+
+    # Generate analysis text
+    if outspeed_pct >= 95:
+        analysis = f"You outspeed virtually all {target_pokemon} spreads ({outspeed_pct:.1f}%)"
+    elif outspeed_pct >= 75:
+        analysis = f"You outspeed most {target_pokemon} spreads ({outspeed_pct:.1f}%)"
+    elif outspeed_pct >= 50:
+        analysis = f"Speed is contested - you outspeed {outspeed_pct:.1f}% of {target_pokemon}"
+    elif outspeed_pct >= 25:
+        analysis = f"Most {target_pokemon} outspeed you ({underspeed_pct:.1f}% faster)"
+    else:
+        analysis = f"Nearly all {target_pokemon} outspeed you ({underspeed_pct:.1f}%)"
+
+    if tie_pct >= 5:
+        analysis += f" - significant tie chance ({tie_pct:.1f}%)"
+
+    return SpeedTierResult(
+        your_speed=your_speed,
+        target_pokemon=target_pokemon,
+        target_base_speed=target_base_speed,
+        outspeed_probability=round(outspeed_pct, 1),
+        speed_tie_probability=round(tie_pct, 1),
+        underspeed_probability=round(underspeed_pct, 1),
+        target_speed_distribution=target_speed_distribution,
+        analysis=analysis
+    )

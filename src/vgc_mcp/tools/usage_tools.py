@@ -63,7 +63,8 @@ def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
     @mcp.tool()
     async def get_common_sets(
         pokemon_name: str,
-        format_name: Optional[str] = None
+        format_name: Optional[str] = None,
+        rating: int = 1760
     ) -> dict:
         """
         Get the most common competitive sets for a Pokemon.
@@ -71,12 +72,13 @@ def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
         Args:
             pokemon_name: Name of the Pokemon
             format_name: VGC format (auto-detects latest if not specified)
+            rating: Rating cutoff (0=all, 1500, 1630, 1760=top players). Default 1760.
 
         Returns:
             Top items, abilities, moves, EV spreads, and Tera types with usage rates
         """
         try:
-            sets = await smogon.get_common_sets(pokemon_name, format_name)
+            sets = await smogon.get_common_sets(pokemon_name, format_name, rating)
 
             if not sets:
                 return {"error": f"No set data found for {pokemon_name}"}
@@ -90,6 +92,7 @@ def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
     async def suggest_teammates(
         pokemon_name: str,
         format_name: Optional[str] = None,
+        rating: int = 1760,
         limit: int = 10
     ) -> dict:
         """
@@ -98,13 +101,14 @@ def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
         Args:
             pokemon_name: Pokemon to find teammates for
             format_name: VGC format (auto-detects latest if not specified)
+            rating: Rating cutoff (0=all, 1500, 1630, 1760=top players). Default 1760.
             limit: Number of suggestions to return (default 10)
 
         Returns:
             List of common teammates with usage correlation percentages
         """
         try:
-            teammates = await smogon.suggest_teammates(pokemon_name, format_name, limit)
+            teammates = await smogon.suggest_teammates(pokemon_name, format_name, rating, limit)
 
             if not teammates:
                 return {"error": f"No teammate data found for {pokemon_name}"}
@@ -120,18 +124,27 @@ def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
         Get information about the currently detected VGC format.
 
         Returns:
-            Current format name, month, and available formats
+            Current format name, month, regulation, and available formats.
+            Includes a notice if newer data became available mid-session.
         """
         try:
             # Trigger a fetch to populate current format info
             await smogon.get_usage_stats()
 
-            return {
+            result = {
                 "current_format": smogon.current_format,
                 "current_month": smogon.current_month,
+                "regulation": smogon.regulation_config.current_regulation_name,
                 "available_formats": smogon.VGC_FORMATS[:5],
                 "rating_cutoffs": smogon.RATING_CUTOFFS
             }
+
+            # Include data freshness notice if available
+            notice = smogon.check_data_freshness()
+            if notice:
+                result["notice"] = notice
+
+            return result
 
         except Exception as e:
             return {"error": str(e)}

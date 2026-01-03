@@ -15,7 +15,7 @@ from vgc_mcp_core.calc.coverage import (
 )
 from vgc_mcp_core.calc.modifiers import get_type_effectiveness
 
-# MCP-UI support (enabled in vgc-mcp-lite)
+# MCP-UI support
 from ..ui.resources import create_coverage_resource, add_ui_metadata
 HAS_UI = True
 

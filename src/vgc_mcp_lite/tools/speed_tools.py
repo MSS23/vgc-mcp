@@ -4,6 +4,7 @@ from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
+from vgc_mcp_core.api.smogon import SmogonStatsClient
 from vgc_mcp_core.calc.stats import calculate_speed, find_speed_evs
 from vgc_mcp_core.calc.speed import SPEED_BENCHMARKS, calculate_speed_tier
 from vgc_mcp_core.models.pokemon import Nature
@@ -15,6 +16,7 @@ from ..ui.resources import (
     create_speed_outspeed_graph_resource,
     add_ui_metadata,
 )
+from ..ui.components import create_interactive_speed_histogram_ui
 HAS_UI = True
 
 
@@ -82,7 +84,7 @@ META_SPEED_TIERS = {
 }
 
 
-def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
+def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[SmogonStatsClient] = None):
     """Register speed-related tools with the MCP server."""
 
     @mcp.tool()
@@ -733,7 +735,7 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
     ) -> dict:
         """
         Analyze what percentage of a target Pokemon's common spreads you outspeed.
-        Shows a cumulative distribution graph of outspeed probability.
+        Uses real Smogon usage data when available, falls back to hardcoded meta tiers.
 
         Args:
             pokemon_name: Your Pokemon's name
@@ -756,17 +758,47 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             # Calculate your speed
             your_speed = calculate_speed(base_stats.speed, 31, speed_evs, 50, parsed_nature)
 
-            # Get target Pokemon's common spreads from META_SPEED_TIERS
+            # Normalize target name
             target_lower = target_pokemon.lower().replace(" ", "-")
-
-            # Normalize Ogerpon mask form names (e.g., "ogerpon-wellspring-mask" -> "ogerpon-wellspring")
             if target_lower.endswith("-mask"):
                 target_lower = target_lower.replace("-mask", "")
 
-            target_data = META_SPEED_TIERS.get(target_lower)
+            target_spreads = None
+            target_base_speed = None
+            target_stats = None
+            data_source = "fallback"
 
-            if not target_data:
-                # If not in meta tiers, calculate standard spreads
+            # Try Smogon data first
+            if smogon:
+                try:
+                    target_base = await pokeapi.get_base_stats(target_pokemon)
+                    speed_dist = await smogon.get_speed_distribution(
+                        target_pokemon,
+                        target_base.speed
+                    )
+                    if speed_dist and speed_dist.get("distribution"):
+                        target_spreads = speed_dist["distribution"]
+                        target_base_speed = speed_dist["base_speed"]
+                        target_stats = speed_dist.get("stats", {})
+                        data_source = "smogon"
+                except Exception:
+                    pass  # Fall through to fallbacks
+
+            # Fallback 1: META_SPEED_TIERS (hardcoded)
+            if not target_spreads:
+                target_data = META_SPEED_TIERS.get(target_lower)
+                if target_data:
+                    common_speeds = target_data["common_speeds"]
+                    usage_per = 100 // len(common_speeds) if common_speeds else 100
+                    target_spreads = [
+                        {"speed": s, "usage": usage_per}
+                        for s in common_speeds
+                    ]
+                    target_base_speed = target_data["base"]
+                    data_source = "meta_tiers"
+
+            # Fallback 2: Calculate standard spreads from base stats
+            if not target_spreads:
                 try:
                     target_base = await pokeapi.get_base_stats(target_pokemon)
                     target_spreads = [
@@ -775,16 +807,10 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                         {"speed": calculate_speed(target_base.speed, 31, 0, 50, Nature.SERIOUS), "usage": 20},
                         {"speed": calculate_speed(target_base.speed, 31, 0, 50, Nature.BRAVE), "usage": 20},
                     ]
+                    target_base_speed = target_base.speed
+                    data_source = "calculated"
                 except Exception:
                     return {"error": f"Could not find data for {target_pokemon}"}
-            else:
-                # Build spreads from common_speeds
-                common_speeds = target_data["common_speeds"]
-                usage_per = 100 // len(common_speeds) if common_speeds else 100
-                target_spreads = [
-                    {"speed": s, "usage": usage_per}
-                    for s in common_speeds
-                ]
 
             # Calculate outspeed percentage
             total_usage = sum(s["usage"] for s in target_spreads)
@@ -829,10 +855,13 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 "nature": nature,
                 "speed_evs": speed_evs,
                 "target_pokemon": target_pokemon,
+                "target_base_speed": target_base_speed,
                 "target_spreads": target_spreads,
+                "target_stats": target_stats,
                 "outspeed_percent": round(outspeed_percent, 1),
                 "tie_percent": round(tie_percent, 1),
                 "result": result_text,
+                "data_source": data_source,
                 "summary_table": "\n".join(table_lines),
                 "analysis": f"{pokemon_name} ({your_speed} Speed) outspeeds {round(outspeed_percent, 1)}% of {target_pokemon} spreads"
             }
@@ -855,3 +884,169 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
 
         except Exception as e:
             return {"error": str(e)}
+
+    @mcp.tool()
+    async def visualize_speed_histogram(
+        pokemon_name: str,
+        targets: list[str] | None = None,
+        nature: str = "serious",
+        speed_evs: int = 0,
+    ) -> str:
+        """
+        Visualize speed distribution histogram comparing your Pokemon against meta targets.
+        Uses real Smogon usage data for accurate speed tier analysis.
+
+        Args:
+            pokemon_name: Your Pokemon's name
+            targets: List of target Pokemon to load (e.g., ["Flutter Mane", "Rillaboom"]).
+                    If None, auto-loads top 30 meta Pokemon from Smogon usage.
+            nature: Your Pokemon's nature (default "serious")
+            speed_evs: Your Pokemon's Speed EVs (default 0)
+
+        Returns:
+            Interactive HTML speed histogram with:
+            - Searchable dropdown to compare against any loaded Pokemon
+            - Your speed marker on the distribution
+            - Real-time speed controls (nature, EVs, modifiers like Tailwind/Scarf)
+            - Outspeed percentage calculation
+        """
+        try:
+            # Get your Pokemon's base stats
+            base_stats = await pokeapi.get_base_stats(pokemon_name)
+            base_speed = base_stats.speed
+
+            # Parse nature
+            try:
+                parsed_nature = Nature(nature.lower())
+            except ValueError:
+                return f"Error: Invalid nature '{nature}'"
+
+            # Calculate your speed
+            your_speed = calculate_speed(base_speed, 31, speed_evs, 50, parsed_nature)
+
+            # Determine targets to load
+            if targets:
+                target_list = targets
+            else:
+                # Auto-load top 30 Pokemon from Smogon usage
+                if smogon:
+                    try:
+                        usage_data = await smogon.get_usage_stats()
+                        if usage_data and "data" in usage_data:
+                            # Get top 30 Pokemon by usage
+                            pokemon_data = usage_data["data"]
+                            sorted_pokemon = sorted(
+                                pokemon_data.items(),
+                                key=lambda x: x[1].get("usage", 0),
+                                reverse=True
+                            )[:30]
+                            target_list = [name for name, _ in sorted_pokemon]
+                        else:
+                            target_list = list(META_SPEED_TIERS.keys())[:30]
+                    except Exception:
+                        target_list = list(META_SPEED_TIERS.keys())[:30]
+                else:
+                    target_list = list(META_SPEED_TIERS.keys())[:30]
+
+            # Fetch speed distributions for all targets
+            all_targets_data = {}
+            all_pokemon_names = []
+
+            for target in target_list:
+                try:
+                    # Get target's base speed
+                    target_base = await pokeapi.get_base_stats(target)
+
+                    # Get speed distribution from Smogon
+                    if smogon:
+                        speed_dist = await smogon.get_speed_distribution(
+                            target,
+                            target_base.speed
+                        )
+                        if speed_dist and speed_dist.get("distribution"):
+                            # Normalize name for key
+                            key = target.lower().replace(" ", "-")
+                            all_targets_data[key] = {
+                                "base_speed": target_base.speed,
+                                "distribution": speed_dist["distribution"],
+                                "stats": speed_dist.get("stats", {}),
+                            }
+                            all_pokemon_names.append(target)
+                            continue
+
+                    # Fallback: use META_SPEED_TIERS or calculate standard spreads
+                    target_lower = target.lower().replace(" ", "-")
+                    if target_lower in META_SPEED_TIERS:
+                        meta_data = META_SPEED_TIERS[target_lower]
+                        common_speeds = meta_data["common_speeds"]
+                        usage_per = 100 // len(common_speeds)
+                        all_targets_data[target_lower] = {
+                            "base_speed": meta_data["base"],
+                            "distribution": [
+                                {"speed": s, "usage": usage_per}
+                                for s in common_speeds
+                            ],
+                            "stats": {
+                                "min": min(common_speeds),
+                                "max": max(common_speeds),
+                                "median": common_speeds[len(common_speeds) // 2],
+                                "mean": sum(common_speeds) / len(common_speeds),
+                            },
+                        }
+                        all_pokemon_names.append(target)
+                    else:
+                        # Calculate standard spreads
+                        dist = [
+                            {"speed": calculate_speed(target_base.speed, 31, 252, 50, Nature.JOLLY), "usage": 35},
+                            {"speed": calculate_speed(target_base.speed, 31, 252, 50, Nature.SERIOUS), "usage": 25},
+                            {"speed": calculate_speed(target_base.speed, 31, 0, 50, Nature.SERIOUS), "usage": 20},
+                            {"speed": calculate_speed(target_base.speed, 31, 0, 50, Nature.BRAVE), "usage": 20},
+                        ]
+                        speeds = [d["speed"] for d in dist]
+                        all_targets_data[target_lower] = {
+                            "base_speed": target_base.speed,
+                            "distribution": dist,
+                            "stats": {
+                                "min": min(speeds),
+                                "max": max(speeds),
+                                "median": speeds[1],
+                                "mean": sum(speeds) / len(speeds),
+                            },
+                        }
+                        all_pokemon_names.append(target)
+
+                except Exception:
+                    continue  # Skip Pokemon that fail
+
+            if not all_targets_data:
+                return "Error: Could not load speed distributions for any targets"
+
+            # Get all Pokemon names from Smogon for the dropdown
+            # This allows searching any Pokemon even if not pre-loaded
+            if smogon:
+                try:
+                    usage_data = await smogon.get_usage_stats()
+                    if usage_data and "data" in usage_data:
+                        all_pokemon_names = list(usage_data["data"].keys())
+                except Exception:
+                    pass  # Use the list we already have
+
+            # Determine initial target (first in list)
+            initial_target = list(all_targets_data.keys())[0]
+
+            # Generate the interactive histogram UI
+            html = create_interactive_speed_histogram_ui(
+                pokemon_name=pokemon_name,
+                pokemon_speed=your_speed,
+                initial_target=initial_target,
+                all_targets_data=all_targets_data,
+                base_speed=base_speed,
+                nature=nature.title(),
+                speed_evs=speed_evs,
+                all_pokemon_names=all_pokemon_names,
+            )
+
+            return html
+
+        except Exception as e:
+            return f"Error: {str(e)}"

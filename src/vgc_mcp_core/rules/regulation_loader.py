@@ -94,6 +94,12 @@ class RegulationConfig:
         regulations = list(self._data.get("regulations", {}).keys())
         return regulations[0] if regulations else "reg_f"
 
+    @property
+    def current_regulation_name(self) -> str:
+        """Get human-readable name for current regulation (e.g., 'Regulation F')."""
+        reg_data = self.get_regulation()
+        return reg_data.get("name", self.current_regulation.upper().replace("_", " "))
+
     def set_session_regulation(self, regulation: str) -> bool:
         """
         Override current regulation for this session.

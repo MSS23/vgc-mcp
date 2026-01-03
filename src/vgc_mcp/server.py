@@ -37,6 +37,7 @@ from vgc_mcp_core.api.smogon import SmogonStatsClient
 from vgc_mcp_core.api.pokepaste import PokePasteClient
 from vgc_mcp_core.team.manager import TeamManager
 from vgc_mcp_core.team.analysis import TeamAnalyzer
+from vgc_mcp_core.state import BuildStateManager
 
 from .tools.stats_tools import register_stats_tools
 from .tools.damage_tools import register_damage_tools
@@ -62,6 +63,10 @@ from .tools.lead_tools import register_lead_tools
 from .tools.preset_tools import register_preset_tools
 from .tools.sample_team_tools import register_sample_team_tools
 from .tools.pokepaste_tools import register_pokepaste_tools
+from .tools.build_tools import register_build_tools
+from .tools.diff_tools import register_diff_tools
+from .tools.report_tools import register_report_tools
+from .tools.speed_tools import register_speed_tools
 
 # Note: MCP-UI is only enabled in vgc-mcp-lite for smaller footprint
 # Full server focuses on tool completeness over visual components
@@ -80,6 +85,7 @@ smogon = SmogonStatsClient(cache)
 pokepaste = PokePasteClient(cache)
 team_manager = TeamManager()
 analyzer = TeamAnalyzer()
+build_manager = BuildStateManager()
 
 # Register all tools
 register_stats_tools(mcp, pokeapi)
@@ -120,6 +126,15 @@ register_preset_tools(mcp, smogon)
 register_sample_team_tools(mcp)
 register_pokepaste_tools(mcp, pokepaste, pokeapi, smogon)
 
+# Build state management (5 tools)
+register_build_tools(mcp, build_manager, pokeapi)
+
+# Team diff and reporting tools
+register_diff_tools(mcp)
+register_report_tools(mcp, pokeapi)
+
+# Consolidated speed tools (complements speed_analysis and speed_probability)
+register_speed_tools(mcp, pokeapi, smogon)
 
 
 def main():

@@ -30,6 +30,9 @@ from vgc_mcp_core.api.smogon import SmogonStatsClient
 from vgc_mcp_core.team.manager import TeamManager
 from vgc_mcp_core.team.analysis import TeamAnalyzer
 
+# Build state manager for bidirectional UI sync (from core)
+from vgc_mcp_core.state import BuildStateManager
+
 # Import only the essential tool modules
 # Target: ~49 tools (well under Goose's 60 recommendation)
 from .tools.stats_tools import register_stats_tools          # 2 tools
@@ -42,7 +45,9 @@ from .tools.import_export_tools import register_import_export_tools  # 5 tools
 from .tools.coverage_tools import register_coverage_tools    # 6 tools
 from .tools.matchup_tools import register_matchup_tools      # 6 tools
 from .tools.report_tools import register_report_tools        # 1 tool
-# Total: ~51 tools
+from .tools.build_tools import register_build_tools          # 5 tools
+from .tools.diff_tools import register_diff_tools            # 1 tool
+# Total: ~57 tools
 
 # MCP-UI support
 from .ui import register_ui_resources
@@ -60,6 +65,7 @@ pokeapi = PokeAPIClient(cache)
 smogon = SmogonStatsClient(cache)
 team_manager = TeamManager()
 analyzer = TeamAnalyzer()
+build_manager = BuildStateManager()
 
 # Register ONLY essential tools (targeting ~49 total, under Goose's 60 limit)
 
@@ -73,7 +79,7 @@ register_damage_tools(mcp, pokeapi, smogon)
 register_stats_tools(mcp, pokeapi)
 
 # Speed analysis (7 tools)
-register_speed_tools(mcp, pokeapi)
+register_speed_tools(mcp, pokeapi, smogon)
 
 # Import/export (4 tools)
 register_import_export_tools(mcp, pokeapi, team_manager)
@@ -92,6 +98,12 @@ register_usage_tools(mcp, smogon)
 
 # Report generation (1 tool)
 register_report_tools(mcp, pokeapi)
+
+# Build state management (5 tools)
+register_build_tools(mcp, build_manager, pokeapi)
+
+# Team diff comparison (1 tool)
+register_diff_tools(mcp)
 
 # Register MCP-UI resources
 register_ui_resources(mcp)

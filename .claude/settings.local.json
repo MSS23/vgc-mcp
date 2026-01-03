@@ -57,7 +57,20 @@
       "Bash(start \"\" \"c:\\\\Users\\\\msidh\\\\Documents\\\\ChatGPT App\\\\mcp vgc\\\\test_tera_damage_calc.html\")",
       "Bash(start \"\" \"c:\\\\Users\\\\msidh\\\\Documents\\\\ChatGPT App\\\\mcp vgc\\\\test_optimize_spread.html\")",
       "Bash(start \"\" \"c:\\\\Users\\\\msidh\\\\Documents\\\\ChatGPT App\\\\mcp vgc\\\\test_build_report_preview.html\")",
-      "Bash(start \"\" \"c:\\\\Users\\\\msidh\\\\Documents\\\\ChatGPT App\\\\mcp vgc\\\\test_ev_detection.html\")"
+      "Bash(start \"\" \"c:\\\\Users\\\\msidh\\\\Documents\\\\ChatGPT App\\\\mcp vgc\\\\test_ev_detection.html\")",
+      "Bash(start \"\" \"test_speed_histogram_preview.html\")",
+      "Bash(start \"\" \"c:\\\\Users\\\\msidh\\\\Documents\\\\ChatGPT App\\\\mcp vgc\\\\test_editable_grid_preview.html\")",
+      "Bash(start \"\" \"c:\\\\Users\\\\msidh\\\\Documents\\\\ChatGPT App\\\\mcp vgc\\\\test_speed_vs_opponent.html\")",
+      "Bash(start \"\" \"c:\\\\Users\\\\msidh\\\\Documents\\\\ChatGPT App\\\\mcp vgc\\\\test_spread_dropdown_preview.html\")",
+      "Bash(start \"\" \"c:\\\\Users\\\\msidh\\\\Documents\\\\ChatGPT App\\\\mcp vgc\\\\test_scarf_speed.html\")",
+      "Bash(start \"\" \"c:\\\\Users\\\\msidh\\\\Documents\\\\ChatGPT App\\\\mcp vgc\\\\test_team_diff_preview.html\")",
+      "Bash(start \"\" \"c:\\\\Users\\\\msidh\\\\Documents\\\\ChatGPT App\\\\mcp vgc\\\\test_interactive_histogram_preview.html\")",
+      "Bash(start \"\" \"c:\\\\Users\\\\msidh\\\\Documents\\\\ChatGPT App\\\\mcp vgc\\\\test_all_ui_components.html\")",
+      "Bash(start \"\" \"c:\\\\Users\\\\msidh\\\\Documents\\\\ChatGPT App\\\\mcp vgc\\\\test_damage_calc_table_preview.html\")",
+      "Bash(del \"c:\\\\Users\\\\msidh\\\\Documents\\\\ChatGPT App\\\\mcp vgc\\\\test_speed_histogram_preview.py\")",
+      "Bash(del \"c:\\\\Users\\\\msidh\\\\Documents\\\\ChatGPT App\\\\mcp vgc\\\\test_speed_histogram_preview.html\")",
+      "Bash(start \"\" \"c:\\\\Users\\\\msidh\\\\Documents\\\\ChatGPT App\\\\mcp vgc\\\\test_smogon_speed_histogram.html\")",
+      "Bash(start \"\" \"c:\\\\Users\\\\msidh\\\\Documents\\\\ChatGPT App\\\\mcp vgc\\\\test_calc_history_preview.html\")"
     ]
   }
 }

@@ -121,18 +121,27 @@ def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
         Get information about the currently detected VGC format.
 
         Returns:
-            Current format name, month, and available formats
+            Current format name, month, regulation, and available formats.
+            Includes a notice if newer data became available mid-session.
         """
         try:
             # Trigger a fetch to populate current format info
             await smogon.get_usage_stats()
 
-            return {
+            result = {
                 "current_format": smogon.current_format,
                 "current_month": smogon.current_month,
+                "regulation": smogon.regulation_config.current_regulation_name,
                 "available_formats": smogon.VGC_FORMATS[:5],
                 "rating_cutoffs": smogon.RATING_CUTOFFS
             }
+
+            # Include data freshness notice if available
+            notice = smogon.check_data_freshness()
+            if notice:
+                result["notice"] = notice
+
+            return result
 
         except Exception as e:
             return {"error": str(e)}

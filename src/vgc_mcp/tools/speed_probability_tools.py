@@ -11,6 +11,7 @@ from mcp.server.fastmcp import FastMCP
 from vgc_mcp_core.calc.stats import calculate_speed
 from vgc_mcp_core.calc.speed_probability import (
     calculate_outspeed_probability,
+    calculate_outspeed_from_distribution,
     calculate_meta_outspeed_rate,
     calculate_speed_creep_evs,
     parse_spread_to_speed,
@@ -73,24 +74,40 @@ def register_speed_probability_tools(mcp: FastMCP, smogon, pokeapi, team_manager
 
         target_base_speed = target_data["base_stats"]["speed"]
 
-        # Get target's spread distribution from Smogon
-        target_usage = await smogon.get_pokemon_usage(target_pokemon)
-        if not target_usage:
-            return {
-                "error": f"No usage data found for {target_pokemon}",
-                "note": "Target may not be common enough in the current meta"
-            }
+        # Try to use get_speed_distribution() first (more efficient)
+        speed_dist = await smogon.get_speed_distribution(target_pokemon, target_base_speed)
 
-        target_spreads = target_usage.get("spreads", [])
-        meta_info = target_usage.get("_meta", {})
+        if speed_dist and speed_dist.get("distribution"):
+            # Use the new optimized path with pre-calculated speeds
+            distribution = speed_dist["distribution"]
+            speed_stats = speed_dist.get("stats", {})
 
-        # Calculate probability
-        result = calculate_outspeed_probability(
-            your_speed,
-            target_base_speed,
-            target_spreads,
-            target_pokemon
-        )
+            result = calculate_outspeed_from_distribution(
+                your_speed,
+                distribution,
+                target_pokemon,
+                target_base_speed
+            )
+
+            meta_info = {"data_source": "speed_distribution"}
+        else:
+            # Fallback to raw spreads
+            target_usage = await smogon.get_pokemon_usage(target_pokemon)
+            if not target_usage:
+                return {
+                    "error": f"No usage data found for {target_pokemon}",
+                    "note": "Target may not be common enough in the current meta"
+                }
+
+            target_spreads = target_usage.get("spreads", [])
+            meta_info = target_usage.get("_meta", {})
+
+            result = calculate_outspeed_probability(
+                your_speed,
+                target_base_speed,
+                target_spreads,
+                target_pokemon
+            )
 
         return {
             "your_pokemon": your_pokemon,
@@ -155,20 +172,36 @@ def register_speed_probability_tools(mcp: FastMCP, smogon, pokeapi, team_manager
 
         target_base_speed = target_data["base_stats"]["speed"]
 
-        # Get target's spread distribution
-        target_usage = await smogon.get_pokemon_usage(target_pokemon)
-        if not target_usage:
-            return {"error": f"No usage data found for {target_pokemon}"}
+        # Try to use get_speed_distribution() first (more efficient)
+        speed_dist = await smogon.get_speed_distribution(target_pokemon, target_base_speed)
 
-        target_spreads = target_usage.get("spreads", [])
-        meta_info = target_usage.get("_meta", {})
+        if speed_dist and speed_dist.get("distribution"):
+            # Use the new optimized path with pre-calculated speeds
+            distribution = speed_dist["distribution"]
 
-        result = calculate_outspeed_probability(
-            your_speed,
-            target_base_speed,
-            target_spreads,
-            target_pokemon
-        )
+            result = calculate_outspeed_from_distribution(
+                your_speed,
+                distribution,
+                target_pokemon,
+                target_base_speed
+            )
+
+            meta_info = {"data_source": "speed_distribution"}
+        else:
+            # Fallback to raw spreads
+            target_usage = await smogon.get_pokemon_usage(target_pokemon)
+            if not target_usage:
+                return {"error": f"No usage data found for {target_pokemon}"}
+
+            target_spreads = target_usage.get("spreads", [])
+            meta_info = target_usage.get("_meta", {})
+
+            result = calculate_outspeed_probability(
+                your_speed,
+                target_base_speed,
+                target_spreads,
+                target_pokemon
+            )
 
         return {
             "your_pokemon": pokemon.name,

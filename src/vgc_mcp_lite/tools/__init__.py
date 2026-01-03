@@ -11,6 +11,7 @@ from .import_export_tools import register_import_export_tools
 from .coverage_tools import register_coverage_tools
 from .matchup_tools import register_matchup_tools
 from .report_tools import register_report_tools
+from .build_tools import register_build_tools
 
 __all__ = [
     "register_stats_tools",
@@ -23,4 +24,5 @@ __all__ = [
     "register_coverage_tools",
     "register_matchup_tools",
     "register_report_tools",
+    "register_build_tools",
 ]

@@ -190,66 +190,562 @@ SPEED_BENCHMARKS = {
 
 # VGC Meta Speed Tiers - Common competitive speeds for VGC Pokemon
 # This data tracks what speed investments are commonly used in VGC
+# paradox_type: "ancient" (Protosynthesis - Sun) or "future" (Quark Drive - Electric Terrain)
+# spreads: list of common spreads with nature, evs, and usage percentage
 META_SPEED_TIERS = {
     # Ultra fast (200+)
-    "regieleki": {"base": 200, "common_speeds": [277, 252, 200]},
+    "regieleki": {
+        "base": 200,
+        "common_speeds": [277, 252, 200],
+        "spreads": [
+            {"nature": "Timid", "evs": 252, "usage": 60},
+            {"nature": "Modest", "evs": 252, "usage": 30},
+            {"nature": "Timid", "evs": 0, "usage": 10},
+        ]
+    },
 
     # Very fast (135-150)
-    "electrode-hisui": {"base": 150, "common_speeds": [222, 202]},
-    "dragapult": {"base": 142, "common_speeds": [213, 194]},
-    "iron-bundle": {"base": 136, "common_speeds": [205, 187, 136]},
-    "flutter-mane": {"base": 135, "common_speeds": [205, 187, 157]},
-    "miraidon": {"base": 135, "common_speeds": [205, 187]},
-    "koraidon": {"base": 135, "common_speeds": [205, 187]},
-    "meowscarada": {"base": 123, "common_speeds": [192, 175]},
-    "chien-pao": {"base": 135, "common_speeds": [205, 187]},
-    "calyrex-shadow": {"base": 150, "common_speeds": [222, 202]},
+    "electrode-hisui": {
+        "base": 150,
+        "common_speeds": [222, 202],
+        "spreads": [
+            {"nature": "Timid", "evs": 252, "usage": 70},
+            {"nature": "Modest", "evs": 252, "usage": 30},
+        ]
+    },
+    "dragapult": {
+        "base": 142,
+        "common_speeds": [213, 194],
+        "spreads": [
+            {"nature": "Jolly", "evs": 252, "usage": 50},
+            {"nature": "Timid", "evs": 252, "usage": 30},
+            {"nature": "Adamant", "evs": 252, "usage": 20},
+        ]
+    },
+    "iron-bundle": {
+        "base": 136,
+        "paradox_type": "future",
+        "common_speeds": [205, 187, 136],
+        "spreads": [
+            {"nature": "Timid", "evs": 252, "usage": 50},
+            {"nature": "Modest", "evs": 252, "usage": 40},
+            {"nature": "Modest", "evs": 0, "usage": 10},
+        ]
+    },
+    "flutter-mane": {
+        "base": 135,
+        "paradox_type": "ancient",
+        "common_speeds": [205, 187, 157],
+        "spreads": [
+            {"nature": "Timid", "evs": 252, "usage": 44},
+            {"nature": "Modest", "evs": 252, "usage": 30},
+            {"nature": "Timid", "evs": 100, "usage": 18},
+            {"nature": "Timid", "evs": 0, "usage": 8},
+        ]
+    },
+    "miraidon": {
+        "base": 135,
+        "common_speeds": [205, 187],
+        "spreads": [
+            {"nature": "Timid", "evs": 252, "usage": 60},
+            {"nature": "Modest", "evs": 252, "usage": 40},
+        ]
+    },
+    "koraidon": {
+        "base": 135,
+        "common_speeds": [205, 187],
+        "spreads": [
+            {"nature": "Jolly", "evs": 252, "usage": 60},
+            {"nature": "Adamant", "evs": 252, "usage": 40},
+        ]
+    },
+    "meowscarada": {
+        "base": 123,
+        "common_speeds": [192, 175],
+        "spreads": [
+            {"nature": "Jolly", "evs": 252, "usage": 80},
+            {"nature": "Adamant", "evs": 252, "usage": 20},
+        ]
+    },
+    "chien-pao": {
+        "base": 135,
+        "common_speeds": [205, 187],
+        "spreads": [
+            {"nature": "Jolly", "evs": 252, "usage": 70},
+            {"nature": "Adamant", "evs": 252, "usage": 30},
+        ]
+    },
+    "calyrex-shadow": {
+        "base": 150,
+        "common_speeds": [222, 202],
+        "spreads": [
+            {"nature": "Timid", "evs": 252, "usage": 70},
+            {"nature": "Modest", "evs": 252, "usage": 30},
+        ]
+    },
 
     # Fast (100-120)
-    "iron-moth": {"base": 110, "common_speeds": [178, 162]},
-    "raging-bolt": {"base": 110, "common_speeds": [178, 162, 110]},
-    "gouging-fire": {"base": 110, "common_speeds": [178, 162]},
-    "walking-wake": {"base": 109, "common_speeds": [177, 161]},
-    "ogerpon": {"base": 110, "common_speeds": [178, 162]},
-    "ogerpon-wellspring": {"base": 110, "common_speeds": [178, 162]},
-    "ogerpon-hearthflame": {"base": 110, "common_speeds": [178, 162]},
-    "ogerpon-cornerstone": {"base": 110, "common_speeds": [178, 162]},
-    "entei": {"base": 100, "common_speeds": [167, 152, 157]},
-    "urshifu": {"base": 97, "common_speeds": [163, 148]},
-    "urshifu-rapid-strike": {"base": 97, "common_speeds": [163, 148]},
-    "landorus": {"base": 101, "common_speeds": [168, 153]},
-    "garchomp": {"base": 102, "common_speeds": [169, 154]},
-    "arcanine": {"base": 95, "common_speeds": [161, 146, 95]},
-    "arcanine-hisui": {"base": 90, "common_speeds": [156, 141, 90]},
-    "palafin": {"base": 100, "common_speeds": [167, 152]},
-    "indeedee-f": {"base": 95, "common_speeds": [161, 146]},
+    "iron-moth": {
+        "base": 110,
+        "paradox_type": "future",
+        "common_speeds": [178, 162],
+        "spreads": [
+            {"nature": "Timid", "evs": 252, "usage": 50},
+            {"nature": "Modest", "evs": 252, "usage": 50},
+        ]
+    },
+    "raging-bolt": {
+        "base": 110,
+        "paradox_type": "ancient",
+        "common_speeds": [178, 162, 110],
+        "spreads": [
+            {"nature": "Timid", "evs": 252, "usage": 25},
+            {"nature": "Modest", "evs": 252, "usage": 40},
+            {"nature": "Modest", "evs": 0, "usage": 25},
+            {"nature": "Quiet", "evs": 0, "usage": 10},
+        ]
+    },
+    "gouging-fire": {
+        "base": 110,
+        "paradox_type": "ancient",
+        "common_speeds": [178, 162],
+        "spreads": [
+            {"nature": "Jolly", "evs": 252, "usage": 40},
+            {"nature": "Adamant", "evs": 252, "usage": 40},
+            {"nature": "Adamant", "evs": 100, "usage": 20},
+        ]
+    },
+    "walking-wake": {
+        "base": 109,
+        "paradox_type": "ancient",
+        "common_speeds": [177, 161],
+        "spreads": [
+            {"nature": "Timid", "evs": 252, "usage": 40},
+            {"nature": "Modest", "evs": 252, "usage": 60},
+        ]
+    },
+    "ogerpon": {
+        "base": 110,
+        "common_speeds": [178, 162],
+        "spreads": [
+            {"nature": "Jolly", "evs": 252, "usage": 60},
+            {"nature": "Adamant", "evs": 252, "usage": 40},
+        ]
+    },
+    "ogerpon-wellspring": {
+        "base": 110,
+        "common_speeds": [178, 162],
+        "spreads": [
+            {"nature": "Jolly", "evs": 252, "usage": 60},
+            {"nature": "Adamant", "evs": 252, "usage": 40},
+        ]
+    },
+    "ogerpon-hearthflame": {
+        "base": 110,
+        "common_speeds": [178, 162],
+        "spreads": [
+            {"nature": "Jolly", "evs": 252, "usage": 60},
+            {"nature": "Adamant", "evs": 252, "usage": 40},
+        ]
+    },
+    "ogerpon-cornerstone": {
+        "base": 110,
+        "common_speeds": [178, 162],
+        "spreads": [
+            {"nature": "Jolly", "evs": 252, "usage": 40},
+            {"nature": "Adamant", "evs": 252, "usage": 60},
+        ]
+    },
+    "tornadus": {
+        "base": 111,
+        "common_speeds": [179, 163],
+        "spreads": [
+            {"nature": "Timid", "evs": 252, "usage": 70},
+            {"nature": "Modest", "evs": 252, "usage": 30},
+        ]
+    },
+    "entei": {
+        "base": 100,
+        "common_speeds": [167, 152, 136],
+        "spreads": [
+            {"nature": "Jolly", "evs": 252, "usage": 44},
+            {"nature": "Adamant", "evs": 252, "usage": 30},
+            {"nature": "Jolly", "evs": 0, "usage": 8},
+            {"nature": "Adamant", "evs": 0, "usage": 5},
+        ]
+    },
+    "urshifu": {
+        "base": 97,
+        "common_speeds": [163, 148],
+        "spreads": [
+            {"nature": "Jolly", "evs": 252, "usage": 60},
+            {"nature": "Adamant", "evs": 252, "usage": 40},
+        ]
+    },
+    "urshifu-rapid-strike": {
+        "base": 97,
+        "common_speeds": [163, 148],
+        "spreads": [
+            {"nature": "Jolly", "evs": 252, "usage": 60},
+            {"nature": "Adamant", "evs": 252, "usage": 40},
+        ]
+    },
+    "landorus": {
+        "base": 101,
+        "common_speeds": [168, 153],
+        "spreads": [
+            {"nature": "Timid", "evs": 252, "usage": 50},
+            {"nature": "Modest", "evs": 252, "usage": 50},
+        ]
+    },
+    "landorus-therian": {
+        "base": 91,
+        "common_speeds": [157, 143],
+        "spreads": [
+            {"nature": "Jolly", "evs": 252, "usage": 40},
+            {"nature": "Adamant", "evs": 252, "usage": 50},
+            {"nature": "Adamant", "evs": 100, "usage": 10},
+        ]
+    },
+    "garchomp": {
+        "base": 102,
+        "common_speeds": [169, 154],
+        "spreads": [
+            {"nature": "Jolly", "evs": 252, "usage": 50},
+            {"nature": "Adamant", "evs": 252, "usage": 50},
+        ]
+    },
+    "arcanine": {
+        "base": 95,
+        "common_speeds": [161, 146, 95],
+        "spreads": [
+            {"nature": "Jolly", "evs": 252, "usage": 30},
+            {"nature": "Adamant", "evs": 252, "usage": 40},
+            {"nature": "Adamant", "evs": 0, "usage": 30},
+        ]
+    },
+    "arcanine-hisui": {
+        "base": 90,
+        "common_speeds": [156, 141, 90],
+        "spreads": [
+            {"nature": "Jolly", "evs": 252, "usage": 25},
+            {"nature": "Adamant", "evs": 252, "usage": 40},
+            {"nature": "Adamant", "evs": 0, "usage": 35},
+        ]
+    },
+    "palafin": {
+        "base": 100,
+        "common_speeds": [167, 152],
+        "spreads": [
+            {"nature": "Jolly", "evs": 252, "usage": 60},
+            {"nature": "Adamant", "evs": 252, "usage": 40},
+        ]
+    },
+    "indeedee-f": {
+        "base": 95,
+        "common_speeds": [161, 146],
+        "spreads": [
+            {"nature": "Timid", "evs": 252, "usage": 30},
+            {"nature": "Modest", "evs": 252, "usage": 40},
+            {"nature": "Bold", "evs": 0, "usage": 30},
+        ]
+    },
 
     # Medium (70-95)
-    "annihilape": {"base": 90, "common_speeds": [156, 142]},
-    "gholdengo": {"base": 84, "common_speeds": [150, 136]},
-    "rillaboom": {"base": 85, "common_speeds": [150, 137, 85]},
-    "dragonite": {"base": 80, "common_speeds": [145, 132, 80]},
-    "gyarados": {"base": 81, "common_speeds": [146, 133]},
-    "kyogre": {"base": 90, "common_speeds": [156, 142]},
-    "groudon": {"base": 90, "common_speeds": [156, 142]},
-    "glimmora": {"base": 70, "common_speeds": [134, 122]},
+    "annihilape": {
+        "base": 90,
+        "common_speeds": [156, 142],
+        "spreads": [
+            {"nature": "Jolly", "evs": 252, "usage": 40},
+            {"nature": "Adamant", "evs": 252, "usage": 60},
+        ]
+    },
+    "gholdengo": {
+        "base": 84,
+        "common_speeds": [150, 136],
+        "spreads": [
+            {"nature": "Timid", "evs": 252, "usage": 40},
+            {"nature": "Modest", "evs": 252, "usage": 60},
+        ]
+    },
+    "rillaboom": {
+        "base": 85,
+        "common_speeds": [150, 137, 85],
+        "spreads": [
+            {"nature": "Jolly", "evs": 252, "usage": 20},
+            {"nature": "Adamant", "evs": 252, "usage": 50},
+            {"nature": "Adamant", "evs": 0, "usage": 30},
+        ]
+    },
+    "dragonite": {
+        "base": 80,
+        "common_speeds": [145, 132, 80],
+        "spreads": [
+            {"nature": "Jolly", "evs": 252, "usage": 20},
+            {"nature": "Adamant", "evs": 252, "usage": 60},
+            {"nature": "Adamant", "evs": 0, "usage": 20},
+        ]
+    },
+    "gyarados": {
+        "base": 81,
+        "common_speeds": [146, 133],
+        "spreads": [
+            {"nature": "Jolly", "evs": 252, "usage": 40},
+            {"nature": "Adamant", "evs": 252, "usage": 60},
+        ]
+    },
+    "kyogre": {
+        "base": 90,
+        "common_speeds": [156, 142],
+        "spreads": [
+            {"nature": "Timid", "evs": 252, "usage": 30},
+            {"nature": "Modest", "evs": 252, "usage": 70},
+        ]
+    },
+    "groudon": {
+        "base": 90,
+        "common_speeds": [156, 142],
+        "spreads": [
+            {"nature": "Jolly", "evs": 252, "usage": 30},
+            {"nature": "Adamant", "evs": 252, "usage": 70},
+        ]
+    },
+    "glimmora": {
+        "base": 70,
+        "common_speeds": [134, 122],
+        "spreads": [
+            {"nature": "Timid", "evs": 252, "usage": 50},
+            {"nature": "Modest", "evs": 252, "usage": 50},
+        ]
+    },
+    "great-tusk": {
+        "base": 87,
+        "paradox_type": "ancient",
+        "common_speeds": [152, 139],
+        "spreads": [
+            {"nature": "Jolly", "evs": 252, "usage": 50},
+            {"nature": "Adamant", "evs": 252, "usage": 50},
+        ]
+    },
+    "roaring-moon": {
+        "base": 119,
+        "paradox_type": "ancient",
+        "common_speeds": [187, 170],
+        "spreads": [
+            {"nature": "Jolly", "evs": 252, "usage": 60},
+            {"nature": "Adamant", "evs": 252, "usage": 40},
+        ]
+    },
+    "iron-valiant": {
+        "base": 116,
+        "paradox_type": "future",
+        "common_speeds": [183, 167],
+        "spreads": [
+            {"nature": "Jolly", "evs": 252, "usage": 40},
+            {"nature": "Timid", "evs": 252, "usage": 30},
+            {"nature": "Naive", "evs": 252, "usage": 30},
+        ]
+    },
 
     # Slow (50-70)
-    "pelipper": {"base": 65, "common_speeds": [126, 85]},
-    "incineroar": {"base": 60, "common_speeds": [123, 92, 60]},
-    "porygon2": {"base": 60, "common_speeds": [92, 60]},
-    "farigiraf": {"base": 60, "common_speeds": [123, 60]},
+    "pelipper": {
+        "base": 65,
+        "common_speeds": [126, 85],
+        "spreads": [
+            {"nature": "Bold", "evs": 252, "usage": 30},
+            {"nature": "Modest", "evs": 0, "usage": 70},
+        ]
+    },
+    "incineroar": {
+        "base": 60,
+        "common_speeds": [123, 92, 60],
+        "spreads": [
+            {"nature": "Adamant", "evs": 252, "usage": 20},
+            {"nature": "Careful", "evs": 100, "usage": 40},
+            {"nature": "Careful", "evs": 0, "usage": 40},
+        ]
+    },
+    "porygon2": {
+        "base": 60,
+        "common_speeds": [92, 60],
+        "spreads": [
+            {"nature": "Relaxed", "evs": 0, "usage": 50},
+            {"nature": "Sassy", "evs": 0, "usage": 50},
+        ]
+    },
+    "farigiraf": {
+        "base": 60,
+        "common_speeds": [123, 60],
+        "spreads": [
+            {"nature": "Modest", "evs": 252, "usage": 30},
+            {"nature": "Calm", "evs": 0, "usage": 70},
+        ]
+    },
 
     # Very Slow / Trick Room (under 50)
-    "kingambit": {"base": 50, "common_speeds": [70, 50]},
-    "iron-hands": {"base": 50, "common_speeds": [70, 50]},
-    "ursaluna": {"base": 50, "common_speeds": [70, 50]},
-    "ursaluna-bloodmoon": {"base": 52, "common_speeds": [73, 52]},
-    "calyrex-ice": {"base": 50, "common_speeds": [70, 50, 36]},
-    "dondozo": {"base": 35, "common_speeds": [75, 35]},
-    "amoonguss": {"base": 30, "common_speeds": [31, 30]},
-    "hatterene": {"base": 29, "common_speeds": [49, 29]},
-    "torkoal": {"base": 20, "common_speeds": [40, 20]},
+    "kingambit": {
+        "base": 50,
+        "common_speeds": [70, 50],
+        "spreads": [
+            {"nature": "Adamant", "evs": 0, "usage": 80},
+            {"nature": "Brave", "evs": 0, "usage": 20},
+        ]
+    },
+    "iron-hands": {
+        "base": 50,
+        "paradox_type": "future",
+        "common_speeds": [70, 50],
+        "spreads": [
+            {"nature": "Adamant", "evs": 0, "usage": 70},
+            {"nature": "Brave", "evs": 0, "usage": 30},
+        ]
+    },
+    "ursaluna": {
+        "base": 50,
+        "common_speeds": [70, 50],
+        "spreads": [
+            {"nature": "Adamant", "evs": 0, "usage": 60},
+            {"nature": "Brave", "evs": 0, "usage": 40},
+        ]
+    },
+    "ursaluna-bloodmoon": {
+        "base": 52,
+        "common_speeds": [73, 52],
+        "spreads": [
+            {"nature": "Modest", "evs": 0, "usage": 60},
+            {"nature": "Quiet", "evs": 0, "usage": 40},
+        ]
+    },
+    "calyrex-ice": {
+        "base": 50,
+        "common_speeds": [70, 50, 36],
+        "spreads": [
+            {"nature": "Adamant", "evs": 0, "usage": 50},
+            {"nature": "Brave", "evs": 0, "usage": 50},
+        ]
+    },
+    "dondozo": {
+        "base": 35,
+        "common_speeds": [75, 35],
+        "spreads": [
+            {"nature": "Adamant", "evs": 252, "usage": 30},
+            {"nature": "Careful", "evs": 0, "usage": 70},
+        ]
+    },
+    "amoonguss": {
+        "base": 30,
+        "common_speeds": [31, 30],
+        "spreads": [
+            {"nature": "Relaxed", "evs": 0, "usage": 50},
+            {"nature": "Sassy", "evs": 0, "usage": 50},
+        ]
+    },
+    "hatterene": {
+        "base": 29,
+        "common_speeds": [49, 29],
+        "spreads": [
+            {"nature": "Quiet", "evs": 0, "usage": 80},
+            {"nature": "Modest", "evs": 0, "usage": 20},
+        ]
+    },
+    "torkoal": {
+        "base": 20,
+        "common_speeds": [40, 20],
+        "spreads": [
+            {"nature": "Quiet", "evs": 0, "usage": 80},
+            {"nature": "Modest", "evs": 0, "usage": 20},
+        ]
+    },
+    "iron-treads": {
+        "base": 106,
+        "paradox_type": "future",
+        "common_speeds": [172, 157],
+        "spreads": [
+            {"nature": "Jolly", "evs": 252, "usage": 50},
+            {"nature": "Adamant", "evs": 252, "usage": 50},
+        ]
+    },
+    "iron-thorns": {
+        "base": 72,
+        "paradox_type": "future",
+        "common_speeds": [137, 125],
+        "spreads": [
+            {"nature": "Jolly", "evs": 252, "usage": 40},
+            {"nature": "Adamant", "evs": 252, "usage": 60},
+        ]
+    },
+    "iron-jugulis": {
+        "base": 108,
+        "paradox_type": "future",
+        "common_speeds": [175, 159],
+        "spreads": [
+            {"nature": "Timid", "evs": 252, "usage": 50},
+            {"nature": "Modest", "evs": 252, "usage": 50},
+        ]
+    },
+    "scream-tail": {
+        "base": 111,
+        "paradox_type": "ancient",
+        "common_speeds": [179, 163],
+        "spreads": [
+            {"nature": "Timid", "evs": 252, "usage": 30},
+            {"nature": "Calm", "evs": 252, "usage": 70},
+        ]
+    },
+    "brute-bonnet": {
+        "base": 55,
+        "paradox_type": "ancient",
+        "common_speeds": [108, 75],
+        "spreads": [
+            {"nature": "Adamant", "evs": 252, "usage": 60},
+            {"nature": "Brave", "evs": 0, "usage": 40},
+        ]
+    },
+    "sandy-shocks": {
+        "base": 101,
+        "paradox_type": "ancient",
+        "common_speeds": [168, 153],
+        "spreads": [
+            {"nature": "Timid", "evs": 252, "usage": 50},
+            {"nature": "Modest", "evs": 252, "usage": 50},
+        ]
+    },
+    "slither-wing": {
+        "base": 81,
+        "paradox_type": "ancient",
+        "common_speeds": [146, 133],
+        "spreads": [
+            {"nature": "Jolly", "evs": 252, "usage": 40},
+            {"nature": "Adamant", "evs": 252, "usage": 60},
+        ]
+    },
+    "iron-leaves": {
+        "base": 108,
+        "paradox_type": "future",
+        "common_speeds": [175, 159],
+        "spreads": [
+            {"nature": "Jolly", "evs": 252, "usage": 60},
+            {"nature": "Adamant", "evs": 252, "usage": 40},
+        ]
+    },
+    "iron-boulder": {
+        "base": 108,
+        "paradox_type": "future",
+        "common_speeds": [175, 159],
+        "spreads": [
+            {"nature": "Jolly", "evs": 252, "usage": 60},
+            {"nature": "Adamant", "evs": 252, "usage": 40},
+        ]
+    },
+    "iron-crown": {
+        "base": 108,
+        "paradox_type": "future",
+        "common_speeds": [175, 159],
+        "spreads": [
+            {"nature": "Timid", "evs": 252, "usage": 50},
+            {"nature": "Modest", "evs": 252, "usage": 50},
+        ]
+    },
 }
 
 

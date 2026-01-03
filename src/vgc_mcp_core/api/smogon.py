@@ -53,6 +53,10 @@ class SmogonStatsClient:
         self._client: Optional[httpx.AsyncClient] = None
         self._current_format: Optional[str] = None
         self._current_month: Optional[str] = None
+        # Session-level data freshness tracking
+        self._session_first_month: Optional[str] = None
+        self._data_upgraded: bool = False
+        self._upgrade_notice: Optional[str] = None
 
     @property
     def regulation_config(self) -> RegulationConfig:
@@ -65,6 +69,19 @@ class SmogonStatsClient:
     def VGC_FORMATS(self) -> list[str]:
         """Get VGC formats dynamically from current regulation config."""
         return self.regulation_config.get_all_smogon_formats()
+
+    @property
+    def RATING_CUTOFFS(self) -> list[int]:
+        """Get available Smogon rating cutoffs.
+
+        Returns:
+            List of available ratings: [0, 1500, 1630, 1760]
+            - 0: All players (broadest data)
+            - 1500: 1500+ ELO players
+            - 1630: 1630+ ELO players
+            - 1760: Top competitive players (default)
+        """
+        return settings.SMOGON_RATING_CUTOFFS
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client with connection pooling."""
@@ -149,11 +166,19 @@ class SmogonStatsClient:
                 if data:
                     self._current_format = fmt
                     self._current_month = m
+                    self._check_for_data_upgrade(m)  # Track data freshness
+
                     data["_meta"] = {
                         "format": fmt,
                         "month": m,
                         "rating": rating
                     }
+
+                    # Add notice if data source upgraded mid-session
+                    notice = self.check_data_freshness()
+                    if notice:
+                        data["_meta"]["notice"] = notice
+
                     return data
 
         raise SmogonStatsError(
@@ -277,10 +302,11 @@ class SmogonStatsClient:
         self,
         pokemon_name: str,
         format_name: Optional[str] = None,
+        rating: int = 1760,
         limit: int = 5
     ) -> Optional[dict]:
         """Get the most common competitive sets for a Pokemon."""
-        usage = await self.get_pokemon_usage(pokemon_name, format_name)
+        usage = await self.get_pokemon_usage(pokemon_name, format_name, rating)
         if not usage:
             return None
 
@@ -310,10 +336,11 @@ class SmogonStatsClient:
         self,
         pokemon_name: str,
         format_name: Optional[str] = None,
+        rating: int = 1760,
         limit: int = 10
     ) -> Optional[dict]:
         """Get suggested teammates based on usage data."""
-        usage = await self.get_pokemon_usage(pokemon_name, format_name)
+        usage = await self.get_pokemon_usage(pokemon_name, format_name, rating)
         if not usage:
             return None
 
@@ -337,6 +364,46 @@ class SmogonStatsClient:
     def current_month(self) -> Optional[str]:
         """Get the last successfully used month."""
         return self._current_month
+
+    def check_data_freshness(self) -> Optional[str]:
+        """Check if newer data became available since session started.
+
+        Returns:
+            Notice message if newer data was found, None otherwise.
+            Notice is cleared after being read (shown once per upgrade).
+        """
+        if self._data_upgraded and self._upgrade_notice:
+            notice = self._upgrade_notice
+            self._upgrade_notice = None  # Clear after reading (show once)
+            return notice
+        return None
+
+    def _check_for_data_upgrade(self, new_month: str) -> None:
+        """Check if we've upgraded to a newer month mid-session.
+
+        Called each time stats are fetched. If the month is newer than
+        the first month used in this session, sets a notification.
+        """
+        if self._session_first_month is None:
+            self._session_first_month = new_month
+        elif new_month > self._session_first_month and not self._data_upgraded:
+            self._data_upgraded = True
+            # Format: "2024-12" -> "December 2024"
+            try:
+                month_name = datetime.strptime(new_month, "%Y-%m").strftime("%B %Y")
+                prev_name = datetime.strptime(
+                    self._session_first_month, "%Y-%m"
+                ).strftime("%B %Y")
+                self._upgrade_notice = (
+                    f"New data available! Now using {month_name} Smogon stats "
+                    f"(previously {prev_name}). Spreads and usage rates are updated."
+                )
+            except ValueError:
+                # Fallback if date parsing fails
+                self._upgrade_notice = (
+                    f"New data available! Now using {new_month} stats "
+                    f"(previously {self._session_first_month})."
+                )
 
     async def compare_pokemon_usage(
         self,
@@ -470,6 +537,133 @@ class SmogonStatsClient:
                             )
 
         return comparison
+
+    async def get_speed_distribution(
+        self,
+        pokemon_name: str,
+        base_speed: int,
+        format_name: Optional[str] = None,
+        rating: int = 1760
+    ) -> Optional[dict]:
+        """
+        Get speed distribution from Smogon spreads.
+
+        Parses all spreads for a Pokemon and calculates the final speed stat
+        for each, then builds a usage-weighted distribution.
+
+        Args:
+            pokemon_name: Pokemon name to look up
+            base_speed: Pokemon's base speed stat (from PokeAPI)
+            format_name: Specific format (auto-detects if None)
+            rating: Rating cutoff (default 1760)
+
+        Returns:
+            Distribution data or None if not found:
+            {
+                "pokemon": "Flutter Mane",
+                "base_speed": 135,
+                "distribution": [
+                    {"speed": 205, "usage": 44.0},
+                    {"speed": 187, "usage": 30.0},
+                    ...
+                ],
+                "stats": {
+                    "min": 135, "max": 205, "median": 187,
+                    "mean": 183.5, "iqr_low": 157, "iqr_high": 205
+                }
+            }
+        """
+        from ..calc.stats import calculate_speed
+        from ..models.pokemon import Nature
+
+        # Nature name -> Nature enum mapping
+        NATURE_MAP = {
+            "adamant": Nature.ADAMANT, "bashful": Nature.BASHFUL, "bold": Nature.BOLD,
+            "brave": Nature.BRAVE, "calm": Nature.CALM, "careful": Nature.CAREFUL,
+            "docile": Nature.DOCILE, "gentle": Nature.GENTLE, "hardy": Nature.HARDY,
+            "hasty": Nature.HASTY, "impish": Nature.IMPISH, "jolly": Nature.JOLLY,
+            "lax": Nature.LAX, "lonely": Nature.LONELY, "mild": Nature.MILD,
+            "modest": Nature.MODEST, "naive": Nature.NAIVE, "naughty": Nature.NAUGHTY,
+            "quiet": Nature.QUIET, "quirky": Nature.QUIRKY, "rash": Nature.RASH,
+            "relaxed": Nature.RELAXED, "sassy": Nature.SASSY, "serious": Nature.SERIOUS,
+            "timid": Nature.TIMID,
+        }
+
+        usage = await self.get_pokemon_usage(pokemon_name, format_name, rating)
+        if not usage or not usage.get("spreads"):
+            return None
+
+        # Calculate speed for each spread and aggregate by speed value
+        speed_usage: dict[int, float] = {}
+        for spread in usage["spreads"]:
+            nature_str = spread.get("nature", "Serious").lower()
+            evs = spread.get("evs", {})
+            spread_usage = spread.get("usage", 0)
+
+            nature = NATURE_MAP.get(nature_str, Nature.SERIOUS)
+            speed_evs = evs.get("speed", 0)
+
+            # Calculate final speed stat (level 50, 31 IVs)
+            final_speed = calculate_speed(base_speed, 31, speed_evs, 50, nature)
+
+            if final_speed in speed_usage:
+                speed_usage[final_speed] += spread_usage
+            else:
+                speed_usage[final_speed] = spread_usage
+
+        if not speed_usage:
+            return None
+
+        # Build distribution sorted by speed
+        distribution = [
+            {"speed": speed, "usage": round(usage_pct, 1)}
+            for speed, usage_pct in sorted(speed_usage.items())
+        ]
+
+        # Calculate statistics
+        speeds = list(speed_usage.keys())
+        usages = list(speed_usage.values())
+        total_usage = sum(usages)
+
+        # Weighted mean
+        weighted_sum = sum(s * u for s, u in zip(speeds, usages))
+        mean_speed = weighted_sum / total_usage if total_usage > 0 else speeds[0]
+
+        # Median (by usage weight)
+        cumulative = 0
+        median_speed = speeds[0]
+        for s, u in sorted(zip(speeds, usages)):
+            cumulative += u
+            if cumulative >= total_usage / 2:
+                median_speed = s
+                break
+
+        # IQR (25th and 75th percentile by usage)
+        cumulative = 0
+        iqr_low = speeds[0]
+        iqr_high = speeds[-1]
+        for s, u in sorted(zip(speeds, usages)):
+            cumulative += u
+            if cumulative >= total_usage * 0.25 and iqr_low == speeds[0]:
+                iqr_low = s
+            if cumulative >= total_usage * 0.75:
+                iqr_high = s
+                break
+
+        return {
+            "pokemon": usage["name"],
+            "base_speed": base_speed,
+            "distribution": distribution,
+            "stats": {
+                "min": min(speeds),
+                "max": max(speeds),
+                "median": median_speed,
+                "mean": round(mean_speed, 1),
+                "iqr_low": iqr_low,
+                "iqr_high": iqr_high,
+            },
+            "_meta": usage.get("_meta", {})
+        }
 
     async def close(self) -> None:
         """Close the HTTP client."""
