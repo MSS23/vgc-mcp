@@ -32,6 +32,12 @@ COMMON_POKEMON = [
     "hatterene", "torkoal", "lilligant-hisui", "bronzong", "cresselia",
     "regieleki", "raging-bolt", "gouging-fire", "iron-crown", "iron-boulder",
 
+    # Ogerpon forms (mask variants)
+    "ogerpon", "ogerpon-wellspring", "ogerpon-hearthflame", "ogerpon-cornerstone",
+
+    # Meowstic forms
+    "meowstic", "meowstic-male", "meowstic-female",
+
     # Other common Pokemon
     "charizard", "venusaur", "blastoise", "pikachu", "mewtwo",
     "dragonite", "gyarados", "snorlax", "gengar", "alakazam",

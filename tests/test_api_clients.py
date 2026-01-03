@@ -84,6 +84,36 @@ class TestPokeAPIClient:
         assert client._normalize_name("landorus-therian") == "landorus-therian"
         assert client._normalize_name("urshifu-rapid-strike") == "urshifu-rapid-strike"
 
+    def test_normalize_name_ogerpon_mask_forms(self, client):
+        """Test Ogerpon short form names are aliased to PokeAPI mask names."""
+        # Ogerpon short forms should map to full mask names for PokeAPI
+        assert client._normalize_name("ogerpon-wellspring") == "ogerpon-wellspring-mask"
+        assert client._normalize_name("ogerpon-hearthflame") == "ogerpon-hearthflame-mask"
+        assert client._normalize_name("ogerpon-cornerstone") == "ogerpon-cornerstone-mask"
+        assert client._normalize_name("ogerpon-teal") == "ogerpon-teal-mask"
+        # Full mask names should remain unchanged
+        assert client._normalize_name("ogerpon-wellspring-mask") == "ogerpon-wellspring-mask"
+
+    def test_normalize_name_meowstic_forms(self, client):
+        """Test Meowstic base form and short gender aliases."""
+        # Base meowstic should become meowstic-male for PokeAPI
+        assert client._normalize_name("meowstic") == "meowstic-male"
+        # Short form aliases
+        assert client._normalize_name("meowstic-f") == "meowstic-female"
+        assert client._normalize_name("meowstic-m") == "meowstic-male"
+        # Full gender names should remain unchanged
+        assert client._normalize_name("meowstic-female") == "meowstic-female"
+
+    def test_normalize_name_indeedee_short_forms(self, client):
+        """Test Indeedee short form aliases."""
+        # Base indeedee is already aliased
+        assert client._normalize_name("indeedee") == "indeedee-male"
+        # Short form aliases
+        assert client._normalize_name("indeedee-f") == "indeedee-female"
+        assert client._normalize_name("indeedee-m") == "indeedee-male"
+        # Full gender names should remain unchanged
+        assert client._normalize_name("indeedee-female") == "indeedee-female"
+
     @pytest.mark.asyncio
     async def test_get_pokemon_returns_data(self, client, mock_cache):
         """Test getting Pokemon data with mocked response."""

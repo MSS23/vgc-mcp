@@ -7768,17 +7768,6 @@ def create_pokemon_build_card_ui(
             font-weight: 600;
         }}
 
-        /* Nature Suggestion */
-        .nature-suggestion {{
-            margin-top: var(--space-sm);
-            padding: var(--space-sm) var(--space-md);
-            background: rgba(234, 179, 8, 0.1);
-            border: 1px solid rgba(234, 179, 8, 0.3);
-            border-radius: var(--radius-sm);
-            font-size: 12px;
-            color: #fbbf24;
-        }}
-
         .stat-final {{
             font-family: var(--font-mono);
             font-size: 16px;
@@ -8321,7 +8310,6 @@ def create_pokemon_build_card_ui(
                     <div class="ev-total" id="ev-total">0 / 508</div>
                 </div>
             </div>
-            <div class="nature-suggestion" id="nature-suggestion" style="display:none"></div>
         </div>
 
         <!-- EV Sliders -->
@@ -8528,33 +8516,6 @@ def create_pokemon_build_card_ui(
             return evs - nearest;  // How many EVs are wasted
         }}
 
-        // Check if a +Speed nature could achieve same speed with fewer EVs
-        function checkNatureOptimization(currentEVs, targetStat, currentNature) {{
-            const base = BASE_STATS['speed'];
-            const currentMods = getNatureMods(currentNature);
-
-            // If already using +Speed nature, no optimization possible
-            if (currentMods.speed === 1.1) return null;
-
-            // Calculate what EVs would be needed with +Speed nature (1.1x)
-            for (let testEV = 0; testEV <= 252; testEV += 4) {{
-                const statWith110 = calcStat(base, testEV, 31, 1.1, false);
-                if (statWith110 >= targetStat) {{
-                    const evSaved = currentEVs - testEV;
-                    if (evSaved >= 8) {{  // Only suggest if saving at least 8 EVs
-                        return {{
-                            suggestedNature: 'Jolly/Timid',
-                            newEVs: testEV,
-                            evSaved: evSaved,
-                            sameSpeed: statWith110
-                        }};
-                    }}
-                    break;
-                }}
-            }}
-            return null;
-        }}
-
         function updateNature() {{
             const nature = document.getElementById('nature').value;
             const [boosted, lowered] = NATURES[nature] || [null, null];
@@ -8617,21 +8578,6 @@ def create_pokemon_build_card_ui(
             }});
 
             updateSpeedTier();
-
-            // Check nature optimization for speed
-            const speedEVs = parseInt(document.getElementById('ev-speed').value) || 0;
-            const speedStat = parseInt(document.getElementById('stat-speed').textContent) || 0;
-            const suggestionEl = document.getElementById('nature-suggestion');
-
-            if (suggestionEl) {{
-                const optimization = checkNatureOptimization(speedEVs, speedStat, nature);
-                if (optimization && speedEVs > 0) {{
-                    suggestionEl.innerHTML = `&#128161; Use ${{optimization.suggestedNature}} nature with ${{optimization.newEVs}} Spe EVs to save ${{optimization.evSaved}} EVs`;
-                    suggestionEl.style.display = 'block';
-                }} else {{
-                    suggestionEl.style.display = 'none';
-                }}
-            }}
         }}
 
         function updateSpeedTier() {{

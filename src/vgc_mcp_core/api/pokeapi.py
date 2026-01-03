@@ -19,12 +19,26 @@ POKEAPI_FORM_ALIASES = {
     "tornadus": "tornadus-incarnate",
     "thundurus": "thundurus-incarnate",
     "enamorus": "enamorus-incarnate",
+
     # Urshifu - PokeAPI uses explicit "-single-strike" suffix
     "urshifu": "urshifu-single-strike",
-    # Indeedee - PokeAPI uses explicit "-male" suffix
+
+    # Gender-dimorphic Pokemon - PokeAPI uses explicit "-male" suffix
     "indeedee": "indeedee-male",
-    # Basculegion - PokeAPI uses explicit "-male" suffix
     "basculegion": "basculegion-male",
+    "meowstic": "meowstic-male",
+
+    # Short form aliases for gender-dimorphic Pokemon
+    "indeedee-f": "indeedee-female",
+    "indeedee-m": "indeedee-male",
+    "meowstic-f": "meowstic-female",
+    "meowstic-m": "meowstic-male",
+
+    # Ogerpon mask forms - PokeAPI requires "-mask" suffix
+    "ogerpon-wellspring": "ogerpon-wellspring-mask",
+    "ogerpon-hearthflame": "ogerpon-hearthflame-mask",
+    "ogerpon-cornerstone": "ogerpon-cornerstone-mask",
+    "ogerpon-teal": "ogerpon-teal-mask",
 }
 
 

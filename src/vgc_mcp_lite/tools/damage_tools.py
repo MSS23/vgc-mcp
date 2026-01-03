@@ -28,6 +28,26 @@ from vgc_mcp_core.utils.synergies import get_synergy_ability
 _smogon_client: Optional[SmogonStatsClient] = None
 
 
+def _format_showdown_spread(evs_dict: dict, nature: str, name: str, item: str = None) -> str:
+    """Format EVs in Showdown damage calc style.
+
+    Example output: '252 SpA / 252 Spe Modest Landorus-I @ Life Orb'
+    """
+    ev_parts = []
+    stat_names = [
+        ("hp", "HP"), ("attack", "Atk"), ("defense", "Def"),
+        ("special_attack", "SpA"), ("special_defense", "SpD"), ("speed", "Spe")
+    ]
+    for stat, short in stat_names:
+        ev_val = evs_dict.get(stat, 0)
+        if ev_val > 0:
+            ev_parts.append(f"{ev_val} {short}")
+
+    ev_str = " / ".join(ev_parts) if ev_parts else "0 EVs"
+    item_str = f" @ {item.replace('-', ' ').title()}" if item else ""
+    return f"{ev_str} {nature.title()} {name}{item_str}"
+
+
 async def _get_common_spread(pokemon_name: str) -> Optional[dict]:
     """Fetch the most common spread for a Pokemon from Smogon usage stats.
 
@@ -397,24 +417,35 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             final_def = calculate_stat(def_base.defense, 31, defender_def_evs, 50, def_nature_mod)
             final_spd = calculate_stat(def_base.special_defense, 31, defender_spd_evs, 50, spd_nature_mod)
 
-            # Build descriptive spread strings for analysis
+            # Build descriptive spread strings for analysis (Showdown format)
             is_physical = move.category.value == "physical"
-            relevant_atk_stat = final_attack if is_physical else final_spa
-            relevant_atk_evs = attacker_atk_evs if is_physical else attacker_spa_evs
-            stat_name = "Atk" if is_physical else "SpA"
 
-            # Build attacker spread string (e.g., "252+ Atk Mystic Water")
-            nature_boost = "+" if (is_physical and atk_nature_mod > 1.0) or (not is_physical and spa_nature_mod > 1.0) else ""
-            nature_penalty = "-" if (is_physical and atk_nature_mod < 1.0) or (not is_physical and spa_nature_mod < 1.0) else ""
-            nature_indicator = nature_boost or nature_penalty
-            item_str = f" {attacker_item.replace('-', ' ').title()}" if attacker_item else ""
-            attacker_spread_str = f"{relevant_atk_evs}{nature_indicator} {stat_name}{item_str} {attacker_name}"
+            # Build full EVs dicts for Showdown-style formatting
+            # Use Smogon data if available, otherwise use what we know
+            if attacker_spread_info:
+                attacker_evs_full = attacker_spread_info.get("evs", {})
+            else:
+                attacker_evs_full = {
+                    "attack": attacker_atk_evs,
+                    "special_attack": attacker_spa_evs
+                }
 
-            # Build defender spread string (e.g., "132 HP / 196 Def")
-            relevant_def_stat = final_def if is_physical else final_spd
-            relevant_def_evs = defender_def_evs if is_physical else defender_spd_evs
-            def_stat_name = "Def" if is_physical else "SpD"
-            defender_spread_str = f"{defender_hp_evs} HP / {relevant_def_evs} {def_stat_name} {defender_name}"
+            if defender_spread_info:
+                defender_evs_full = defender_spread_info.get("evs", {})
+            else:
+                defender_evs_full = {
+                    "hp": defender_hp_evs,
+                    "defense": defender_def_evs,
+                    "special_defense": defender_spd_evs
+                }
+
+            # Build Showdown-style spread strings
+            attacker_spread_str = _format_showdown_spread(
+                attacker_evs_full, attacker_nature, attacker_name, attacker_item
+            )
+            defender_spread_str = _format_showdown_spread(
+                defender_evs_full, defender_nature, defender_name, None
+            )
 
             # Calculate damage percentages
             min_pct = round(result.damage_range[0], 1)
@@ -893,11 +924,16 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             def_types = await pokeapi.get_pokemon_types(defender_name)
             move = await pokeapi.get_move(move_name, user_name=attacker_name)
 
+            # Track spread info for Showdown-style output
+            attacker_spread_info = None
+            defender_spread_info = None
+
             # Auto-fetch Smogon spreads if enabled
             if use_smogon_spreads:
                 if attacker_nature is None or attacker_atk_evs is None or attacker_spa_evs is None:
                     atk_spread = await _get_common_spread(attacker_name)
                     if atk_spread:
+                        attacker_spread_info = atk_spread
                         if attacker_nature is None:
                             attacker_nature = atk_spread["nature"]
                         evs = atk_spread.get("evs", {})
@@ -911,6 +947,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 if defender_nature is None or defender_hp_evs is None or defender_def_evs is None or defender_spd_evs is None:
                     def_spread = await _get_common_spread(defender_name)
                     if def_spread:
+                        defender_spread_info = def_spread
                         if defender_nature is None:
                             defender_nature = def_spread["nature"]
                         evs = def_spread.get("evs", {})
@@ -1036,22 +1073,34 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             final_def = calculate_stat(def_base.defense, 31, defender_def_evs, 50, def_nature_mod_def)
             final_spd = calculate_stat(def_base.special_defense, 31, defender_spd_evs, 50, def_nature_mod_spd)
 
-            # Build descriptive spread strings for analysis
+            # Build descriptive spread strings for analysis (Showdown format)
             is_physical = move.category.value == "physical"
-            relevant_atk_evs = attacker_atk_evs if is_physical else attacker_spa_evs
-            stat_name = "Atk" if is_physical else "SpA"
 
-            # Build attacker spread string (e.g., "252+ Atk Mystic Water")
-            nature_boost = "+" if (is_physical and atk_nature_mod_atk > 1.0) or (not is_physical and atk_nature_mod_spa > 1.0) else ""
-            nature_penalty = "-" if (is_physical and atk_nature_mod_atk < 1.0) or (not is_physical and atk_nature_mod_spa < 1.0) else ""
-            nature_indicator = nature_boost or nature_penalty
-            item_str = f" {attacker_item.replace('-', ' ').title()}" if attacker_item else ""
-            attacker_spread_str = f"{relevant_atk_evs}{nature_indicator} {stat_name}{item_str} {attacker_name}"
+            # Build full EVs dicts for Showdown-style formatting
+            if attacker_spread_info:
+                attacker_evs_full = attacker_spread_info.get("evs", {})
+            else:
+                attacker_evs_full = {
+                    "attack": attacker_atk_evs,
+                    "special_attack": attacker_spa_evs
+                }
 
-            # Build defender spread string (e.g., "132 HP / 196 Def")
-            relevant_def_evs = defender_def_evs if is_physical else defender_spd_evs
-            def_stat_name = "Def" if is_physical else "SpD"
-            defender_spread_str = f"{defender_hp_evs} HP / {relevant_def_evs} {def_stat_name} {defender_name}"
+            if defender_spread_info:
+                defender_evs_full = defender_spread_info.get("evs", {})
+            else:
+                defender_evs_full = {
+                    "hp": defender_hp_evs,
+                    "defense": defender_def_evs,
+                    "special_defense": defender_spd_evs
+                }
+
+            # Build Showdown-style spread strings
+            attacker_spread_str = _format_showdown_spread(
+                attacker_evs_full, attacker_nature, attacker_name, attacker_item
+            )
+            defender_spread_str = _format_showdown_spread(
+                defender_evs_full, defender_nature, defender_name, None
+            )
 
             # Build summary table
             table_lines = [
