@@ -1331,5 +1331,174 @@ class TestPsyblade:
         assert 1.45 <= ratio <= 1.55
 
 
+class TestAutoFillFromBuild:
+    """Test that item and ability are auto-filled from PokemonBuild."""
+
+    def test_ability_auto_filled_from_build(self):
+        """Ability from PokemonBuild should be auto-applied when modifiers don't specify it."""
+        # Landorus-I with Sheer Force
+        lando_base = BaseStats(
+            hp=89, attack=125, defense=90,
+            special_attack=115, special_defense=80, speed=101
+        )
+
+        lando_with_sf = PokemonBuild(
+            name="landorus-incarnate",
+            base_stats=lando_base,
+            types=["Ground", "Flying"],
+            nature=Nature.TIMID,
+            evs=EVSpread(special_attack=252, speed=252),
+            ability="sheer-force"
+        )
+
+        lando_no_ability = PokemonBuild(
+            name="landorus-incarnate",
+            base_stats=lando_base,
+            types=["Ground", "Flying"],
+            nature=Nature.TIMID,
+            evs=EVSpread(special_attack=252, speed=252)
+        )
+
+        defender = PokemonBuild(
+            name="incineroar",
+            base_stats=BaseStats(
+                hp=95, attack=115, defense=90,
+                special_attack=80, special_defense=90, speed=60
+            ),
+            types=["Fire", "Dark"],
+            nature=Nature.CAREFUL,
+            evs=EVSpread(hp=252, special_defense=252)
+        )
+
+        # Sludge Bomb has effect_chance so Sheer Force applies
+        sludge_bomb = Move(
+            name="sludge-bomb",
+            type="Poison",
+            category=MoveCategory.SPECIAL,
+            power=90,
+            accuracy=100,
+            pp=10,
+            effect_chance=30
+        )
+
+        # Empty modifiers - should auto-fill ability from build
+        mods = DamageModifiers()
+
+        result_with_sf = calculate_damage(lando_with_sf, defender, sludge_bomb, mods)
+        result_no_sf = calculate_damage(lando_no_ability, defender, sludge_bomb, mods)
+
+        # Sheer Force should boost damage by 1.3x
+        ratio = result_with_sf.max_damage / result_no_sf.max_damage
+        assert 1.25 <= ratio <= 1.35, f"Expected ~1.3x ratio, got {ratio}"
+
+    def test_item_auto_filled_from_build(self):
+        """Item from PokemonBuild should be auto-applied when modifiers don't specify it."""
+        flutter_base = BaseStats(
+            hp=55, attack=55, defense=55,
+            special_attack=135, special_defense=135, speed=135
+        )
+
+        flutter_with_lo = PokemonBuild(
+            name="flutter-mane",
+            base_stats=flutter_base,
+            types=["Ghost", "Fairy"],
+            nature=Nature.TIMID,
+            evs=EVSpread(special_attack=252, speed=252),
+            item="life-orb"
+        )
+
+        flutter_no_item = PokemonBuild(
+            name="flutter-mane",
+            base_stats=flutter_base,
+            types=["Ghost", "Fairy"],
+            nature=Nature.TIMID,
+            evs=EVSpread(special_attack=252, speed=252)
+        )
+
+        defender = PokemonBuild(
+            name="incineroar",
+            base_stats=BaseStats(
+                hp=95, attack=115, defense=90,
+                special_attack=80, special_defense=90, speed=60
+            ),
+            types=["Fire", "Dark"],
+            nature=Nature.CAREFUL,
+            evs=EVSpread(hp=252, special_defense=252)
+        )
+
+        moonblast = Move(
+            name="moonblast",
+            type="Fairy",
+            category=MoveCategory.SPECIAL,
+            power=95,
+            accuracy=100,
+            pp=15
+        )
+
+        mods = DamageModifiers()
+
+        result_with_lo = calculate_damage(flutter_with_lo, defender, moonblast, mods)
+        result_no_lo = calculate_damage(flutter_no_item, defender, moonblast, mods)
+
+        # Life Orb should boost damage by 1.3x
+        ratio = result_with_lo.max_damage / result_no_lo.max_damage
+        assert 1.25 <= ratio <= 1.35, f"Expected ~1.3x ratio, got {ratio}"
+
+    def test_item_and_ability_both_auto_filled(self):
+        """Both item and ability should be auto-filled together."""
+        lando_base = BaseStats(
+            hp=89, attack=125, defense=90,
+            special_attack=115, special_defense=80, speed=101
+        )
+
+        lando_full = PokemonBuild(
+            name="landorus-incarnate",
+            base_stats=lando_base,
+            types=["Ground", "Flying"],
+            nature=Nature.TIMID,
+            evs=EVSpread(special_attack=252, speed=252),
+            item="life-orb",
+            ability="sheer-force"
+        )
+
+        lando_empty = PokemonBuild(
+            name="landorus-incarnate",
+            base_stats=lando_base,
+            types=["Ground", "Flying"],
+            nature=Nature.TIMID,
+            evs=EVSpread(special_attack=252, speed=252)
+        )
+
+        defender = PokemonBuild(
+            name="incineroar",
+            base_stats=BaseStats(
+                hp=95, attack=115, defense=90,
+                special_attack=80, special_defense=90, speed=60
+            ),
+            types=["Fire", "Dark"],
+            nature=Nature.CAREFUL,
+            evs=EVSpread(hp=252, special_defense=252)
+        )
+
+        sludge_bomb = Move(
+            name="sludge-bomb",
+            type="Poison",
+            category=MoveCategory.SPECIAL,
+            power=90,
+            accuracy=100,
+            pp=10,
+            effect_chance=30
+        )
+
+        mods = DamageModifiers()
+
+        result_full = calculate_damage(lando_full, defender, sludge_bomb, mods)
+        result_empty = calculate_damage(lando_empty, defender, sludge_bomb, mods)
+
+        # Both SF (1.3x) and Life Orb (1.3x) should boost = ~1.69x
+        ratio = result_full.max_damage / result_empty.max_damage
+        assert 1.60 <= ratio <= 1.75, f"Expected ~1.69x ratio, got {ratio}"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

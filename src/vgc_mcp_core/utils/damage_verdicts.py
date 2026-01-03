@@ -106,10 +106,10 @@ def calculate_ko_probability(
     )
 
     return KOProbability(
-        ohko_chance=round(ohko_chance, 1),
-        twohko_chance=round(twohko_chance, 1),
-        threehko_chance=round(threehko_chance, 1),
-        fourhko_chance=round(fourhko_chance, 1),
+        ohko_chance=round(ohko_chance, 2),
+        twohko_chance=round(twohko_chance, 2),
+        threehko_chance=round(threehko_chance, 2),
+        fourhko_chance=round(fourhko_chance, 2),
         guaranteed_ko=guaranteed_ko,
         rolls_that_ohko=ohko_count,
         verdict=verdict
@@ -129,25 +129,25 @@ def _format_ko_verdict(
     elif ohko >= 99.9:
         return "Guaranteed OHKO"
     elif ohko > 0:
-        return f"{ohko:.1f}% chance to OHKO"
+        return f"{ohko:.2f}% chance to OHKO"
     elif guaranteed == 2:
         return "Guaranteed 2HKO"
     elif twohko >= 99.9:
         return "Guaranteed 2HKO"
     elif twohko > 0:
-        return f"{twohko:.1f}% chance to 2HKO"
+        return f"{twohko:.2f}% chance to 2HKO"
     elif guaranteed == 3:
         return "Guaranteed 3HKO"
     elif threehko >= 99.9:
         return "Guaranteed 3HKO"
     elif threehko > 0:
-        return f"{threehko:.1f}% chance to 3HKO"
+        return f"{threehko:.2f}% chance to 3HKO"
     elif guaranteed == 4:
         return "Guaranteed 4HKO"
     elif fourhko >= 99.9:
         return "Guaranteed 4HKO"
     elif fourhko > 0:
-        return f"{fourhko:.1f}% chance to 4HKO"
+        return f"{fourhko:.2f}% chance to 4HKO"
     else:
         return "5+ HKO"
 

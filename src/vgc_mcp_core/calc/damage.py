@@ -463,6 +463,12 @@ def calculate_damage(
     if modifiers.defender_item is None and defender.item:
         modifiers = replace(modifiers, defender_item=defender.item)
 
+    # Auto-fill attacker/defender abilities from Pokemon builds if not specified
+    if modifiers.attacker_ability is None and attacker.ability:
+        modifiers = replace(modifiers, attacker_ability=attacker.ability)
+    if modifiers.defender_ability is None and defender.ability:
+        modifiers = replace(modifiers, defender_ability=defender.ability)
+
     # Check for multi-hit move mechanics
     multi_hit_info = get_multi_hit_info(move.name)
     hit_count = 1
@@ -1367,6 +1373,7 @@ def _get_type_boost_item_mod_4096(item: str | None, move_type: str) -> int:
         "hearthflame-mask": "Fire",
         "wellspring-mask": "Water",
         "cornerstone-mask": "Rock",
+        "teal-mask": "Grass",
     }
 
     if item in type_items and type_items[item] == move_type:

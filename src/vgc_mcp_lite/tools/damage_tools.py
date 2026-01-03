@@ -475,12 +475,12 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "attacker": attacker_name,
                 "attacker_ability": attacker_ability,
                 "attacker_item": attacker_item,
-                "attacker_tera_type": attacker_tera_type,
+                "attacker_tera": attacker_tera_type,
                 "attacker_tera_active": attacker_tera_type is not None,
                 "defender": defender_name,
                 "defender_ability": defender_ability,
                 "defender_item": None,  # Not supported in lite version
-                "defender_tera_type": defender_tera_type,
+                "defender_tera": defender_tera_type,
                 "defender_tera_active": defender_tera_type is not None,
                 "move": move_name,
                 "move_type": move.type,
@@ -756,7 +756,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "achievable": True,
                 "evs_needed": result["evs_needed"],
                 "stat": result["stat_name"],
-                "ko_chance": f"{result['ko_chance']:.1f}%",
+                "ko_chance": f"{result['ko_chance']:.2f}%",
                 "damage_range": result["damage_range"]
             }
 
@@ -851,7 +851,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "hp_evs_needed": result["hp_evs"],
                 "def_evs_needed": result["def_evs"],
                 "def_stat": result["def_stat_name"],
-                "survival_chance": f"{result['survival_chance']:.1f}%",
+                "survival_chance": f"{result['survival_chance']:.2f}%",
                 "damage_range": result["damage_range"]
             }
 
@@ -1112,7 +1112,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 f"| Per Hit          | {min_per_hit}-{max_per_hit} ({min_percent_per_hit:.1f}-{max_percent_per_hit:.1f}%) |",
                 f"| Total Damage     | {total_min}-{total_max} ({total_min_percent:.1f}-{total_max_percent:.1f}%) |",
                 f"| HP Remaining     | {hp_remaining_min}-{hp_remaining_max} ({hp_remain_min_pct}-{hp_remain_max_pct}%) |",
-                f"| Survival Chance  | {survival_chance:.1f}%                     |",
+                f"| Survival Chance  | {survival_chance:.2f}%                     |",
                 f"| Verdict          | {verdict_str}                              |",
             ]
 
@@ -1140,7 +1140,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 },
                 "survives_guaranteed": survives_guaranteed,
                 "survives_possible": survives_possible,
-                "survival_chance": f"{survival_chance:.1f}%",
+                "survival_chance": f"{survival_chance:.2f}%",
                 "verdict": verdict_str,
                 "attacker_spread": {
                     "nature": attacker_nature,
