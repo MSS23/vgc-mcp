@@ -26,6 +26,53 @@ PARADOX_POKEMON = {
 
 # Pokemon with signature/mandatory items that should be auto-filled
 # Maps Pokemon name (lowercase, hyphenated) to item name
+# Pokemon with fixed/locked Tera types (cannot change their Tera type)
+# Maps Pokemon name (lowercase, hyphenated) to their locked Tera type
+FIXED_TERA_TYPES: dict[str, str] = {
+    # Ogerpon forms have locked Tera matching their mask type
+    "ogerpon": "Grass",  # Base/Teal form
+    "ogerpon-teal": "Grass",
+    "ogerpon-teal-mask": "Grass",
+    "ogerpon-wellspring": "Water",
+    "ogerpon-wellspring-mask": "Water",
+    "ogerpon-hearthflame": "Fire",
+    "ogerpon-hearthflame-mask": "Fire",
+    "ogerpon-cornerstone": "Rock",
+    "ogerpon-cornerstone-mask": "Rock",
+    # Terapagos has locked Stellar Tera
+    "terapagos": "Stellar",
+    "terapagos-terastal": "Stellar",
+    "terapagos-stellar": "Stellar",
+}
+
+
+def get_fixed_tera_type(pokemon_name: str) -> str | None:
+    """Get the fixed Tera type for a Pokemon if it has one.
+
+    Some Pokemon have locked Tera types that cannot be changed:
+    - Ogerpon forms: Tera matches their mask type (Grass/Water/Fire/Rock)
+    - Terapagos: Always Stellar Tera
+
+    Args:
+        pokemon_name: Pokemon name (case-insensitive)
+
+    Returns:
+        Fixed Tera type if Pokemon has one, None otherwise
+    """
+    normalized = pokemon_name.lower().replace(" ", "-")
+
+    # Direct lookup
+    if normalized in FIXED_TERA_TYPES:
+        return FIXED_TERA_TYPES[normalized]
+
+    # Partial match for form variations
+    for form, tera_type in FIXED_TERA_TYPES.items():
+        if form in normalized or normalized in form:
+            return tera_type
+
+    return None
+
+
 SIGNATURE_ITEMS: dict[str, str] = {
     # Ogerpon masks (required for form)
     "ogerpon-hearthflame": "hearthflame-mask",

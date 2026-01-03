@@ -147,6 +147,18 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 if sig_item:
                     attacker_item = sig_item
 
+            # Auto-assign fixed Tera types (Ogerpon forms, Terapagos)
+            from vgc_mcp_core.calc.items import get_fixed_tera_type
+            if attacker_tera_type is not None:
+                fixed_tera = get_fixed_tera_type(attacker_name)
+                if fixed_tera and attacker_tera_type.lower() != fixed_tera.lower():
+                    # Override user-provided Tera with the fixed type
+                    attacker_tera_type = fixed_tera
+            if defender_tera_type is not None:
+                fixed_tera = get_fixed_tera_type(defender_name)
+                if fixed_tera and defender_tera_type.lower() != fixed_tera.lower():
+                    defender_tera_type = fixed_tera
+
             # Fetch Pokemon data
             atk_base = await pokeapi.get_base_stats(attacker_name)
             def_base = await pokeapi.get_base_stats(defender_name)
@@ -1459,7 +1471,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             attacker2_spa_evs = attacker2_spa_evs if attacker2_spa_evs is not None else 0
 
             # Auto-assign signature items
-            from vgc_mcp_core.calc.items import get_signature_item
+            from vgc_mcp_core.calc.items import get_signature_item, get_fixed_tera_type
             if attacker1_item is None:
                 sig_item = get_signature_item(attacker1_name)
                 if sig_item:
@@ -1468,6 +1480,12 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 sig_item = get_signature_item(attacker2_name)
                 if sig_item:
                     attacker2_item = sig_item
+
+            # Auto-assign fixed Tera type for defender (Ogerpon forms, Terapagos)
+            if defender_tera_type is not None:
+                fixed_tera = get_fixed_tera_type(defender_name)
+                if fixed_tera and defender_tera_type.lower() != fixed_tera.lower():
+                    defender_tera_type = fixed_tera
 
             # Parse natures
             try:

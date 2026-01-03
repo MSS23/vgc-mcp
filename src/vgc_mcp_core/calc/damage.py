@@ -652,20 +652,27 @@ def calculate_damage(
         defense_stat = defender_stats[defense_stat_name]
 
     # Apply stat stage modifiers
+    # Critical hits ignore:
+    # - Attacker's negative Attack/SpA stages (e.g., Intimidate drops)
+    # - Defender's positive Defense/SpD stages (boosts)
     if is_physical:
-        attack_stat = int(attack_stat * modifiers.get_stat_stage_multiplier(modifiers.attack_stage))
-        if not modifiers.is_critical:  # Crits ignore positive defense stages
-            if modifiers.defense_stage > 0:
-                defense_stat = int(defense_stat * modifiers.get_stat_stage_multiplier(modifiers.defense_stage))
-            else:
-                defense_stat = int(defense_stat * modifiers.get_stat_stage_multiplier(modifiers.defense_stage))
+        # Crits ignore negative attack stages (Intimidate)
+        if modifiers.is_critical and modifiers.attack_stage < 0:
+            pass  # Don't apply negative attack stage on crit
+        else:
+            attack_stat = int(attack_stat * modifiers.get_stat_stage_multiplier(modifiers.attack_stage))
+        # Crits ignore positive defense stages
+        if not modifiers.is_critical or modifiers.defense_stage < 0:
+            defense_stat = int(defense_stat * modifiers.get_stat_stage_multiplier(modifiers.defense_stage))
     else:
-        attack_stat = int(attack_stat * modifiers.get_stat_stage_multiplier(modifiers.special_attack_stage))
-        if not modifiers.is_critical:
-            if modifiers.special_defense_stage > 0:
-                defense_stat = int(defense_stat * modifiers.get_stat_stage_multiplier(modifiers.special_defense_stage))
-            else:
-                defense_stat = int(defense_stat * modifiers.get_stat_stage_multiplier(modifiers.special_defense_stage))
+        # Crits ignore negative special attack stages
+        if modifiers.is_critical and modifiers.special_attack_stage < 0:
+            pass  # Don't apply negative SpA stage on crit
+        else:
+            attack_stat = int(attack_stat * modifiers.get_stat_stage_multiplier(modifiers.special_attack_stage))
+        # Crits ignore positive special defense stages
+        if not modifiers.is_critical or modifiers.special_defense_stage < 0:
+            defense_stat = int(defense_stat * modifiers.get_stat_stage_multiplier(modifiers.special_defense_stage))
 
     # Apply Choice Band/Specs (to stat, not damage)
     if modifiers.attacker_item:

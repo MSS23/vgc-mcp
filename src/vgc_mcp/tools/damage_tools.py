@@ -270,6 +270,17 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 if sig_item:
                     attacker_item = sig_item
 
+            # Auto-assign fixed Tera types (Ogerpon forms, Terapagos)
+            from vgc_mcp_core.calc.items import get_fixed_tera_type
+            if attacker_tera_type is not None:
+                fixed_tera = get_fixed_tera_type(attacker_name)
+                if fixed_tera and attacker_tera_type.lower() != fixed_tera.lower():
+                    attacker_tera_type = fixed_tera
+            if defender_tera_type is not None:
+                fixed_tera = get_fixed_tera_type(defender_name)
+                if fixed_tera and defender_tera_type.lower() != fixed_tera.lower():
+                    defender_tera_type = fixed_tera
+
             # Fetch Pokemon data
             atk_base = await pokeapi.get_base_stats(attacker_name)
             def_base = await pokeapi.get_base_stats(defender_name)
