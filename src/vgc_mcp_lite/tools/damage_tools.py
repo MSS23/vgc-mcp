@@ -1309,3 +1309,421 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     suggestions if suggestions else None
                 )
             return api_error("PokeAPI", str(e), is_retryable=True)
+
+    @mcp.tool()
+    async def survive_double_up(
+        defender_name: str,
+        attacker1_name: str,
+        move1_name: str,
+        attacker2_name: str,
+        move2_name: str,
+        defender_nature: Optional[str] = None,
+        defender_hp_evs: Optional[int] = None,
+        defender_def_evs: Optional[int] = None,
+        defender_spd_evs: Optional[int] = None,
+        defender_item: Optional[str] = None,
+        defender_ability: Optional[str] = None,
+        defender_tera_type: Optional[str] = None,
+        attacker1_nature: Optional[str] = None,
+        attacker1_atk_evs: Optional[int] = None,
+        attacker1_spa_evs: Optional[int] = None,
+        attacker1_item: Optional[str] = None,
+        attacker1_ability: Optional[str] = None,
+        attacker2_nature: Optional[str] = None,
+        attacker2_atk_evs: Optional[int] = None,
+        attacker2_spa_evs: Optional[int] = None,
+        attacker2_item: Optional[str] = None,
+        attacker2_ability: Optional[str] = None,
+        use_smogon_spreads: bool = True,
+        weather: Optional[str] = None,
+        terrain: Optional[str] = None,
+        reflect: bool = False,
+        light_screen: bool = False,
+        friend_guard: bool = False,
+        sword_of_ruin: bool = False,
+        beads_of_ruin: bool = False
+    ) -> dict:
+        """
+        Check if a Pokemon survives combined damage from two attackers in one turn (double-up).
+
+        Use this to answer questions like "Can Chien-Pao survive Grassy Glide + Aqua Jet?"
+
+        Args:
+            defender_name: Target Pokemon being attacked (e.g., "Chien-Pao")
+            attacker1_name: First attacker (e.g., "Rillaboom")
+            move1_name: First attack (e.g., "Grassy Glide")
+            attacker2_name: Second attacker (e.g., "Urshifu-Rapid-Strike")
+            move2_name: Second attack (e.g., "Aqua Jet")
+            defender_nature: Defender's nature (auto-fetched from Smogon if not specified)
+            defender_hp_evs: Defender's HP EVs
+            defender_def_evs: Defender's Defense EVs
+            defender_spd_evs: Defender's Sp. Def EVs
+            defender_item: Defender's item (e.g., "focus-sash")
+            defender_ability: Defender's ability
+            defender_tera_type: Defender's Tera type if Terastallized
+            attacker1_nature: First attacker's nature
+            attacker1_atk_evs: First attacker's Attack EVs
+            attacker1_spa_evs: First attacker's Sp. Atk EVs
+            attacker1_item: First attacker's item
+            attacker1_ability: First attacker's ability
+            attacker2_nature: Second attacker's nature
+            attacker2_atk_evs: Second attacker's Attack EVs
+            attacker2_spa_evs: Second attacker's Sp. Atk EVs
+            attacker2_item: Second attacker's item
+            attacker2_ability: Second attacker's ability
+            use_smogon_spreads: Auto-fetch spreads from Smogon (default True)
+            weather: "sun", "rain", "sand", or "snow"
+            terrain: "electric", "grassy", "psychic", or "misty"
+            reflect: True if Reflect is active (halves physical damage)
+            light_screen: True if Light Screen is active (halves special damage)
+            friend_guard: True if ally has Friend Guard (0.75x damage)
+            sword_of_ruin: True if Chien-Pao's Sword of Ruin is active (lowers Def)
+            beads_of_ruin: True if Chi-Yu's Beads of Ruin is active (lowers SpD)
+
+        Returns:
+            Combined damage range, survival result, and breakdown per attacker
+        """
+        try:
+            # Fetch Pokemon data for all three Pokemon
+            def_base = await pokeapi.get_base_stats(defender_name)
+            def_types = await pokeapi.get_pokemon_types(defender_name)
+            atk1_base = await pokeapi.get_base_stats(attacker1_name)
+            atk1_types = await pokeapi.get_pokemon_types(attacker1_name)
+            atk2_base = await pokeapi.get_base_stats(attacker2_name)
+            atk2_types = await pokeapi.get_pokemon_types(attacker2_name)
+            move1 = await pokeapi.get_move(move1_name, user_name=attacker1_name)
+            move2 = await pokeapi.get_move(move2_name, user_name=attacker2_name)
+
+            # Auto-fetch Smogon spreads if enabled
+            if use_smogon_spreads:
+                # Defender spread
+                if defender_nature is None or defender_hp_evs is None or defender_def_evs is None or defender_spd_evs is None:
+                    def_spread = await _get_common_spread(defender_name)
+                    if def_spread:
+                        if defender_nature is None:
+                            defender_nature = def_spread["nature"]
+                        evs = def_spread.get("evs", {})
+                        if defender_hp_evs is None:
+                            defender_hp_evs = evs.get("hp", 0)
+                        if defender_def_evs is None:
+                            defender_def_evs = evs.get("defense", 0)
+                        if defender_spd_evs is None:
+                            defender_spd_evs = evs.get("special_defense", 0)
+                        if defender_item is None and def_spread.get("item"):
+                            defender_item = def_spread["item"].lower().replace(" ", "-")
+                        if defender_ability is None and def_spread.get("ability"):
+                            defender_ability = def_spread["ability"].lower().replace(" ", "-")
+
+                # Attacker 1 spread
+                if attacker1_nature is None or attacker1_atk_evs is None or attacker1_spa_evs is None:
+                    atk1_spread = await _get_common_spread(attacker1_name)
+                    if atk1_spread:
+                        if attacker1_nature is None:
+                            attacker1_nature = atk1_spread["nature"]
+                        evs = atk1_spread.get("evs", {})
+                        if attacker1_atk_evs is None:
+                            attacker1_atk_evs = evs.get("attack", 0)
+                        if attacker1_spa_evs is None:
+                            attacker1_spa_evs = evs.get("special_attack", 0)
+                        if attacker1_item is None and atk1_spread.get("item"):
+                            attacker1_item = atk1_spread["item"].lower().replace(" ", "-")
+                        if attacker1_ability is None and atk1_spread.get("ability"):
+                            attacker1_ability = atk1_spread["ability"].lower().replace(" ", "-")
+
+                # Attacker 2 spread
+                if attacker2_nature is None or attacker2_atk_evs is None or attacker2_spa_evs is None:
+                    atk2_spread = await _get_common_spread(attacker2_name)
+                    if atk2_spread:
+                        if attacker2_nature is None:
+                            attacker2_nature = atk2_spread["nature"]
+                        evs = atk2_spread.get("evs", {})
+                        if attacker2_atk_evs is None:
+                            attacker2_atk_evs = evs.get("attack", 0)
+                        if attacker2_spa_evs is None:
+                            attacker2_spa_evs = evs.get("special_attack", 0)
+                        if attacker2_item is None and atk2_spread.get("item"):
+                            attacker2_item = atk2_spread["item"].lower().replace(" ", "-")
+                        if attacker2_ability is None and atk2_spread.get("ability"):
+                            attacker2_ability = atk2_spread["ability"].lower().replace(" ", "-")
+
+            # Set defaults
+            defender_nature = defender_nature or "serious"
+            defender_hp_evs = defender_hp_evs if defender_hp_evs is not None else 0
+            defender_def_evs = defender_def_evs if defender_def_evs is not None else 0
+            defender_spd_evs = defender_spd_evs if defender_spd_evs is not None else 0
+            attacker1_nature = attacker1_nature or "adamant"
+            attacker1_atk_evs = attacker1_atk_evs if attacker1_atk_evs is not None else 252
+            attacker1_spa_evs = attacker1_spa_evs if attacker1_spa_evs is not None else 0
+            attacker2_nature = attacker2_nature or "adamant"
+            attacker2_atk_evs = attacker2_atk_evs if attacker2_atk_evs is not None else 252
+            attacker2_spa_evs = attacker2_spa_evs if attacker2_spa_evs is not None else 0
+
+            # Auto-assign signature items
+            from ...vgc_mcp_core.calc.items import get_signature_item
+            if attacker1_item is None:
+                sig_item = get_signature_item(attacker1_name)
+                if sig_item:
+                    attacker1_item = sig_item
+            if attacker2_item is None:
+                sig_item = get_signature_item(attacker2_name)
+                if sig_item:
+                    attacker2_item = sig_item
+
+            # Parse natures
+            try:
+                def_nature = Nature(defender_nature.lower())
+            except ValueError:
+                suggestions = suggest_nature(defender_nature)
+                return invalid_nature_error(defender_nature, suggestions if suggestions else [n.value for n in Nature])
+
+            try:
+                atk1_nature = Nature(attacker1_nature.lower())
+            except ValueError:
+                suggestions = suggest_nature(attacker1_nature)
+                return invalid_nature_error(attacker1_nature, suggestions if suggestions else [n.value for n in Nature])
+
+            try:
+                atk2_nature = Nature(attacker2_nature.lower())
+            except ValueError:
+                suggestions = suggest_nature(attacker2_nature)
+                return invalid_nature_error(attacker2_nature, suggestions if suggestions else [n.value for n in Nature])
+
+            # Create Pokemon builds
+            defender = PokemonBuild(
+                name=defender_name,
+                base_stats=def_base,
+                types=def_types,
+                nature=def_nature,
+                evs=EVSpread(
+                    hp=defender_hp_evs,
+                    defense=defender_def_evs,
+                    special_defense=defender_spd_evs
+                ),
+                item=defender_item,
+                tera_type=defender_tera_type
+            )
+
+            attacker1 = PokemonBuild(
+                name=attacker1_name,
+                base_stats=atk1_base,
+                types=atk1_types,
+                nature=atk1_nature,
+                evs=EVSpread(
+                    attack=attacker1_atk_evs,
+                    special_attack=attacker1_spa_evs
+                ),
+                item=attacker1_item
+            )
+
+            attacker2 = PokemonBuild(
+                name=attacker2_name,
+                base_stats=atk2_base,
+                types=atk2_types,
+                nature=atk2_nature,
+                evs=EVSpread(
+                    attack=attacker2_atk_evs,
+                    special_attack=attacker2_spa_evs
+                ),
+                item=attacker2_item
+            )
+
+            # Set up modifiers for both attacks
+            modifiers1 = DamageModifiers(
+                is_doubles=True,
+                weather=weather,
+                terrain=terrain,
+                attacker_item=attacker1_item,
+                defender_item=defender_item,
+                attacker_ability=attacker1_ability,
+                defender_ability=defender_ability,
+                defender_tera_type=defender_tera_type,
+                defender_tera_active=defender_tera_type is not None,
+                reflect_up=reflect,
+                light_screen_up=light_screen,
+                friend_guard=friend_guard,
+                sword_of_ruin=sword_of_ruin,
+                beads_of_ruin=beads_of_ruin
+            )
+
+            modifiers2 = DamageModifiers(
+                is_doubles=True,
+                weather=weather,
+                terrain=terrain,
+                attacker_item=attacker2_item,
+                defender_item=defender_item,
+                attacker_ability=attacker2_ability,
+                defender_ability=defender_ability,
+                defender_tera_type=defender_tera_type,
+                defender_tera_active=defender_tera_type is not None,
+                reflect_up=reflect,
+                light_screen_up=light_screen,
+                friend_guard=friend_guard,
+                sword_of_ruin=sword_of_ruin,
+                beads_of_ruin=beads_of_ruin
+            )
+
+            # Calculate damage from each attack
+            result1 = calculate_damage(attacker1, defender, move1, modifiers1)
+            result2 = calculate_damage(attacker2, defender, move2, modifiers2)
+
+            defender_hp = result1.defender_hp
+
+            # Calculate combined damage
+            combined_min = result1.min_damage + result2.min_damage
+            combined_max = result1.max_damage + result2.max_damage
+
+            combined_min_pct = round((combined_min / defender_hp) * 100, 1)
+            combined_max_pct = round((combined_max / defender_hp) * 100, 1)
+
+            # Calculate survival
+            survives_min_roll = combined_max < defender_hp
+            survives_max_roll = combined_min < defender_hp
+
+            # Calculate exact survival probability by combining roll distributions
+            survival_scenarios = 0
+            total_scenarios = 16 * 16  # 256 combinations
+
+            for roll1 in result1.rolls:
+                for roll2 in result2.rolls:
+                    if roll1 + roll2 < defender_hp:
+                        survival_scenarios += 1
+
+            survival_chance = round((survival_scenarios / total_scenarios) * 100, 1)
+
+            # Determine verdict
+            if survives_min_roll:
+                verdict = "SURVIVES"
+            elif survives_max_roll:
+                verdict = "MIGHT SURVIVE"
+            else:
+                verdict = "FAINTS"
+
+            # HP remaining calculations
+            hp_remaining_min = max(0, defender_hp - combined_max)
+            hp_remaining_max = max(0, defender_hp - combined_min)
+            hp_remain_min_pct = round((hp_remaining_min / defender_hp) * 100, 1)
+            hp_remain_max_pct = round((hp_remaining_max / defender_hp) * 100, 1)
+
+            # Format individual attack results
+            move1_min_pct = round((result1.min_damage / defender_hp) * 100, 1)
+            move1_max_pct = round((result1.max_damage / defender_hp) * 100, 1)
+            move2_min_pct = round((result2.min_damage / defender_hp) * 100, 1)
+            move2_max_pct = round((result2.max_damage / defender_hp) * 100, 1)
+
+            # Build summary table
+            table_lines = [
+                "| Attack           | Damage                                     |",
+                "|------------------|---------------------------------------------|",
+                f"| {attacker1_name}'s {move1_name} | {result1.min_damage}-{result1.max_damage} ({move1_min_pct}-{move1_max_pct}%) |",
+                f"| {attacker2_name}'s {move2_name} | {result2.min_damage}-{result2.max_damage} ({move2_min_pct}-{move2_max_pct}%) |",
+                f"| **Combined**     | {combined_min}-{combined_max} ({combined_min_pct}-{combined_max_pct}%) |",
+                "|------------------|---------------------------------------------|",
+                f"| {defender_name} HP | {defender_hp}                             |",
+                f"| HP Remaining     | {hp_remaining_min}-{hp_remaining_max} ({hp_remain_min_pct}-{hp_remain_max_pct}%) |",
+                f"| Survival Chance  | {survival_chance}%                         |",
+                f"| **Verdict**      | {verdict}                                  |",
+            ]
+
+            # Build analysis prose
+            survival_word = "survives" if survives_min_roll else ("may survive" if survives_max_roll else "does not survive")
+            analysis = f"{defender_name} {survival_word} {attacker1_name}'s {move1_name} + {attacker2_name}'s {move2_name} double-up — takes {combined_min_pct}-{combined_max_pct}% combined damage, left at {hp_remain_min_pct}-{hp_remain_max_pct}% HP ({survival_chance}% survival chance)"
+
+            # Determine move priorities for turn order info
+            priority_info = []
+            if move1.priority > 0:
+                priority_info.append(f"{move1_name}: +{move1.priority} priority")
+            if move2.priority > 0:
+                priority_info.append(f"{move2_name}: +{move2.priority} priority")
+
+            response = {
+                "defender": defender_name,
+                "defender_hp": defender_hp,
+                "attacks": [
+                    {
+                        "attacker": attacker1_name,
+                        "move": move1_name,
+                        "damage_min": result1.min_damage,
+                        "damage_max": result1.max_damage,
+                        "damage_range": f"{result1.min_damage}-{result1.max_damage}",
+                        "percent": f"{move1_min_pct}-{move1_max_pct}%",
+                        "priority": move1.priority,
+                        "item": attacker1_item,
+                        "ability": attacker1_ability
+                    },
+                    {
+                        "attacker": attacker2_name,
+                        "move": move2_name,
+                        "damage_min": result2.min_damage,
+                        "damage_max": result2.max_damage,
+                        "damage_range": f"{result2.min_damage}-{result2.max_damage}",
+                        "percent": f"{move2_min_pct}-{move2_max_pct}%",
+                        "priority": move2.priority,
+                        "item": attacker2_item,
+                        "ability": attacker2_ability
+                    }
+                ],
+                "combined_damage": {
+                    "min": combined_min,
+                    "max": combined_max,
+                    "range": f"{combined_min}-{combined_max}",
+                    "percent": f"{combined_min_pct}-{combined_max_pct}%"
+                },
+                "hp_remaining": {
+                    "min": hp_remaining_min,
+                    "max": hp_remaining_max,
+                    "percent": f"{hp_remain_min_pct}-{hp_remain_max_pct}%"
+                },
+                "survives_min_roll": survives_min_roll,
+                "survives_max_roll": survives_max_roll,
+                "survival_chance": f"{survival_chance}%",
+                "verdict": verdict,
+                "defender_spread": {
+                    "nature": defender_nature,
+                    "hp_evs": defender_hp_evs,
+                    "def_evs": defender_def_evs,
+                    "spd_evs": defender_spd_evs,
+                    "item": defender_item,
+                    "ability": defender_ability,
+                    "tera_type": defender_tera_type
+                },
+                "summary_table": "\n".join(table_lines),
+                "analysis": analysis
+            }
+
+            if priority_info:
+                response["priority_notes"] = priority_info
+
+            # Add notes for active conditions
+            notes = []
+            if weather:
+                notes.append(f"Weather: {weather.title()}")
+            if terrain:
+                notes.append(f"Terrain: {terrain.title()}")
+            if reflect:
+                notes.append("Reflect active")
+            if light_screen:
+                notes.append("Light Screen active")
+            if friend_guard:
+                notes.append("Friend Guard active (0.75x damage)")
+            if sword_of_ruin:
+                notes.append("Sword of Ruin active (0.75x Def)")
+            if beads_of_ruin:
+                notes.append("Beads of Ruin active (0.75x SpD)")
+            if notes:
+                response["active_conditions"] = notes
+
+            return response
+
+        except Exception as e:
+            error_str = str(e).lower()
+            if "not found" in error_str or "404" in error_str:
+                suggestions = (
+                    suggest_pokemon_name(defender_name) or
+                    suggest_pokemon_name(attacker1_name) or
+                    suggest_pokemon_name(attacker2_name)
+                )
+                return pokemon_not_found_error(
+                    f"{defender_name}, {attacker1_name}, or {attacker2_name}",
+                    suggestions if suggestions else None
+                )
+            return api_error("PokeAPI", str(e), is_retryable=True)
