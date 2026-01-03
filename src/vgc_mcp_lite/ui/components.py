@@ -5,6 +5,7 @@ Creates HTML strings for various UI components that can be
 embedded in MCP UI resources.
 """
 
+import json
 from typing import Any, Optional
 from pathlib import Path
 
@@ -31,20 +32,31 @@ def get_sprite_url(pokemon_name: str, animated: bool = True) -> str:
     Returns:
         URL string for the Pokemon sprite
     """
-    # Normalize name for URL
-    normalized = pokemon_name.lower().replace(" ", "-").replace(".", "")
-    # Handle special forms
-    if normalized.startswith("urshifu"):
-        if "rapid" in normalized:
-            normalized = "urshifu-rapid-strike"
-        else:
-            normalized = "urshifu"
-
     if animated:
-        # Pokemon Showdown animated sprites
+        # Pokemon Showdown format: no spaces, forms use single hyphen
+        # "Flutter Mane" -> "fluttermane"
+        # "Urshifu-Rapid-Strike" -> "urshifu-rapidstrike"
+        normalized = pokemon_name.lower().replace(" ", "").replace(".", "")
+
+        # Collapse form hyphens: "rapid-strike" -> "rapidstrike"
+        # But keep the base-form hyphen: "urshifu-rapidstrike"
+        parts = normalized.split("-")
+        if len(parts) >= 2:
+            base = parts[0]
+            form = "".join(parts[1:])
+            normalized = f"{base}-{form}" if form else base
+
         return f"https://play.pokemonshowdown.com/sprites/ani/{normalized}.gif"
     else:
-        # Fallback to static PokemonDB sprites
+        # PokemonDB format: hyphenated names
+        # "Flutter Mane" -> "flutter-mane"
+        normalized = pokemon_name.lower().replace(" ", "-").replace(".", "")
+        # Handle Urshifu forms for PokemonDB
+        if normalized.startswith("urshifu"):
+            if "rapid" in normalized:
+                normalized = "urshifu-rapid-strike"
+            else:
+                normalized = "urshifu"
         return f"https://img.pokemondb.net/sprites/home/normal/{normalized}.png"
 
 
@@ -126,6 +138,8 @@ def create_damage_calc_ui(
     defender_base_stats: Optional[dict[str, int]] = None,
     move_category: str = "special",
     move_power: int = 0,
+    attacker_types: Optional[list[str]] = None,
+    defender_types: Optional[list[str]] = None,
 ) -> str:
     """Create damage calculator UI HTML.
 
@@ -177,6 +191,8 @@ def create_damage_calc_ui(
     defender_evs = defender_evs or {"hp": 252, "attack": 0, "defense": 0, "special_attack": 0, "special_defense": 0, "speed": 0}
     attacker_base_stats = attacker_base_stats or {"hp": 100, "attack": 100, "defense": 100, "special_attack": 100, "special_defense": 100, "speed": 100}
     defender_base_stats = defender_base_stats or {"hp": 100, "attack": 100, "defense": 100, "special_attack": 100, "special_defense": 100, "speed": 100}
+    attacker_types = attacker_types or ["Normal"]
+    defender_types = defender_types or ["Normal"]
 
     # Determine KO badge class
     ko_class = "survive"
@@ -221,6 +237,71 @@ def create_damage_calc_ui(
     defender_nature_options = "".join(
         f'<option value="{n}" {"selected" if n == defender_nature else ""}>{n}</option>'
         for n in natures
+    )
+
+    # Ability options for damage calculation
+    offensive_abilities = [
+        ("adaptability", "Adaptability (2x STAB)"),
+        ("huge-power", "Huge Power (2x Atk)"),
+        ("pure-power", "Pure Power (2x Atk)"),
+        ("gorilla-tactics", "Gorilla Tactics (1.5x Atk)"),
+        ("hustle", "Hustle (1.5x Atk)"),
+        ("guts", "Guts (1.5x Atk when statused)"),
+        ("technician", "Technician (1.5x if BP<=60)"),
+        ("sheer-force", "Sheer Force (1.3x)"),
+        ("tough-claws", "Tough Claws (1.3x contact)"),
+        ("analytic", "Analytic (1.3x moving last)"),
+        ("iron-fist", "Iron Fist (1.2x punch)"),
+        ("reckless", "Reckless (1.2x recoil)"),
+        ("strong-jaw", "Strong Jaw (1.5x bite)"),
+        ("mega-launcher", "Mega Launcher (1.5x pulse)"),
+        ("sharpness", "Sharpness (1.5x slicing)"),
+        ("rocky-payload", "Rocky Payload (1.5x Rock)"),
+        ("transistor", "Transistor (1.3x Electric)"),
+        ("dragons-maw", "Dragon's Maw (1.5x Dragon)"),
+        ("steelworker", "Steelworker (1.5x Steel)"),
+        ("steely-spirit", "Steely Spirit (1.5x Steel)"),
+        ("water-bubble", "Water Bubble (2x Water)"),
+        ("sand-force", "Sand Force (1.3x in Sand)"),
+        ("neuroforce", "Neuroforce (1.25x SE)"),
+        ("tinted-lens", "Tinted Lens (2x NVE)"),
+        ("supreme-overlord", "Supreme Overlord"),
+    ]
+    defensive_abilities = [
+        ("multiscale", "Multiscale (0.5x at full HP)"),
+        ("shadow-shield", "Shadow Shield (0.5x at full)"),
+        ("ice-scales", "Ice Scales (0.5x special)"),
+        ("fur-coat", "Fur Coat (0.5x physical)"),
+        ("filter", "Filter (0.75x SE)"),
+        ("solid-rock", "Solid Rock (0.75x SE)"),
+        ("prism-armor", "Prism Armor (0.75x SE)"),
+        ("thick-fat", "Thick Fat (0.5x Fire/Ice)"),
+        ("heatproof", "Heatproof (0.5x Fire)"),
+        ("fluffy", "Fluffy (0.5x contact)"),
+        ("punk-rock", "Punk Rock (0.5x sound)"),
+        ("purifying-salt", "Purifying Salt (0.5x Ghost)"),
+        ("water-bubble-def", "Water Bubble (0.5x Fire)"),
+        ("tera-shell", "Tera Shell (all NVE at full HP)"),
+    ]
+
+    attacker_ability_options = '<option value="">(None)</option>'
+    attacker_ability_options += '<optgroup label="Offensive">'
+    for val, label in offensive_abilities:
+        attacker_ability_options += f'<option value="{val}">{label}</option>'
+    attacker_ability_options += '</optgroup>'
+
+    defender_ability_options = '<option value="">(None)</option>'
+    defender_ability_options += '<optgroup label="Defensive">'
+    for val, label in defensive_abilities:
+        defender_ability_options += f'<option value="{val}">{label}</option>'
+    defender_ability_options += '</optgroup>'
+
+    # Type options for Tera
+    tera_types = ["Normal", "Fire", "Water", "Electric", "Grass", "Ice", "Fighting",
+                  "Poison", "Ground", "Flying", "Psychic", "Bug", "Rock", "Ghost",
+                  "Dragon", "Dark", "Steel", "Fairy", "Stellar"]
+    tera_type_options = "".join(
+        f'<option value="{t.lower()}">{t}</option>' for t in tera_types
     )
 
     # Common competitive items
@@ -1152,6 +1233,369 @@ body::before {{
 ::-webkit-scrollbar-thumb:hover {{
     background: rgba(99, 102, 241, 0.6);
 }}
+
+/* ===== TERA TOGGLE ===== */
+.tera-row {{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}}
+
+.tera-toggle {{
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 22px;
+    flex-shrink: 0;
+}}
+
+.tera-toggle input {{
+    opacity: 0;
+    width: 0;
+    height: 0;
+}}
+
+.tera-switch {{
+    position: absolute;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}}
+
+.tera-switch::before {{
+    content: "";
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    left: 2px;
+    top: 2px;
+    background: #71717a;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+}}
+
+.tera-toggle input:checked + .tera-switch {{
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    border-color: rgba(99, 102, 241, 0.4);
+    box-shadow: 0 0 12px rgba(99, 102, 241, 0.4);
+}}
+
+.tera-toggle input:checked + .tera-switch::before {{
+    transform: translateX(18px);
+    background: #fff;
+}}
+
+.tera-select {{
+    flex: 1;
+    min-width: 0;
+}}
+
+/* ===== ADVANCED OPTIONS COLLAPSIBLE ===== */
+.advanced-options {{
+    margin-top: 24px;
+    margin-bottom: 24px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    overflow: hidden;
+}}
+
+.advanced-options-header {{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 16px 20px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: #a1a1aa;
+    background: rgba(255, 255, 255, 0.02);
+    border-bottom: 1px solid transparent;
+    transition: all 0.3s ease;
+    list-style: none;
+}}
+
+.advanced-options-header::-webkit-details-marker {{
+    display: none;
+}}
+
+.advanced-options-header:hover {{
+    background: rgba(255, 255, 255, 0.04);
+    color: #e4e4e7;
+}}
+
+.advanced-options[open] .advanced-options-header {{
+    border-bottom-color: rgba(255, 255, 255, 0.06);
+}}
+
+.advanced-icon {{
+    font-size: 16px;
+}}
+
+.chevron {{
+    margin-left: auto;
+    font-size: 10px;
+    transition: transform 0.3s ease;
+}}
+
+.advanced-options[open] .chevron {{
+    transform: rotate(180deg);
+}}
+
+.advanced-options-content {{
+    padding: 20px;
+    animation: fadeSlideIn 0.3s ease;
+}}
+
+@keyframes fadeSlideIn {{
+    from {{
+        opacity: 0;
+        transform: translateY(-10px);
+    }}
+    to {{
+        opacity: 1;
+        transform: translateY(0);
+    }}
+}}
+
+/* ===== OPTIONS SECTIONS ===== */
+.options-section {{
+    margin-bottom: 24px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}}
+
+.options-section:last-child {{
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+}}
+
+.section-title {{
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: #6366f1;
+    margin-bottom: 14px;
+}}
+
+/* ===== FIELD DROPDOWNS ===== */
+.field-row {{
+    display: flex;
+    gap: 16px;
+}}
+
+.field-group {{
+    flex: 1;
+}}
+
+.field-label {{
+    display: block;
+    font-size: 10px;
+    color: #71717a;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+}}
+
+.field-select {{
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    background: rgba(24, 24, 27, 0.6);
+    color: #e4e4e7;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}}
+
+.field-select:hover {{
+    border-color: rgba(99, 102, 241, 0.4);
+}}
+
+.field-select:focus {{
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}}
+
+.field-select option {{
+    background: #1a1a2e;
+    color: #fff;
+}}
+
+/* ===== TOGGLE BUTTON GRID ===== */
+.toggle-grid {{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}}
+
+.field-toggle {{
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 16px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    background: rgba(24, 24, 27, 0.4);
+    color: #a1a1aa;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}}
+
+.field-toggle:hover {{
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.12);
+    color: #e4e4e7;
+}}
+
+.field-toggle.active {{
+    background: rgba(99, 102, 241, 0.15);
+    border-color: rgba(99, 102, 241, 0.4);
+    color: #a5b4fc;
+}}
+
+/* ===== RUIN ABILITY COLORS ===== */
+.field-toggle.ruin.sword.active {{
+    background: rgba(96, 165, 250, 0.15);
+    border-color: rgba(96, 165, 250, 0.4);
+    color: #60a5fa;
+}}
+
+.field-toggle.ruin.beads.active {{
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: #f87171;
+}}
+
+.field-toggle.ruin.tablets.active {{
+    background: rgba(34, 197, 94, 0.15);
+    border-color: rgba(34, 197, 94, 0.4);
+    color: #4ade80;
+}}
+
+.field-toggle.ruin.vessel.active {{
+    background: rgba(168, 85, 247, 0.15);
+    border-color: rgba(168, 85, 247, 0.4);
+    color: #c084fc;
+}}
+
+.field-toggle.commander.active {{
+    background: rgba(14, 165, 233, 0.15);
+    border-color: rgba(14, 165, 233, 0.4);
+    color: #38bdf8;
+}}
+
+/* ===== STAT STAGES ===== */
+.stat-stages-grid {{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}}
+
+.stage-group {{
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 12px;
+    padding: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.04);
+}}
+
+.stage-label {{
+    display: block;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #71717a;
+    margin-bottom: 10px;
+}}
+
+.attacker-stages .stage-label {{ color: #fb7185; }}
+.defender-stages .stage-label {{ color: #60a5fa; }}
+
+.stage-row {{
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}}
+
+.stage-stat {{
+    font-size: 11px;
+    color: #a1a1aa;
+    min-width: 55px;
+    font-weight: 500;
+}}
+
+.stage-slider {{
+    flex: 1;
+    -webkit-appearance: none;
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.1);
+    outline: none;
+}}
+
+.stage-slider::-webkit-slider-thumb {{
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+    transition: transform 0.2s ease;
+}}
+
+.stage-slider::-webkit-slider-thumb:hover {{
+    transform: scale(1.1);
+}}
+
+.stage-slider::-moz-range-thumb {{
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+}}
+
+.stage-value {{
+    font-size: 14px;
+    font-weight: 700;
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+    color: #e4e4e7;
+    min-width: 28px;
+    text-align: right;
+}}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 600px) {{
+    .stat-stages-grid {{
+        grid-template-columns: 1fr;
+    }}
+
+    .field-row {{
+        flex-direction: column;
+    }}
+
+    .toggle-grid {{
+        justify-content: center;
+    }}
+
+    .tera-row {{
+        flex-wrap: wrap;
+    }}
+}}
     </style>
 </head>
 <body>
@@ -1198,6 +1642,22 @@ body::before {{
                     <span class="nature-label">Nature</span>
                     <select class="nature-select" id="attacker-nature" onchange="recalculateDamage()">
                         {attacker_nature_options}
+                    </select>
+                </div>
+                <div class="nature-row">
+                    <span class="nature-label">Ability</span>
+                    <select class="nature-select ability-select" id="attacker-ability" onchange="recalculateDamage()">
+                        {attacker_ability_options}
+                    </select>
+                </div>
+                <div class="nature-row tera-row">
+                    <span class="nature-label">Tera</span>
+                    <label class="tera-toggle">
+                        <input type="checkbox" id="attacker-tera-active" onchange="recalculateDamage()">
+                        <span class="tera-switch"></span>
+                    </label>
+                    <select class="nature-select tera-select" id="attacker-tera-type" onchange="recalculateDamage()">
+                        {tera_type_options}
                     </select>
                 </div>
                 <div class="ev-section">
@@ -1257,6 +1717,22 @@ body::before {{
                         {defender_nature_options}
                     </select>
                 </div>
+                <div class="nature-row">
+                    <span class="nature-label">Ability</span>
+                    <select class="nature-select ability-select" id="defender-ability" onchange="recalculateDamage()">
+                        {defender_ability_options}
+                    </select>
+                </div>
+                <div class="nature-row tera-row">
+                    <span class="nature-label">Tera</span>
+                    <label class="tera-toggle">
+                        <input type="checkbox" id="defender-tera-active" onchange="recalculateDamage()">
+                        <span class="tera-switch"></span>
+                    </label>
+                    <select class="nature-select tera-select" id="defender-tera-type" onchange="recalculateDamage()">
+                        {tera_type_options}
+                    </select>
+                </div>
                 <div class="ev-section">
                     <div class="ev-grid">
                         <div class="ev-item">
@@ -1288,6 +1764,112 @@ body::before {{
                 </div>
             </div>
         </div>
+
+        <!-- Advanced Options (Collapsible) -->
+        <details class="advanced-options">
+            <summary class="advanced-options-header">
+                <span class="advanced-icon">&#9881;</span>
+                Advanced Options
+                <span class="chevron">&#9660;</span>
+            </summary>
+            <div class="advanced-options-content">
+                <!-- Field Conditions Section -->
+                <div class="options-section">
+                    <div class="section-title">Field Conditions</div>
+                    <div class="field-row">
+                        <div class="field-group">
+                            <label class="field-label">Weather</label>
+                            <select class="field-select" id="weather" onchange="recalculateDamage()">
+                                <option value="">None</option>
+                                <option value="sun">Sun</option>
+                                <option value="rain">Rain</option>
+                                <option value="sand">Sand</option>
+                                <option value="snow">Snow</option>
+                            </select>
+                        </div>
+                        <div class="field-group">
+                            <label class="field-label">Terrain</label>
+                            <select class="field-select" id="terrain" onchange="recalculateDamage()">
+                                <option value="">None</option>
+                                <option value="electric">Electric</option>
+                                <option value="grassy">Grassy</option>
+                                <option value="psychic">Psychic</option>
+                                <option value="misty">Misty</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Screens & Support Section -->
+                <div class="options-section">
+                    <div class="section-title">Screens & Support</div>
+                    <div class="toggle-grid">
+                        <button type="button" class="field-toggle" id="reflect" onclick="toggleField(this)">
+                            Reflect
+                        </button>
+                        <button type="button" class="field-toggle" id="light-screen" onclick="toggleField(this)">
+                            Light Screen
+                        </button>
+                        <button type="button" class="field-toggle" id="aurora-veil" onclick="toggleField(this)">
+                            Aurora Veil
+                        </button>
+                        <button type="button" class="field-toggle" id="helping-hand" onclick="toggleField(this)">
+                            Helping Hand
+                        </button>
+                        <button type="button" class="field-toggle" id="friend-guard" onclick="toggleField(this)">
+                            Friend Guard
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Ruin Abilities Section -->
+                <div class="options-section">
+                    <div class="section-title">Ruin Abilities (On Field)</div>
+                    <div class="toggle-grid ruin-grid">
+                        <button type="button" class="field-toggle ruin sword" id="sword-of-ruin" onclick="toggleField(this)" title="Chien-Pao: -25% Def">
+                            Sword of Ruin
+                        </button>
+                        <button type="button" class="field-toggle ruin beads" id="beads-of-ruin" onclick="toggleField(this)" title="Chi-Yu: -25% SpD">
+                            Beads of Ruin
+                        </button>
+                        <button type="button" class="field-toggle ruin tablets" id="tablets-of-ruin" onclick="toggleField(this)" title="Wo-Chien: -25% Atk">
+                            Tablets of Ruin
+                        </button>
+                        <button type="button" class="field-toggle ruin vessel" id="vessel-of-ruin" onclick="toggleField(this)" title="Ting-Lu: -25% SpA">
+                            Vessel of Ruin
+                        </button>
+                        <button type="button" class="field-toggle commander" id="commander" onclick="toggleField(this)" title="Dondozo+Tatsugiri: 2x stats">
+                            Commander
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Stat Stages Section -->
+                <div class="options-section">
+                    <div class="section-title">Stat Stages</div>
+                    <div class="stat-stages-grid">
+                        <div class="stage-group attacker-stages">
+                            <span class="stage-label">Attacker</span>
+                            <div class="stage-row">
+                                <span class="stage-stat">Atk/SpA</span>
+                                <input type="range" class="stage-slider" id="atk-stage"
+                                       min="-6" max="6" value="0" oninput="updateStageDisplay(this); recalculateDamage()">
+                                <span class="stage-value" id="atk-stage-display">+0</span>
+                            </div>
+                        </div>
+                        <div class="stage-group defender-stages">
+                            <span class="stage-label">Defender</span>
+                            <div class="stage-row">
+                                <span class="stage-stat">Def/SpD</span>
+                                <input type="range" class="stage-slider" id="def-stage"
+                                       min="-6" max="6" value="0" oninput="updateStageDisplay(this); recalculateDamage()">
+                                <span class="stage-value" id="def-stage-display">+0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </details>
 
         <!-- Damage Result -->
         <div class="damage-panel">
@@ -1324,8 +1906,46 @@ body::before {{
             attackerItem: "{attacker_item or ''}",
             defenderItem: "{defender_item or ''}",
             attackerBaseStats: {str(attacker_base_stats).replace("'", '"')},
-            defenderBaseStats: {str(defender_base_stats).replace("'", '"')}
+            defenderBaseStats: {str(defender_base_stats).replace("'", '"')},
+            attackerTypes: {json.dumps([t.lower() for t in attacker_types])},
+            defenderTypes: {json.dumps([t.lower() for t in defender_types])}
         }};
+
+        // Type effectiveness chart for recalculating when Tera changes types
+        const TYPE_CHART = {{
+            normal: {{ rock: 0.5, ghost: 0, steel: 0.5 }},
+            fire: {{ fire: 0.5, water: 0.5, grass: 2, ice: 2, bug: 2, rock: 0.5, dragon: 0.5, steel: 2 }},
+            water: {{ fire: 2, water: 0.5, grass: 0.5, ground: 2, rock: 2, dragon: 0.5 }},
+            electric: {{ water: 2, electric: 0.5, grass: 0.5, ground: 0, flying: 2, dragon: 0.5 }},
+            grass: {{ fire: 0.5, water: 2, grass: 0.5, poison: 0.5, ground: 2, flying: 0.5, bug: 0.5, rock: 2, dragon: 0.5, steel: 0.5 }},
+            ice: {{ fire: 0.5, water: 0.5, grass: 2, ice: 0.5, ground: 2, flying: 2, dragon: 2, steel: 0.5 }},
+            fighting: {{ normal: 2, ice: 2, poison: 0.5, flying: 0.5, psychic: 0.5, bug: 0.5, rock: 2, ghost: 0, dark: 2, steel: 2, fairy: 0.5 }},
+            poison: {{ grass: 2, poison: 0.5, ground: 0.5, rock: 0.5, ghost: 0.5, steel: 0, fairy: 2 }},
+            ground: {{ fire: 2, electric: 2, grass: 0.5, poison: 2, flying: 0, bug: 0.5, rock: 2, steel: 2 }},
+            flying: {{ electric: 0.5, grass: 2, fighting: 2, bug: 2, rock: 0.5, steel: 0.5 }},
+            psychic: {{ fighting: 2, poison: 2, psychic: 0.5, dark: 0, steel: 0.5 }},
+            bug: {{ fire: 0.5, grass: 2, fighting: 0.5, poison: 0.5, flying: 0.5, psychic: 2, ghost: 0.5, dark: 2, steel: 0.5, fairy: 0.5 }},
+            rock: {{ fire: 2, ice: 2, fighting: 0.5, ground: 0.5, flying: 2, bug: 2, steel: 0.5 }},
+            ghost: {{ normal: 0, psychic: 2, ghost: 2, dark: 0.5 }},
+            dragon: {{ dragon: 2, steel: 0.5, fairy: 0 }},
+            dark: {{ fighting: 0.5, psychic: 2, ghost: 2, dark: 0.5, fairy: 0.5 }},
+            steel: {{ fire: 0.5, water: 0.5, electric: 0.5, ice: 2, rock: 2, steel: 0.5, fairy: 2 }},
+            fairy: {{ fire: 0.5, fighting: 2, poison: 0.5, dragon: 2, dark: 2, steel: 0.5 }}
+        }};
+
+        // Calculate type effectiveness against defender types
+        function getTypeEffectiveness(moveType, defenderTypes) {{
+            let multiplier = 1.0;
+            const chart = TYPE_CHART[moveType.toLowerCase()];
+            if (!chart) return 1.0;
+            for (const defType of defenderTypes) {{
+                const eff = chart[defType.toLowerCase()];
+                if (eff !== undefined) {{
+                    multiplier *= eff;
+                }}
+            }}
+            return multiplier;
+        }}
 
         // Nature modifiers
         const natureModifiers = {{
@@ -1422,7 +2042,29 @@ body::before {{
             "Eviolite": {{ type: "both_defense", mult: 1.5 }}
         }};
 
-        // Calculate damage (simplified Gen 9 formula)
+        // Toggle field condition buttons
+        function toggleField(button) {{
+            button.classList.toggle('active');
+            recalculateDamage();
+        }}
+
+        // Update stat stage display
+        function updateStageDisplay(slider) {{
+            const value = parseInt(slider.value);
+            const displayId = slider.id + '-display';
+            const display = document.getElementById(displayId);
+            if (display) {{
+                display.textContent = value >= 0 ? '+' + value : value.toString();
+            }}
+        }}
+
+        // Get stat stage multiplier
+        function getStageMultiplier(stage) {{
+            if (stage >= 0) return (2 + stage) / 2;
+            return 2 / (2 - stage);
+        }}
+
+        // Calculate damage (enhanced Gen 9 formula with all modifiers)
         function calculateDamage() {{
             const attackerEVs = getEVs('atk');
             const defenderEVs = getEVs('def');
@@ -1431,13 +2073,45 @@ body::before {{
             const attackerItem = document.getElementById('attacker-item').value;
             const defenderItem = document.getElementById('defender-item').value;
 
+            // Get abilities
+            const attackerAbility = document.getElementById('attacker-ability')?.value || '';
+            const defenderAbility = document.getElementById('defender-ability')?.value || '';
+
+            // Get Tera state
+            const attackerTeraActive = document.getElementById('attacker-tera-active')?.checked || false;
+            const attackerTeraType = document.getElementById('attacker-tera-type')?.value || '';
+            const defenderTeraActive = document.getElementById('defender-tera-active')?.checked || false;
+            const defenderTeraType = document.getElementById('defender-tera-type')?.value || '';
+
+            // Get field conditions
+            const weather = document.getElementById('weather')?.value || '';
+            const terrain = document.getElementById('terrain')?.value || '';
+
+            // Get screens and support toggles
+            const reflectUp = document.getElementById('reflect')?.classList.contains('active') || false;
+            const lightScreenUp = document.getElementById('light-screen')?.classList.contains('active') || false;
+            const auroraVeilUp = document.getElementById('aurora-veil')?.classList.contains('active') || false;
+            const helpingHand = document.getElementById('helping-hand')?.classList.contains('active') || false;
+            const friendGuard = document.getElementById('friend-guard')?.classList.contains('active') || false;
+
+            // Get Ruin abilities
+            const swordOfRuin = document.getElementById('sword-of-ruin')?.classList.contains('active') || false;
+            const beadsOfRuin = document.getElementById('beads-of-ruin')?.classList.contains('active') || false;
+            const tabletsOfRuin = document.getElementById('tablets-of-ruin')?.classList.contains('active') || false;
+            const vesselOfRuin = document.getElementById('vessel-of-ruin')?.classList.contains('active') || false;
+            const commanderActive = document.getElementById('commander')?.classList.contains('active') || false;
+
+            // Get stat stages
+            const atkStage = parseInt(document.getElementById('atk-stage')?.value || 0);
+            const defStage = parseInt(document.getElementById('def-stage')?.value || 0);
+
             // Determine which stats to use
             const isPhysical = calcData.moveCategory === 'physical';
             const atkStatName = isPhysical ? 'attack' : 'special_attack';
             const defStatName = isPhysical ? 'defense' : 'special_defense';
 
-            // Calculate stats
-            const attackStat = calcStat(
+            // Calculate base stats
+            let attackStat = calcStat(
                 calcData.attackerBaseStats[atkStatName],
                 attackerEVs[atkStatName],
                 31,
@@ -1463,6 +2137,101 @@ body::before {{
                 'hp',
                 true
             );
+
+            // Apply stat stage multipliers
+            attackStat = Math.floor(attackStat * getStageMultiplier(atkStage));
+            defenseStat = Math.floor(defenseStat * getStageMultiplier(defStage));
+
+            // Apply Ruin ability effects
+            if (swordOfRuin && isPhysical) {{
+                defenseStat = Math.floor(defenseStat * 0.75);
+            }}
+            if (beadsOfRuin && !isPhysical) {{
+                defenseStat = Math.floor(defenseStat * 0.75);
+            }}
+            if (tabletsOfRuin && isPhysical) {{
+                attackStat = Math.floor(attackStat * 0.75);
+            }}
+            if (vesselOfRuin && !isPhysical) {{
+                attackStat = Math.floor(attackStat * 0.75);
+            }}
+
+            // Apply Commander (+100% stats)
+            if (commanderActive) {{
+                attackStat = Math.floor(attackStat * 2);
+            }}
+
+            // Apply attacker ability modifiers
+            let abilityMod = 1.0;
+            if (attackerAbility === 'adaptability') {{
+                // Will be applied to STAB
+            }} else if (attackerAbility === 'huge-power' || attackerAbility === 'pure-power') {{
+                if (isPhysical) attackStat = Math.floor(attackStat * 2);
+            }} else if (attackerAbility === 'gorilla-tactics' || attackerAbility === 'hustle') {{
+                if (isPhysical) attackStat = Math.floor(attackStat * 1.5);
+            }} else if (attackerAbility === 'guts') {{
+                if (isPhysical) attackStat = Math.floor(attackStat * 1.5);
+            }} else if (attackerAbility === 'technician' && calcData.movePower <= 60) {{
+                abilityMod = 1.5;
+            }} else if (attackerAbility === 'sheer-force') {{
+                abilityMod = 1.3;
+            }} else if (attackerAbility === 'tough-claws') {{
+                abilityMod = 1.3;
+            }} else if (attackerAbility === 'analytic') {{
+                abilityMod = 1.3;
+            }} else if (attackerAbility === 'iron-fist' || attackerAbility === 'reckless') {{
+                abilityMod = 1.2;
+            }} else if (attackerAbility === 'strong-jaw' || attackerAbility === 'mega-launcher' || attackerAbility === 'sharpness') {{
+                abilityMod = 1.5;
+            }} else if (attackerAbility === 'water-bubble' && calcData.moveType.toLowerCase() === 'water') {{
+                abilityMod = 2.0;
+            }} else if (attackerAbility === 'transistor' && calcData.moveType.toLowerCase() === 'electric') {{
+                abilityMod = 1.3;
+            }} else if ((attackerAbility === 'dragons-maw' && calcData.moveType.toLowerCase() === 'dragon') ||
+                       (attackerAbility === 'steelworker' && calcData.moveType.toLowerCase() === 'steel') ||
+                       (attackerAbility === 'steely-spirit' && calcData.moveType.toLowerCase() === 'steel') ||
+                       (attackerAbility === 'rocky-payload' && calcData.moveType.toLowerCase() === 'rock')) {{
+                abilityMod = 1.5;
+            }} else if (attackerAbility === 'sand-force' && weather === 'sand') {{
+                if (['rock', 'ground', 'steel'].includes(calcData.moveType.toLowerCase())) {{
+                    abilityMod = 1.3;
+                }}
+            }} else if (attackerAbility === 'neuroforce' && calcData.typeEffectiveness > 1) {{
+                abilityMod = 1.25;
+            }} else if (attackerAbility === 'tinted-lens' && calcData.typeEffectiveness < 1) {{
+                abilityMod = 2.0;
+            }}
+
+            // Apply defender ability modifiers
+            let defAbilityMod = 1.0;
+            if (defenderAbility === 'multiscale' || defenderAbility === 'shadow-shield') {{
+                defAbilityMod = 0.5;  // Assumes full HP
+            }} else if (defenderAbility === 'ice-scales' && !isPhysical) {{
+                defAbilityMod = 0.5;
+            }} else if (defenderAbility === 'fur-coat' && isPhysical) {{
+                defAbilityMod = 0.5;
+            }} else if (defenderAbility === 'filter' || defenderAbility === 'solid-rock' || defenderAbility === 'prism-armor') {{
+                if (calcData.typeEffectiveness > 1) defAbilityMod = 0.75;
+            }} else if (defenderAbility === 'fluffy' && isPhysical) {{
+                defAbilityMod = 0.5;
+            }} else if (defenderAbility === 'punk-rock') {{
+                // Sound moves - would need move data
+                defAbilityMod = 0.5;
+            }} else if (defenderAbility === 'thick-fat') {{
+                if (['fire', 'ice'].includes(calcData.moveType.toLowerCase())) {{
+                    defAbilityMod = 0.5;
+                }}
+            }} else if (defenderAbility === 'heatproof' || defenderAbility === 'water-bubble-def') {{
+                if (calcData.moveType.toLowerCase() === 'fire') {{
+                    defAbilityMod = 0.5;
+                }}
+            }} else if (defenderAbility === 'purifying-salt') {{
+                if (calcData.moveType.toLowerCase() === 'ghost') {{
+                    defAbilityMod = 0.5;
+                }}
+            }} else if (defenderAbility === 'tera-shell') {{
+                defAbilityMod = 0.5;  // Assumes full HP
+            }}
 
             // Defender item defense modifier
             const defItem = defenseItemModifiers[defenderItem];
@@ -1492,13 +2261,103 @@ body::before {{
             // Base damage formula
             const level = 50;
             const power = calcData.movePower;
-            const baseDamage = Math.floor(Math.floor(Math.floor(2 * level / 5 + 2) * power * attackStat / defenseStat) / 50 + 2);
+            let baseDamage = Math.floor(Math.floor(Math.floor(2 * level / 5 + 2) * power * attackStat / defenseStat) / 50 + 2);
 
             // Apply modifiers
             let damage = baseDamage;
-            damage = Math.floor(damage * itemMod);  // Item
-            damage = Math.floor(damage * 1.5);  // STAB (assuming)
-            damage = Math.floor(damage * calcData.typeEffectiveness);  // Type effectiveness
+
+            // Weather modifier
+            const moveType = calcData.moveType.toLowerCase();
+            if (weather === 'sun') {{
+                if (moveType === 'fire') damage = Math.floor(damage * 1.5);
+                else if (moveType === 'water') damage = Math.floor(damage * 0.5);
+            }} else if (weather === 'rain') {{
+                if (moveType === 'water') damage = Math.floor(damage * 1.5);
+                else if (moveType === 'fire') damage = Math.floor(damage * 0.5);
+            }}
+
+            // Terrain modifier (grounded assumed)
+            if (terrain === 'electric' && moveType === 'electric') {{
+                damage = Math.floor(damage * 1.3);
+            }} else if (terrain === 'grassy' && moveType === 'grass') {{
+                damage = Math.floor(damage * 1.3);
+            }} else if (terrain === 'psychic' && moveType === 'psychic') {{
+                damage = Math.floor(damage * 1.3);
+            }} else if (terrain === 'misty' && moveType === 'dragon') {{
+                damage = Math.floor(damage * 0.5);
+            }}
+
+            // Screen modifier (Doubles format = 2/3 reduction)
+            if (isPhysical && reflectUp && !auroraVeilUp) {{
+                damage = Math.floor(damage * (2/3));
+            }} else if (!isPhysical && lightScreenUp && !auroraVeilUp) {{
+                damage = Math.floor(damage * (2/3));
+            }}
+            if (auroraVeilUp) {{
+                damage = Math.floor(damage * (2/3));
+            }}
+
+            // Apply item modifier
+            damage = Math.floor(damage * itemMod);
+
+            // Apply ability modifier
+            damage = Math.floor(damage * abilityMod);
+
+            // Determine effective move type (for Tera Blast)
+            let effectiveMoveType = calcData.moveType.toLowerCase();
+            if (calcData.move.toLowerCase() === 'tera blast' && attackerTeraActive && attackerTeraType) {{
+                effectiveMoveType = attackerTeraType.toLowerCase();
+            }}
+
+            // Determine attacker's types for STAB calculation
+            let attackerTypesForStab = [...calcData.attackerTypes];
+            if (attackerTeraActive && attackerTeraType) {{
+                // When Terastallized, can get STAB from Tera type
+                attackerTypesForStab = [attackerTeraType.toLowerCase()];
+            }}
+
+            // STAB - only apply if move type matches attacker's types
+            let stabMod = 1.0;
+            const moveMatchesType = attackerTypesForStab.some(t => t === effectiveMoveType);
+            const moveMatchesOriginalType = calcData.attackerTypes.some(t => t === effectiveMoveType);
+
+            if (moveMatchesType) {{
+                // Terastallized into matching type or using original type
+                if (attackerTeraActive && moveMatchesOriginalType) {{
+                    // Tera type matches original type AND move type = 2.0x STAB
+                    stabMod = attackerAbility.toLowerCase() === 'adaptability' ? 2.25 : 2.0;
+                }} else {{
+                    stabMod = attackerAbility.toLowerCase() === 'adaptability' ? 2.0 : 1.5;
+                }}
+            }} else if (!attackerTeraActive && moveMatchesOriginalType) {{
+                // Not Terastallized but move matches original type
+                stabMod = attackerAbility.toLowerCase() === 'adaptability' ? 2.0 : 1.5;
+            }}
+            damage = Math.floor(damage * stabMod);
+
+            // Determine defender's types for effectiveness calculation
+            let defenderTypesForEff = [...calcData.defenderTypes];
+            if (defenderTeraActive && defenderTeraType) {{
+                // When Terastallized, defender becomes mono-type
+                defenderTypesForEff = [defenderTeraType.toLowerCase()];
+            }}
+
+            // Type effectiveness - recalculate based on current types
+            const typeEff = getTypeEffectiveness(effectiveMoveType, defenderTypesForEff);
+            damage = Math.floor(damage * typeEff);
+
+            // Apply defender ability modifier
+            damage = Math.floor(damage * defAbilityMod);
+
+            // Helping Hand (+50%)
+            if (helpingHand) {{
+                damage = Math.floor(damage * 1.5);
+            }}
+
+            // Friend Guard (-25%)
+            if (friendGuard) {{
+                damage = Math.floor(damage * 0.75);
+            }}
 
             // Random roll range (0.85 to 1.0)
             const minDamage = Math.floor(damage * 0.85);
@@ -1515,14 +2374,44 @@ body::before {{
             }};
         }}
 
-        // Determine KO chance
+        // Calculate probability for KO at a given threshold
+        // Pokemon damage has 16 rolls from 0.85 to 1.00 in even steps
+        function calcKOProbability(minPct, maxPct, threshold) {{
+            if (minPct >= threshold) return 100;
+            if (maxPct < threshold) return 0;
+            // Linear interpolation: how many of 16 rolls exceed threshold?
+            const range = maxPct - minPct;
+            if (range <= 0) return minPct >= threshold ? 100 : 0;
+            const rollsAbove = Math.floor(((maxPct - threshold) / range) * 16) + 1;
+            return Math.round((rollsAbove / 16) * 100);
+        }}
+
+        // Determine KO chance with probability
         function getKOChance(minPct, maxPct) {{
+            // OHKO check
             if (minPct >= 100) return {{ text: 'Guaranteed OHKO', class: 'ohko' }};
-            if (maxPct >= 100) return {{ text: 'Possible OHKO', class: 'ohko' }};
+            if (maxPct >= 100) {{
+                const prob = calcKOProbability(minPct, maxPct, 100);
+                return {{ text: prob + '% OHKO', class: 'ohko' }};
+            }}
+            // 2HKO check (need 50% per hit)
             if (minPct >= 50) return {{ text: 'Guaranteed 2HKO', class: '2hko' }};
-            if (maxPct >= 50) return {{ text: 'Possible 2HKO', class: '2hko' }};
+            if (maxPct >= 50) {{
+                const prob = calcKOProbability(minPct, maxPct, 50);
+                return {{ text: prob + '% 2HKO', class: '2hko' }};
+            }}
+            // 3HKO check (need 33.4% per hit)
             if (minPct >= 33.4) return {{ text: 'Guaranteed 3HKO', class: '3hko' }};
-            if (maxPct >= 33.4) return {{ text: 'Possible 3HKO', class: '3hko' }};
+            if (maxPct >= 33.4) {{
+                const prob = calcKOProbability(minPct, maxPct, 33.4);
+                return {{ text: prob + '% 3HKO', class: '3hko' }};
+            }}
+            // 4HKO check (need 25% per hit)
+            if (minPct >= 25) return {{ text: '4HKO', class: 'survive' }};
+            if (maxPct >= 25) {{
+                const prob = calcKOProbability(minPct, maxPct, 25);
+                return {{ text: prob + '% 4HKO', class: 'survive' }};
+            }}
             return {{ text: 'Survives', class: 'survive' }};
         }}
 
@@ -2776,107 +3665,6 @@ body {{
                 <div class="legend-item"><span class="legend-dot slower"></span> You outspeed</div>
                 <div class="legend-item"><span class="legend-dot tie"></span> Speed tie</div>
             </div>
-        </div>
-    </div>
-</body>
-</html>"""
-
-
-def create_coverage_ui(
-    pokemon_name: str,
-    moves: list[dict[str, Any]],
-    coverage: dict[str, float],
-) -> str:
-    """Create type coverage analyzer UI HTML.
-
-    Args:
-        pokemon_name: Name of the Pokemon
-        moves: List of move dicts with keys: name, type, power
-        coverage: Dict mapping type names to effectiveness multipliers
-
-    Returns:
-        HTML string for the coverage UI
-    """
-    styles = get_shared_styles()
-
-    all_types = [
-        "Normal", "Fire", "Water", "Electric", "Grass", "Ice",
-        "Fighting", "Poison", "Ground", "Flying", "Psychic", "Bug",
-        "Rock", "Ghost", "Dragon", "Dark", "Steel", "Fairy"
-    ]
-
-    # Build moves display
-    moves_html = ""
-    for move in moves:
-        move_name = move.get("name", "Unknown")
-        move_type = move.get("type", "normal")
-        power = move.get("power", "-")
-        move_color = get_type_color(move_type)
-        moves_html += f"""
-        <div style="display: inline-flex; align-items: center; margin: 4px; padding: 4px 8px; background: {move_color}; border-radius: 4px;">
-            <span style="font-weight: 600;">{move_name}</span>
-            <span style="margin-left: 8px; font-size: 11px; opacity: 0.8;">{power} BP</span>
-        </div>
-        """
-
-    # Build coverage grid
-    grid_html = ""
-    for type_name in all_types:
-        eff = coverage.get(type_name.lower(), 1.0)
-
-        # Determine cell class and text
-        if eff >= 2:
-            cell_class = "super"
-            text = "2x"
-        elif eff == 0:
-            cell_class = "immune"
-            text = "0"
-        elif eff < 1:
-            cell_class = "resist"
-            text = "½"
-        else:
-            cell_class = "neutral"
-            text = "1x"
-
-        type_color = get_type_color(type_name)
-        grid_html += f"""
-        <div class="coverage-cell {cell_class}" title="{type_name}: {eff}x" style="border: 2px solid {type_color};">
-            <span style="font-size: 9px;">{type_name[:3].upper()}</span>
-        </div>
-        """
-
-    # Count coverage stats
-    super_eff = sum(1 for e in coverage.values() if e >= 2)
-    neutral = sum(1 for e in coverage.values() if e == 1)
-    resisted = sum(1 for e in coverage.values() if 0 < e < 1)
-    immune = sum(1 for e in coverage.values() if e == 0)
-
-    return f"""<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>{styles}</style>
-</head>
-<body>
-    <div class="card">
-        <div class="card-header">
-            <span class="card-title">{pokemon_name} Coverage</span>
-        </div>
-
-        <div style="margin-bottom: 16px;">
-            {moves_html}
-        </div>
-
-        <div class="coverage-grid">
-            {grid_html}
-        </div>
-
-        <div class="flex justify-between mt-2" style="font-size: 12px;">
-            <span style="color: #4caf50;">Super: {super_eff}</span>
-            <span style="color: #888;">Neutral: {neutral}</span>
-            <span style="color: #ff9800;">Resisted: {resisted}</span>
-            <span style="color: #666;">Immune: {immune}</span>
         </div>
     </div>
 </body>
@@ -4501,19 +5289,45 @@ def create_threat_matrix_ui(
     sprite_html = get_sprite_html(pokemon_name, size=72, css_class="sprite") if not pokemon_sprite else f'<img src="{pokemon_sprite}" class="sprite" alt="{pokemon_name}" style="width:72px;height:72px;">'
     threats_json = json.dumps(threats[:10])  # Top 10 threats
 
+    def calc_ko_probability(damage_min: float, damage_max: float, threshold: float) -> int:
+        """Calculate probability of exceeding threshold (16 damage rolls)."""
+        if damage_min >= threshold:
+            return 100
+        if damage_max < threshold:
+            return 0
+        dmg_range = damage_max - damage_min
+        if dmg_range <= 0:
+            return 100 if damage_min >= threshold else 0
+        rolls_above = int(((damage_max - threshold) / dmg_range) * 16) + 1
+        return round((rolls_above / 16) * 100)
+
     def get_ko_class(damage_min: float, damage_max: float) -> tuple[str, str]:
         """Return CSS class and label for damage range."""
-        avg = (damage_min + damage_max) / 2
+        # OHKO check
         if damage_min >= 100:
             return "ohko", "OHKO"
-        elif damage_max >= 100:
-            return "ohko-chance", f"{int(damage_min)}-{int(damage_max)}%"
-        elif avg >= 50:
+        if damage_max >= 100:
+            prob = calc_ko_probability(damage_min, damage_max, 100)
+            return "ohko", f"{prob}% OHKO"
+        # 2HKO check (need 50% per hit)
+        if damage_min >= 50:
             return "twohko", "2HKO"
-        elif avg >= 33:
+        if damage_max >= 50:
+            prob = calc_ko_probability(damage_min, damage_max, 50)
+            return "twohko", f"{prob}% 2HKO"
+        # 3HKO check (need 33.4% per hit)
+        if damage_min >= 33.4:
             return "threehko", "3HKO"
-        else:
-            return "chip", f"{int(avg)}%"
+        if damage_max >= 33.4:
+            prob = calc_ko_probability(damage_min, damage_max, 33.4)
+            return "threehko", f"{prob}% 3HKO"
+        # 4HKO check (need 25% per hit)
+        if damage_min >= 25:
+            return "chip", "4HKO"
+        if damage_max >= 25:
+            prob = calc_ko_probability(damage_min, damage_max, 25)
+            return "chip", f"{prob}% 4HKO"
+        return "chip", f"{int((damage_min + damage_max) / 2)}%"
 
     return f'''<!DOCTYPE html>
 <html>
@@ -7727,6 +8541,3122 @@ body {{
         </div>
 
         {f'<div class="turn-preview"><div class="turn-title">Predicted Turn 1</div>{turn_html}</div>' if turn_html else ''}
+    </div>
+</body>
+</html>"""
+
+
+def create_speed_histogram_ui(
+    pokemon_name: str,
+    pokemon_speed: int,
+    target_pokemon: str,
+    speed_distribution: list[dict[str, Any]],
+    stats: Optional[dict[str, Any]] = None,
+    base_speed: Optional[int] = None,
+    nature: str = "Serious",
+    speed_evs: int = 0,
+) -> str:
+    """Create a histogram-style speed distribution UI like Pikalytics.
+
+    Shows speed distribution as vertical bars with your Pokemon's position highlighted.
+    Includes interactive controls for Nature, Speed EVs, and modifiers (Tailwind, Scarf, Paralysis).
+
+    Args:
+        pokemon_name: Your Pokemon's name
+        pokemon_speed: Your Pokemon's speed stat (initial calculated value)
+        target_pokemon: The target Pokemon being analyzed
+        speed_distribution: List of dicts with 'speed' and 'count' or 'usage' keys
+        stats: Optional dict with 'median', 'mean', 'min', 'max', 'iqr_low', 'iqr_high'
+        base_speed: Your Pokemon's base speed stat (for recalculation). If None, controls are hidden.
+        nature: Your Pokemon's current nature (default "Serious")
+        speed_evs: Your Pokemon's current Speed EVs (default 0)
+
+    Returns:
+        HTML string for the speed histogram UI
+    """
+    styles = get_shared_styles()
+
+    # Calculate statistics if not provided
+    speeds = [s.get("speed", 0) for s in speed_distribution]
+    usages = [s.get("usage", s.get("count", 1)) for s in speed_distribution]
+
+    if not stats:
+        if speeds:
+            sorted_speeds = sorted(speeds)
+            stats = {
+                "min": min(speeds),
+                "max": max(speeds),
+                "median": sorted_speeds[len(sorted_speeds) // 2],
+                "mean": sum(speeds) / len(speeds),
+            }
+        else:
+            stats = {"min": 0, "max": 200, "median": 100, "mean": 100}
+
+    # Normalize for bar heights
+    max_usage = max(usages) if usages else 1
+
+    # Build histogram bars
+    bars_html = ""
+    speed_min = stats.get("min", min(speeds) if speeds else 50)
+    speed_max = stats.get("max", max(speeds) if speeds else 150)
+    speed_range = speed_max - speed_min if speed_max > speed_min else 1
+
+    # Sort by speed for display
+    sorted_dist = sorted(speed_distribution, key=lambda x: x.get("speed", 0))
+
+    for entry in sorted_dist:
+        speed = entry.get("speed", 0)
+        usage = entry.get("usage", entry.get("count", 1))
+        height_pct = (usage / max_usage) * 100 if max_usage > 0 else 0
+
+        # Determine if this is the user's Pokemon speed range
+        is_user_speed = abs(speed - pokemon_speed) <= 2
+        bar_class = "user-bar" if is_user_speed else ""
+
+        # Position along x-axis
+        x_pos = ((speed - speed_min) / speed_range) * 100 if speed_range > 0 else 50
+
+        bars_html += f"""
+        <div class="histogram-bar {bar_class}"
+             style="left: {x_pos}%; height: {height_pct}%;"
+             title="{speed} Spe: {usage:.1f}% usage">
+        </div>
+        """
+
+    # Add user's Pokemon marker
+    user_x_pos = ((pokemon_speed - speed_min) / speed_range) * 100 if speed_range > 0 else 50
+    user_x_pos = max(0, min(100, user_x_pos))
+
+    # Calculate outspeed percentage
+    outsped_count = sum(1 for s in speeds if pokemon_speed > s)
+    outspeed_pct = (outsped_count / len(speeds) * 100) if speeds else 0
+
+    # Determine result class
+    if outspeed_pct >= 80:
+        result_class = "excellent"
+    elif outspeed_pct >= 50:
+        result_class = "good"
+    else:
+        result_class = "poor"
+
+    # Pre-build distribution JSON for JavaScript
+    distribution_json = json.dumps([
+        {"speed": s.get("speed", 0), "usage": s.get("usage", s.get("count", 1))}
+        for s in speed_distribution
+    ])
+
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        {styles}
+
+        .histogram-container {{
+            background: var(--bg-card);
+            border-radius: var(--radius-lg);
+            padding: var(--space-lg);
+            border: 1px solid var(--glass-border);
+        }}
+
+        .histogram-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: var(--space-lg);
+        }}
+
+        .histogram-title {{
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }}
+
+        .histogram-subtitle {{
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }}
+
+        .histogram-stats {{
+            text-align: right;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }}
+
+        .histogram-stats .stat-row {{
+            margin-bottom: 2px;
+        }}
+
+        .histogram-stats .stat-label {{
+            color: var(--text-muted);
+        }}
+
+        .histogram-stats .stat-value {{
+            color: var(--text-primary);
+            font-weight: 600;
+            font-family: 'SF Mono', monospace;
+        }}
+
+        .histogram-chart {{
+            position: relative;
+            height: 180px;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: var(--radius-md);
+            margin-bottom: var(--space-md);
+            overflow: hidden;
+        }}
+
+        .histogram-bars {{
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 100%;
+            display: flex;
+            align-items: flex-end;
+            padding: 0 4px;
+        }}
+
+        .histogram-bar {{
+            position: absolute;
+            bottom: 0;
+            width: 8px;
+            min-height: 4px;
+            background: linear-gradient(to top, #dc2626, #dc2626);
+            border-radius: 2px 2px 0 0;
+            transform: translateX(-50%);
+            transition: all 0.2s ease;
+        }}
+
+        .histogram-bar:hover {{
+            background: linear-gradient(to top, #ef4444, #f87171);
+            transform: translateX(-50%) scaleY(1.05);
+        }}
+
+        .histogram-bar.user-bar {{
+            background: linear-gradient(to top, #22c55e, #4ade80);
+            box-shadow: 0 0 10px rgba(34, 197, 94, 0.5);
+        }}
+
+        .user-marker {{
+            position: absolute;
+            bottom: -30px;
+            left: {user_x_pos}%;
+            transform: translateX(-50%);
+            text-align: center;
+            z-index: 10;
+        }}
+
+        .user-marker-line {{
+            position: absolute;
+            bottom: 0;
+            left: {user_x_pos}%;
+            width: 2px;
+            height: 100%;
+            background: linear-gradient(to top, var(--accent-primary), transparent);
+            transform: translateX(-50%);
+        }}
+
+        .user-marker-label {{
+            background: var(--gradient-primary);
+            color: white;
+            padding: 4px 8px;
+            border-radius: var(--radius-sm);
+            font-size: 11px;
+            font-weight: 600;
+            white-space: nowrap;
+            box-shadow: var(--glow-primary);
+        }}
+
+        .user-marker-speed {{
+            font-size: 10px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }}
+
+        .histogram-axis {{
+            display: flex;
+            justify-content: space-between;
+            padding: 0 4px;
+            font-size: 10px;
+            color: var(--text-muted);
+            margin-top: 40px;
+        }}
+
+        .outspeed-result {{
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--space-md);
+            padding: var(--space-md);
+            background: var(--glass-bg);
+            border-radius: var(--radius-md);
+            margin-top: var(--space-md);
+        }}
+
+        .outspeed-percent {{
+            font-size: 28px;
+            font-weight: 700;
+        }}
+
+        .outspeed-percent.excellent {{ color: var(--accent-success); }}
+        .outspeed-percent.good {{ color: var(--accent-warning); }}
+        .outspeed-percent.poor {{ color: var(--accent-danger); }}
+
+        .outspeed-text {{
+            font-size: 13px;
+            color: var(--text-secondary);
+        }}
+
+        .range-input {{
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            margin-top: var(--space-md);
+            padding: var(--space-sm);
+            background: var(--glass-bg);
+            border-radius: var(--radius-md);
+            font-size: 12px;
+        }}
+
+        .range-label {{
+            color: var(--text-secondary);
+        }}
+
+        .range-value {{
+            background: var(--bg-elevated);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-sm);
+            padding: 4px 8px;
+            color: var(--text-primary);
+            font-family: 'SF Mono', monospace;
+            width: 50px;
+            text-align: center;
+        }}
+
+        .tier-zone {{
+            position: absolute;
+            top: 0;
+            height: 100%;
+            opacity: 0.1;
+        }}
+
+        .tier-zone.slow {{ background: #ef4444; left: 0; width: 33%; }}
+        .tier-zone.medium {{ background: #f59e0b; left: 33%; width: 34%; }}
+        .tier-zone.fast {{ background: #22c55e; left: 67%; width: 33%; }}
+
+        /* Speed Controls Section */
+        .speed-controls {{
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-md);
+            padding: var(--space-md);
+            margin-bottom: var(--space-lg);
+        }}
+
+        .speed-controls-title {{
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--accent-primary);
+            margin-bottom: var(--space-md);
+        }}
+
+        .controls-row {{
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+            margin-bottom: var(--space-sm);
+            flex-wrap: wrap;
+        }}
+
+        .control-group {{
+            display: flex;
+            align-items: center;
+            gap: var(--space-xs);
+        }}
+
+        .control-label {{
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }}
+
+        .nature-select {{
+            padding: 6px 10px;
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-sm);
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            font-size: 12px;
+            cursor: pointer;
+        }}
+
+        .nature-select:focus {{
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+        }}
+
+        .ev-slider {{
+            width: 120px;
+            -webkit-appearance: none;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.1);
+        }}
+
+        .ev-slider::-webkit-slider-thumb {{
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--gradient-primary);
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(99, 102, 241, 0.4);
+        }}
+
+        .ev-value {{
+            font-family: 'SF Mono', monospace;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-primary);
+            min-width: 30px;
+        }}
+
+        .final-speed {{
+            background: var(--gradient-primary);
+            color: white;
+            padding: 6px 12px;
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            font-weight: 700;
+            margin-left: auto;
+        }}
+
+        .modifier-toggles {{
+            display: flex;
+            gap: var(--space-xs);
+            margin-top: var(--space-sm);
+        }}
+
+        .modifier-btn {{
+            padding: 6px 12px;
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-sm);
+            background: var(--bg-elevated);
+            color: var(--text-secondary);
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }}
+
+        .modifier-btn:hover {{
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(255, 255, 255, 0.15);
+        }}
+
+        .modifier-btn.active {{
+            background: var(--accent-primary);
+            border-color: var(--accent-primary);
+            color: white;
+        }}
+
+        .modifier-btn.active.tailwind {{
+            background: #3b82f6;
+            border-color: #3b82f6;
+        }}
+
+        .modifier-btn.active.scarf {{
+            background: #f59e0b;
+            border-color: #f59e0b;
+        }}
+
+        .modifier-btn.active.paralysis {{
+            background: #eab308;
+            border-color: #eab308;
+            color: #1a1a2e;
+        }}
+
+        .base-speed-info {{
+            font-size: 11px;
+            color: var(--text-muted);
+        }}
+    </style>
+</head>
+<body>
+    <div class="histogram-container">
+        <div class="histogram-header">
+            <div>
+                <div class="histogram-title">Speed Distribution: {target_pokemon}</div>
+                <div class="histogram-subtitle">Base {stats.get('base', 60)} Speed</div>
+            </div>
+            <div class="histogram-stats">
+                <div class="stat-row"><span class="stat-label">Median:</span> <span class="stat-value">{stats.get('median', 0)}</span></div>
+                <div class="stat-row"><span class="stat-label">IQR:</span> <span class="stat-value">{stats.get('iqr_low', 0)} - {stats.get('iqr_high', 0)}</span></div>
+                <div class="stat-row"><span class="stat-label">Mean:</span> <span class="stat-value">{stats.get('mean', 0):.1f}</span></div>
+            </div>
+        </div>
+
+        {"" if base_speed is None else f'''
+        <div class="speed-controls">
+            <div class="speed-controls-title">Your Speed Controls</div>
+            <div class="controls-row">
+                <div class="control-group">
+                    <span class="control-label">Nature:</span>
+                    <select id="nature-select" class="nature-select" onchange="updateSpeed()">
+                        <optgroup label="+Speed Natures">
+                            <option value="Timid" {"selected" if nature == "Timid" else ""}>Timid (+Spe, -Atk)</option>
+                            <option value="Jolly" {"selected" if nature == "Jolly" else ""}>Jolly (+Spe, -SpA)</option>
+                            <option value="Hasty" {"selected" if nature == "Hasty" else ""}>Hasty (+Spe, -Def)</option>
+                            <option value="Naive" {"selected" if nature == "Naive" else ""}>Naive (+Spe, -SpD)</option>
+                        </optgroup>
+                        <optgroup label="-Speed Natures">
+                            <option value="Brave" {"selected" if nature == "Brave" else ""}>Brave (+Atk, -Spe)</option>
+                            <option value="Relaxed" {"selected" if nature == "Relaxed" else ""}>Relaxed (+Def, -Spe)</option>
+                            <option value="Quiet" {"selected" if nature == "Quiet" else ""}>Quiet (+SpA, -Spe)</option>
+                            <option value="Sassy" {"selected" if nature == "Sassy" else ""}>Sassy (+SpD, -Spe)</option>
+                        </optgroup>
+                        <optgroup label="Neutral Natures">
+                            <option value="Hardy" {"selected" if nature == "Hardy" else ""}>Hardy</option>
+                            <option value="Docile" {"selected" if nature == "Docile" else ""}>Docile</option>
+                            <option value="Serious" {"selected" if nature == "Serious" else ""}>Serious</option>
+                            <option value="Bashful" {"selected" if nature == "Bashful" else ""}>Bashful</option>
+                            <option value="Quirky" {"selected" if nature == "Quirky" else ""}>Quirky</option>
+                            <option value="Adamant" {"selected" if nature == "Adamant" else ""}>Adamant (+Atk, -SpA)</option>
+                            <option value="Naughty" {"selected" if nature == "Naughty" else ""}>Naughty (+Atk, -SpD)</option>
+                            <option value="Lonely" {"selected" if nature == "Lonely" else ""}>Lonely (+Atk, -Def)</option>
+                            <option value="Bold" {"selected" if nature == "Bold" else ""}>Bold (+Def, -Atk)</option>
+                            <option value="Impish" {"selected" if nature == "Impish" else ""}>Impish (+Def, -SpA)</option>
+                            <option value="Lax" {"selected" if nature == "Lax" else ""}>Lax (+Def, -SpD)</option>
+                            <option value="Modest" {"selected" if nature == "Modest" else ""}>Modest (+SpA, -Atk)</option>
+                            <option value="Mild" {"selected" if nature == "Mild" else ""}>Mild (+SpA, -Def)</option>
+                            <option value="Rash" {"selected" if nature == "Rash" else ""}>Rash (+SpA, -SpD)</option>
+                            <option value="Calm" {"selected" if nature == "Calm" else ""}>Calm (+SpD, -Atk)</option>
+                            <option value="Gentle" {"selected" if nature == "Gentle" else ""}>Gentle (+SpD, -Def)</option>
+                            <option value="Careful" {"selected" if nature == "Careful" else ""}>Careful (+SpD, -SpA)</option>
+                        </optgroup>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <span class="control-label">Speed EVs:</span>
+                    <input type="range" id="speed-evs" class="ev-slider" min="0" max="252" step="4" value="{speed_evs}" oninput="updateSpeed()">
+                    <span id="ev-display" class="ev-value">{speed_evs}</span>
+                </div>
+                <div class="control-group">
+                    <span class="base-speed-info">Base: {base_speed}</span>
+                </div>
+                <div class="final-speed">
+                    <span id="final-speed">{pokemon_speed}</span> Spe
+                </div>
+            </div>
+            <div class="modifier-toggles">
+                <button id="tailwind-btn" class="modifier-btn tailwind" onclick="toggleModifier(this, &apos;tailwind&apos;)">Tailwind (2x)</button>
+                <button id="scarf-btn" class="modifier-btn scarf" onclick="toggleModifier(this, &apos;scarf&apos;)">Choice Scarf (1.5x)</button>
+                <button id="paralysis-btn" class="modifier-btn paralysis" onclick="toggleModifier(this, &apos;paralysis&apos;)">Paralysis (0.5x)</button>
+            </div>
+        </div>
+        '''}
+
+        <div class="histogram-chart">
+            <div class="tier-zone slow"></div>
+            <div class="tier-zone medium"></div>
+            <div class="tier-zone fast"></div>
+            <div id="user-marker-line" class="user-marker-line" style="left: {user_x_pos}%;"></div>
+            <div class="histogram-bars">
+                {bars_html}
+            </div>
+        </div>
+
+        <div class="histogram-axis">
+            <span>{speed_min}</span>
+            <span>{(speed_min + speed_max) // 2}</span>
+            <span>{speed_max}</span>
+        </div>
+
+        <div id="user-marker" class="user-marker" style="left: {user_x_pos}%;">
+            <div class="user-marker-label">{pokemon_name}</div>
+            <div id="user-marker-speed" class="user-marker-speed">{pokemon_speed} Spe</div>
+        </div>
+
+        <div class="outspeed-result">
+            <div id="outspeed-percent" class="outspeed-percent {result_class}">{outspeed_pct:.1f}%</div>
+            <div id="outspeed-text" class="outspeed-text">
+                <strong>{pokemon_name}</strong> outspeeds <span id="outspeed-count">{outspeed_pct:.0f}</span>% of {target_pokemon} spreads
+            </div>
+        </div>
+
+        <div class="range-input">
+            <span class="range-label">Range:</span>
+            <input type="text" class="range-value" value="{speed_min}">
+            <span>-</span>
+            <input type="text" class="range-value" value="{speed_max}">
+            <button class="btn" style="padding: 4px 8px; font-size: 11px;">Reset</button>
+        </div>
+    </div>
+
+    {"" if base_speed is None else f'''
+    <script>
+        // Speed distribution data
+        const DISTRIBUTION = {distribution_json};
+        const TOTAL_USAGE = DISTRIBUTION.reduce((sum, e) => sum + e.usage, 0);
+        const SPEED_MIN = {speed_min};
+        const SPEED_MAX = {speed_max};
+        const BASE_SPEED = {base_speed};
+
+        // Nature speed modifiers
+        const NATURE_MODS = {{
+            "Timid": 1.1, "Jolly": 1.1, "Hasty": 1.1, "Naive": 1.1,
+            "Brave": 0.9, "Relaxed": 0.9, "Quiet": 0.9, "Sassy": 0.9
+        }};
+
+        // Active modifiers
+        let modifiers = {{ tailwind: false, scarf: false, paralysis: false }};
+
+        // Calculate speed stat at level 50 (31 IVs assumed)
+        function calcSpeed(base, evs, nature) {{
+            const mod = NATURE_MODS[nature] || 1.0;
+            const inner = Math.floor((2 * base + 31 + Math.floor(evs / 4)) * 50 / 100);
+            return Math.floor((inner + 5) * mod);
+        }}
+
+        // Apply active modifiers
+        function applyModifiers(speed) {{
+            let finalSpeed = speed;
+            if (modifiers.tailwind) finalSpeed *= 2;
+            if (modifiers.scarf) finalSpeed *= 1.5;
+            if (modifiers.paralysis) finalSpeed *= 0.5;
+            return Math.floor(finalSpeed);
+        }}
+
+        // Calculate outspeed percentage
+        function calcOutspeedPct(mySpeed) {{
+            let outsped = 0;
+            for (const entry of DISTRIBUTION) {{
+                if (mySpeed > entry.speed) outsped += entry.usage;
+            }}
+            return TOTAL_USAGE > 0 ? (outsped / TOTAL_USAGE) * 100 : 0;
+        }}
+
+        // Toggle modifier button
+        function toggleModifier(btn, mod) {{
+            modifiers[mod] = !modifiers[mod];
+            btn.classList.toggle("active", modifiers[mod]);
+            updateSpeed();
+        }}
+
+        // Update UI on input change
+        function updateSpeed() {{
+            const evs = parseInt(document.getElementById("speed-evs").value) || 0;
+            const nature = document.getElementById("nature-select").value;
+
+            // Update EV display
+            document.getElementById("ev-display").textContent = evs;
+
+            // Calculate base speed (before modifiers)
+            let speed = calcSpeed(BASE_SPEED, evs, nature);
+
+            // Apply modifiers
+            speed = applyModifiers(speed);
+
+            // Update final speed display
+            document.getElementById("final-speed").textContent = speed;
+
+            // Update position marker
+            const speedRange = SPEED_MAX - SPEED_MIN;
+            let pct = speedRange > 0 ? ((speed - SPEED_MIN) / speedRange) * 100 : 50;
+            pct = Math.max(0, Math.min(100, pct));
+
+            document.getElementById("user-marker-line").style.left = pct + "%";
+            document.getElementById("user-marker").style.left = pct + "%";
+            document.getElementById("user-marker-speed").textContent = speed + " Spe";
+
+            // Update outspeed percentage
+            const outspeedPct = calcOutspeedPct(speed);
+            const outspeedEl = document.getElementById("outspeed-percent");
+            outspeedEl.textContent = outspeedPct.toFixed(1) + "%";
+
+            // Update result class
+            outspeedEl.classList.remove("excellent", "good", "poor");
+            if (outspeedPct >= 80) outspeedEl.classList.add("excellent");
+            else if (outspeedPct >= 50) outspeedEl.classList.add("good");
+            else outspeedEl.classList.add("poor");
+
+            document.getElementById("outspeed-count").textContent = Math.round(outspeedPct);
+        }}
+    </script>
+    '''}
+</body>
+</html>"""
+
+
+def create_interactive_speed_histogram_ui(
+    pokemon_name: str,
+    pokemon_speed: int,
+    initial_target: str,
+    all_targets_data: dict[str, dict[str, Any]],
+) -> str:
+    """Create an interactive histogram with a dropdown to switch between target Pokemon.
+
+    Pre-loads speed distribution data for multiple Pokemon so the dropdown can
+    switch between them client-side without needing additional API calls.
+
+    Args:
+        pokemon_name: Your Pokemon's name
+        pokemon_speed: Your Pokemon's speed stat
+        initial_target: The initially selected target Pokemon
+        all_targets_data: Dict mapping Pokemon names to their data:
+            {
+                "Pokemon Name": {
+                    "base_speed": int,
+                    "distribution": [{"speed": int, "usage": float}, ...],
+                    "stats": {"min": int, "max": int, "median": int, "mean": float}
+                },
+                ...
+            }
+
+    Returns:
+        HTML string for the interactive speed histogram UI
+    """
+    styles = get_shared_styles()
+    targets_json = json.dumps(all_targets_data)
+    initial_data = all_targets_data.get(initial_target, {})
+    initial_dist = initial_data.get("distribution", [])
+    initial_stats = initial_data.get("stats", {})
+    initial_base = initial_data.get("base_speed", 100)
+    speeds = [s.get("speed", 0) for s in initial_dist]
+    usages = [s.get("usage", s.get("count", 1)) for s in initial_dist]
+    if not initial_stats and speeds:
+        sorted_speeds = sorted(speeds)
+        initial_stats = {
+            "min": min(speeds), "max": max(speeds),
+            "median": sorted_speeds[len(sorted_speeds) // 2],
+            "mean": sum(speeds) / len(speeds) if speeds else 0,
+        }
+    speed_min = initial_stats.get("min", 50)
+    speed_max = initial_stats.get("max", 200)
+    speed_range = speed_max - speed_min if speed_max > speed_min else 1
+    max_usage = max(usages) if usages else 1
+    bars_html = ""
+    sorted_dist = sorted(initial_dist, key=lambda x: x.get("speed", 0))
+    for entry in sorted_dist:
+        speed = entry.get("speed", 0)
+        usage = entry.get("usage", entry.get("count", 1))
+        height_pct = (usage / max_usage) * 100 if max_usage > 0 else 0
+        is_user_speed = abs(speed - pokemon_speed) <= 2
+        bar_class = "user-bar" if is_user_speed else ""
+        x_pos = ((speed - speed_min) / speed_range) * 100 if speed_range > 0 else 50
+        bars_html += f'<div class="histogram-bar {bar_class}" style="left: {x_pos}%; height: {height_pct}%;" title="{speed} Spe: {usage:.1f}% usage"></div>'
+    user_x_pos = ((pokemon_speed - speed_min) / speed_range) * 100 if speed_range > 0 else 50
+    user_x_pos = max(0, min(100, user_x_pos))
+    outsped_usage = sum(u for s, u in zip(speeds, usages) if pokemon_speed > s)
+    total_usage = sum(usages) if usages else 1
+    outspeed_pct = (outsped_usage / total_usage * 100) if total_usage > 0 else 0
+    result_class = "excellent" if outspeed_pct >= 80 else "good" if outspeed_pct >= 50 else "poor"
+    dropdown_options = "".join(
+        f'<option value="{n}" {"selected" if n == initial_target else ""}>{n.replace("-", " ").title()}</option>'
+        for n in sorted(all_targets_data.keys())
+    )
+    return f'''<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><style>{styles}
+.histogram-container{{background:var(--bg-card);border-radius:var(--radius-lg);padding:var(--space-lg);border:1px solid var(--glass-border)}}
+.histogram-header{{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:var(--space-lg)}}
+.histogram-title{{font-size:16px;font-weight:600;color:var(--text-primary)}}
+.histogram-subtitle{{font-size:12px;color:var(--text-secondary);margin-top:4px}}
+.histogram-stats{{text-align:right;font-size:12px;color:var(--text-secondary)}}
+.histogram-stats .stat-row{{margin-bottom:2px}}
+.histogram-stats .stat-label{{color:var(--text-muted)}}
+.histogram-stats .stat-value{{color:var(--text-primary);font-weight:600;font-family:'SF Mono',monospace}}
+.histogram-chart{{position:relative;height:180px;background:rgba(255,255,255,0.02);border-radius:var(--radius-md);margin-bottom:var(--space-md);overflow:hidden}}
+.histogram-bars{{position:absolute;bottom:0;left:0;right:0;height:100%;padding:0 4px}}
+.histogram-bar{{position:absolute;bottom:0;width:8px;min-height:4px;background:linear-gradient(to top,#dc2626,#dc2626);border-radius:2px 2px 0 0;transform:translateX(-50%);transition:all 0.3s ease}}
+.histogram-bar:hover{{background:linear-gradient(to top,#ef4444,#f87171);transform:translateX(-50%) scaleY(1.05)}}
+.histogram-bar.user-bar{{background:linear-gradient(to top,#22c55e,#4ade80);box-shadow:0 0 10px rgba(34,197,94,0.5)}}
+.user-marker{{position:absolute;bottom:-30px;text-align:center;z-index:10;transition:left 0.3s ease}}
+.user-marker-line{{position:absolute;bottom:0;width:2px;height:100%;background:linear-gradient(to top,var(--accent-primary),transparent);transform:translateX(-50%);transition:left 0.3s ease}}
+.user-marker-label{{background:var(--gradient-primary);color:white;padding:4px 8px;border-radius:var(--radius-sm);font-size:11px;font-weight:600;white-space:nowrap;box-shadow:var(--glow-primary)}}
+.user-marker-speed{{font-size:10px;color:var(--text-secondary);margin-top:2px}}
+.histogram-axis{{display:flex;justify-content:space-between;padding:0 4px;font-size:10px;color:var(--text-muted);margin-top:40px}}
+.outspeed-result{{display:flex;align-items:center;justify-content:center;gap:var(--space-md);padding:var(--space-md);background:var(--glass-bg);border-radius:var(--radius-md);margin-top:var(--space-md)}}
+.outspeed-percent{{font-size:28px;font-weight:700;transition:color 0.3s ease}}
+.outspeed-percent.excellent{{color:var(--accent-success)}}.outspeed-percent.good{{color:var(--accent-warning)}}.outspeed-percent.poor{{color:var(--accent-danger)}}
+.outspeed-text{{font-size:13px;color:var(--text-secondary)}}
+.pokemon-selector{{display:flex;align-items:center;gap:var(--space-sm);margin-top:var(--space-md);padding:var(--space-sm) var(--space-md);background:var(--glass-bg);border-radius:var(--radius-md);font-size:12px}}
+.selector-label{{color:var(--text-secondary)}}
+.pokemon-dropdown{{background:var(--bg-elevated);border:1px solid var(--glass-border);border-radius:var(--radius-sm);padding:6px 12px;color:var(--text-primary);font-size:13px;cursor:pointer;transition:border-color var(--duration-fast);min-width:180px}}
+.pokemon-dropdown:hover,.pokemon-dropdown:focus{{border-color:var(--accent-primary);outline:none}}
+.tier-zone{{position:absolute;top:0;height:100%;opacity:0.1}}
+.tier-zone.slow{{background:#ef4444;left:0;width:33%}}.tier-zone.medium{{background:#f59e0b;left:33%;width:34%}}.tier-zone.fast{{background:#22c55e;left:67%;width:33%}}
+.loading-overlay{{position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(10,10,26,0.8);display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity 0.2s ease}}
+.loading-overlay.active{{opacity:1;pointer-events:auto}}
+.loading-spinner{{width:24px;height:24px;border:3px solid var(--glass-border);border-top-color:var(--accent-primary);border-radius:50%;animation:spin 0.8s linear infinite}}
+@keyframes spin{{to{{transform:rotate(360deg)}}}}
+</style></head><body>
+<div class="histogram-container">
+<div class="histogram-header"><div>
+<div class="histogram-title" id="histogram-title">Speed Distribution: {initial_target.replace("-", " ").title()}</div>
+<div class="histogram-subtitle" id="histogram-subtitle">Base {initial_base} Speed</div>
+</div><div class="histogram-stats">
+<div class="stat-row"><span class="stat-label">Median:</span> <span class="stat-value" id="stat-median">{initial_stats.get('median', 0)}</span></div>
+<div class="stat-row"><span class="stat-label">IQR:</span> <span class="stat-value" id="stat-iqr">{initial_stats.get('iqr_low', speed_min)} - {initial_stats.get('iqr_high', speed_max)}</span></div>
+<div class="stat-row"><span class="stat-label">Mean:</span> <span class="stat-value" id="stat-mean">{initial_stats.get('mean', 0):.1f}</span></div>
+</div></div>
+<div class="histogram-chart" id="histogram-chart">
+<div class="tier-zone slow"></div><div class="tier-zone medium"></div><div class="tier-zone fast"></div>
+<div class="user-marker-line" id="user-marker-line" style="left:{user_x_pos}%"></div>
+<div class="histogram-bars" id="histogram-bars">{bars_html}</div>
+<div class="loading-overlay" id="loading-overlay"><div class="loading-spinner"></div></div>
+</div>
+<div class="histogram-axis"><span id="axis-min">{speed_min}</span><span id="axis-mid">{(speed_min + speed_max) // 2}</span><span id="axis-max">{speed_max}</span></div>
+<div class="user-marker" id="user-marker" style="left:{user_x_pos}%;transform:translateX(-50%)">
+<div class="user-marker-label">{pokemon_name}</div><div class="user-marker-speed">{pokemon_speed} Spe</div>
+</div>
+<div class="outspeed-result">
+<div class="outspeed-percent {result_class}" id="outspeed-percent">{outspeed_pct:.1f}%</div>
+<div class="outspeed-text" id="outspeed-text"><strong>{pokemon_name}</strong> outspeeds {outspeed_pct:.0f}% of <span id="target-name-display">{initial_target.replace("-", " ").title()}</span> spreads</div>
+</div>
+<div class="pokemon-selector"><span class="selector-label">Compare to:</span>
+<select class="pokemon-dropdown" id="pokemon-dropdown" onchange="updateHistogram(this.value)">{dropdown_options}</select>
+</div></div>
+<script>
+const allTargetsData={targets_json};
+const userPokemonName="{pokemon_name}";
+const userPokemonSpeed={pokemon_speed};
+function updateHistogram(targetName){{const data=allTargetsData[targetName];if(!data)return;
+document.getElementById('loading-overlay').classList.add('active');
+setTimeout(()=>{{const distribution=data.distribution||[];const stats=data.stats||{{}};const baseSpeed=data.base_speed||100;
+const displayName=targetName.split('-').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(' ');
+document.getElementById('histogram-title').textContent='Speed Distribution: '+displayName;
+document.getElementById('histogram-subtitle').textContent='Base '+baseSpeed+' Speed';
+document.getElementById('target-name-display').textContent=displayName;
+const speeds=distribution.map(s=>s.speed||0);const usages=distribution.map(s=>s.usage||s.count||1);
+let speedMin=stats.min,speedMax=stats.max,median=stats.median,mean=stats.mean,iqrLow=stats.iqr_low,iqrHigh=stats.iqr_high;
+if(speeds.length>0){{if(speedMin===undefined)speedMin=Math.min(...speeds);if(speedMax===undefined)speedMax=Math.max(...speeds);
+if(median===undefined){{const sorted=[...speeds].sort((a,b)=>a-b);median=sorted[Math.floor(sorted.length/2)];}}
+if(mean===undefined)mean=speeds.reduce((a,b)=>a+b,0)/speeds.length;if(iqrLow===undefined)iqrLow=speedMin;if(iqrHigh===undefined)iqrHigh=speedMax;}}
+else{{speedMin=speedMin||50;speedMax=speedMax||200;median=median||100;mean=mean||100;iqrLow=iqrLow||speedMin;iqrHigh=iqrHigh||speedMax;}}
+document.getElementById('stat-median').textContent=median;
+document.getElementById('stat-iqr').textContent=iqrLow+' - '+iqrHigh;
+document.getElementById('stat-mean').textContent=mean.toFixed(1);
+document.getElementById('axis-min').textContent=speedMin;
+document.getElementById('axis-mid').textContent=Math.floor((speedMin+speedMax)/2);
+document.getElementById('axis-max').textContent=speedMax;
+const barsContainer=document.getElementById('histogram-bars');barsContainer.innerHTML='';
+const speedRange=speedMax-speedMin||1;const maxUsage=Math.max(...usages,1);
+const sortedDist=[...distribution].sort((a,b)=>(a.speed||0)-(b.speed||0));
+sortedDist.forEach(entry=>{{const speed=entry.speed||0;const usage=entry.usage||entry.count||1;
+const heightPct=(usage/maxUsage)*100;const isUserSpeed=Math.abs(speed-userPokemonSpeed)<=2;
+const xPos=((speed-speedMin)/speedRange)*100;
+const bar=document.createElement('div');bar.className='histogram-bar'+(isUserSpeed?' user-bar':'');
+bar.style.left=xPos+'%';bar.style.height=heightPct+'%';bar.title=speed+' Spe: '+usage.toFixed(1)+'% usage';
+barsContainer.appendChild(bar);}});
+const userXPos=Math.max(0,Math.min(100,((userPokemonSpeed-speedMin)/speedRange)*100));
+document.getElementById('user-marker').style.left=userXPos+'%';
+document.getElementById('user-marker-line').style.left=userXPos+'%';
+let outspeedUsage=0,totalUsage=0;
+for(let i=0;i<speeds.length;i++){{totalUsage+=usages[i];if(userPokemonSpeed>speeds[i])outspeedUsage+=usages[i];}}
+const outspeedPct=totalUsage>0?(outspeedUsage/totalUsage*100):0;
+const outspeedEl=document.getElementById('outspeed-percent');
+outspeedEl.textContent=outspeedPct.toFixed(1)+'%';
+outspeedEl.className='outspeed-percent '+(outspeedPct>=80?'excellent':outspeedPct>=50?'good':'poor');
+document.getElementById('outspeed-text').innerHTML='<strong>'+userPokemonName+'</strong> outspeeds '+Math.round(outspeedPct)+'% of <span id="target-name-display">'+displayName+'</span> spreads';
+document.getElementById('loading-overlay').classList.remove('active');}},150);}}
+console.log('Interactive Speed Histogram initialized with',Object.keys(allTargetsData).length,'targets');
+</script></body></html>'''
+
+
+def create_spread_cards_ui(
+    pokemon_name: str,
+    spreads: list[dict[str, Any]],
+    show_count: int = 3,
+    selected_index: Optional[int] = None,
+) -> str:
+    """Create spread selection cards UI showing multiple spreads.
+
+    Args:
+        pokemon_name: Pokemon name
+        spreads: List of spread dicts with 'nature', 'evs', 'usage', 'item', 'ability'
+        show_count: Number of spreads to show initially (default 3)
+        selected_index: Index of currently selected spread (optional)
+
+    Returns:
+        HTML string for the spread cards UI
+    """
+    styles = get_shared_styles()
+
+    # Build spread cards
+    cards_html = ""
+    for i, spread in enumerate(spreads[:show_count]):
+        nature = spread.get("nature", "Serious")
+        evs = spread.get("evs", {})
+        usage = spread.get("usage", 0)
+        item = spread.get("item", "")
+        ability = spread.get("ability", "")
+
+        # Format EVs
+        ev_parts = []
+        ev_order = ["hp", "attack", "defense", "special_attack", "special_defense", "speed"]
+        ev_labels = {"hp": "HP", "attack": "Atk", "defense": "Def",
+                     "special_attack": "SpA", "special_defense": "SpD", "speed": "Spe"}
+
+        for stat in ev_order:
+            val = evs.get(stat, 0)
+            if val > 0:
+                ev_parts.append(f"{val} {ev_labels[stat]}")
+
+        ev_str = " / ".join(ev_parts) if ev_parts else "No EVs"
+
+        is_selected = i == selected_index
+        selected_class = "selected" if is_selected else ""
+        rank_emoji = ["&#129351;", "&#129352;", "&#129353;"][i] if i < 3 else f"#{i+1}"
+
+        cards_html += f"""
+        <div class="spread-card {selected_class}" data-index="{i}">
+            <div class="spread-rank">{rank_emoji}</div>
+            <div class="spread-content">
+                <div class="spread-header">
+                    <span class="spread-nature">{nature}</span>
+                    <span class="spread-usage">{usage:.1f}%</span>
+                </div>
+                <div class="spread-evs">{ev_str}</div>
+                <div class="spread-details">
+                    {f'<span class="spread-item">@ {item}</span>' if item else ''}
+                    {f'<span class="spread-ability">{ability}</span>' if ability else ''}
+                </div>
+            </div>
+            <div class="spread-select">
+                {'<span class="selected-check">&#10003;</span>' if is_selected else '<span class="select-btn">Select</span>'}
+            </div>
+        </div>
+        """
+
+    # Show more button if there are more spreads
+    more_count = len(spreads) - show_count
+    show_more_html = ""
+    if more_count > 0:
+        show_more_html = f"""
+        <button class="show-more-btn" onclick="this.style.display='none'; document.querySelectorAll('.hidden-spread').forEach(el => el.style.display='flex');">
+            Show {more_count} more spreads
+        </button>
+        """
+
+        # Add hidden spreads
+        for i, spread in enumerate(spreads[show_count:], start=show_count):
+            nature = spread.get("nature", "Serious")
+            evs = spread.get("evs", {})
+            usage = spread.get("usage", 0)
+            item = spread.get("item", "")
+            ability = spread.get("ability", "")
+
+            ev_parts = []
+            for stat in ev_order:
+                val = evs.get(stat, 0)
+                if val > 0:
+                    ev_parts.append(f"{val} {ev_labels[stat]}")
+            ev_str = " / ".join(ev_parts) if ev_parts else "No EVs"
+
+            is_selected = i == selected_index
+            selected_class = "selected" if is_selected else ""
+
+            cards_html += f"""
+            <div class="spread-card hidden-spread {selected_class}" data-index="{i}" style="display: none;">
+                <div class="spread-rank">#{i+1}</div>
+                <div class="spread-content">
+                    <div class="spread-header">
+                        <span class="spread-nature">{nature}</span>
+                        <span class="spread-usage">{usage:.1f}%</span>
+                    </div>
+                    <div class="spread-evs">{ev_str}</div>
+                    <div class="spread-details">
+                        {f'<span class="spread-item">@ {item}</span>' if item else ''}
+                        {f'<span class="spread-ability">{ability}</span>' if ability else ''}
+                    </div>
+                </div>
+                <div class="spread-select">
+                    {'<span class="selected-check">&#10003;</span>' if is_selected else '<span class="select-btn">Select</span>'}
+                </div>
+            </div>
+            """
+
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        {styles}
+
+        .spreads-container {{
+            background: var(--bg-card);
+            border-radius: var(--radius-lg);
+            padding: var(--space-lg);
+            border: 1px solid var(--glass-border);
+        }}
+
+        .spreads-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--space-md);
+        }}
+
+        .spreads-title {{
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }}
+
+        .spreads-count {{
+            font-size: 12px;
+            color: var(--text-secondary);
+            background: var(--glass-bg);
+            padding: 4px 8px;
+            border-radius: var(--radius-full);
+        }}
+
+        .spread-card {{
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+            padding: var(--space-md);
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-md);
+            margin-bottom: var(--space-sm);
+            cursor: pointer;
+            transition: all var(--duration-fast) var(--ease-smooth);
+        }}
+
+        .spread-card:hover {{
+            background: var(--glass-bg-hover);
+            border-color: var(--glass-border-hover);
+            transform: translateX(4px);
+        }}
+
+        .spread-card.selected {{
+            background: rgba(99, 102, 241, 0.15);
+            border-color: var(--accent-primary);
+            box-shadow: var(--glow-primary);
+        }}
+
+        .spread-rank {{
+            font-size: 20px;
+            width: 36px;
+            text-align: center;
+        }}
+
+        .spread-content {{
+            flex: 1;
+        }}
+
+        .spread-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4px;
+        }}
+
+        .spread-nature {{
+            font-weight: 600;
+            color: var(--text-primary);
+        }}
+
+        .spread-usage {{
+            font-size: 12px;
+            color: var(--accent-primary);
+            font-weight: 600;
+            background: rgba(99, 102, 241, 0.2);
+            padding: 2px 8px;
+            border-radius: var(--radius-full);
+        }}
+
+        .spread-evs {{
+            font-size: 13px;
+            color: var(--text-secondary);
+            font-family: 'SF Mono', monospace;
+            margin-bottom: 4px;
+        }}
+
+        .spread-details {{
+            display: flex;
+            gap: var(--space-sm);
+            font-size: 11px;
+        }}
+
+        .spread-item {{
+            color: var(--accent-warning);
+        }}
+
+        .spread-ability {{
+            color: var(--accent-info);
+        }}
+
+        .spread-select {{
+            width: 60px;
+            text-align: center;
+        }}
+
+        .select-btn {{
+            font-size: 11px;
+            color: var(--text-muted);
+            padding: 4px 8px;
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-sm);
+            transition: all var(--duration-fast);
+        }}
+
+        .spread-card:hover .select-btn {{
+            color: var(--accent-primary);
+            border-color: var(--accent-primary);
+        }}
+
+        .selected-check {{
+            font-size: 18px;
+            color: var(--accent-success);
+        }}
+
+        .show-more-btn {{
+            width: 100%;
+            padding: var(--space-sm);
+            background: var(--glass-bg);
+            border: 1px dashed var(--glass-border);
+            border-radius: var(--radius-md);
+            color: var(--text-secondary);
+            font-size: 13px;
+            cursor: pointer;
+            transition: all var(--duration-fast);
+            margin-top: var(--space-sm);
+        }}
+
+        .show-more-btn:hover {{
+            background: var(--glass-bg-hover);
+            border-color: var(--accent-primary);
+            color: var(--accent-primary);
+        }}
+    </style>
+</head>
+<body>
+    <div class="spreads-container">
+        <div class="spreads-header">
+            <div class="spreads-title">Common Spreads: {pokemon_name}</div>
+            <div class="spreads-count">{len(spreads)} spreads</div>
+        </div>
+
+        <div class="spreads-list">
+            {cards_html}
+        </div>
+
+        {show_more_html}
+    </div>
+</body>
+</html>"""
+
+
+def create_pokemon_build_card_ui(
+    pokemon_name: str,
+    base_stats: dict,
+    types: list[str],
+    abilities: list[str],
+    moves: list[str],
+    items: Optional[list[str]] = None,
+    initial_evs: Optional[dict] = None,
+    initial_nature: str = "Adamant",
+    initial_ability: Optional[str] = None,
+    initial_item: Optional[str] = None,
+    initial_tera: Optional[str] = None,
+    initial_moves: Optional[list[str]] = None,
+    usage_speed_tiers: Optional[list[dict]] = None,
+) -> str:
+    """Create an interactive Pokemon build editor card with EV sliders.
+
+    Features:
+    - Pokemon sprite and type display
+    - EV sliders (0-252) for all 6 stats
+    - Nature, ability, item, tera type selectors
+    - Move selectors (4 slots)
+    - Real-time stat calculation
+    - Speed tier display showing how you compare to usage stats of this Pokemon
+
+    Args:
+        pokemon_name: Name of the Pokemon
+        base_stats: Dict with hp, attack, defense, special_attack, special_defense, speed
+        types: List of Pokemon types
+        abilities: List of available abilities
+        moves: List of available moves for this Pokemon
+        items: List of common items (optional, uses defaults if not provided)
+        initial_evs: Starting EV spread (optional)
+        initial_nature: Starting nature (default: Adamant)
+        initial_ability: Starting ability (optional, uses first)
+        initial_item: Starting item (optional)
+        initial_tera: Starting tera type (optional, uses first type)
+        initial_moves: Starting moves (optional)
+        usage_speed_tiers: List of speed tiers from usage data for THIS Pokemon
+            Each entry: {speed: int, usage_pct: float, nature: str, evs: int}
+            Shows how your build compares to common spreads of the same Pokemon
+
+    Returns:
+        Complete HTML string for the build card
+    """
+    from .design_system import DESIGN_TOKENS, ANIMATIONS, TYPE_COLORS
+
+    # Default items if not provided
+    if items is None:
+        items = [
+            "Life Orb", "Choice Band", "Choice Specs", "Choice Scarf",
+            "Assault Vest", "Focus Sash", "Leftovers", "Sitrus Berry",
+            "Clear Amulet", "Covert Cloak", "Safety Goggles", "Rocky Helmet",
+            "Eviolite", "Light Clay", "Mystic Water", "Charcoal"
+        ]
+
+    # Default EVs
+    if initial_evs is None:
+        initial_evs = {"hp": 0, "attack": 0, "defense": 0, "special_attack": 0, "special_defense": 0, "speed": 0}
+
+    # Default selections
+    if initial_ability is None and abilities:
+        initial_ability = abilities[0]
+    if initial_tera is None and types:
+        initial_tera = types[0]
+    if initial_moves is None:
+        initial_moves = moves[:4] if len(moves) >= 4 else moves + [""] * (4 - len(moves))
+
+    # Generate sprite HTML
+    sprite_html = get_sprite_html(pokemon_name, size=96)
+
+    # Type badges
+    type_badges = "".join([
+        f'<span class="type-badge" style="background:{get_type_color(t)}">{t}</span>'
+        for t in types
+    ])
+
+    # Nature options (all 25 natures with stat effects)
+    natures = {
+        "Hardy": (None, None), "Lonely": ("attack", "defense"), "Brave": ("attack", "speed"),
+        "Adamant": ("attack", "special_attack"), "Naughty": ("attack", "special_defense"),
+        "Bold": ("defense", "attack"), "Docile": (None, None), "Relaxed": ("defense", "speed"),
+        "Impish": ("defense", "special_attack"), "Lax": ("defense", "special_defense"),
+        "Timid": ("speed", "attack"), "Hasty": ("speed", "defense"), "Serious": (None, None),
+        "Jolly": ("speed", "special_attack"), "Naive": ("speed", "special_defense"),
+        "Modest": ("special_attack", "attack"), "Mild": ("special_attack", "defense"),
+        "Quiet": ("special_attack", "speed"), "Bashful": (None, None), "Rash": ("special_attack", "special_defense"),
+        "Calm": ("special_defense", "attack"), "Gentle": ("special_defense", "defense"),
+        "Sassy": ("special_defense", "speed"), "Careful": ("special_defense", "special_attack"), "Quirky": (None, None),
+    }
+
+    nature_options = "".join([
+        f'<option value="{n}" {"selected" if n == initial_nature else ""}>{n}</option>'
+        for n in natures.keys()
+    ])
+
+    # Ability options
+    ability_options = "".join([
+        f'<option value="{a}" {"selected" if a == initial_ability else ""}>{a.replace("-", " ").title()}</option>'
+        for a in abilities
+    ])
+
+    # Item options
+    item_options = '<option value="">-- No Item --</option>' + "".join([
+        f'<option value="{i}" {"selected" if i == initial_item else ""}>{i}</option>'
+        for i in items
+    ])
+
+    # Tera type options (all 18 types)
+    all_types = ["Normal", "Fire", "Water", "Electric", "Grass", "Ice", "Fighting", "Poison",
+                 "Ground", "Flying", "Psychic", "Bug", "Rock", "Ghost", "Dragon", "Dark", "Steel", "Fairy"]
+    tera_options = "".join([
+        f'<option value="{t}" {"selected" if t == initial_tera else ""}>{t}</option>'
+        for t in all_types
+    ])
+
+    # Move options
+    move_options_html = '<option value="">-- Select Move --</option>' + "".join([
+        f'<option value="{m}">{m.replace("-", " ").title()}</option>'
+        for m in moves
+    ])
+
+    # Move selectors (4 slots)
+    move_selectors = ""
+    for i in range(4):
+        selected_move = initial_moves[i] if i < len(initial_moves) else ""
+        move_selectors += f'''
+        <select class="move-select" id="move-{i}" onchange="updateBuild()">
+            <option value="">-- Move {i+1} --</option>
+            {"".join([f'<option value="{m}" {"selected" if m == selected_move else ""}>{m.replace("-", " ").title()}</option>' for m in moves])}
+        </select>
+        '''
+
+    # EV slider rows
+    stat_labels = ["HP", "Attack", "Defense", "Sp. Atk", "Sp. Def", "Speed"]
+    stat_keys = ["hp", "attack", "defense", "special_attack", "special_defense", "speed"]
+    stat_colors = ["#22c55e", "#ef4444", "#3b82f6", "#a855f7", "#84cc16", "#f59e0b"]
+
+    ev_rows = ""
+    for i, (label, key, color) in enumerate(zip(stat_labels, stat_keys, stat_colors)):
+        ev_val = initial_evs.get(key, 0)
+        base_val = base_stats.get(key, 100)
+        ev_rows += f'''
+        <div class="ev-row">
+            <div class="ev-label">{label}</div>
+            <div class="ev-base">{base_val}</div>
+            <input type="range" class="ev-slider" id="ev-{key}"
+                   min="0" max="252" step="4" value="{ev_val}"
+                   style="--slider-color: {color}"
+                   oninput="document.getElementById('ev-val-{key}').textContent=this.value;updateEVs()">
+            <div class="ev-value-container">
+                <div class="ev-value" id="ev-val-{key}">{ev_val}</div>
+                <span class="ev-warning" id="warn-{key}" style="display:none"></span>
+            </div>
+            <button class="ev-lock-btn" id="lock-{key}" onclick="toggleLock('{key}')" title="Lock this stat">
+                <span class="lock-icon">&#128275;</span>
+            </button>
+            <div class="stat-final" id="stat-{key}">--</div>
+        </div>
+        '''
+
+    # Speed tiers JSON for JavaScript (usage data for this Pokemon)
+    import json
+    speed_tiers_json = json.dumps(usage_speed_tiers or [])
+
+    # Base stats JSON for JavaScript
+    base_stats_json = json.dumps(base_stats)
+
+    # Natures JSON for JavaScript
+    natures_json = json.dumps({k: list(v) for k, v in natures.items()})
+
+    return f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{pokemon_name} Build Editor</title>
+    <style>
+        {DESIGN_TOKENS}
+        {ANIMATIONS}
+
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
+
+        body {{
+            font-family: var(--font-family);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: var(--space-md);
+        }}
+
+        .build-card {{
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            max-width: 480px;
+            margin: 0 auto;
+            overflow: hidden;
+            box-shadow: var(--shadow-lg);
+            animation: fadeSlideIn 0.4s var(--ease-smooth);
+        }}
+
+        /* Header Section */
+        .card-header {{
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+            padding: var(--space-lg);
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.05) 100%);
+            border-bottom: 1px solid var(--glass-border);
+        }}
+
+        .sprite-container {{
+            flex-shrink: 0;
+        }}
+
+        .pokemon-sprite {{
+            width: 96px;
+            height: 96px;
+            image-rendering: pixelated;
+            filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.4));
+            transition: transform 0.3s var(--ease-bounce);
+        }}
+
+        .pokemon-sprite:hover {{
+            transform: scale(1.1);
+        }}
+
+        .pokemon-info {{
+            flex: 1;
+        }}
+
+        .pokemon-name {{
+            font-size: var(--font-size-xl);
+            font-weight: var(--font-weight-bold);
+            margin-bottom: var(--space-xs);
+        }}
+
+        .type-badges {{
+            display: flex;
+            gap: var(--space-xs);
+            margin-bottom: var(--space-sm);
+        }}
+
+        .type-badge {{
+            padding: 2px 10px;
+            border-radius: var(--radius-full);
+            font-size: var(--font-size-xs);
+            font-weight: var(--font-weight-medium);
+            text-transform: uppercase;
+            color: white;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+        }}
+
+        .tera-row {{
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }}
+
+        .tera-label {{
+            font-size: var(--font-size-sm);
+            color: var(--text-secondary);
+        }}
+
+        .tera-select {{
+            background: var(--bg-elevated);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            padding: 4px 8px;
+            font-size: var(--font-size-sm);
+        }}
+
+        /* Controls Section */
+        .controls-section {{
+            padding: var(--space-md);
+            border-bottom: 1px solid var(--glass-border);
+        }}
+
+        .control-row {{
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-md);
+            margin-bottom: var(--space-sm);
+        }}
+
+        .control-group {{
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }}
+
+        .control-label {{
+            font-size: var(--font-size-xs);
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }}
+
+        .control-select {{
+            background: var(--bg-elevated);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            padding: 8px 12px;
+            font-size: var(--font-size-sm);
+            cursor: pointer;
+            transition: border-color var(--duration-fast);
+        }}
+
+        .control-select:hover {{
+            border-color: var(--accent-primary);
+        }}
+
+        .control-select:focus {{
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+        }}
+
+        /* EV Section */
+        .ev-section {{
+            padding: var(--space-md);
+            border-bottom: 1px solid var(--glass-border);
+        }}
+
+        .ev-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--space-md);
+        }}
+
+        .ev-title {{
+            font-size: var(--font-size-md);
+            font-weight: var(--font-weight-medium);
+        }}
+
+        .ev-total {{
+            font-size: var(--font-size-sm);
+            padding: 4px 12px;
+            background: var(--bg-elevated);
+            border-radius: var(--radius-full);
+            transition: all var(--duration-fast);
+        }}
+
+        .ev-total.over {{
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--accent-danger);
+        }}
+
+        .ev-total.max {{
+            background: rgba(34, 197, 94, 0.2);
+            color: var(--accent-success);
+        }}
+
+        .ev-header-row {{
+            display: grid;
+            grid-template-columns: 70px 40px 1fr 70px 28px 60px;
+            gap: var(--space-sm);
+            margin-bottom: var(--space-xs);
+            padding-bottom: var(--space-xs);
+            border-bottom: 1px solid var(--glass-border);
+        }}
+
+        .ev-header {{
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            font-weight: 600;
+        }}
+
+        .ev-row {{
+            display: grid;
+            grid-template-columns: 70px 40px 1fr 70px 28px 60px;
+            /* Label | Base | Slider | EVs+Warning | Lock | Final */
+            align-items: center;
+            gap: var(--space-sm);
+            margin-bottom: var(--space-sm);
+        }}
+
+        .ev-label {{
+            font-size: var(--font-size-sm);
+            font-weight: var(--font-weight-medium);
+        }}
+
+        .ev-label.boosted {{
+            color: var(--accent-success);
+        }}
+
+        .ev-label.lowered {{
+            color: var(--accent-danger);
+        }}
+
+        .ev-base {{
+            font-size: var(--font-size-xs);
+            color: var(--text-muted);
+            text-align: center;
+        }}
+
+        .ev-slider {{
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: var(--radius-full);
+            cursor: pointer;
+        }}
+
+        .ev-slider::-webkit-slider-thumb {{
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--slider-color, var(--accent-primary));
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+            transition: transform var(--duration-fast);
+        }}
+
+        .ev-slider::-webkit-slider-thumb:hover {{
+            transform: scale(1.2);
+        }}
+
+        .ev-slider::-moz-range-thumb {{
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--slider-color, var(--accent-primary));
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        }}
+
+        .ev-value {{
+            font-family: var(--font-mono);
+            font-size: 16px;
+            font-weight: 700;
+            text-align: center;
+            color: #a78bfa;
+            min-width: 50px;
+        }}
+
+        /* EV Value Container for warning badge */
+        .ev-value-container {{
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 70px;
+        }}
+
+        /* Wasted EV Warning */
+        .ev-value.wasted {{
+            color: #ef4444 !important;
+            animation: pulse-warning 1s ease-in-out infinite;
+        }}
+
+        @keyframes pulse-warning {{
+            0%, 100% {{ opacity: 1; }}
+            50% {{ opacity: 0.6; }}
+        }}
+
+        .ev-warning {{
+            font-size: 10px;
+            color: #ef4444;
+            background: rgba(239, 68, 68, 0.2);
+            padding: 2px 4px;
+            border-radius: 4px;
+            margin-left: 4px;
+            font-weight: 600;
+        }}
+
+        /* Nature Suggestion */
+        .nature-suggestion {{
+            margin-top: var(--space-sm);
+            padding: var(--space-sm) var(--space-md);
+            background: rgba(234, 179, 8, 0.1);
+            border: 1px solid rgba(234, 179, 8, 0.3);
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            color: #fbbf24;
+        }}
+
+        .stat-final {{
+            font-family: var(--font-mono);
+            font-size: 16px;
+            font-weight: 700;
+            text-align: right;
+            color: #ffffff;
+        }}
+
+        /* Lock Button */
+        .ev-lock-btn {{
+            width: 24px;
+            height: 24px;
+            padding: 0;
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            opacity: 0.5;
+            transition: all var(--duration-fast);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }}
+
+        .ev-lock-btn:hover {{
+            opacity: 0.8;
+            border-color: rgba(255, 255, 255, 0.2);
+        }}
+
+        .ev-lock-btn.locked {{
+            opacity: 1;
+            background: rgba(99, 102, 241, 0.2);
+            border-color: var(--accent-primary);
+        }}
+
+        .lock-icon {{
+            font-size: 12px;
+        }}
+
+        .ev-slider:disabled {{
+            opacity: 0.5;
+            cursor: not-allowed;
+        }}
+
+        /* Optimize Button */
+        .ev-header-actions {{
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }}
+
+        .optimize-btn {{
+            padding: 4px 12px;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            border: none;
+            border-radius: var(--radius-sm);
+            color: white;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all var(--duration-fast);
+        }}
+
+        .optimize-btn:hover {{
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+        }}
+
+        .optimize-btn:disabled {{
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }}
+
+        /* Moves Section */
+        .moves-section {{
+            padding: var(--space-md);
+            border-bottom: 1px solid var(--glass-border);
+        }}
+
+        .moves-title {{
+            font-size: var(--font-size-md);
+            font-weight: var(--font-weight-medium);
+            margin-bottom: var(--space-sm);
+        }}
+
+        .moves-grid {{
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-sm);
+        }}
+
+        .move-select {{
+            background: var(--bg-elevated);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            padding: 8px 10px;
+            font-size: var(--font-size-sm);
+            cursor: pointer;
+        }}
+
+        .move-select:hover {{
+            border-color: var(--accent-primary);
+        }}
+
+        /* Speed Tier Section - Redesigned */
+        .speed-section {{
+            padding: var(--space-lg);
+            background: linear-gradient(180deg, rgba(99, 102, 241, 0.05) 0%, transparent 100%);
+        }}
+
+        .speed-section-title {{
+            font-size: 16px;
+            font-weight: var(--font-weight-bold);
+            margin-bottom: var(--space-md);
+            color: var(--text-primary);
+        }}
+
+        /* Header Stats Grid */
+        .speed-header-stats {{
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: var(--space-sm);
+            margin-bottom: var(--space-lg);
+        }}
+
+        .speed-stat-box {{
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-md);
+            padding: var(--space-sm) var(--space-md);
+            text-align: center;
+        }}
+
+        .speed-stat-box.highlight {{
+            border-color: var(--accent-success);
+            background: rgba(34, 197, 94, 0.1);
+        }}
+
+        .speed-stat-label {{
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }}
+
+        .speed-stat-value {{
+            font-family: var(--font-mono);
+            font-size: 24px;
+            font-weight: var(--font-weight-bold);
+            color: var(--accent-primary);
+        }}
+
+        .speed-stat-box.highlight .speed-stat-value {{
+            color: var(--accent-success);
+        }}
+
+        /* Main Percentage Display */
+        .speed-percentage-display {{
+            text-align: center;
+            margin-bottom: var(--space-lg);
+            padding: var(--space-md);
+            background: var(--glass-bg);
+            border-radius: var(--radius-md);
+        }}
+
+        .speed-pct-large {{
+            font-size: 42px;
+            font-weight: var(--font-weight-bold);
+            color: var(--accent-primary);
+            line-height: 1;
+        }}
+
+        .speed-pct-label {{
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-top: var(--space-xs);
+        }}
+
+        /* Progress Bar */
+        .speed-progress-container {{
+            height: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: var(--radius-full);
+            overflow: hidden;
+            margin-bottom: var(--space-lg);
+            position: relative;
+        }}
+
+        .speed-progress-bar {{
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-success) 0%, var(--accent-primary) 100%);
+            border-radius: var(--radius-full);
+            transition: width 0.3s var(--ease-smooth);
+        }}
+
+        /* Speed Tier Table */
+        .speed-tier-table {{
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }}
+
+        .speed-tier-table th {{
+            text-align: left;
+            padding: 10px 12px;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--glass-border);
+            background: rgba(0, 0, 0, 0.2);
+        }}
+
+        .speed-tier-table th:last-child {{
+            text-align: right;
+        }}
+
+        .speed-tier-table td {{
+            padding: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }}
+
+        .speed-tier-table tr:last-child td {{
+            border-bottom: none;
+        }}
+
+        .speed-tier-table .speed-col {{
+            font-family: var(--font-mono);
+            font-size: 18px;
+            font-weight: var(--font-weight-bold);
+        }}
+
+        .speed-tier-table .nature-col {{
+            color: var(--text-secondary);
+            font-size: 14px;
+        }}
+
+        .speed-tier-table .usage-col {{
+            color: var(--text-muted);
+            font-size: 14px;
+            text-align: center;
+        }}
+
+        .speed-tier-table .result-col {{
+            text-align: right;
+            font-weight: var(--font-weight-bold);
+            font-size: 14px;
+        }}
+
+        .result-outspeed {{
+            color: #22c55e;
+        }}
+
+        .result-tie {{
+            color: #f59e0b;
+        }}
+
+        .result-outsped {{
+            color: #ef4444;
+        }}
+    </style>
+</head>
+<body>
+    <div class="build-card">
+        <!-- Header -->
+        <div class="card-header">
+            <div class="sprite-container">
+                {sprite_html}
+            </div>
+            <div class="pokemon-info">
+                <div class="pokemon-name">{pokemon_name}</div>
+                <div class="type-badges">{type_badges}</div>
+                <div class="tera-row">
+                    <span class="tera-label">Tera:</span>
+                    <select class="tera-select" id="tera-type" onchange="updateBuild()">
+                        {tera_options}
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="controls-section">
+            <div class="control-row">
+                <div class="control-group">
+                    <label class="control-label">Ability</label>
+                    <select class="control-select" id="ability" onchange="updateBuild()">
+                        {ability_options}
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label class="control-label">Item</label>
+                    <select class="control-select" id="item" onchange="updateBuild()">
+                        {item_options}
+                    </select>
+                </div>
+            </div>
+            <div class="control-row">
+                <div class="control-group">
+                    <label class="control-label">Nature</label>
+                    <select class="control-select" id="nature" onchange="updateNature()">
+                        {nature_options}
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label class="control-label">Total EVs</label>
+                    <div class="ev-total" id="ev-total">0 / 508</div>
+                </div>
+            </div>
+            <div class="nature-suggestion" id="nature-suggestion" style="display:none"></div>
+        </div>
+
+        <!-- EV Sliders -->
+        <div class="ev-section">
+            <div class="ev-header" style="display:flex;justify-content:space-between;align-items:center;padding:var(--space-sm) var(--space-md);border-bottom:1px solid var(--glass-border);">
+                <span class="ev-title">EV Spread</span>
+            </div>
+            <div class="ev-header-row">
+                <div class="ev-header">Stat</div>
+                <div class="ev-header">Base</div>
+                <div class="ev-header"></div>
+                <div class="ev-header">EVs</div>
+                <div class="ev-header"></div>
+                <div class="ev-header">Final</div>
+            </div>
+            {ev_rows}
+        </div>
+
+        <!-- Moves -->
+        <div class="moves-section">
+            <div class="moves-title">Moves</div>
+            <div class="moves-grid">
+                {move_selectors}
+            </div>
+        </div>
+
+        <!-- Speed Tier -->
+        <div class="speed-section">
+            <div class="speed-section-title">Speed Self-Comparison</div>
+
+            <!-- Header Stats: Your Speed, Common Max, Common Min -->
+            <div class="speed-header-stats">
+                <div class="speed-stat-box highlight">
+                    <div class="speed-stat-label">Your Speed</div>
+                    <div class="speed-stat-value" id="speed-display">--</div>
+                </div>
+                <div class="speed-stat-box">
+                    <div class="speed-stat-label">Common Max</div>
+                    <div class="speed-stat-value" id="speed-max">--</div>
+                </div>
+                <div class="speed-stat-box">
+                    <div class="speed-stat-label">Common Min</div>
+                    <div class="speed-stat-value" id="speed-min">--</div>
+                </div>
+            </div>
+
+            <!-- Main Percentage Display -->
+            <div class="speed-percentage-display">
+                <div class="speed-pct-large"><span id="speed-pct">~0</span>%</div>
+                <div class="speed-pct-label">Faster than this % of {pokemon_name} builds (est.)</div>
+            </div>
+
+            <!-- Progress Bar -->
+            <div class="speed-progress-container">
+                <div class="speed-progress-bar" id="speed-bar" style="width: 0%"></div>
+            </div>
+
+            <!-- Speed Tier Table -->
+            <table class="speed-tier-table" id="speed-tier-table">
+                <thead>
+                    <tr>
+                        <th>Speed</th>
+                        <th>Spread</th>
+                        <th>Usage</th>
+                        <th>Result</th>
+                    </tr>
+                </thead>
+                <tbody id="speed-tier-tbody">
+                    <!-- Populated by JavaScript -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const BASE_STATS = {base_stats_json};
+        const NATURES = {natures_json};
+        const SPEED_TIERS = {speed_tiers_json};
+
+        const STAT_KEYS = ['hp', 'attack', 'defense', 'special_attack', 'special_defense', 'speed'];
+        const NATURE_STAT_MAP = {{
+            'attack': 'attack',
+            'defense': 'defense',
+            'special_attack': 'special_attack',
+            'special_defense': 'special_defense',
+            'speed': 'speed'
+        }};
+
+        function calcStat(base, ev, iv, natureMod, isHP) {{
+            iv = iv || 31;
+            if (isHP) {{
+                return Math.floor((2 * base + iv + Math.floor(ev / 4)) * 50 / 100) + 50 + 10;
+            }}
+            return Math.floor((Math.floor((2 * base + iv + Math.floor(ev / 4)) * 50 / 100) + 5) * natureMod);
+        }}
+
+        function getNatureMods(natureName) {{
+            const nature = NATURES[natureName];
+            const mods = {{}};
+            STAT_KEYS.forEach(k => mods[k] = 1.0);
+            if (nature && nature[0]) {{
+                mods[nature[0]] = 1.1;
+            }}
+            if (nature && nature[1]) {{
+                mods[nature[1]] = 0.9;
+            }}
+            return mods;
+        }}
+
+        // Valid EV breakpoints at Level 50: 0, 4, 12, 20, 28, ... 244, 252
+        // Pattern: First point at 4 EVs, then +8 for each additional stat point
+        const EV_BREAKPOINTS = [0, 4, 12, 20, 28, 36, 44, 52, 60, 68, 76, 84, 92, 100, 108, 116, 124, 132, 140, 148, 156, 164, 172, 180, 188, 196, 204, 212, 220, 228, 236, 244, 252];
+
+        function isValidBreakpoint(evs) {{
+            return EV_BREAKPOINTS.includes(evs);
+        }}
+
+        function getNearestBreakpoint(evs) {{
+            // Find highest breakpoint <= evs
+            for (let i = EV_BREAKPOINTS.length - 1; i >= 0; i--) {{
+                if (EV_BREAKPOINTS[i] <= evs) {{
+                    return EV_BREAKPOINTS[i];
+                }}
+            }}
+            return 0;
+        }}
+
+        function getWastedEVs(evs) {{
+            const nearest = getNearestBreakpoint(evs);
+            return evs - nearest;  // How many EVs are wasted
+        }}
+
+        // Check if a +Speed nature could achieve same speed with fewer EVs
+        function checkNatureOptimization(currentEVs, targetStat, currentNature) {{
+            const base = BASE_STATS['speed'];
+            const currentMods = getNatureMods(currentNature);
+
+            // If already using +Speed nature, no optimization possible
+            if (currentMods.speed === 1.1) return null;
+
+            // Calculate what EVs would be needed with +Speed nature (1.1x)
+            for (let testEV = 0; testEV <= 252; testEV += 4) {{
+                const statWith110 = calcStat(base, testEV, 31, 1.1, false);
+                if (statWith110 >= targetStat) {{
+                    const evSaved = currentEVs - testEV;
+                    if (evSaved >= 8) {{  // Only suggest if saving at least 8 EVs
+                        return {{
+                            suggestedNature: 'Jolly/Timid',
+                            newEVs: testEV,
+                            evSaved: evSaved,
+                            sameSpeed: statWith110
+                        }};
+                    }}
+                    break;
+                }}
+            }}
+            return null;
+        }}
+
+        function updateNature() {{
+            const nature = document.getElementById('nature').value;
+            const [boosted, lowered] = NATURES[nature] || [null, null];
+
+            // Update label colors
+            STAT_KEYS.forEach(key => {{
+                const label = document.querySelector(`#ev-${{key}}`).closest('.ev-row').querySelector('.ev-label');
+                label.classList.remove('boosted', 'lowered');
+                if (boosted === key) label.classList.add('boosted');
+                if (lowered === key) label.classList.add('lowered');
+            }});
+
+            updateEVs();
+        }}
+
+        function updateEVs() {{
+            // Calculate total EVs and check for wasted EVs
+            let total = 0;
+            const nature = document.getElementById('nature').value;
+            const natureMods = getNatureMods(nature);
+
+            STAT_KEYS.forEach(key => {{
+                const val = parseInt(document.getElementById(`ev-${{key}}`).value) || 0;
+                total += val;
+
+                const evDisplay = document.getElementById(`ev-val-${{key}}`);
+                evDisplay.textContent = val;
+
+                // Check for wasted EVs at non-breakpoints
+                const wasted = getWastedEVs(val);
+                const warningEl = document.getElementById(`warn-${{key}}`);
+
+                if (wasted > 0) {{
+                    evDisplay.classList.add('wasted');
+                    evDisplay.title = `Wasting ${{wasted}} EVs! Use ${{getNearestBreakpoint(val)}} instead.`;
+                    if (warningEl) {{
+                        warningEl.textContent = `-${{wasted}}`;
+                        warningEl.style.display = 'inline-block';
+                    }}
+                }} else {{
+                    evDisplay.classList.remove('wasted');
+                    evDisplay.title = '';
+                    if (warningEl) warningEl.style.display = 'none';
+                }}
+            }});
+
+            // Update total display
+            const totalEl = document.getElementById('ev-total');
+            totalEl.textContent = `${{total}} / 508`;
+            totalEl.classList.remove('over', 'max');
+            if (total > 508) totalEl.classList.add('over');
+            else if (total === 508) totalEl.classList.add('max');
+
+            // Calculate final stats
+            STAT_KEYS.forEach(key => {{
+                const base = BASE_STATS[key] || 100;
+                const ev = parseInt(document.getElementById(`ev-${{key}}`).value) || 0;
+                const stat = calcStat(base, ev, 31, natureMods[key], key === 'hp');
+                document.getElementById(`stat-${{key}}`).textContent = stat;
+            }});
+
+            updateSpeedTier();
+
+            // Check nature optimization for speed
+            const speedEVs = parseInt(document.getElementById('ev-speed').value) || 0;
+            const speedStat = parseInt(document.getElementById('stat-speed').textContent) || 0;
+            const suggestionEl = document.getElementById('nature-suggestion');
+
+            if (suggestionEl) {{
+                const optimization = checkNatureOptimization(speedEVs, speedStat, nature);
+                if (optimization && speedEVs > 0) {{
+                    suggestionEl.innerHTML = `&#128161; Use ${{optimization.suggestedNature}} nature with ${{optimization.newEVs}} Spe EVs to save ${{optimization.evSaved}} EVs`;
+                    suggestionEl.style.display = 'block';
+                }} else {{
+                    suggestionEl.style.display = 'none';
+                }}
+            }}
+        }}
+
+        function updateSpeedTier() {{
+            const speed = parseInt(document.getElementById('stat-speed').textContent) || 0;
+            document.getElementById('speed-display').textContent = speed;
+
+            if (SPEED_TIERS.length === 0) {{
+                document.getElementById('speed-pct').textContent = '--';
+                document.getElementById('speed-bar').style.width = '50%';
+                document.getElementById('speed-max').textContent = '--';
+                document.getElementById('speed-min').textContent = '--';
+                document.getElementById('speed-tier-tbody').innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);">No usage data available</td></tr>';
+                return;
+            }}
+
+            // Sort tiers by speed (ascending for table, highest first in display)
+            const sortedTiers = [...SPEED_TIERS].sort((a, b) => a.speed - b.speed);
+
+            // Calculate min/max for header stats
+            const minSpeed = sortedTiers[0].speed;
+            const maxSpeed = sortedTiers[sortedTiers.length - 1].speed;
+            document.getElementById('speed-min').textContent = minSpeed;
+            document.getElementById('speed-max').textContent = maxSpeed;
+
+            // Calculate cumulative percentages
+            let cumulative = 0;
+            const tiers = sortedTiers.map(t => {{
+                cumulative += t.usage_pct || 1;
+                return {{ ...t, cumPct: cumulative }};
+            }});
+            const total = cumulative;
+
+            // Find bounds and interpolate for smooth progression
+            let pct = 0;
+            if (speed <= tiers[0].speed) {{
+                pct = 0;  // Slower than or equal to slowest tier
+            }} else if (speed > tiers[tiers.length - 1].speed) {{
+                pct = 100;  // Faster than fastest tier
+            }} else {{
+                // Find lower and upper bounds
+                let lower = {{ speed: tiers[0].speed, cumPct: 0 }};
+                let upper = tiers[tiers.length - 1];
+
+                for (let i = 0; i < tiers.length; i++) {{
+                    if (tiers[i].speed < speed) {{
+                        lower = tiers[i];
+                    }} else {{
+                        upper = tiers[i];
+                        break;
+                    }}
+                }}
+
+                // Interpolate between lower and upper bounds
+                const lowerPct = (lower.cumPct / total) * 100;
+                const upperPct = (upper.cumPct / total) * 100;
+                const ratio = (speed - lower.speed) / (upper.speed - lower.speed);
+                pct = lowerPct + ratio * (upperPct - lowerPct);
+            }}
+
+            document.getElementById('speed-pct').textContent = '~' + pct.toFixed(1);
+            document.getElementById('speed-bar').style.width = pct + '%';
+
+            // Build the speed tier table (sorted by speed descending for display)
+            const tableRows = [...SPEED_TIERS]
+                .sort((a, b) => b.speed - a.speed)  // Highest speed first
+                .map(tier => {{
+                    let result, resultClass;
+                    if (speed > tier.speed) {{
+                        result = 'Outspeed';
+                        resultClass = 'result-outspeed';
+                    }} else if (speed === tier.speed) {{
+                        result = '= Tie';
+                        resultClass = 'result-tie';
+                    }} else {{
+                        result = 'Outsped';
+                        resultClass = 'result-outsped';
+                    }}
+
+                    const evDisplay = tier.evs !== undefined ? `${{tier.evs}} Spe` : '';
+                    const natureDisplay = tier.nature || '';
+                    const spreadDisplay = [natureDisplay, evDisplay].filter(Boolean).join(' ');
+                    const usagePct = tier.usage_pct !== undefined ? tier.usage_pct.toFixed(1) + '%' : '--';
+
+                    return `<tr>
+                        <td class="speed-col">${{tier.speed}}</td>
+                        <td class="nature-col">${{spreadDisplay || '--'}}</td>
+                        <td class="usage-col">${{usagePct}}</td>
+                        <td class="result-col ${{resultClass}}">${{result}}</td>
+                    </tr>`;
+                }})
+                .join('');
+
+            document.getElementById('speed-tier-tbody').innerHTML = tableRows;
+        }}
+
+        // Track locked stats for optimization
+        const lockedStats = new Set();
+
+        function toggleLock(statKey) {{
+            const btn = document.getElementById(`lock-${{statKey}}`);
+            const slider = document.getElementById(`ev-${{statKey}}`);
+
+            if (lockedStats.has(statKey)) {{
+                lockedStats.delete(statKey);
+                btn.classList.remove('locked');
+                btn.innerHTML = '<span class="lock-icon">&#128275;</span>';
+                slider.disabled = false;
+            }} else {{
+                lockedStats.add(statKey);
+                btn.classList.add('locked');
+                btn.innerHTML = '<span class="lock-icon">&#128274;</span>';
+                slider.disabled = true;
+            }}
+        }}
+
+        function optimizeSpread() {{
+            const nature = document.getElementById('nature').value;
+            const natureMods = getNatureMods(nature);
+
+            // Get locked EVs and calculate remaining
+            let lockedTotal = 0;
+            lockedStats.forEach(key => {{
+                lockedTotal += parseInt(document.getElementById(`ev-${{key}}`).value) || 0;
+            }});
+            let remaining = 508 - lockedTotal;
+
+            // Get unlocked stats
+            const unlocked = STAT_KEYS.filter(k => !lockedStats.has(k));
+
+            // Figure out which defensive stats to optimize (HP, Def, SpD)
+            const bulkStats = unlocked.filter(k => ['hp', 'defense', 'special_defense'].includes(k));
+            const otherUnlocked = unlocked.filter(k => !bulkStats.includes(k));
+
+            // Reset unlocked non-bulk stats to 0
+            otherUnlocked.forEach(key => {{
+                setEV(key, 0);
+            }});
+
+            // Reset bulk stats to 0 before redistributing
+            bulkStats.forEach(key => {{
+                setEV(key, 0);
+            }});
+
+            // Distribute remaining EVs to bulk stats using diminishing returns optimization
+            // Add 4 EVs where marginal gain is highest
+            if (bulkStats.length > 0 && remaining > 0) {{
+                while (remaining >= 4) {{
+                    let bestStat = null;
+                    let bestGain = -1;
+
+                    bulkStats.forEach(stat => {{
+                        const currentEV = parseInt(document.getElementById(`ev-${{stat}}`).value) || 0;
+                        if (currentEV >= 252) return; // Already maxed
+
+                        const base = BASE_STATS[stat] || 100;
+                        const mod = natureMods[stat] || 1.0;
+
+                        // Calculate marginal gain for adding 4 EVs
+                        const currentStat = calcStat(base, currentEV, 31, mod, stat === 'hp');
+                        const newStat = calcStat(base, currentEV + 4, 31, mod, stat === 'hp');
+                        const gain = newStat - currentStat;
+
+                        // Weight HP gains higher (benefits both physical and special bulk)
+                        const weight = stat === 'hp' ? 2 : 1;
+                        const weightedGain = gain * weight;
+
+                        if (weightedGain > bestGain) {{
+                            bestGain = weightedGain;
+                            bestStat = stat;
+                        }}
+                    }});
+
+                    if (bestStat === null) break; // All stats maxed
+
+                    const currentEV = parseInt(document.getElementById(`ev-${{bestStat}}`).value) || 0;
+                    setEV(bestStat, Math.min(252, currentEV + 4));
+                    remaining -= 4;
+                }}
+            }}
+
+            updateEVs();
+        }}
+
+        function setEV(statKey, value) {{
+            const slider = document.getElementById(`ev-${{statKey}}`);
+            const display = document.getElementById(`ev-val-${{statKey}}`);
+            slider.value = value;
+            display.textContent = value;
+        }}
+
+        function updateBuild() {{
+            // Placeholder for future build export functionality
+            console.log('Build updated');
+        }}
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', () => {{
+            updateNature();
+        }});
+
+        // Initialize immediately as well
+        updateNature();
+    </script>
+</body>
+</html>'''
+
+
+def create_pokepaste_team_grid_ui(
+    pokemon_list: list[dict],
+    team_name: Optional[str] = None,
+    paste_url: Optional[str] = None,
+) -> str:
+    """Create a team grid UI from Pokepaste data with full build details."""
+    # Nature stat modifiers
+    NATURE_MODS = {
+        "hardy": (None, None), "lonely": ("atk", "def"), "brave": ("atk", "spe"),
+        "adamant": ("atk", "spa"), "naughty": ("atk", "spd"),
+        "bold": ("def", "atk"), "docile": (None, None), "relaxed": ("def", "spe"),
+        "impish": ("def", "spa"), "lax": ("def", "spd"),
+        "timid": ("spe", "atk"), "hasty": ("spe", "def"), "serious": (None, None),
+        "jolly": ("spe", "spa"), "naive": ("spe", "spd"),
+        "modest": ("spa", "atk"), "mild": ("spa", "def"),
+        "quiet": ("spa", "spe"), "bashful": (None, None), "rash": ("spa", "spd"),
+        "calm": ("spd", "atk"), "gentle": ("spd", "def"),
+        "sassy": ("spd", "spe"), "careful": ("spd", "spa"), "quirky": (None, None),
+    }
+
+    def calc_stat(base, iv, ev, level, nature_mod, is_hp):
+        if is_hp:
+            return int((2 * base + iv + ev // 4) * level / 100) + level + 10
+        return int(((2 * base + iv + ev // 4) * level / 100 + 5) * nature_mod)
+
+    def get_nature_mods_local(nature):
+        mods = {"hp": 1.0, "atk": 1.0, "def": 1.0, "spa": 1.0, "spd": 1.0, "spe": 1.0}
+        nature_data = NATURE_MODS.get(nature.lower(), (None, None))
+        if nature_data[0]:
+            mods[nature_data[0]] = 1.1
+        if nature_data[1]:
+            mods[nature_data[1]] = 0.9
+        return mods
+
+    STAT_COLORS = {
+        "hp": "#ff5959", "atk": "#f5ac78", "def": "#fae078",
+        "spa": "#9db7f5", "spd": "#a7db8d", "spe": "#fa92b2"
+    }
+
+    cards_html = ""
+    for i, pokemon in enumerate(pokemon_list):
+        species = pokemon.get("species", "Unknown")
+        types = pokemon.get("types", [])
+        item = pokemon.get("item", "")
+        ability = pokemon.get("ability", "")
+        nature = pokemon.get("nature", "Serious")
+        evs = pokemon.get("evs", {})
+        ivs = pokemon.get("ivs", {})
+        moves = pokemon.get("moves", [])
+        tera_type = pokemon.get("tera_type")
+        level = pokemon.get("level", 50)
+        base_stats = pokemon.get("base_stats", {})
+
+        ev_total = sum(evs.get(s, 0) for s in ["hp", "atk", "def", "spa", "spd", "spe"])
+        primary_type = types[0].lower() if types else "normal"
+
+        type_badges = " ".join(
+            f'<span class="type-badge type-{t.lower()}">{t.upper()}</span>'
+            for t in types
+        )
+
+        tera_html = ""
+        if tera_type:
+            tera_color = get_type_color(tera_type)
+            tera_html = f'<span class="tera-badge" style="--tera-color: {tera_color};"><span class="tera-icon">&#10022;</span> {tera_type}</span>'
+
+        ev_cells = ""
+        for stat, label in [("hp", "HP"), ("atk", "Atk"), ("def", "Def"), ("spa", "SpA"), ("spd", "SpD"), ("spe", "Spe")]:
+            val = evs.get(stat, 0)
+            color = STAT_COLORS.get(stat, "#888")
+            ev_cells += f'<div class="ev-cell"><span class="ev-label">{label}</span><span class="ev-value" style="color: {color};">{val}</span></div>'
+
+        iv_parts = []
+        for stat, label in [("hp", "HP"), ("atk", "Atk"), ("def", "Def"), ("spa", "SpA"), ("spd", "SpD"), ("spe", "Spe")]:
+            iv_val = ivs.get(stat, 31)
+            if iv_val != 31:
+                iv_parts.append(f"{iv_val} {label}")
+        ivs_html = f'<div class="ivs-note">IVs: {", ".join(iv_parts)}</div>' if iv_parts else ""
+
+        moves_html = ""
+        for move in moves[:4]:
+            if isinstance(move, dict):
+                move_name = move.get("name", "Unknown")
+                move_type = move.get("type", "normal")
+            else:
+                move_name = str(move)
+                move_type = "normal"
+            move_color = get_type_color(move_type)
+            moves_html += f'<span class="move-pill" style="--move-color: {move_color};">{move_name}</span>'
+
+        nature_mods = get_nature_mods_local(nature)
+        final_stats = {}
+        for stat in ["hp", "atk", "def", "spa", "spd", "spe"]:
+            base = base_stats.get(stat, 80)
+            iv = ivs.get(stat, 31)
+            ev = evs.get(stat, 0)
+            mod = nature_mods.get(stat, 1.0)
+            final_stats[stat] = calc_stat(base, iv, ev, level, mod, stat == "hp")
+
+        stats_display = " / ".join(
+            f'<span style="color: {STAT_COLORS.get(s, "#888")};">{final_stats.get(s, "?")}</span>'
+            for s in ["hp", "atk", "def", "spa", "spd", "spe"]
+        )
+
+        nature_info = NATURE_MODS.get(nature.lower(), (None, None))
+        nature_display = nature
+        if nature_info[0] and nature_info[1]:
+            boost_label = {"atk": "Atk", "def": "Def", "spa": "SpA", "spd": "SpD", "spe": "Spe"}.get(nature_info[0], "")
+            drop_label = {"atk": "Atk", "def": "Def", "spa": "SpA", "spd": "SpD", "spe": "Spe"}.get(nature_info[1], "")
+            nature_display = f'{nature} <span class="nature-hint">(+{boost_label} -{drop_label})</span>'
+
+        delay = i * 0.1
+        cards_html += f"""
+        <div class="paste-card" style="animation-delay: {delay}s; --type-color: {get_type_color(primary_type)};">
+            <div class="card-shine"></div>
+            <div class="card-header">
+                <div class="sprite-area">{get_sprite_html(species, size=80, css_class="paste-sprite")}</div>
+                <div class="header-info">
+                    <div class="species-name">{species}</div>
+                    <div class="types-row">{type_badges}</div>
+                    {f'<div class="tera-row">{tera_html}</div>' if tera_html else ''}
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="item-ability-row">
+                    <div class="item-display"><span class="label">@</span><span class="value">{item or 'None'}</span></div>
+                    <div class="ability-display"><span class="value">{ability or 'Unknown'}</span></div>
+                </div>
+                <div class="nature-ev-row">
+                    <div class="nature-display">{nature_display}</div>
+                    <div class="ev-total">EVs: {ev_total}/508</div>
+                </div>
+                <div class="ev-grid">{ev_cells}</div>
+                {ivs_html}
+                <div class="moves-section"><div class="moves-grid">{moves_html}</div></div>
+                <div class="final-stats"><span class="stats-label">Stats:</span><span class="stats-values">{stats_display}</span></div>
+            </div>
+        </div>"""
+
+    header_title = team_name if team_name else "Team"
+    pokemon_count = len(pokemon_list)
+    url_display = ""
+    if paste_url:
+        short_url = paste_url.replace("https://", "").replace("http://", "")
+        url_display = f'<a href="{paste_url}" class="paste-link" target="_blank">{short_url}</a>'
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{header_title}</title>
+    <style>
+* {{ margin: 0; padding: 0; box-sizing: border-box; }}
+body {{ font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #0c0c14 0%, #12121f 50%, #0a0a12 100%); color: #e4e4e7; line-height: 1.5; min-height: 100vh; padding: 24px; }}
+body::before {{ content: ""; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-image: radial-gradient(circle at 20% 30%, rgba(99, 102, 241, 0.08) 0%, transparent 40%), radial-gradient(circle at 80% 70%, rgba(139, 92, 246, 0.06) 0%, transparent 40%); pointer-events: none; z-index: -1; }}
+@keyframes fadeSlideIn {{ 0% {{ opacity: 0; transform: translateY(20px) scale(0.98); }} 100% {{ opacity: 1; transform: translateY(0) scale(1); }} }}
+@keyframes shimmer {{ 0% {{ background-position: -200% 0; }} 100% {{ background-position: 200% 0; }} }}
+.team-container {{ max-width: 1400px; margin: 0 auto; }}
+.team-header {{ display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; padding: 16px 20px; background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(20px); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.08); }}
+.header-left {{ display: flex; align-items: center; gap: 12px; }}
+.team-title {{ font-size: 22px; font-weight: 700; color: #fff; }}
+.team-count {{ background: linear-gradient(135deg, #6366f1, #8b5cf6); padding: 4px 12px; border-radius: 16px; font-size: 12px; font-weight: 700; color: #fff; }}
+.paste-link {{ font-size: 13px; color: #71717a; text-decoration: none; transition: color 0.2s; }}
+.paste-link:hover {{ color: #a78bfa; }}
+.team-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px; }}
+@media (max-width: 720px) {{ .team-grid {{ grid-template-columns: 1fr; }} }}
+.paste-card {{ background: rgba(255, 255, 255, 0.02); backdrop-filter: blur(20px); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.06); overflow: hidden; position: relative; animation: fadeSlideIn 0.5s ease backwards; transition: all 0.3s ease; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2); }}
+.paste-card:hover {{ transform: translateY(-4px); border-color: rgba(255, 255, 255, 0.12); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3), 0 0 20px var(--type-color, rgba(99, 102, 241, 0.2)); }}
+.card-shine {{ position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(135deg, transparent 0%, rgba(255,255,255,0.03) 40%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.03) 60%, transparent 100%); background-size: 200% 200%; opacity: 0; transition: opacity 0.3s; pointer-events: none; }}
+.paste-card:hover .card-shine {{ opacity: 1; animation: shimmer 2s ease-in-out infinite; }}
+.card-header {{ display: flex; gap: 14px; padding: 16px 16px 12px; background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, transparent 100%); border-bottom: 1px solid rgba(255, 255, 255, 0.04); }}
+.sprite-area {{ flex-shrink: 0; width: 80px; height: 80px; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle, rgba(255, 255, 255, 0.05) 0%, transparent 70%); border-radius: 12px; }}
+.paste-sprite {{ width: 72px; height: 72px; image-rendering: auto; filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.4)); }}
+.header-info {{ flex: 1; min-width: 0; }}
+.species-name {{ font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+.types-row {{ display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }}
+.type-badge {{ padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; letter-spacing: 0.5px; color: #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2); }}
+.type-normal {{ background: linear-gradient(135deg, #A8A878, #8a8a5c); }}
+.type-fire {{ background: linear-gradient(135deg, #F08030, #c4682a); }}
+.type-water {{ background: linear-gradient(135deg, #6890F0, #5070c0); }}
+.type-electric {{ background: linear-gradient(135deg, #F8D030, #c4a828); }}
+.type-grass {{ background: linear-gradient(135deg, #78C850, #5ca040); }}
+.type-ice {{ background: linear-gradient(135deg, #98D8D8, #70b0b0); }}
+.type-fighting {{ background: linear-gradient(135deg, #C03028, #901820); }}
+.type-poison {{ background: linear-gradient(135deg, #A040A0, #803080); }}
+.type-ground {{ background: linear-gradient(135deg, #E0C068, #b09048); }}
+.type-flying {{ background: linear-gradient(135deg, #A890F0, #8070c0); }}
+.type-psychic {{ background: linear-gradient(135deg, #F85888, #c04060); }}
+.type-bug {{ background: linear-gradient(135deg, #A8B820, #889010); }}
+.type-rock {{ background: linear-gradient(135deg, #B8A038, #907820); }}
+.type-ghost {{ background: linear-gradient(135deg, #705898, #504070); }}
+.type-dragon {{ background: linear-gradient(135deg, #7038F8, #5028c0); }}
+.type-dark {{ background: linear-gradient(135deg, #705848, #503830); }}
+.type-steel {{ background: linear-gradient(135deg, #B8B8D0, #9090a8); }}
+.type-fairy {{ background: linear-gradient(135deg, #EE99AC, #c07088); }}
+.tera-row {{ margin-top: 4px; }}
+.tera-badge {{ display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.04)); border: 1px dashed var(--tera-color, #fff); border-radius: 4px; font-size: 10px; font-weight: 600; color: var(--tera-color, #fff); }}
+.tera-icon {{ font-size: 11px; }}
+.card-body {{ padding: 12px 16px 16px; }}
+.item-ability-row {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }}
+.item-display, .ability-display {{ font-size: 12px; }}
+.item-display .label {{ color: #f59e0b; margin-right: 4px; }}
+.item-display .value {{ color: #e4e4e7; font-weight: 500; }}
+.ability-display .value {{ color: #a78bfa; font-style: italic; }}
+.nature-ev-row {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }}
+.nature-display {{ font-size: 13px; font-weight: 600; color: #e4e4e7; }}
+.nature-hint {{ font-weight: 400; font-size: 11px; color: #71717a; }}
+.ev-total {{ font-size: 11px; color: #71717a; background: rgba(255, 255, 255, 0.05); padding: 2px 8px; border-radius: 8px; }}
+.ev-grid {{ display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; margin-bottom: 8px; background: rgba(0, 0, 0, 0.2); border-radius: 8px; padding: 8px; }}
+.ev-cell {{ text-align: center; }}
+.ev-label {{ display: block; font-size: 9px; color: #71717a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }}
+.ev-value {{ font-family: 'SF Mono', 'Consolas', monospace; font-size: 13px; font-weight: 700; }}
+.ivs-note {{ font-size: 11px; color: #f87171; margin-bottom: 8px; padding: 4px 8px; background: rgba(248, 113, 113, 0.1); border-radius: 4px; border-left: 2px solid #f87171; }}
+.moves-section {{ margin-bottom: 10px; }}
+.moves-grid {{ display: flex; flex-wrap: wrap; gap: 5px; }}
+.move-pill {{ padding: 4px 10px; background: var(--move-color, #888); border-radius: 10px; font-size: 11px; font-weight: 600; color: #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2); }}
+.final-stats {{ padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, 0.05); font-size: 12px; }}
+.stats-label {{ color: #71717a; margin-right: 6px; }}
+.stats-values {{ font-family: 'SF Mono', 'Consolas', monospace; font-weight: 600; }}
+    </style>
+</head>
+<body>
+    <div class="team-container">
+        <div class="team-header">
+            <div class="header-left">
+                <span class="team-title">{header_title}</span>
+                <span class="team-count">{pokemon_count} Pokemon</span>
+            </div>
+            {url_display}
+        </div>
+        <div class="team-grid">{cards_html}</div>
+    </div>
+</body>
+</html>"""
+
+
+def create_build_report_ui(
+    initial_team: list[dict],
+    final_team: list[dict],
+    conversation: list[dict],
+    changes: list[dict],
+    takeaways: list[str],
+    title: Optional[str] = None,
+    created_date: Optional[str] = None,
+    paste_url: Optional[str] = None,
+) -> str:
+    """
+    Generate a shareable team build report HTML page.
+
+    Creates a self-contained HTML document showing the full team building
+    journey: starting state, discussion points, changes made, and conclusions.
+    Designed for non-technical users to follow the conversation.
+
+    Args:
+        initial_team: Starting team state (list of pokemon dicts)
+        final_team: Final team state after changes (list of pokemon dicts)
+        conversation: List of Q&A exchanges, each dict with:
+            - question: str
+            - answer: str
+            - visual: Optional dict with type and html content
+        changes: List of changes made, each dict with:
+            - pokemon: str (species name)
+            - field: str (what changed, e.g., "EVs", "Tera Type")
+            - before: str
+            - after: str
+            - reason: str (why the change was made)
+        takeaways: List of key conclusion strings
+        title: Optional report title
+        created_date: Optional date string (defaults to today)
+        paste_url: Optional source pokepaste URL
+
+    Returns:
+        Complete self-contained HTML string
+    """
+    import datetime
+
+    report_title = title or "VGC Team Build Report"
+    date_str = created_date or datetime.date.today().strftime("%B %d, %Y")
+
+    NATURE_MODS = {
+        "hardy": (None, None), "lonely": ("atk", "def"), "brave": ("atk", "spe"),
+        "adamant": ("atk", "spa"), "naughty": ("atk", "spd"),
+        "bold": ("def", "atk"), "docile": (None, None), "relaxed": ("def", "spe"),
+        "impish": ("def", "spa"), "lax": ("def", "spd"),
+        "timid": ("spe", "atk"), "hasty": ("spe", "def"), "serious": (None, None),
+        "jolly": ("spe", "spa"), "naive": ("spe", "spd"),
+        "modest": ("spa", "atk"), "mild": ("spa", "def"),
+        "quiet": ("spa", "spe"), "bashful": (None, None), "rash": ("spa", "spd"),
+        "calm": ("spd", "atk"), "gentle": ("spd", "def"),
+        "sassy": ("spd", "spe"), "careful": ("spd", "spa"), "quirky": (None, None),
+    }
+
+    STAT_COLORS = {
+        "hp": "#ff5959", "atk": "#f5ac78", "def": "#fae078",
+        "spa": "#9db7f5", "spd": "#a7db8d", "spe": "#fa92b2"
+    }
+
+    def calc_stat(base, iv, ev, level, nature_mod, is_hp):
+        if is_hp:
+            return int((2 * base + iv + ev // 4) * level / 100) + level + 10
+        return int(((2 * base + iv + ev // 4) * level / 100 + 5) * nature_mod)
+
+    def get_nature_mods_local(nature):
+        mods = {"hp": 1.0, "atk": 1.0, "def": 1.0, "spa": 1.0, "spd": 1.0, "spe": 1.0}
+        nature_data = NATURE_MODS.get(nature.lower(), (None, None))
+        if nature_data[0]:
+            mods[nature_data[0]] = 1.1
+        if nature_data[1]:
+            mods[nature_data[1]] = 0.9
+        return mods
+
+    def generate_mini_team_grid(pokemon_list: list[dict]) -> str:
+        if not pokemon_list:
+            return '<div class="empty-team">No team data</div>'
+
+        cards_html = ""
+        for i, pokemon in enumerate(pokemon_list[:6]):
+            species = pokemon.get("species", "Unknown")
+            types = pokemon.get("types", [])
+            item = pokemon.get("item", "")
+            ability = pokemon.get("ability", "")
+            nature = pokemon.get("nature", "Serious")
+            evs = pokemon.get("evs", {})
+            ivs = pokemon.get("ivs", {})
+            moves = pokemon.get("moves", [])
+            tera_type = pokemon.get("tera_type")
+            level = pokemon.get("level", 50)
+            base_stats = pokemon.get("base_stats", {})
+            speed_tier_pct = pokemon.get("speed_tier_pct")  # Optional speed tier %
+
+            ev_total = sum(evs.get(s, 0) for s in ["hp", "atk", "def", "spa", "spd", "spe"])
+            primary_type = types[0].lower() if types else "normal"
+
+            type_badges = " ".join(
+                f'<span class="type-badge type-{t.lower()}">{t.upper()}</span>'
+                for t in types
+            )
+
+            tera_html = ""
+            if tera_type:
+                tera_color = get_type_color(tera_type)
+                tera_html = f'<span class="tera-badge" style="--tera-color: {tera_color};"><span class="tera-icon">&#10022;</span> {tera_type}</span>'
+
+            ev_cells = ""
+            for stat, label in [("hp", "HP"), ("atk", "Atk"), ("def", "Def"), ("spa", "SpA"), ("spd", "SpD"), ("spe", "Spe")]:
+                val = evs.get(stat, 0)
+                color = STAT_COLORS.get(stat, "#888")
+                ev_cells += f'<div class="ev-cell"><span class="ev-label">{label}</span><span class="ev-value" style="color: {color};">{val}</span></div>'
+
+            iv_parts = []
+            for stat, label in [("hp", "HP"), ("atk", "Atk"), ("def", "Def"), ("spa", "SpA"), ("spd", "SpD"), ("spe", "Spe")]:
+                iv_val = ivs.get(stat, 31)
+                if iv_val != 31:
+                    iv_parts.append(f"{iv_val} {label}")
+            ivs_html = f'<div class="ivs-note">IVs: {", ".join(iv_parts)}</div>' if iv_parts else ""
+
+            moves_html = ""
+            for move in moves[:4]:
+                move_name = move.get("name", move) if isinstance(move, dict) else str(move)
+                moves_html += f'<span class="move-pill">{move_name}</span>'
+
+            nature_mods = get_nature_mods_local(nature)
+            final_stats = {}
+            for stat in ["hp", "atk", "def", "spa", "spd", "spe"]:
+                base = base_stats.get(stat, 80)
+                iv = ivs.get(stat, 31)
+                ev = evs.get(stat, 0)
+                mod = nature_mods.get(stat, 1.0)
+                final_stats[stat] = calc_stat(base, iv, ev, level, mod, stat == "hp")
+
+            stats_display = " / ".join(
+                f'<span style="color: {STAT_COLORS.get(s, "#888")};">{final_stats.get(s, "?")}</span>'
+                for s in ["hp", "atk", "def", "spa", "spd", "spe"]
+            )
+
+            # Speed tier bar if provided
+            speed_tier_html = ""
+            if speed_tier_pct is not None:
+                pct = float(speed_tier_pct)
+                bar_color = "#10b981" if pct >= 70 else "#f59e0b" if pct >= 40 else "#ef4444"
+                speed_tier_html = f'''
+                <div class="speed-tier-row">
+                    <span class="speed-tier-label">Speed Tier</span>
+                    <div class="speed-tier-bar-bg">
+                        <div class="speed-tier-bar" style="width: {pct}%; background: {bar_color};"></div>
+                    </div>
+                    <span class="speed-tier-pct">{pct:.0f}%</span>
+                </div>'''
+
+            delay = i * 0.08
+            cards_html += f"""
+            <div class="mini-card" style="animation-delay: {delay}s; --type-color: {get_type_color(primary_type)};">
+                <div class="mini-header">
+                    <div class="mini-sprite">{get_sprite_html(species, size=56, css_class="sprite-img")}</div>
+                    <div class="mini-info">
+                        <div class="mini-name">{species}</div>
+                        <div class="mini-types">{type_badges}</div>
+                        {f'<div class="mini-tera">{tera_html}</div>' if tera_html else ''}
+                    </div>
+                </div>
+                <div class="mini-details">
+                    <div class="mini-row"><span class="mini-label">@</span> {item or 'None'} <span class="mini-ability">{ability}</span></div>
+                    <div class="mini-row"><span class="mini-nature">{nature}</span> <span class="mini-ev-total">{ev_total}/508 EVs</span></div>
+                    <div class="mini-ev-grid">{ev_cells}</div>
+                    {ivs_html}
+                    <div class="mini-moves">{moves_html}</div>
+                    <div class="mini-stats">{stats_display}</div>
+                    {speed_tier_html}
+                </div>
+            </div>"""
+
+        return f'<div class="mini-team-grid">{cards_html}</div>'
+
+    def generate_damage_calc_visual(calc_data: dict) -> str:
+        """Generate HTML for a damage calc visual."""
+        attacker = calc_data.get("attacker", "Attacker")
+        defender = calc_data.get("defender", "Defender")
+        move = calc_data.get("move", "Move")
+        damage_range = calc_data.get("damage_range", "0-0%")
+        rolls = calc_data.get("rolls", "")
+        ko_chance = calc_data.get("ko_chance", "")
+
+        try:
+            low, high = damage_range.replace("%", "").split("-")
+            avg_pct = (float(low) + float(high)) / 2
+        except:
+            avg_pct = 50
+
+        bar_color = "#ef4444" if avg_pct >= 100 else "#f59e0b" if avg_pct >= 50 else "#10b981"
+        ko_html = f'<span class="calc-ko">{ko_chance}</span>' if ko_chance else ""
+
+        return f'''
+        <div class="damage-calc-card">
+            <div class="calc-header">
+                <span class="calc-attacker">{attacker}</span>
+                <span class="calc-arrow">&#8594;</span>
+                <span class="calc-defender">{defender}</span>
+            </div>
+            <div class="calc-move">{move}</div>
+            <div class="calc-result">
+                <div class="calc-bar-bg">
+                    <div class="calc-bar" style="width: {min(avg_pct, 100)}%; background: {bar_color};"></div>
+                </div>
+                <span class="calc-damage">{damage_range}</span>
+                {ko_html}
+            </div>
+            {f'<div class="calc-rolls">{rolls}</div>' if rolls else ''}
+        </div>'''
+
+    def generate_speed_tier_visual(speed_data: dict) -> str:
+        """Generate HTML for a speed tier comparison visual."""
+        pokemon = speed_data.get("pokemon", "Pokemon")
+        speed_stat = speed_data.get("speed", 0)
+        tier_pct = speed_data.get("tier_pct", 50)
+        outspeeds = speed_data.get("outspeeds", [])
+        outsped_by = speed_data.get("outsped_by", [])
+
+        bar_color = "#10b981" if tier_pct >= 70 else "#f59e0b" if tier_pct >= 40 else "#ef4444"
+
+        outspeeds_html = ""
+        if outspeeds:
+            items = ", ".join(outspeeds[:5])
+            outspeeds_html = f'<div class="speed-list outspeed-list"><span class="speed-list-label">Outspeeds:</span> {items}</div>'
+
+        outsped_html = ""
+        if outsped_by:
+            items = ", ".join(outsped_by[:5])
+            outsped_html = f'<div class="speed-list outsped-list"><span class="speed-list-label">Outsped by:</span> {items}</div>'
+
+        return f'''
+        <div class="speed-tier-card">
+            <div class="speed-header">
+                <span class="speed-pokemon">{pokemon}</span>
+                <span class="speed-stat">{speed_stat} Spe</span>
+            </div>
+            <div class="speed-tier-display">
+                <div class="speed-bar-container">
+                    <div class="speed-bar-bg">
+                        <div class="speed-bar-fill" style="width: {tier_pct}%; background: {bar_color};"></div>
+                    </div>
+                    <span class="speed-pct-label">{tier_pct:.0f}% of meta</span>
+                </div>
+            </div>
+            {outspeeds_html}
+            {outsped_html}
+        </div>'''
+
+    def generate_conversation_html(conv_list: list[dict]) -> str:
+        if not conv_list:
+            return '<div class="no-content">No discussion recorded</div>'
+
+        html = ""
+        for i, item in enumerate(conv_list):
+            question = item.get("question", "")
+            answer = item.get("answer", "")
+            visual = item.get("visual", {})
+            delay = i * 0.1
+
+            visual_html = ""
+            if visual:
+                visual_type = visual.get("type", "")
+                visual_data = visual.get("data", {})
+                raw_html = visual.get("html", visual.get("content", ""))
+
+                if visual_type == "damage_calc" and visual_data:
+                    visual_html = f'<div class="conv-visual">{generate_damage_calc_visual(visual_data)}</div>'
+                elif visual_type == "speed_tier" and visual_data:
+                    visual_html = f'<div class="conv-visual">{generate_speed_tier_visual(visual_data)}</div>'
+                elif raw_html:
+                    visual_html = f'<div class="conv-visual">{raw_html}</div>'
+
+            html += f"""
+            <div class="conv-exchange" style="animation-delay: {delay}s;">
+                <div class="conv-question">
+                    <div class="conv-icon">Q</div>
+                    <div class="conv-text">{question}</div>
+                </div>
+                <div class="conv-answer">
+                    <div class="conv-icon answer-icon">A</div>
+                    <div class="conv-text">{answer}</div>
+                    {visual_html}
+                </div>
+            </div>"""
+        return html
+
+    def generate_changes_html(changes_list: list[dict]) -> str:
+        if not changes_list:
+            return '<div class="no-content">No changes made</div>'
+
+        html = ""
+        for i, change in enumerate(changes_list):
+            pokemon = change.get("pokemon", "Unknown")
+            field = change.get("field", "")
+            before = change.get("before", "")
+            after = change.get("after", "")
+            reason = change.get("reason", "")
+            delay = i * 0.08
+
+            html += f"""
+            <div class="change-item" style="animation-delay: {delay}s;">
+                <div class="change-header">
+                    <span class="change-pokemon">{pokemon}</span>
+                    <span class="change-field">{field}</span>
+                </div>
+                <div class="change-diff">
+                    <span class="change-before">{before}</span>
+                    <span class="change-arrow">&#8594;</span>
+                    <span class="change-after">{after}</span>
+                </div>
+                <div class="change-reason">{reason}</div>
+            </div>"""
+        return html
+
+    def generate_takeaways_html(takeaway_list: list[str]) -> str:
+        if not takeaway_list:
+            return '<div class="no-content">No key takeaways</div>'
+        items = "".join(f'<li class="takeaway-item">{t}</li>' for t in takeaway_list)
+        return f'<ul class="takeaway-list">{items}</ul>'
+
+    initial_team_html = generate_mini_team_grid(initial_team)
+    final_team_html = generate_mini_team_grid(final_team)
+    conversation_html = generate_conversation_html(conversation)
+    changes_html = generate_changes_html(changes)
+    takeaways_html = generate_takeaways_html(takeaways)
+
+    source_html = ""
+    if paste_url:
+        short_url = paste_url.replace("https://", "").replace("http://", "")
+        source_html = f'<a href="{paste_url}" class="source-link" target="_blank">Source: {short_url}</a>'
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{report_title}</title>
+    <style>
+* {{ margin: 0; padding: 0; box-sizing: border-box; }}
+body {{ font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #0c0c14 0%, #12121f 50%, #0a0a12 100%); color: #e4e4e7; line-height: 1.6; min-height: 100vh; }}
+body::before {{ content: ""; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-image: radial-gradient(circle at 20% 30%, rgba(99, 102, 241, 0.08) 0%, transparent 40%), radial-gradient(circle at 80% 70%, rgba(139, 92, 246, 0.06) 0%, transparent 40%); pointer-events: none; z-index: -1; }}
+@keyframes fadeSlideIn {{ 0% {{ opacity: 0; transform: translateY(16px); }} 100% {{ opacity: 1; transform: translateY(0); }} }}
+.report-container {{ max-width: 1000px; margin: 0 auto; padding: 32px 24px; }}
+.report-header {{ text-align: center; margin-bottom: 40px; padding: 32px; background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(20px); border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.08); animation: fadeSlideIn 0.5s ease; }}
+.report-title {{ font-size: 28px; font-weight: 800; color: #fff; margin-bottom: 8px; background: linear-gradient(135deg, #fff 0%, #a78bfa 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }}
+.report-date {{ font-size: 14px; color: #71717a; }}
+.source-link {{ display: inline-block; margin-top: 12px; font-size: 12px; color: #6366f1; text-decoration: none; }}
+.source-link:hover {{ color: #a78bfa; }}
+.share-buttons {{ display: flex; justify-content: center; gap: 12px; margin-top: 16px; }}
+.share-btn {{ padding: 8px 16px; background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 8px; color: #a78bfa; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; }}
+.share-btn:hover {{ background: rgba(99, 102, 241, 0.25); border-color: rgba(99, 102, 241, 0.5); }}
+.report-section {{ margin-bottom: 32px; animation: fadeSlideIn 0.5s ease backwards; }}
+.section-header {{ display: flex; align-items: center; gap: 12px; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }}
+.section-icon {{ width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.2)); border-radius: 10px; font-size: 18px; }}
+.section-title {{ font-size: 18px; font-weight: 700; color: #fff; }}
+.section-content {{ background: rgba(255, 255, 255, 0.02); backdrop-filter: blur(10px); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.06); padding: 20px; }}
+.mini-team-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }}
+@media (max-width: 640px) {{ .mini-team-grid {{ grid-template-columns: 1fr; }} }}
+.mini-card {{ background: rgba(0, 0, 0, 0.3); border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.06); padding: 12px; animation: fadeSlideIn 0.4s ease backwards; transition: all 0.2s; }}
+.mini-card:hover {{ border-color: rgba(255, 255, 255, 0.12); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3); }}
+.mini-header {{ display: flex; gap: 10px; margin-bottom: 10px; }}
+.mini-sprite {{ width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle, rgba(255, 255, 255, 0.05) 0%, transparent 70%); border-radius: 8px; }}
+.sprite-img {{ width: 48px; height: 48px; image-rendering: auto; }}
+.mini-info {{ flex: 1; }}
+.mini-name {{ font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 4px; }}
+.mini-types {{ display: flex; flex-wrap: wrap; gap: 4px; }}
+.mini-tera {{ margin-top: 4px; }}
+.mini-details {{ font-size: 11px; }}
+.mini-row {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; color: #a1a1aa; }}
+.mini-label {{ color: #f59e0b; font-weight: 600; }}
+.mini-ability {{ color: #a78bfa; font-style: italic; }}
+.mini-nature {{ font-weight: 600; color: #e4e4e7; }}
+.mini-ev-total {{ color: #71717a; }}
+.mini-ev-grid {{ display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px; margin-bottom: 6px; background: rgba(0, 0, 0, 0.3); border-radius: 6px; padding: 6px; }}
+.ev-cell {{ text-align: center; }}
+.ev-label {{ display: block; font-size: 8px; color: #71717a; text-transform: uppercase; }}
+.ev-value {{ font-family: 'SF Mono', 'Consolas', monospace; font-size: 11px; font-weight: 700; }}
+.ivs-note {{ font-size: 10px; color: #f87171; margin-bottom: 6px; padding: 3px 6px; background: rgba(248, 113, 113, 0.1); border-radius: 4px; border-left: 2px solid #f87171; }}
+.mini-moves {{ display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }}
+.move-pill {{ padding: 2px 8px; background: rgba(99, 102, 241, 0.3); border-radius: 8px; font-size: 10px; font-weight: 600; color: #e4e4e7; }}
+.mini-stats {{ font-family: 'SF Mono', 'Consolas', monospace; font-size: 10px; color: #a1a1aa; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.05); }}
+.speed-tier-row {{ display: flex; align-items: center; gap: 8px; margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.05); }}
+.speed-tier-label {{ font-size: 9px; color: #71717a; white-space: nowrap; }}
+.speed-tier-bar-bg {{ flex: 1; height: 6px; background: rgba(255, 255, 255, 0.1); border-radius: 3px; overflow: hidden; }}
+.speed-tier-bar {{ height: 100%; border-radius: 3px; transition: width 0.3s ease; }}
+.speed-tier-pct {{ font-size: 10px; font-weight: 700; color: #e4e4e7; min-width: 32px; text-align: right; }}
+.type-badge {{ padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: 700; letter-spacing: 0.3px; color: #fff; }}
+.type-normal {{ background: linear-gradient(135deg, #A8A878, #8a8a5c); }}
+.type-fire {{ background: linear-gradient(135deg, #F08030, #c4682a); }}
+.type-water {{ background: linear-gradient(135deg, #6890F0, #5070c0); }}
+.type-electric {{ background: linear-gradient(135deg, #F8D030, #c4a828); }}
+.type-grass {{ background: linear-gradient(135deg, #78C850, #5ca040); }}
+.type-ice {{ background: linear-gradient(135deg, #98D8D8, #70b0b0); }}
+.type-fighting {{ background: linear-gradient(135deg, #C03028, #901820); }}
+.type-poison {{ background: linear-gradient(135deg, #A040A0, #803080); }}
+.type-ground {{ background: linear-gradient(135deg, #E0C068, #b09048); }}
+.type-flying {{ background: linear-gradient(135deg, #A890F0, #8070c0); }}
+.type-psychic {{ background: linear-gradient(135deg, #F85888, #c04060); }}
+.type-bug {{ background: linear-gradient(135deg, #A8B820, #889010); }}
+.type-rock {{ background: linear-gradient(135deg, #B8A038, #907820); }}
+.type-ghost {{ background: linear-gradient(135deg, #705898, #504070); }}
+.type-dragon {{ background: linear-gradient(135deg, #7038F8, #5028c0); }}
+.type-dark {{ background: linear-gradient(135deg, #705848, #503830); }}
+.type-steel {{ background: linear-gradient(135deg, #B8B8D0, #9090a8); }}
+.type-fairy {{ background: linear-gradient(135deg, #EE99AC, #c07088); }}
+.tera-badge {{ display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px; background: rgba(255, 255, 255, 0.05); border: 1px dashed var(--tera-color, #fff); border-radius: 3px; font-size: 9px; font-weight: 600; color: var(--tera-color, #fff); }}
+.tera-icon {{ font-size: 10px; }}
+.conv-exchange {{ margin-bottom: 20px; animation: fadeSlideIn 0.4s ease backwards; }}
+.conv-exchange:last-child {{ margin-bottom: 0; }}
+.conv-question, .conv-answer {{ display: flex; gap: 12px; margin-bottom: 12px; }}
+.conv-icon {{ flex-shrink: 0; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: 8px; font-size: 12px; font-weight: 800; color: #fff; }}
+.answer-icon {{ background: linear-gradient(135deg, #10b981, #059669); }}
+.conv-text {{ flex: 1; background: rgba(0, 0, 0, 0.2); border-radius: 12px; padding: 12px 16px; font-size: 14px; line-height: 1.6; }}
+.conv-question .conv-text {{ background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2); }}
+.conv-answer .conv-text {{ background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.15); }}
+.conv-visual {{ margin-left: 40px; margin-top: 8px; padding: 12px; background: rgba(0, 0, 0, 0.3); border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.06); overflow-x: auto; }}
+.change-item {{ background: rgba(0, 0, 0, 0.2); border-radius: 12px; padding: 16px; margin-bottom: 12px; border-left: 3px solid #f59e0b; animation: fadeSlideIn 0.4s ease backwards; }}
+.change-item:last-child {{ margin-bottom: 0; }}
+.change-header {{ display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }}
+.change-pokemon {{ font-weight: 700; color: #fff; font-size: 15px; }}
+.change-field {{ font-size: 12px; color: #71717a; background: rgba(255, 255, 255, 0.05); padding: 2px 8px; border-radius: 4px; }}
+.change-diff {{ display: flex; align-items: center; gap: 12px; margin-bottom: 8px; font-family: 'SF Mono', 'Consolas', monospace; font-size: 14px; }}
+.change-before {{ color: #f87171; text-decoration: line-through; opacity: 0.8; }}
+.change-arrow {{ color: #71717a; }}
+.change-after {{ color: #34d399; font-weight: 600; }}
+.change-reason {{ font-size: 13px; color: #a1a1aa; font-style: italic; padding-left: 12px; border-left: 2px solid rgba(255, 255, 255, 0.1); }}
+.takeaway-list {{ list-style: none; }}
+.takeaway-item {{ position: relative; padding: 12px 16px 12px 40px; margin-bottom: 8px; background: rgba(16, 185, 129, 0.08); border-radius: 10px; border: 1px solid rgba(16, 185, 129, 0.15); font-size: 14px; line-height: 1.5; }}
+.takeaway-item:last-child {{ margin-bottom: 0; }}
+.takeaway-item::before {{ content: "\\2713"; position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #10b981; font-weight: 700; font-size: 14px; }}
+.no-content {{ text-align: center; color: #71717a; font-style: italic; padding: 24px; }}
+.empty-team {{ text-align: center; color: #71717a; font-style: italic; padding: 40px; }}
+.report-footer {{ text-align: center; margin-top: 40px; padding-top: 24px; border-top: 1px solid rgba(255, 255, 255, 0.06); font-size: 12px; color: #52525b; }}
+.report-footer a {{ color: #6366f1; text-decoration: none; }}
+.report-footer a:hover {{ color: #a78bfa; }}
+/* Damage Calc Card Styles */
+.damage-calc-card {{ background: rgba(0, 0, 0, 0.3); border-radius: 10px; padding: 14px; border: 1px solid rgba(255, 255, 255, 0.08); }}
+.calc-header {{ display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 13px; font-weight: 600; }}
+.calc-attacker {{ color: #f87171; }}
+.calc-arrow {{ color: #71717a; font-size: 16px; }}
+.calc-defender {{ color: #60a5fa; }}
+.calc-move {{ font-size: 12px; color: #a78bfa; font-weight: 600; margin-bottom: 10px; padding: 4px 10px; background: rgba(167, 139, 250, 0.15); border-radius: 6px; display: inline-block; }}
+.calc-result {{ display: flex; align-items: center; gap: 10px; }}
+.calc-bar-bg {{ flex: 1; height: 10px; background: rgba(255, 255, 255, 0.1); border-radius: 5px; overflow: hidden; }}
+.calc-bar {{ height: 100%; border-radius: 5px; transition: width 0.4s ease; }}
+.calc-damage {{ font-family: 'SF Mono', 'Consolas', monospace; font-size: 13px; font-weight: 700; color: #fff; min-width: 70px; text-align: right; }}
+.calc-ko {{ font-size: 11px; font-weight: 700; padding: 3px 8px; background: linear-gradient(135deg, #ef4444, #dc2626); border-radius: 4px; color: #fff; }}
+.calc-rolls {{ font-size: 10px; color: #71717a; margin-top: 8px; font-family: 'SF Mono', 'Consolas', monospace; }}
+/* Speed Tier Visual Card Styles */
+.speed-tier-card {{ background: rgba(0, 0, 0, 0.3); border-radius: 10px; padding: 14px; border: 1px solid rgba(255, 255, 255, 0.08); }}
+.speed-header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }}
+.speed-pokemon {{ font-size: 14px; font-weight: 700; color: #fff; }}
+.speed-stat {{ font-family: 'SF Mono', 'Consolas', monospace; font-size: 13px; font-weight: 600; color: #fa92b2; }}
+.speed-tier-display {{ margin-bottom: 10px; }}
+.speed-bar-container {{ display: flex; align-items: center; gap: 10px; }}
+.speed-bar-bg {{ flex: 1; height: 10px; background: rgba(255, 255, 255, 0.1); border-radius: 5px; overflow: hidden; }}
+.speed-bar-fill {{ height: 100%; border-radius: 5px; transition: width 0.4s ease; }}
+.speed-pct-label {{ font-size: 12px; font-weight: 700; color: #e4e4e7; min-width: 75px; text-align: right; }}
+.speed-list {{ font-size: 11px; color: #a1a1aa; margin-bottom: 6px; }}
+.speed-list:last-child {{ margin-bottom: 0; }}
+.speed-list-label {{ font-weight: 600; color: #71717a; margin-right: 4px; }}
+.outspeed-list .speed-list-label {{ color: #10b981; }}
+.outsped-list .speed-list-label {{ color: #f87171; }}
+    </style>
+</head>
+<body>
+    <div class="report-container">
+        <header class="report-header">
+            <h1 class="report-title">{report_title}</h1>
+            <div class="report-date">Created: {date_str}</div>
+            {source_html}
+            <div class="share-buttons">
+                <button class="share-btn" onclick="navigator.clipboard.writeText(window.location.href).then(() => alert('Link copied!'))">Copy Link</button>
+                <button class="share-btn" onclick="window.print()">Print / Save PDF</button>
+            </div>
+        </header>
+        <section class="report-section" style="animation-delay: 0.1s;">
+            <div class="section-header">
+                <div class="section-icon">&#128203;</div>
+                <h2 class="section-title">Starting Team</h2>
+            </div>
+            <div class="section-content">{initial_team_html}</div>
+        </section>
+        <section class="report-section" style="animation-delay: 0.2s;">
+            <div class="section-header">
+                <div class="section-icon">&#128172;</div>
+                <h2 class="section-title">Discussion</h2>
+            </div>
+            <div class="section-content">{conversation_html}</div>
+        </section>
+        <section class="report-section" style="animation-delay: 0.3s;">
+            <div class="section-header">
+                <div class="section-icon">&#128260;</div>
+                <h2 class="section-title">Changes Made</h2>
+            </div>
+            <div class="section-content">{changes_html}</div>
+        </section>
+        <section class="report-section" style="animation-delay: 0.4s;">
+            <div class="section-header">
+                <div class="section-icon">&#9989;</div>
+                <h2 class="section-title">Final Team</h2>
+            </div>
+            <div class="section-content">{final_team_html}</div>
+        </section>
+        <section class="report-section" style="animation-delay: 0.5s;">
+            <div class="section-header">
+                <div class="section-icon">&#128221;</div>
+                <h2 class="section-title">Key Takeaways</h2>
+            </div>
+            <div class="section-content">{takeaways_html}</div>
+        </section>
+        <footer class="report-footer">
+            Generated with <a href="https://github.com/anthropics/claude-code" target="_blank">VGC MCP Server</a>
+        </footer>
     </div>
 </body>
 </html>"""

@@ -24,6 +24,94 @@ PARADOX_POKEMON = {
     "iron-boulder", "iron-crown",
 }
 
+# Pokemon with signature/mandatory items that should be auto-filled
+# Maps Pokemon name (lowercase, hyphenated) to item name
+SIGNATURE_ITEMS: dict[str, str] = {
+    # Ogerpon masks (required for form)
+    "ogerpon-hearthflame": "hearthflame-mask",
+    "ogerpon-hearthflame-mask": "hearthflame-mask",
+    "ogerpon-wellspring": "wellspring-mask",
+    "ogerpon-wellspring-mask": "wellspring-mask",
+    "ogerpon-cornerstone": "cornerstone-mask",
+    "ogerpon-cornerstone-mask": "cornerstone-mask",
+    "ogerpon-teal": "teal-mask",
+    "ogerpon-teal-mask": "teal-mask",
+    # Zacian/Zamazenta (transform with their items)
+    "zacian": "rusted-sword",
+    "zacian-crowned": "rusted-sword",
+    "zamazenta": "rusted-shield",
+    "zamazenta-crowned": "rusted-shield",
+    # Giratina (changes form)
+    "giratina-origin": "griseous-orb",
+    # Dialga/Palkia origin forms
+    "dialga-origin": "adamant-crystal",
+    "palkia-origin": "lustrous-globe",
+    # Arceus plates (type-changing)
+    "arceus-fire": "flame-plate",
+    "arceus-water": "splash-plate",
+    "arceus-electric": "zap-plate",
+    "arceus-grass": "meadow-plate",
+    "arceus-ice": "icicle-plate",
+    "arceus-fighting": "fist-plate",
+    "arceus-poison": "toxic-plate",
+    "arceus-ground": "earth-plate",
+    "arceus-flying": "sky-plate",
+    "arceus-psychic": "mind-plate",
+    "arceus-bug": "insect-plate",
+    "arceus-rock": "stone-plate",
+    "arceus-ghost": "spooky-plate",
+    "arceus-dragon": "draco-plate",
+    "arceus-dark": "dread-plate",
+    "arceus-steel": "iron-plate",
+    "arceus-fairy": "pixie-plate",
+    # Silvally memories (type-changing)
+    "silvally-fire": "fire-memory",
+    "silvally-water": "water-memory",
+    "silvally-electric": "electric-memory",
+    "silvally-grass": "grass-memory",
+    "silvally-ice": "ice-memory",
+    "silvally-fighting": "fighting-memory",
+    "silvally-poison": "poison-memory",
+    "silvally-ground": "ground-memory",
+    "silvally-flying": "flying-memory",
+    "silvally-psychic": "psychic-memory",
+    "silvally-bug": "bug-memory",
+    "silvally-rock": "rock-memory",
+    "silvally-ghost": "ghost-memory",
+    "silvally-dragon": "dragon-memory",
+    "silvally-dark": "dark-memory",
+    "silvally-steel": "steel-memory",
+    "silvally-fairy": "fairy-memory",
+    # Genesect drives
+    "genesect-shock": "shock-drive",
+    "genesect-burn": "burn-drive",
+    "genesect-chill": "chill-drive",
+    "genesect-douse": "douse-drive",
+}
+
+
+def get_signature_item(pokemon_name: str) -> str | None:
+    """Get the signature item for a Pokemon if it has one.
+
+    Args:
+        pokemon_name: Pokemon name (case-insensitive)
+
+    Returns:
+        Item name if Pokemon has a signature item, None otherwise
+    """
+    normalized = pokemon_name.lower().replace(" ", "-")
+
+    # Direct lookup
+    if normalized in SIGNATURE_ITEMS:
+        return SIGNATURE_ITEMS[normalized]
+
+    # Partial match for forms (e.g., "ogerpon-hearthflame-mask" contains "ogerpon-hearthflame")
+    for form, item in SIGNATURE_ITEMS.items():
+        if form in normalized:
+            return item
+
+    return None
+
 # Pokemon that are Not Fully Evolved (can use Eviolite)
 # This is a subset - full list would be much longer
 NFE_POKEMON = {

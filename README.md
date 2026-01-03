@@ -6,12 +6,15 @@ A Model Context Protocol (MCP) server for Pokemon VGC (Video Game Championships)
 
 - **157+ tools** for competitive Pokemon team building
 - Full Gen 9 damage formula with all modifiers (weather, terrain, items, abilities)
+- Complete Tera mechanics including Stellar type and Tera Blast
+- New Gen 9 abilities (Embody Aspect, Mind's Eye) and moves (Psyblade, Ivy Cudgel)
 - Smogon usage statistics integration with auto-fetching spreads
 - Speed tier analysis and optimization
 - EV/IV optimization with bulk calculations
 - Team import/export (Showdown paste format)
-- Legality checking for VGC formats
+- Legality checking for VGC formats (Reg F/G/H)
 - Coverage analysis and threat identification
+- Salt Cure and other chip damage calculations
 - MCP-UI support for interactive displays
 
 ## Quick Start
@@ -124,7 +127,7 @@ vgc-mcp/
 │   ├── ui/               # MCP-UI templates
 │   ├── utils/            # Error handling, fuzzy matching
 │   └── validation/       # Input validation
-├── tests/                # Test suite (289 tests)
+├── tests/                # Test suite (337 tests)
 ├── data/                 # Cache and static data
 └── pyproject.toml        # Package configuration
 ```
@@ -164,6 +167,24 @@ The lite version includes essential tools for:
 - `get_usage_stats` - Smogon usage percentages
 - `get_common_sets` - Popular builds for a Pokemon
 - `suggest_teammates` - Teammate recommendations
+
+## Gen 9 Mechanics Support
+
+### Tera Types
+- Full type chart including Stellar type
+- Tera Blast type/category changes when Terastallized
+- Stellar type's 2x boost vs Terastallized Pokemon
+
+### Abilities
+- **Embody Aspect**: Ogerpon mask-specific stat boosts
+- **Mind's Eye/Scrappy**: Normal/Fighting hit Ghost types
+- **Protosynthesis/Quark Drive**: Paradox stat boosts
+
+### Moves
+- **Ivy Cudgel**: Form-dependent type (Hearthflame=Fire, Wellspring=Water, Cornerstone=Rock)
+- **Psyblade**: 1.5x boost in Psychic Terrain
+- **Collision Course/Electro Drift**: 1.33x boost when super effective
+- **Salt Cure**: Chip damage (12.5%, doubled for Water/Steel)
 
 ## Development
 

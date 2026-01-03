@@ -1,5 +1,6 @@
 """Configuration settings for the VGC MCP server."""
 
+import bisect
 import logging
 import sys
 from pathlib import Path
@@ -84,6 +85,8 @@ def normalize_evs(evs: int) -> int:
     EVs between breakpoints (like 8, 16, 24) are wasteful and get
     rounded down to the previous breakpoint.
 
+    Uses binary search for O(log n) lookup instead of O(n) linear search.
+
     Args:
         evs: Raw EV value
 
@@ -101,10 +104,15 @@ def normalize_evs(evs: int) -> int:
     # Cap at max stat EVs first
     evs = min(evs, settings.MAX_STAT_EVS)
 
-    # Find the highest breakpoint <= evs
-    for bp in reversed(EV_BREAKPOINTS_LV50):
-        if bp <= evs:
-            return bp
+    if evs <= 0:
+        return 0
+
+    # Use bisect to find insertion point, then get previous valid breakpoint
+    # bisect_right gives index where evs would be inserted to keep sorted order
+    idx = bisect.bisect_right(EV_BREAKPOINTS_LV50, evs) - 1
+
+    if idx >= 0:
+        return EV_BREAKPOINTS_LV50[idx]
 
     return 0
 

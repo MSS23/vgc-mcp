@@ -758,6 +758,11 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
 
             # Get target Pokemon's common spreads from META_SPEED_TIERS
             target_lower = target_pokemon.lower().replace(" ", "-")
+
+            # Normalize Ogerpon mask form names (e.g., "ogerpon-wellspring-mask" -> "ogerpon-wellspring")
+            if target_lower.endswith("-mask"):
+                target_lower = target_lower.replace("-mask", "")
+
             target_data = META_SPEED_TIERS.get(target_lower)
 
             if not target_data:

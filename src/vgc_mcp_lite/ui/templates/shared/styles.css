@@ -21,10 +21,10 @@
     --glass-blur: 20px;
     --glass-shine: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 50%);
 
-    /* Text */
+    /* Text - Increased contrast for better readability */
     --text-primary: #ffffff;
-    --text-secondary: rgba(255, 255, 255, 0.7);
-    --text-muted: rgba(255, 255, 255, 0.5);
+    --text-secondary: rgba(255, 255, 255, 0.75);
+    --text-muted: rgba(255, 255, 255, 0.65);
 
     /* Accents */
     --accent-primary: #6366f1;
@@ -451,9 +451,9 @@ body {
 .type-psychic { background: var(--type-psychic); color: #fff; }
 .type-bug { background: var(--type-bug); color: #000; }
 .type-rock { background: var(--type-rock); color: #000; }
-.type-ghost { background: var(--type-ghost); color: #fff; }
-.type-dragon { background: var(--type-dragon); color: #fff; }
-.type-dark { background: var(--type-dark); color: #fff; }
+.type-ghost { background: var(--type-ghost); color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8); }
+.type-dragon { background: var(--type-dragon); color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6); }
+.type-dark { background: var(--type-dark); color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8); }
 .type-steel { background: var(--type-steel); color: #000; }
 .type-fairy { background: var(--type-fairy); color: #000; }
 
@@ -493,6 +493,16 @@ body {
     color: #000;
     text-shadow: 0 1px 1px rgba(255, 255, 255, 0.3);
     border-color: rgba(234, 179, 8, 0.5);
+    box-shadow: 0 0 20px rgba(234, 179, 8, 0.3);
+}
+
+.ko-badge.fourhko,
+.ko-badge.4hko {
+    background: linear-gradient(135deg, #84cc16, #a3e635);
+    color: #000;
+    text-shadow: 0 1px 1px rgba(255, 255, 255, 0.3);
+    border-color: rgba(132, 204, 22, 0.5);
+    box-shadow: 0 0 15px rgba(132, 204, 22, 0.3);
 }
 
 .ko-badge.survive {
@@ -893,6 +903,10 @@ body {
     transition: background var(--duration-fast);
 }
 
+.modern-table tbody tr:nth-child(even) td {
+    background: rgba(255, 255, 255, 0.03);
+}
+
 .modern-table tr:hover td {
     background: var(--glass-bg-hover);
 }
@@ -903,6 +917,36 @@ body {
 
 .modern-table tr:last-child td:last-child {
     border-radius: 0 0 var(--radius-md) 0;
+}
+
+/* Spread dropdown in damage tables */
+.spread-dropdown {
+    background: #1a1a2e;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    color: #ffffff;
+    font-size: 12px;
+    padding: 6px 8px;
+    min-width: 180px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.spread-dropdown:hover {
+    border-color: var(--accent-primary);
+    background: #222250;
+}
+
+.spread-dropdown:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+.spread-dropdown option {
+    background: #1a1a2e;
+    color: #ffffff;
+    padding: 8px;
 }
 
 /* =============================================================================

@@ -3,6 +3,8 @@
 from dataclasses import dataclass, field
 from typing import Optional
 
+from ..utils.normalize import normalize_item
+
 
 # Complete Gen 9 Type Chart
 # Key = attacking type, Value = dict of defending type -> multiplier
@@ -73,13 +75,17 @@ TYPE_CHART: dict[str, dict[str, float]] = {
         "Fire": 0.5, "Fighting": 2, "Poison": 0.5, "Dragon": 2,
         "Dark": 2, "Steel": 0.5
     },
+    # Stellar type (Terapagos-Stellar): neutral to all types defensively
+    # Offensively, deals 2x to Terastallized Pokemon (handled separately in damage calc)
+    "Stellar": {},
 }
 
 
 def get_type_effectiveness(
     attack_type: str,
     defender_types: list[str],
-    tera_type: Optional[str] = None
+    tera_type: Optional[str] = None,
+    attacker_tera_stellar: bool = False
 ) -> float:
     """
     Calculate type effectiveness multiplier.
@@ -88,12 +94,21 @@ def get_type_effectiveness(
         attack_type: Type of the attacking move
         defender_types: List of defender's types (1-2)
         tera_type: If defender is Terastallized, only this type is used
+        attacker_tera_stellar: If True, attacker is Stellar Tera (2x vs Tera'd Pokemon)
 
     Returns:
         Effectiveness multiplier (0, 0.25, 0.5, 1, 2, or 4)
     """
     # Normalize type names
     attack_type = attack_type.capitalize()
+
+    # Stellar type offensive bonus: 2x against Terastallized Pokemon
+    # This applies when the attacker is Tera Stellar AND the defender is Terastallized
+    if attacker_tera_stellar and tera_type:
+        # Stellar deals 2x to any Terastallized Pokemon (for each type's first use)
+        # Note: In actual game, each type can only get the boost once per battle
+        # For single calc purposes, we apply the boost
+        return 2.0
 
     # If Tera active, only consider Tera type for defense
     if tera_type:
@@ -300,7 +315,7 @@ class DamageModifiers:
         if not self.attacker_item:
             return 1.0
 
-        item = self.attacker_item.lower().replace(" ", "-")
+        item = normalize_item(self.attacker_item)
         move_type = move_type.capitalize()
 
         # Life Orb (applies to damage, not stat)

@@ -12,6 +12,7 @@ Formulas (Level 50):
 - Other: floor((floor((2 * Base + IV + EV/4) * 50/100) + 5) * Nature)
 """
 
+import bisect
 import math
 from typing import Optional
 
@@ -176,6 +177,10 @@ def find_speed_evs(
     """
     Find minimum Speed EVs needed to reach a target speed.
 
+    Uses binary search over EV breakpoints for O(log n) performance instead of
+    linear O(n) search. Since stat calculation is monotonically increasing with
+    EVs, binary search is valid.
+
     Args:
         base_speed: Base Speed stat
         target_speed: Desired Speed stat
@@ -186,10 +191,17 @@ def find_speed_evs(
     Returns:
         Minimum EVs needed, or None if target is unreachable
     """
-    for ev in EV_BREAKPOINTS_LV50:  # EVs at level 50 breakpoints
-        speed = calculate_speed(base_speed, iv, ev, level, nature)
-        if speed >= target_speed:
-            return ev
+    # Pre-compute speeds for all breakpoints for binary search
+    # Cache this calculation as it's the same for given parameters
+    speeds = [calculate_speed(base_speed, iv, ev, level, nature)
+              for ev in EV_BREAKPOINTS_LV50]
+
+    # Use bisect to find first speed >= target
+    idx = bisect.bisect_left(speeds, target_speed)
+
+    # Check if we found a valid result
+    if idx < len(speeds) and speeds[idx] >= target_speed:
+        return EV_BREAKPOINTS_LV50[idx]
 
     return None  # Cannot reach target
 

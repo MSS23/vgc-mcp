@@ -38,10 +38,11 @@ from .tools.speed_tools import register_speed_tools          # 7 tools
 from .tools.team_tools import register_team_tools            # 9 tools
 from .tools.usage_tools import register_usage_tools          # 6 tools
 from .tools.spread_tools import register_spread_tools        # 6 tools
-from .tools.import_export_tools import register_import_export_tools  # 4 tools
+from .tools.import_export_tools import register_import_export_tools  # 5 tools
 from .tools.coverage_tools import register_coverage_tools    # 6 tools
 from .tools.matchup_tools import register_matchup_tools      # 6 tools
-# Total: ~49 tools
+from .tools.report_tools import register_report_tools        # 1 tool
+# Total: ~51 tools
 
 # MCP-UI support
 from .ui import register_ui_resources
@@ -88,6 +89,9 @@ register_matchup_tools(mcp, team_manager)
 
 # Usage data (6 tools)
 register_usage_tools(mcp, smogon)
+
+# Report generation (1 tool)
+register_report_tools(mcp, pokeapi)
 
 # Register MCP-UI resources
 register_ui_resources(mcp)

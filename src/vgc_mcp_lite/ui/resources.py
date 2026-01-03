@@ -21,7 +21,6 @@ from .components import (
     create_damage_calc_ui,
     create_team_roster_ui,
     create_speed_tier_ui,
-    create_coverage_ui,
     create_matchup_summary_ui,
     create_threat_analysis_ui,
     create_usage_stats_ui,
@@ -35,6 +34,7 @@ from .components import (
     create_summary_table_ui,
     create_speed_outspeed_graph_ui,
     create_multi_hit_survival_ui,
+    create_pokemon_build_card_ui,
 )
 
 
@@ -196,31 +196,6 @@ def create_speed_tier_resource(
 
     return create_ui_resource({
         "uri": f"ui://vgc/speed/tiers/{pokemon_name.lower()}",
-        "content": {
-            "type": "rawHtml",
-            "htmlString": html,
-        },
-        "encoding": "text",
-    })
-
-
-def create_coverage_resource(
-    pokemon_name: str,
-    moves: list[dict[str, Any]],
-    coverage: dict[str, float],
-) -> dict[str, Any]:
-    """Create a type coverage analyzer UI resource.
-
-    Returns a dict with the UI resource showing type coverage grid.
-    """
-    html = create_coverage_ui(
-        pokemon_name=pokemon_name,
-        moves=moves,
-        coverage=coverage,
-    )
-
-    return create_ui_resource({
-        "uri": f"ui://vgc/coverage/{pokemon_name.lower()}",
         "content": {
             "type": "rawHtml",
             "htmlString": html,

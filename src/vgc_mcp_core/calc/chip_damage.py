@@ -402,6 +402,86 @@ def calculate_terrain_healing(
     )
 
 
+def calculate_salt_cure_damage(
+    current_hp: int,
+    max_hp: int,
+    pokemon_types: list[str],
+    ability: Optional[str] = None
+) -> ChipDamageResult:
+    """
+    Calculate Salt Cure damage for one turn.
+
+    Salt Cure is Garganacl's signature move that inflicts a residual damage condition:
+    - Normally deals 1/8 (12.5%) max HP per turn
+    - Deals 1/4 (25%) max HP per turn if target is Steel or Water type
+
+    Args:
+        current_hp: Current HP
+        max_hp: Maximum HP
+        pokemon_types: Target's types
+        ability: Target's ability (optional)
+
+    Returns:
+        ChipDamageResult with damage info
+    """
+    normalized_ability = ability.lower().replace(" ", "-") if ability else ""
+    normalized_types = [t.lower() for t in pokemon_types]
+
+    # Magic Guard blocks all indirect damage
+    if normalized_ability == "magic-guard":
+        return ChipDamageResult(
+            source="Salt Cure",
+            damage=0,
+            damage_percent=0,
+            is_healing=False,
+            immune=True,
+            immunity_reason="Magic Guard blocks indirect damage",
+            hp_after=current_hp,
+            notes=[]
+        )
+
+    # Check for Steel or Water type (double damage)
+    is_vulnerable = "steel" in normalized_types or "water" in normalized_types
+
+    if is_vulnerable:
+        # 1/4 (25%) max HP damage for Steel/Water types
+        damage = max_hp // 4
+        damage_percent = (damage / max_hp) * 100
+        vulnerable_type = "Steel" if "steel" in normalized_types else "Water"
+
+        return ChipDamageResult(
+            source="Salt Cure",
+            damage=damage,
+            damage_percent=round(damage_percent, 2),
+            is_healing=False,
+            immune=False,
+            immunity_reason=None,
+            hp_after=max(0, current_hp - damage),
+            notes=[
+                f"25% damage per turn ({vulnerable_type}-type takes double damage)",
+                "Garganacl's signature residual effect"
+            ]
+        )
+    else:
+        # 1/8 (12.5%) max HP damage normally
+        damage = max_hp // 8
+        damage_percent = (damage / max_hp) * 100
+
+        return ChipDamageResult(
+            source="Salt Cure",
+            damage=damage,
+            damage_percent=round(damage_percent, 2),
+            is_healing=False,
+            immune=False,
+            immunity_reason=None,
+            hp_after=max(0, current_hp - damage),
+            notes=[
+                "12.5% damage per turn",
+                "Deals 25% to Steel/Water types"
+            ]
+        )
+
+
 def calculate_leftovers_recovery(
     current_hp: int,
     max_hp: int,

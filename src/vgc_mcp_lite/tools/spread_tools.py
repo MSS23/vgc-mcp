@@ -16,6 +16,7 @@ from vgc_mcp_core.calc.bulk_optimization import (
 from vgc_mcp_core.models.pokemon import Nature, get_nature_modifier, PokemonBuild, BaseStats, EVSpread
 from vgc_mcp_core.models.move import Move, MoveCategory
 from vgc_mcp_core.config import EV_BREAKPOINTS_LV50, normalize_evs
+from vgc_mcp_core.utils.synergies import get_synergy_ability
 
 
 # Module-level Smogon client reference (set during registration)
@@ -39,50 +40,6 @@ META_SYNERGIES = {
 }
 
 
-def _get_synergy_ability(item: str, abilities: dict) -> tuple[str, float]:
-    """Get the best ability to pair with an item based on known synergies.
-
-    Args:
-        item: The item being used
-        abilities: Dict of ability_name -> usage_percent
-
-    Returns:
-        Tuple of (ability_name, usage_percent)
-    """
-    if not abilities:
-        return (None, 0)
-
-    # Normalize item name for matching
-    item_lower = (item or "").lower().replace("-", " ").replace("_", " ")
-
-    # Known synergies: item -> preferred abilities (in order of preference)
-    synergies = {
-        "life orb": ["Sheer Force"],  # Sheer Force cancels Life Orb recoil
-        "choice band": ["Huge Power", "Pure Power", "Gorilla Tactics"],
-        "choice specs": ["Adaptability"],
-        "assault vest": ["Regenerator"],
-        "rocky helmet": ["Rough Skin", "Iron Barbs"],
-        "leftovers": ["Regenerator", "Poison Heal"],
-        "black sludge": ["Regenerator", "Poison Heal"],
-        "flame orb": ["Guts", "Marvel Scale"],
-        "toxic orb": ["Poison Heal", "Guts", "Marvel Scale"],
-        "booster energy": ["Protosynthesis", "Quark Drive"],
-    }
-
-    # Check if this item has known synergies
-    preferred_abilities = synergies.get(item_lower, [])
-
-    for preferred in preferred_abilities:
-        preferred_lower = preferred.lower()
-        for ability, usage in abilities.items():
-            if ability.lower() == preferred_lower:
-                return (ability, usage)
-
-    # No synergy found - return the most common ability
-    top_ability = list(abilities.keys())[0]
-    return (top_ability, abilities[top_ability])
-
-
 async def _get_common_spread(pokemon_name: str) -> Optional[dict]:
     """Fetch the most common spread for a Pokemon from Smogon usage stats.
 
@@ -100,7 +57,7 @@ async def _get_common_spread(pokemon_name: str) -> Optional[dict]:
             top_item = list(items.keys())[0] if items else None
 
             # Get ability based on item synergy (e.g., Life Orb -> Sheer Force)
-            top_ability, _ = _get_synergy_ability(top_item, abilities)
+            top_ability, _ = get_synergy_ability(top_item, abilities)
 
             return {
                 "nature": top_spread.get("nature", "Serious"),

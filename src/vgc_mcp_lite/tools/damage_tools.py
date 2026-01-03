@@ -22,53 +22,10 @@ from ..ui.resources import (
 )
 HAS_UI = True
 
+from vgc_mcp_core.utils.synergies import get_synergy_ability
 
 # Module-level Smogon client reference (set during registration)
 _smogon_client: Optional[SmogonStatsClient] = None
-
-
-def _get_synergy_ability(item: str, abilities: dict) -> tuple[str, float]:
-    """Get the best ability to pair with an item based on known synergies.
-
-    Args:
-        item: The item being used
-        abilities: Dict of ability_name -> usage_percent
-
-    Returns:
-        Tuple of (ability_name, usage_percent)
-    """
-    if not abilities:
-        return (None, 0)
-
-    # Normalize item name for matching
-    item_lower = (item or "").lower().replace("-", " ").replace("_", " ")
-
-    # Known synergies: item -> preferred abilities (in order of preference)
-    synergies = {
-        "life orb": ["Sheer Force"],  # Sheer Force cancels Life Orb recoil
-        "choice band": ["Huge Power", "Pure Power", "Gorilla Tactics"],
-        "choice specs": ["Adaptability"],
-        "assault vest": ["Regenerator"],
-        "rocky helmet": ["Rough Skin", "Iron Barbs"],
-        "leftovers": ["Regenerator", "Poison Heal"],
-        "black sludge": ["Regenerator", "Poison Heal"],
-        "flame orb": ["Guts", "Marvel Scale"],
-        "toxic orb": ["Poison Heal", "Guts", "Marvel Scale"],
-        "booster energy": ["Protosynthesis", "Quark Drive"],
-    }
-
-    # Check if this item has known synergies
-    preferred_abilities = synergies.get(item_lower, [])
-
-    for preferred in preferred_abilities:
-        preferred_lower = preferred.lower()
-        for ability, usage in abilities.items():
-            if ability.lower() == preferred_lower:
-                return (ability, usage)
-
-    # No synergy found - return the most common ability
-    top_ability = list(abilities.keys())[0]
-    return (top_ability, abilities[top_ability])
 
 
 async def _get_common_spread(pokemon_name: str) -> Optional[dict]:
@@ -88,7 +45,7 @@ async def _get_common_spread(pokemon_name: str) -> Optional[dict]:
             top_item = list(items.keys())[0] if items else None
 
             # Get ability based on item synergy (e.g., Life Orb -> Sheer Force)
-            top_ability, _ = _get_synergy_ability(top_item, abilities)
+            top_ability, _ = get_synergy_ability(top_item, abilities)
 
             return {
                 "nature": top_spread.get("nature", "Serious"),
@@ -183,15 +140,12 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             Damage range, percentages, and KO probability
         """
         try:
-            # Auto-assign mask item for Ogerpon forms if not specified
+            # Auto-assign signature items for Pokemon that require them
             if attacker_item is None:
-                attacker_lower = attacker_name.lower()
-                if "ogerpon-hearthflame" in attacker_lower:
-                    attacker_item = "hearthflame-mask"
-                elif "ogerpon-wellspring" in attacker_lower:
-                    attacker_item = "wellspring-mask"
-                elif "ogerpon-cornerstone" in attacker_lower:
-                    attacker_item = "cornerstone-mask"
+                from ...vgc_mcp_core.calc.items import get_signature_item
+                sig_item = get_signature_item(attacker_name)
+                if sig_item:
+                    attacker_item = sig_item
 
             # Fetch Pokemon data
             atk_base = await pokeapi.get_base_stats(attacker_name)
@@ -963,6 +917,13 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             defender_hp_evs = defender_hp_evs if defender_hp_evs is not None else 0
             defender_def_evs = defender_def_evs if defender_def_evs is not None else 0
             defender_spd_evs = defender_spd_evs if defender_spd_evs is not None else 0
+
+            # Auto-fill signature items for Pokemon that require them
+            if attacker_item is None:
+                from ...vgc_mcp_core.calc.items import get_signature_item
+                sig_item = get_signature_item(attacker_name)
+                if sig_item:
+                    attacker_item = sig_item
 
             # Parse natures
             try:

@@ -262,6 +262,11 @@ def get_speed_tier_info(pokemon_name: str) -> Optional[dict]:
 def get_meta_speed_tier(pokemon_name: str) -> Optional[dict]:
     """Get VGC meta speed tier info for a Pokemon (includes common speeds)."""
     name = pokemon_name.lower().replace(" ", "-")
+
+    # Normalize Ogerpon mask form names (e.g., "ogerpon-wellspring-mask" -> "ogerpon-wellspring")
+    if name.endswith("-mask"):
+        name = name.replace("-mask", "")
+
     return META_SPEED_TIERS.get(name)
 
 

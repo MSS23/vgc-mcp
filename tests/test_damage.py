@@ -1013,5 +1013,323 @@ class TestGen9Items:
         assert result_glove.max_damage == result_normal.max_damage
 
 
+class TestStellarType:
+    """Test Stellar Tera type mechanics."""
+
+    def test_stellar_type_in_chart(self):
+        """Stellar type exists and is neutral defensively."""
+        # Stellar should be neutral to all types
+        eff = get_type_effectiveness("Fire", ["Stellar"])
+        assert eff == 1.0
+
+        eff = get_type_effectiveness("Dragon", ["Stellar"])
+        assert eff == 1.0
+
+    def test_stellar_offensive_vs_tera(self):
+        """Stellar Tera deals 2x damage to Terastallized Pokemon."""
+        eff = get_type_effectiveness(
+            "Fire",
+            ["Water"],  # Defender types
+            tera_type="Water",  # Defender is Tera Water
+            attacker_tera_stellar=True  # Attacker is Tera Stellar
+        )
+        assert eff == 2.0
+
+
+class TestTeraBlast:
+    """Test Tera Blast type and category changes."""
+
+    def test_tera_blast_type_change(self):
+        """Tera Blast becomes the attacker's Tera type when Terastallized."""
+        flutter_mane = PokemonBuild(
+            name="flutter-mane",
+            base_stats=BaseStats(
+                hp=55, attack=55, defense=55,
+                special_attack=135, special_defense=135, speed=135
+            ),
+            nature=Nature.TIMID,
+            evs=EVSpread(special_attack=252, speed=252),
+            types=["Ghost", "Fairy"]
+        )
+
+        # Ice type defender (weak to Fire)
+        avalugg = PokemonBuild(
+            name="avalugg",
+            base_stats=BaseStats(
+                hp=95, attack=117, defense=184,
+                special_attack=44, special_defense=46, speed=28
+            ),
+            nature=Nature.CAREFUL,
+            evs=EVSpread(hp=252, special_defense=252),
+            types=["Ice"]
+        )
+
+        tera_blast = Move(
+            name="tera-blast",
+            type="Normal",
+            category=MoveCategory.SPECIAL,
+            power=80,
+            accuracy=100,
+            pp=10
+        )
+
+        # Without Tera - Normal type (not very effective vs Ice? No, neutral)
+        mods_no_tera = DamageModifiers()
+        result_no_tera = calculate_damage(flutter_mane, avalugg, tera_blast, mods_no_tera)
+
+        # With Fire Tera - Fire type (super effective vs Ice)
+        mods_fire_tera = DamageModifiers(
+            tera_active=True,
+            tera_type="Fire"
+        )
+        result_fire_tera = calculate_damage(flutter_mane, avalugg, tera_blast, mods_fire_tera)
+
+        # Fire Tera Blast should do more damage (super effective)
+        assert result_fire_tera.max_damage > result_no_tera.max_damage
+
+    def test_tera_blast_physical_when_atk_higher(self):
+        """Tera Blast becomes physical when Attack > Special Attack."""
+        # Physical attacker with higher Attack than SpA
+        ursaluna = PokemonBuild(
+            name="ursaluna",
+            base_stats=BaseStats(
+                hp=130, attack=140, defense=105,
+                special_attack=45, special_defense=80, speed=50
+            ),
+            nature=Nature.ADAMANT,
+            evs=EVSpread(attack=252, hp=252),
+            types=["Ground", "Normal"]
+        )
+
+        # High Def, low SpD - damage will be higher if attack targets special defense
+        chansey = PokemonBuild(
+            name="chansey",
+            base_stats=BaseStats(
+                hp=250, attack=5, defense=5,
+                special_attack=35, special_defense=105, speed=50
+            ),
+            nature=Nature.BOLD,
+            evs=EVSpread(defense=252, special_defense=4),
+            types=["Normal"]
+        )
+
+        tera_blast = Move(
+            name="tera-blast",
+            type="Normal",
+            category=MoveCategory.SPECIAL,  # Default is special
+            power=80,
+            accuracy=100,
+            pp=10
+        )
+
+        # With Tera active, Tera Blast should become physical (Atk > SpA)
+        mods_tera = DamageModifiers(
+            tera_active=True,
+            tera_type="Ground"
+        )
+        result = calculate_damage(ursaluna, chansey, tera_blast, mods_tera)
+
+        # High damage expected because physical attacks target Chansey's terrible 5 base Def
+        # If it were special, it would target the 105 SpD
+        assert result.max_damage > 100  # Should do significant damage
+
+
+class TestMindsEye:
+    """Test Mind's Eye Ghost immunity bypass."""
+
+    def test_minds_eye_hits_ghost_with_normal(self):
+        """Mind's Eye allows Normal moves to hit Ghost types."""
+        ursaluna_bloodmoon = PokemonBuild(
+            name="ursaluna-bloodmoon",
+            base_stats=BaseStats(
+                hp=113, attack=70, defense=120,
+                special_attack=135, special_defense=65, speed=52
+            ),
+            nature=Nature.MODEST,
+            evs=EVSpread(special_attack=252, hp=252),
+            types=["Ground", "Normal"]
+        )
+
+        gengar = PokemonBuild(
+            name="gengar",
+            base_stats=BaseStats(
+                hp=60, attack=65, defense=60,
+                special_attack=130, special_defense=75, speed=110
+            ),
+            nature=Nature.TIMID,
+            evs=EVSpread(special_attack=252, speed=252),
+            types=["Ghost", "Poison"]
+        )
+
+        hyper_voice = Move(
+            name="hyper-voice",
+            type="Normal",
+            category=MoveCategory.SPECIAL,
+            power=90,
+            accuracy=100,
+            pp=10
+        )
+
+        # Without Mind's Eye - immune
+        mods_no_ability = DamageModifiers()
+        result_no_ability = calculate_damage(ursaluna_bloodmoon, gengar, hyper_voice, mods_no_ability)
+        assert result_no_ability.max_damage == 0
+
+        # With Mind's Eye - should hit
+        mods_minds_eye = DamageModifiers(attacker_ability="minds-eye")
+        result_minds_eye = calculate_damage(ursaluna_bloodmoon, gengar, hyper_voice, mods_minds_eye)
+        assert result_minds_eye.max_damage > 0
+
+
+class TestEmbodyAspect:
+    """Test Embody Aspect stat boosts for Ogerpon masks."""
+
+    def test_hearthflame_attack_boost(self):
+        """Hearthflame Mask Ogerpon gets Attack boost from Embody Aspect."""
+        ogerpon_hearthflame = PokemonBuild(
+            name="ogerpon-hearthflame",
+            base_stats=BaseStats(
+                hp=80, attack=120, defense=84,
+                special_attack=60, special_defense=96, speed=110
+            ),
+            nature=Nature.ADAMANT,
+            evs=EVSpread(attack=252, speed=252),
+            types=["Grass", "Fire"]
+        )
+
+        defender = PokemonBuild(
+            name="incineroar",
+            base_stats=BaseStats(
+                hp=95, attack=115, defense=90,
+                special_attack=80, special_defense=90, speed=60
+            ),
+            nature=Nature.CAREFUL,
+            evs=EVSpread(hp=252, defense=252),
+            types=["Fire", "Dark"]
+        )
+
+        ivy_cudgel = Move(
+            name="ivy-cudgel",
+            type="Fire",  # Hearthflame type
+            category=MoveCategory.PHYSICAL,
+            power=100,
+            accuracy=100,
+            pp=10
+        )
+
+        # Without Embody Aspect
+        mods_no_aspect = DamageModifiers(attacker_item="hearthflame-mask")
+        result_no_aspect = calculate_damage(ogerpon_hearthflame, defender, ivy_cudgel, mods_no_aspect)
+
+        # With Embody Aspect (+1 Attack = 1.5x)
+        mods_aspect = DamageModifiers(
+            attacker_ability="embody-aspect",
+            attacker_item="hearthflame-mask"
+        )
+        result_aspect = calculate_damage(ogerpon_hearthflame, defender, ivy_cudgel, mods_aspect)
+
+        # Should do 1.5x damage
+        assert result_aspect.max_damage > result_no_aspect.max_damage
+        ratio = result_aspect.max_damage / result_no_aspect.max_damage
+        assert 1.4 <= ratio <= 1.55
+
+
+class TestIvyCudgel:
+    """Test Ivy Cudgel form-dependent type changes."""
+
+    def test_ivy_cudgel_hearthflame_fire(self):
+        """Ivy Cudgel is Fire type for Ogerpon-Hearthflame."""
+        ogerpon_hearthflame = PokemonBuild(
+            name="ogerpon-hearthflame",
+            base_stats=BaseStats(
+                hp=80, attack=120, defense=84,
+                special_attack=60, special_defense=96, speed=110
+            ),
+            nature=Nature.ADAMANT,
+            evs=EVSpread(attack=252, speed=252),
+            types=["Grass", "Fire"]
+        )
+
+        # Grass defender (weak to Fire, resists Grass)
+        venusaur = PokemonBuild(
+            name="venusaur",
+            base_stats=BaseStats(
+                hp=80, attack=82, defense=83,
+                special_attack=100, special_defense=100, speed=80
+            ),
+            nature=Nature.CALM,
+            evs=EVSpread(hp=252, special_defense=252),
+            types=["Grass", "Poison"]
+        )
+
+        # Ivy Cudgel base type is Grass, but should become Fire for Hearthflame
+        ivy_cudgel = Move(
+            name="ivy-cudgel",
+            type="Grass",  # Base type
+            category=MoveCategory.PHYSICAL,
+            power=100,
+            accuracy=100,
+            pp=10
+        )
+
+        mods = DamageModifiers()
+        result = calculate_damage(ogerpon_hearthflame, venusaur, ivy_cudgel, mods)
+
+        # Should do super effective damage (Fire vs Grass)
+        # If it stayed Grass type, it would be not very effective
+        assert result.max_percent > 40  # Significant damage expected
+
+
+class TestPsyblade:
+    """Test Psyblade Psychic Terrain boost."""
+
+    def test_psyblade_terrain_boost(self):
+        """Psyblade gets 1.5x in Psychic Terrain (not the standard 1.3x)."""
+        iron_valiant = PokemonBuild(
+            name="iron-valiant",
+            base_stats=BaseStats(
+                hp=74, attack=130, defense=90,
+                special_attack=120, special_defense=60, speed=116
+            ),
+            nature=Nature.ADAMANT,
+            evs=EVSpread(attack=252, speed=252),
+            types=["Fairy", "Fighting"]
+        )
+
+        # Use a Pokemon that isn't immune to Psychic (not Dark type)
+        defender = PokemonBuild(
+            name="garchomp",
+            base_stats=BaseStats(
+                hp=108, attack=130, defense=95,
+                special_attack=80, special_defense=85, speed=102
+            ),
+            nature=Nature.JOLLY,
+            evs=EVSpread(hp=252, defense=252),
+            types=["Dragon", "Ground"]
+        )
+
+        psyblade = Move(
+            name="psyblade",
+            type="Psychic",
+            category=MoveCategory.PHYSICAL,
+            power=80,
+            accuracy=100,
+            pp=15
+        )
+
+        # Without terrain
+        mods_no_terrain = DamageModifiers()
+        result_no_terrain = calculate_damage(iron_valiant, defender, psyblade, mods_no_terrain)
+
+        # With Psychic Terrain (should get 1.5x boost)
+        mods_terrain = DamageModifiers(terrain="psychic")
+        result_terrain = calculate_damage(iron_valiant, defender, psyblade, mods_terrain)
+
+        # Should do 1.5x damage
+        assert result_terrain.max_damage > result_no_terrain.max_damage
+        ratio = result_terrain.max_damage / result_no_terrain.max_damage
+        assert 1.45 <= ratio <= 1.55
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

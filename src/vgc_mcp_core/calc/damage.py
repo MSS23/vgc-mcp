@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from ..models.pokemon import PokemonBuild
-from ..models.move import Move, MoveCategory, get_multi_hit_info, GEN9_SPECIAL_MOVES
+from ..models.move import Move, MoveCategory, get_multi_hit_info, GEN9_SPECIAL_MOVES, get_move_type_for_user
 from ..config import EV_BREAKPOINTS_LV50
 from .stats import calculate_all_stats
 from .modifiers import (
@@ -33,6 +33,7 @@ from .modifiers import (
     is_super_effective,
 )
 from ..utils.damage_verdicts import calculate_ko_probability, KOProbability
+from ..utils.normalize import normalize_ability, normalize_move, normalize_item
 
 
 # =============================================================================
@@ -154,6 +155,12 @@ IMMUNITY_ABILITIES: dict[str, list[str]] = {
     "wind-rider": [],  # Only immune to wind moves, handled separately
     "bulletproof": [],  # Immune to ball/bomb moves, handled separately
     "soundproof": [],  # Immune to sound moves, handled separately
+}
+
+# Abilities that bypass defender's abilities (Mold Breaker and variants)
+MOLD_BREAKER_ABILITIES = {
+    "mold-breaker", "teravolt", "turboblaze",
+    "mycelium-might",  # Only for status moves, but include for completeness
 }
 
 # Wind moves for Wind Rider ability
@@ -495,17 +502,56 @@ def calculate_damage(
     effective_move_type = move.type.capitalize()
     ate_ability_boost = False
     if modifiers.attacker_ability:
-        ability = modifiers.attacker_ability.lower().replace(" ", "-")
+        ability = normalize_ability(modifiers.attacker_ability)
         if ability in ATE_ABILITIES and move.type.capitalize() == "Normal":
             effective_move_type = ATE_ABILITIES[ability]
             ate_ability_boost = True
 
     # Get normalized move name for immunity checks
-    move_name_normalized = move.name.lower().replace(" ", "-")
+    move_name_normalized = normalize_move(move.name)
 
-    # Check for ability-based type immunities
-    if modifiers.defender_ability:
-        def_ability = modifiers.defender_ability.lower().replace(" ", "-")
+    # Handle form-dependent move types (Ivy Cudgel changes type based on Ogerpon form)
+    if attacker and move_name_normalized == "ivy-cudgel":
+        effective_move_type = get_move_type_for_user(move.name, attacker.name, effective_move_type)
+
+    # Handle Tera Blast: type and category change when Terastallized
+    # When Terastallized, Tera Blast becomes the attacker's Tera type
+    # Also becomes physical if Attack > Special Attack
+    tera_blast_physical = False
+    if move_name_normalized == "tera-blast" and modifiers.tera_active and modifiers.tera_type:
+        effective_move_type = modifiers.tera_type.capitalize()
+        # Check if should be physical (Atk > SpA after all modifiers)
+        if attacker:
+            stats = calculate_all_stats(attacker)
+            if stats["attack"] > stats["special_attack"]:
+                tera_blast_physical = True
+
+    # Determine if move is physical (accounting for Tera Blast category change)
+    # This variable should be used instead of move.category == MoveCategory.PHYSICAL
+    is_physical = tera_blast_physical or move.category == MoveCategory.PHYSICAL
+
+    # Weather Ball changes type and doubles power in weather
+    weather_ball_boosted = False
+    if move_name_normalized == "weather-ball" and modifiers.weather:
+        weather_type_map = {
+            "sun": "Fire",
+            "rain": "Water",
+            "sand": "Rock",
+            "snow": "Ice",
+        }
+        if modifiers.weather in weather_type_map:
+            effective_move_type = weather_type_map[modifiers.weather]
+            weather_ball_boosted = True
+
+    # Check if attacker has Mold Breaker or similar (bypasses defender abilities)
+    attacker_ignores_abilities = False
+    if modifiers.attacker_ability:
+        atk_ability = normalize_ability(modifiers.attacker_ability)
+        attacker_ignores_abilities = atk_ability in MOLD_BREAKER_ABILITIES
+
+    # Check for ability-based type immunities (unless attacker ignores abilities)
+    if modifiers.defender_ability and not attacker_ignores_abilities:
+        def_ability = normalize_ability(modifiers.defender_ability)
 
         # Check type-based immunities
         if def_ability in IMMUNITY_ABILITIES:
@@ -556,7 +602,7 @@ def calculate_damage(
 
     # Check for Air Balloon item immunity to Ground
     if modifiers.defender_item:
-        def_item = modifiers.defender_item.lower().replace(" ", "-")
+        def_item = normalize_item(modifiers.defender_item)
         if def_item == "air-balloon" and effective_move_type == "Ground":
             return DamageResult(
                 min_damage=0, max_damage=0, min_percent=0, max_percent=0,
@@ -580,7 +626,7 @@ def calculate_damage(
         # Foul Play: Uses defender's Attack stat for damage
         attack_stat_name = "attack"
         attack_stat = defender_stats["attack"]
-        defense_stat_name = "defense" if move.category == MoveCategory.PHYSICAL else "special_defense"
+        defense_stat_name = "defense" if is_physical else "special_defense"
         defense_stat = defender_stats[defense_stat_name]
     elif special_move_data.get("uses_user_defense"):
         # Body Press: Uses user's Defense stat instead of Attack
@@ -594,7 +640,7 @@ def calculate_damage(
         attack_stat = attacker_stats["special_attack"]
         defense_stat_name = "defense"
         defense_stat = defender_stats["defense"]
-    elif move.category == MoveCategory.PHYSICAL:
+    elif is_physical:
         attack_stat_name = "attack"
         defense_stat_name = "defense"
         attack_stat = attacker_stats[attack_stat_name]
@@ -606,7 +652,7 @@ def calculate_damage(
         defense_stat = defender_stats[defense_stat_name]
 
     # Apply stat stage modifiers
-    if move.category == MoveCategory.PHYSICAL:
+    if is_physical:
         attack_stat = int(attack_stat * modifiers.get_stat_stage_multiplier(modifiers.attack_stage))
         if not modifiers.is_critical:  # Crits ignore positive defense stages
             if modifiers.defense_stage > 0:
@@ -623,39 +669,64 @@ def calculate_damage(
 
     # Apply Choice Band/Specs (to stat, not damage)
     if modifiers.attacker_item:
-        item = modifiers.attacker_item.lower().replace(" ", "-")
-        if item == "choice-band" and move.category == MoveCategory.PHYSICAL:
+        item = normalize_item(modifiers.attacker_item)
+        if item == "choice-band" and is_physical:
             attack_stat = int(attack_stat * 1.5)
-        elif item == "choice-specs" and move.category == MoveCategory.SPECIAL:
+        elif item == "choice-specs" and not is_physical:
             attack_stat = int(attack_stat * 1.5)
 
     # Apply stat-modifying abilities
     if modifiers.attacker_ability:
-        ability = modifiers.attacker_ability.lower().replace(" ", "-")
+        ability = normalize_ability(modifiers.attacker_ability)
         # Huge Power / Pure Power double Attack stat
-        if ability in ("huge-power", "pure-power") and move.category == MoveCategory.PHYSICAL:
+        if ability in ("huge-power", "pure-power") and is_physical:
             attack_stat = int(attack_stat * 2)
         # Guts (1.5x Attack when statused) - Ursaluna, Conkeldurr, Heracross
-        elif ability == "guts" and modifiers.attacker_statused and move.category == MoveCategory.PHYSICAL:
+        elif ability == "guts" and modifiers.attacker_statused and is_physical:
             attack_stat = apply_mod(attack_stat, MOD_GUTS)
         # Gorilla Tactics (1.5x Attack, locked into move) - Darmanitan-Galar
-        elif ability == "gorilla-tactics" and move.category == MoveCategory.PHYSICAL:
+        elif ability == "gorilla-tactics" and is_physical:
             attack_stat = int(attack_stat * 1.5)
         # Flare Boost (1.5x SpA when burned) - Drifloon/Drifblim
-        elif ability == "flare-boost" and modifiers.attacker_burned and move.category == MoveCategory.SPECIAL:
+        elif ability == "flare-boost" and modifiers.attacker_burned and not is_physical:
             attack_stat = int(attack_stat * 1.5)
         # Toxic Boost (1.5x Atk when poisoned) - Zangoose
-        elif ability == "toxic-boost" and modifiers.attacker_statused and move.category == MoveCategory.PHYSICAL:
+        elif ability == "toxic-boost" and modifiers.attacker_statused and is_physical:
             # Note: Toxic Boost is specifically for poison, but we use attacker_statused for simplicity
             attack_stat = int(attack_stat * 1.5)
         # Orichalcum Pulse (1.333x Attack in Sun) - Koraidon
         elif ability == "orichalcum-pulse" and modifiers.weather == "sun":
-            if move.category == MoveCategory.PHYSICAL:
+            if is_physical:
                 attack_stat = apply_mod(attack_stat, MOD_ORICHALCUM)
         # Hadron Engine (1.333x SpA in Electric Terrain) - Miraidon
         elif ability == "hadron-engine" and modifiers.terrain == "electric":
-            if move.category == MoveCategory.SPECIAL:
+            if not is_physical:
                 attack_stat = apply_mod(attack_stat, MOD_HADRON)
+
+    # Embody Aspect (Ogerpon): +1 to a specific stat based on mask form
+    # This is a stat stage boost that activates on entry
+    # - Teal Mask: +1 Speed (doesn't affect damage calc directly)
+    # - Hearthflame Mask: +1 Attack
+    # - Wellspring Mask: +1 Special Defense
+    # - Cornerstone Mask: +1 Defense
+    if modifiers.attacker_ability:
+        ability = normalize_ability(modifiers.attacker_ability)
+        if ability == "embody-aspect":
+            item = normalize_item(modifiers.attacker_item or "")
+            if item == "hearthflame-mask" and is_physical:
+                # +1 Attack stage = 1.5x
+                attack_stat = int(attack_stat * 1.5)
+
+    if modifiers.defender_ability:
+        def_ability = normalize_ability(modifiers.defender_ability)
+        if def_ability == "embody-aspect":
+            def_item = normalize_item(modifiers.defender_item or "")
+            if def_item == "wellspring-mask" and not is_physical:
+                # +1 Special Defense stage = 1.5x
+                defense_stat = int(defense_stat * 1.5)
+            elif def_item == "cornerstone-mask" and is_physical:
+                # +1 Defense stage = 1.5x
+                defense_stat = int(defense_stat * 1.5)
 
     # Commander ability (Dondozo + Tatsugiri combo)
     # When Commander is active, Dondozo's Attack, Defense, SpA, SpD, and Speed are doubled
@@ -672,19 +743,19 @@ def calculate_damage(
 
     # Apply Ruin abilities
     # Sword of Ruin (Chien-Pao): Lowers foe Defense to 0.75x
-    if modifiers.sword_of_ruin and move.category == MoveCategory.PHYSICAL:
+    if modifiers.sword_of_ruin and is_physical:
         defense_stat = int(defense_stat * 0.75)
 
     # Beads of Ruin (Chi-Yu): Lowers foe Special Defense to 0.75x
-    if modifiers.beads_of_ruin and move.category == MoveCategory.SPECIAL:
+    if modifiers.beads_of_ruin and not is_physical:
         defense_stat = int(defense_stat * 0.75)
 
     # Tablets of Ruin (Wo-Chien): Lowers foe Attack to 0.75x
-    if modifiers.tablets_of_ruin and move.category == MoveCategory.PHYSICAL:
+    if modifiers.tablets_of_ruin and is_physical:
         attack_stat = int(attack_stat * 0.75)
 
     # Vessel of Ruin (Ting-Lu): Lowers foe Special Attack to 0.75x
-    if modifiers.vessel_of_ruin and move.category == MoveCategory.SPECIAL:
+    if modifiers.vessel_of_ruin and not is_physical:
         attack_stat = int(attack_stat * 0.75)
 
     # Apply Protosynthesis/Quark Drive boosts (1.3x, or 1.5x for Speed)
@@ -692,28 +763,32 @@ def calculate_damage(
     for boost_stat in [modifiers.protosynthesis_boost, modifiers.quark_drive_boost]:
         if boost_stat:
             boost_multiplier = 1.5 if boost_stat == "speed" else 1.3
-            if boost_stat == "attack" and move.category == MoveCategory.PHYSICAL:
+            if boost_stat == "attack" and is_physical:
                 attack_stat = int(attack_stat * boost_multiplier)
-            elif boost_stat == "special_attack" and move.category == MoveCategory.SPECIAL:
+            elif boost_stat == "special_attack" and not is_physical:
                 attack_stat = int(attack_stat * boost_multiplier)
 
     # Apply defender's Protosynthesis/Quark Drive boosts
     for boost_stat in [modifiers.defender_protosynthesis_boost, modifiers.defender_quark_drive_boost]:
         if boost_stat:
             boost_multiplier = 1.5 if boost_stat == "speed" else 1.3
-            if boost_stat == "defense" and move.category == MoveCategory.PHYSICAL:
+            if boost_stat == "defense" and is_physical:
                 defense_stat = int(defense_stat * boost_multiplier)
-            elif boost_stat == "special_defense" and move.category == MoveCategory.SPECIAL:
+            elif boost_stat == "special_defense" and not is_physical:
                 defense_stat = int(defense_stat * boost_multiplier)
 
     # Apply Assault Vest (1.5x SpD for special moves)
     if modifiers.defender_item:
-        def_item = modifiers.defender_item.lower().replace(" ", "-")
-        if def_item == "assault-vest" and move.category == MoveCategory.SPECIAL:
+        def_item = normalize_item(modifiers.defender_item)
+        if def_item == "assault-vest" and not is_physical:
             defense_stat = int(defense_stat * 1.5)
 
     # Get base power (may be variable for special moves)
     power = move.power
+
+    # Weather Ball doubles power in weather (50 -> 100)
+    if weather_ball_boosted:
+        power = power * 2
 
     # Calculate variable base power for special moves (Gyro Ball, Eruption, etc.)
     if special_move_data:
@@ -728,23 +803,23 @@ def calculate_damage(
 
     # Apply power modifiers from abilities (Technician, etc.)
     if modifiers.attacker_ability:
-        ability = modifiers.attacker_ability.lower().replace(" ", "-")
+        ability = normalize_ability(modifiers.attacker_ability)
         if ability == "technician" and power <= 60:
             power = int(power * 1.5)
         elif ability == "sheer-force" and move.effect_chance:
             power = int(power * 1.3)
         elif ability == "tough-claws" and move.makes_contact:
             power = apply_mod(power, MOD_TOUGH_CLAWS)
-        elif ability == "iron-fist" and move.name.lower().replace(" ", "-") in PUNCH_MOVES:
+        elif ability == "iron-fist" and normalize_move(move.name) in PUNCH_MOVES:
             power = apply_mod(power, MOD_IRON_FIST)
         # Rocky Payload (1.5x Rock damage) - Ogerpon-Cornerstone
         elif ability == "rocky-payload" and effective_move_type == "Rock":
             power = apply_mod(power, MOD_ROCKY_PAYLOAD)
         # Sharpness (1.5x slicing moves) - Gallade, Kartana, Samurott-Hisui
-        elif ability == "sharpness" and move.name.lower().replace(" ", "-") in SLICING_MOVES:
+        elif ability == "sharpness" and normalize_move(move.name) in SLICING_MOVES:
             power = apply_mod(power, MOD_SHARPNESS)
         # Strong Jaw (1.5x biting moves) - Dracovish, Tyrantrum, Boltund
-        elif ability == "strong-jaw" and move.name.lower().replace(" ", "-") in BITING_MOVES:
+        elif ability == "strong-jaw" and normalize_move(move.name) in BITING_MOVES:
             power = apply_mod(power, MOD_STRONG_JAW)
         # Supreme Overlord (+10% per fainted ally, up to +50%) - Kingambit
         elif ability == "supreme-overlord" and modifiers.supreme_overlord_count > 0:
@@ -844,6 +919,12 @@ def calculate_damage(
         modifiers.attacker_grounded,
         modifiers.defender_grounded
     )
+
+    # Psyblade: 1.5x in Psychic Terrain (overrides the standard 1.3x boost)
+    # This applies regardless of whether attacker is grounded
+    if move_name_normalized == "psyblade" and modifiers.terrain == "psychic":
+        terrain_mod_4096 = 6144  # 1.5x
+
     if terrain_mod_4096 != MOD_NEUTRAL:
         base_damage = apply_mod(base_damage, terrain_mod_4096)
         terrain_name = modifiers.terrain.capitalize() if modifiers.terrain else "Terrain"
@@ -868,26 +949,35 @@ def calculate_damage(
     # Tera Shell (all hits not very effective at full HP) - Terapagos
     # This forces type effectiveness to 0.5x (unless already immune)
     if modifiers.defender_ability:
-        def_ability = modifiers.defender_ability.lower().replace(" ", "-")
+        def_ability = normalize_ability(modifiers.defender_ability)
         if def_ability == "tera-shell" and modifiers.defender_at_full_hp:
             if type_eff > 0:  # Don't override immunity
                 type_eff = 0.5
+
+    # Mind's Eye (Ursaluna-Bloodmoon) / Scrappy: Normal and Fighting moves hit Ghost types
+    # This bypasses the Ghost immunity to Normal and Fighting
+    if modifiers.attacker_ability:
+        att_ability = normalize_ability(modifiers.attacker_ability)
+        if att_ability in ("minds-eye", "scrappy") and type_eff == 0:
+            # Check if this is a Ghost-type immunity to Normal or Fighting
+            if effective_move_type in ("Normal", "Fighting") and "Ghost" in defender_types:
+                type_eff = 1.0  # Bypass immunity, deal neutral damage
 
     # Pre-calculate final modifier chain (screens, items, abilities)
     final_mods = []
 
     # Burn (2048/4096 = 0.5x on physical unless Guts/Facade)
-    if modifiers.attacker_burned and move.category == MoveCategory.PHYSICAL:
+    if modifiers.attacker_burned and is_physical:
         # Check for Guts ability which negates burn penalty
         has_guts_ability = (
             modifiers.attacker_ability and
-            modifiers.attacker_ability.lower().replace(" ", "-") == "guts"
+            normalize_ability(modifiers.attacker_ability) == "guts"
         )
         if not modifiers.has_guts and not has_guts_ability and move.name.lower() != "facade":
             final_mods.append(MOD_BURN)
 
     # Screens
-    screen_mod_4096 = _get_screen_mod_4096(modifiers, move.category == MoveCategory.PHYSICAL)
+    screen_mod_4096 = _get_screen_mod_4096(modifiers, is_physical)
     if screen_mod_4096 != MOD_NEUTRAL:
         final_mods.append(screen_mod_4096)
 
@@ -897,7 +987,7 @@ def calculate_damage(
         final_mods.append(item_mod_4096)
 
     # Expert Belt (only if super effective)
-    if modifiers.attacker_item and modifiers.attacker_item.lower().replace(" ", "-") == "expert-belt":
+    if modifiers.attacker_item and normalize_item(modifiers.attacker_item) == "expert-belt":
         if type_eff >= 2.0:
             final_mods.append(MOD_EXPERT_BELT)
 
@@ -911,14 +1001,14 @@ def calculate_damage(
 
     # Defender ability effects
     if modifiers.defender_ability:
-        def_ability = modifiers.defender_ability.lower().replace(" ", "-")
+        def_ability = normalize_ability(modifiers.defender_ability)
 
         # Multiscale / Shadow Shield (0.5x at full HP)
         if def_ability in ("multiscale", "shadow-shield") and modifiers.defender_at_full_hp:
             final_mods.append(MOD_MULTISCALE)
 
         # Ice Scales (0.5x special damage)
-        if def_ability == "ice-scales" and move.category == MoveCategory.SPECIAL:
+        if def_ability == "ice-scales" and not is_physical:
             final_mods.append(MOD_ICE_SCALES)
 
         # Solid Rock / Filter / Prism Armor (0.75x super-effective damage)
@@ -953,7 +1043,7 @@ def calculate_damage(
             final_mods.append(MOD_DRY_SKIN_FIRE)
 
         # Fur Coat (0.5x physical damage) - Alolan Persian, Furfrou
-        if def_ability == "fur-coat" and move.category == MoveCategory.PHYSICAL:
+        if def_ability == "fur-coat" and is_physical:
             final_mods.append(MOD_FUR_COAT)
 
         # Punk Rock (0.5x sound damage taken) - Toxtricity
@@ -963,24 +1053,24 @@ def calculate_damage(
         # Neuroforce (1.25x on super-effective) - Necrozma-Ultra
         # Note: This is an offensive ability for the attacker
     if modifiers.attacker_ability:
-        att_ability = modifiers.attacker_ability.lower().replace(" ", "-")
+        att_ability = normalize_ability(modifiers.attacker_ability)
         if att_ability == "neuroforce" and type_eff >= 2.0:
             final_mods.append(MOD_NEUROFORCE)
 
     # Attacker item effects (final damage modifiers)
     if modifiers.attacker_item:
-        att_item = modifiers.attacker_item.lower().replace(" ", "-")
+        att_item = normalize_item(modifiers.attacker_item)
 
         # Punching Glove (1.1x punch moves) - Iron Hands, etc.
         if att_item == "punching-glove" and move_name_normalized in PUNCH_MOVES:
             final_mods.append(MOD_PUNCHING_GLOVE)
 
         # Muscle Band (1.1x physical moves)
-        if att_item == "muscle-band" and move.category == MoveCategory.PHYSICAL:
+        if att_item == "muscle-band" and is_physical:
             final_mods.append(MOD_MUSCLE_BAND)
 
         # Wise Glasses (1.1x special moves)
-        if att_item == "wise-glasses" and move.category == MoveCategory.SPECIAL:
+        if att_item == "wise-glasses" and not is_physical:
             final_mods.append(MOD_WISE_GLASSES)
 
         # Normal Gem (1.5x first Normal move - one-time use)
@@ -989,7 +1079,7 @@ def calculate_damage(
 
     # Defender item effects
     if modifiers.defender_item:
-        def_item = modifiers.defender_item.lower().replace(" ", "-")
+        def_item = normalize_item(modifiers.defender_item)
 
         # Resistance berries (0.5x super-effective damage of matching type)
         if def_item in RESISTANCE_BERRIES:
@@ -1021,6 +1111,11 @@ def calculate_damage(
         if type_eff != 1.0:
             # Type effectiveness uses floor, not pokeRound
             damage = int(damage * type_eff)
+
+        # Collision Course / Electro Drift: 1.33x damage on super effective hits
+        if move_name_normalized in ("collision-course", "electro-drift") and type_eff > 1.0:
+            # 5461/4096 = 1.333x
+            damage = apply_mod(damage, 5461)
 
         # 7-10. Apply chained final modifiers (burn, screens, items, etc.)
         if final_mod_4096 != MOD_NEUTRAL:
@@ -1238,7 +1333,7 @@ def _get_type_boost_item_mod_4096(item: str | None, move_type: str) -> int:
     if not item:
         return MOD_NEUTRAL
 
-    item = item.lower().replace(" ", "-")
+    item = normalize_item(item)
     move_type = move_type.capitalize()
 
     # Type-boosting items (4915/4096 = ~1.2x) - applied to BASE POWER
@@ -1308,7 +1403,7 @@ def _get_item_mod_4096(item: str | None, move_type: str) -> int:
     if not item:
         return MOD_NEUTRAL
 
-    item = item.lower().replace(" ", "-")
+    item = normalize_item(item)
 
     # Life Orb - final damage modifier
     if item == "life-orb":

@@ -4,6 +4,7 @@ from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
+from vgc_mcp_core.api.pokepaste import PokePasteClient, PokePasteError
 from vgc_mcp_core.team.manager import TeamManager
 from vgc_mcp_core.formats.showdown import (
     parse_showdown_pokemon,
@@ -16,6 +17,7 @@ from vgc_mcp_core.formats.showdown import (
     ShowdownParseError,
 )
 from vgc_mcp_core.models.pokemon import PokemonBuild
+from vgc_mcp_lite.ui.components import create_pokepaste_team_grid_ui
 
 
 def register_import_export_tools(
@@ -336,5 +338,145 @@ def register_import_export_tools(
             return {
                 "success": False,
                 "error": "export_error",
+                "message": str(e)
+            }
+
+    @mcp.tool()
+    async def render_pokepaste_team(
+        url_or_id: str,
+        team_name: Optional[str] = None
+    ) -> dict:
+        """
+        Fetch a Pokepaste and render it as a team grid card UI.
+
+        Takes a pokepast.es URL or paste ID and generates an HTML visualization
+        showing all Pokemon with their full build details:
+        - Sprites, types, tera type
+        - Item, ability, nature
+        - Full EV spread (all 6 stats)
+        - Non-default IVs
+        - All moves
+        - Calculated final stats at Lv50
+
+        Args:
+            url_or_id: Pokepaste URL (e.g., "https://pokepast.es/abc123") or paste ID
+            team_name: Optional display name for the team header
+
+        Returns:
+            Dict with HTML content or error message
+        """
+        try:
+            # Fetch the paste
+            pokepaste_client = PokePasteClient()
+            paste_id = pokepaste_client.extract_paste_id(url_or_id)
+            if not paste_id:
+                return {
+                    "success": False,
+                    "error": "invalid_url",
+                    "message": f"Could not extract paste ID from: {url_or_id}"
+                }
+
+            raw_paste = await pokepaste_client.get_paste(url_or_id)
+            paste_url = f"https://pokepast.es/{paste_id}"
+
+            # Parse the team
+            parsed_team = parse_showdown_team(raw_paste)
+            if not parsed_team:
+                return {
+                    "success": False,
+                    "error": "parse_error",
+                    "message": "No Pokemon found in paste"
+                }
+
+            # Build pokemon list with full data
+            pokemon_list = []
+            for parsed in parsed_team:
+                species_name = parsed.species.lower().replace(" ", "-")
+
+                # Fetch base stats and types from API
+                try:
+                    base_stats = await pokeapi.get_base_stats(species_name)
+                    types = await pokeapi.get_pokemon_types(species_name)
+                except Exception:
+                    # Use fallback if API fails
+                    base_stats = {"hp": 80, "atk": 80, "def": 80, "spa": 80, "spd": 80, "spe": 80}
+                    types = ["Normal"]
+
+                # Convert base_stats to short keys if needed
+                base_stats_short = {
+                    "hp": base_stats.get("hp", base_stats.get("hp", 80)),
+                    "atk": base_stats.get("attack", base_stats.get("atk", 80)),
+                    "def": base_stats.get("defense", base_stats.get("def", 80)),
+                    "spa": base_stats.get("special_attack", base_stats.get("spa", 80)),
+                    "spd": base_stats.get("special_defense", base_stats.get("spd", 80)),
+                    "spe": base_stats.get("speed", base_stats.get("spe", 80)),
+                }
+
+                # Convert EVs dict keys from showdown format
+                evs_short = {
+                    "hp": parsed.evs.get("hp", 0),
+                    "atk": parsed.evs.get("atk", 0),
+                    "def": parsed.evs.get("def", 0),
+                    "spa": parsed.evs.get("spa", 0),
+                    "spd": parsed.evs.get("spd", 0),
+                    "spe": parsed.evs.get("spe", 0),
+                }
+
+                # IVs - only include non-31 values
+                ivs_short = {}
+                for stat in ["hp", "atk", "def", "spa", "spd", "spe"]:
+                    iv_val = parsed.ivs.get(stat, 31)
+                    if iv_val != 31:
+                        ivs_short[stat] = iv_val
+
+                pokemon_list.append({
+                    "species": parsed.species,
+                    "types": types,
+                    "item": parsed.item,
+                    "ability": parsed.ability,
+                    "nature": parsed.nature,
+                    "evs": evs_short,
+                    "ivs": ivs_short,
+                    "moves": parsed.moves,
+                    "tera_type": parsed.tera_type,
+                    "level": parsed.level,
+                    "base_stats": base_stats_short,
+                })
+
+            # Generate HTML
+            html = create_pokepaste_team_grid_ui(
+                pokemon_list=pokemon_list,
+                team_name=team_name,
+                paste_url=paste_url,
+            )
+
+            return {
+                "success": True,
+                "paste_id": paste_id,
+                "paste_url": paste_url,
+                "pokemon_count": len(pokemon_list),
+                "pokemon_names": [p["species"] for p in pokemon_list],
+                "ui": {
+                    "type": "html",
+                    "content": html
+                }
+            }
+
+        except PokePasteError as e:
+            return {
+                "success": False,
+                "error": "fetch_error",
+                "message": str(e)
+            }
+        except ShowdownParseError as e:
+            return {
+                "success": False,
+                "error": "parse_error",
+                "message": str(e)
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": "unknown_error",
                 "message": str(e)
             }
