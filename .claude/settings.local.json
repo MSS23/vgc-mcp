@@ -71,7 +71,8 @@
       "Bash(del \"c:\\\\Users\\\\msidh\\\\Documents\\\\ChatGPT App\\\\mcp vgc\\\\test_speed_histogram_preview.html\")",
       "Bash(start \"\" \"c:\\\\Users\\\\msidh\\\\Documents\\\\ChatGPT App\\\\mcp vgc\\\\test_smogon_speed_histogram.html\")",
       "Bash(start \"\" \"c:\\\\Users\\\\msidh\\\\Documents\\\\ChatGPT App\\\\mcp vgc\\\\test_calc_history_preview.html\")",
-      "Bash(start \"\" \"c:\\\\Users\\\\msidh\\\\Documents\\\\ChatGPT App\\\\mcp vgc\\\\test_speed_tier_interactive.html\")"
+      "Bash(start \"\" \"c:\\\\Users\\\\msidh\\\\Documents\\\\ChatGPT App\\\\mcp vgc\\\\test_speed_tier_interactive.html\")",
+      "Bash(timeout 60 C:/Python313/python.exe:*)"
     ]
   }
 }

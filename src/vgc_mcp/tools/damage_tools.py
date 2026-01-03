@@ -265,7 +265,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         try:
             # Auto-assign signature items for Pokemon that require them
             if attacker_item is None:
-                from ...vgc_mcp_core.calc.items import get_signature_item
+                from vgc_mcp_core.calc.items import get_signature_item
                 sig_item = get_signature_item(attacker_name)
                 if sig_item:
                     attacker_item = sig_item
@@ -1179,7 +1179,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
 
             # Auto-fill signature items for Pokemon that require them
             if attacker_item is None:
-                from ...vgc_mcp_core.calc.items import get_signature_item
+                from vgc_mcp_core.calc.items import get_signature_item
                 sig_item = get_signature_item(attacker_name)
                 if sig_item:
                     attacker_item = sig_item
