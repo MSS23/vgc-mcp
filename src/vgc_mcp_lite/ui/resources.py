@@ -171,6 +171,7 @@ def create_speed_tier_resource(
     pokemon_speed: int,
     speed_tiers: list[dict[str, Any]],
     modifiers: dict[str, bool] | None = None,
+    user_base_speed: int | None = None,
 ) -> dict[str, Any]:
     """Create a speed tier analyzer UI resource.
 
@@ -181,6 +182,7 @@ def create_speed_tier_resource(
         pokemon_speed=pokemon_speed,
         speed_tiers=speed_tiers,
         modifiers=modifiers,
+        user_base_speed=user_base_speed,
     )
 
     return create_ui_resource({

@@ -3347,6 +3347,7 @@ def create_speed_tier_ui(
     pokemon_speed: int,
     speed_tiers: list[dict[str, Any]],
     modifiers: Optional[dict[str, bool]] = None,
+    user_base_speed: Optional[int] = None,
 ) -> str:
     """Create speed tier analyzer UI HTML with race track visualization.
 
@@ -3355,10 +3356,13 @@ def create_speed_tier_ui(
         pokemon_speed: Calculated speed stat
         speed_tiers: List of dicts with keys: name, speed, common (bool)
         modifiers: Active modifiers dict (tailwind, trick_room, paralysis, choice_scarf)
+        user_base_speed: Base speed stat for the user's Pokemon (for JS recalculation)
 
     Returns:
         HTML string for the speed tier UI
     """
+    # Store user's base speed for JavaScript interactivity
+    base_speed_for_js = user_base_speed if user_base_speed else pokemon_speed
     modifiers = modifiers or {}
 
     # Calculate max speed for positioning
@@ -3443,7 +3447,7 @@ def create_speed_tier_ui(
         delay = i * 0.05
 
         lanes_html += f"""
-        <div class="race-lane {lane_class}" style="animation-delay: {delay}s;">
+        <div class="race-lane {lane_class}" data-speed="{tier_speed}" data-base-speed="{tier_speed}" data-is-user="{'true' if is_user else 'false'}" style="animation-delay: {delay}s;">
             <div class="lane-position">#{position}</div>
             <div class="lane-sprite">
                 {get_sprite_html(tier_name, size=48, css_class="racer-sprite")}
@@ -3920,6 +3924,151 @@ body {{
             </div>
         </div>
     </div>
+    <script>
+    (function() {{
+        // User's Pokemon data
+        const userBaseSpeed = {base_speed_for_js};
+        const userCurrentSpeed = {pokemon_speed};
+
+        // Modifier state
+        const modifiers = {{
+            tailwind: {'true' if modifiers.get('tailwind') else 'false'},
+            trick_room: {'true' if modifiers.get('trick_room') else 'false'},
+            choice_scarf: {'true' if modifiers.get('choice_scarf') else 'false'},
+            paralysis: {'true' if modifiers.get('paralysis') else 'false'}
+        }};
+
+        // Apply speed modifiers (Tailwind x2, Scarf x1.5, Paralysis x0.5)
+        function applyModifiers(speed) {{
+            let modified = speed;
+            if (modifiers.tailwind) modified *= 2;
+            if (modifiers.choice_scarf) modified *= 1.5;
+            if (modifiers.paralysis) modified *= 0.5;
+            return Math.floor(modified);
+        }}
+
+        // Toggle modifier and update UI
+        function toggleModifier(btn, mod) {{
+            modifiers[mod] = !modifiers[mod];
+            btn.classList.toggle('active', modifiers[mod]);
+            updateSpeedTiers();
+        }}
+
+        // Update all speed tiers based on current modifiers
+        function updateSpeedTiers() {{
+            const lanesContainer = document.querySelector('.lanes-container');
+            const lanes = Array.from(lanesContainer.querySelectorAll('.race-lane'));
+
+            // Recalculate user's speed with modifiers
+            const userLane = lanes.find(l => l.dataset.isUser === 'true');
+            const newUserSpeed = applyModifiers(userCurrentSpeed);
+
+            // Update user's displayed speed
+            if (userLane) {{
+                userLane.dataset.speed = newUserSpeed;
+                userLane.querySelector('.lane-speed').textContent = newUserSpeed;
+            }}
+
+            // Get all speeds for range calculation
+            const allSpeeds = lanes.map(l => parseInt(l.dataset.speed));
+            const maxSpeed = Math.max(...allSpeeds);
+            const minSpeed = Math.min(...allSpeeds);
+
+            // Sort lanes: Trick Room = ascending (slowest first), Normal = descending
+            lanes.sort((a, b) => {{
+                const speedA = parseInt(a.dataset.speed);
+                const speedB = parseInt(b.dataset.speed);
+                return modifiers.trick_room ? (speedA - speedB) : (speedB - speedA);
+            }});
+
+            // Re-append in sorted order and update positions, classes, and track bars
+            lanes.forEach((lane, idx) => {{
+                // Update position number
+                lane.querySelector('.lane-position').textContent = '#' + (idx + 1);
+                lanesContainer.appendChild(lane);
+
+                const laneSpeed = parseInt(lane.dataset.speed);
+                const isUser = lane.dataset.isUser === 'true';
+
+                // Update lane class based on new comparison
+                if (!isUser) {{
+                    lane.classList.remove('faster-lane', 'slower-lane', 'tie-lane');
+
+                    // Check for speed tie with user
+                    const speedTieBadge = lane.querySelector('.speed-tie-badge');
+                    if (speedTieBadge) speedTieBadge.remove();
+
+                    if (laneSpeed === newUserSpeed) {{
+                        lane.classList.add('tie-lane');
+                        // Add speed tie badge
+                        const nameSpan = lane.querySelector('.racer-name');
+                        if (nameSpan && !lane.querySelector('.speed-tie-badge')) {{
+                            const badge = document.createElement('span');
+                            badge.className = 'speed-tie-badge';
+                            badge.textContent = 'SPEED TIE';
+                            nameSpan.parentNode.appendChild(badge);
+                        }}
+                    }} else if (modifiers.trick_room) {{
+                        // In Trick Room, lower speed = moves first = "faster"
+                        lane.classList.add(laneSpeed < newUserSpeed ? 'faster-lane' : 'slower-lane');
+                    }} else {{
+                        lane.classList.add(laneSpeed > newUserSpeed ? 'faster-lane' : 'slower-lane');
+                    }}
+                }}
+
+                // Update track bar position
+                let positionPct = 50;
+                if (maxSpeed > minSpeed) {{
+                    if (modifiers.trick_room) {{
+                        positionPct = 100 - ((laneSpeed - minSpeed) / (maxSpeed - minSpeed) * 100);
+                    }} else {{
+                        positionPct = (laneSpeed - minSpeed) / (maxSpeed - minSpeed) * 100;
+                    }}
+                }}
+                const trackFill = lane.querySelector('.track-fill');
+                const trackMarker = lane.querySelector('.track-marker');
+                if (trackFill) trackFill.style.width = positionPct + '%';
+                if (trackMarker) trackMarker.style.left = positionPct + '%';
+            }});
+
+            // Update summary counts
+            updateSummaryCounts(newUserSpeed, lanes);
+        }}
+
+        // Update the Faster/Ties/Slower counts in the header
+        function updateSummaryCounts(userSpeed, lanes) {{
+            let faster = 0, slower = 0, ties = 0;
+
+            lanes.forEach(lane => {{
+                if (lane.dataset.isUser === 'true') return;
+                const speed = parseInt(lane.dataset.speed);
+                if (speed === userSpeed) {{
+                    ties++;
+                }} else if (modifiers.trick_room ? speed < userSpeed : speed > userSpeed) {{
+                    faster++;
+                }} else {{
+                    slower++;
+                }}
+            }});
+
+            const fasterEl = document.querySelector('.summary-stat.faster');
+            const tiesEl = document.querySelector('.summary-stat.ties');
+            const slowerEl = document.querySelector('.summary-stat.slower');
+
+            if (fasterEl) fasterEl.textContent = faster + ' Faster';
+            if (tiesEl) tiesEl.textContent = ties + ' Ties';
+            if (slowerEl) slowerEl.textContent = slower + ' Slower';
+        }}
+
+        // Attach click handlers to modifier buttons
+        document.querySelectorAll('.mod-btn').forEach(btn => {{
+            btn.addEventListener('click', () => {{
+                const mod = btn.dataset.mod;
+                toggleModifier(btn, mod);
+            }});
+        }});
+    }})();
+    </script>
 </body>
 </html>"""
 

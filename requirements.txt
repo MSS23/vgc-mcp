@@ -1,0 +1,12 @@
+# Core MCP dependencies
+mcp>=1.0.0
+httpx>=0.27.0
+pydantic>=2.0.0
+diskcache>=5.6.0
+
+# UI components for lite version
+mcp-ui-server>=0.1.0
+
+# HTTP server dependencies (required for Render)
+uvicorn>=0.30.0
+starlette>=0.38.0

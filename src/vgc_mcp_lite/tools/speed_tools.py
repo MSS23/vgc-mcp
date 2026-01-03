@@ -455,7 +455,7 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
                            e.g., [{"name": "Entei", "speed": 157}, {"name": "Flutter Mane", "speed": 205}]
             include_tailwind: Show doubled speeds
             include_trick_room: Show order reversed (slowest first)
-            compare_to_meta: Include common meta Pokemon for reference
+            compare_to_meta: Include common meta Pokemon for reference (uses Smogon data)
 
         Returns:
             Text-based speed tier visualization
@@ -471,17 +471,77 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
                 "tailwind_speed": p["speed"] * 2 if include_tailwind else None
             })
 
-        # Add meta Pokemon for reference
+        # Add meta Pokemon for reference - try Smogon first, fallback to hardcoded
         if compare_to_meta:
-            for mon, data in META_SPEED_TIERS.items():
-                for speed in data["common_speeds"][:2]:  # Top 2 common speeds
-                    all_pokemon.append({
-                        "name": mon,
-                        "speed": speed,
-                        "is_yours": False,
-                        "base_speed": data["base"],
-                        "tailwind_speed": speed * 2 if include_tailwind else None
-                    })
+            meta_pokemon_added = set()  # Track added Pokemon to avoid duplicates
+
+            # Try to fetch real data from Smogon
+            if smogon:
+                try:
+                    usage_data = await smogon.get_usage_stats()
+                    if usage_data and "data" in usage_data:
+                        # Get top 20 Pokemon by usage
+                        pokemon_data = usage_data["data"]
+                        sorted_pokemon = sorted(
+                            pokemon_data.items(),
+                            key=lambda x: x[1].get("usage", 0),
+                            reverse=True
+                        )[:20]
+
+                        for mon_name, mon_data in sorted_pokemon:
+                            if mon_name.lower() in meta_pokemon_added:
+                                continue
+
+                            try:
+                                # Get base stats from PokeAPI
+                                base_stats = await pokeapi.get_base_stats(mon_name)
+                                if not base_stats:
+                                    continue
+
+                                # Get speed distribution from Smogon
+                                speed_dist = await smogon.get_speed_distribution(
+                                    mon_name, base_stats.speed
+                                )
+
+                                if speed_dist and speed_dist.get("distribution"):
+                                    # Use top 2 most common speeds
+                                    dist = sorted(
+                                        speed_dist["distribution"],
+                                        key=lambda x: x.get("usage", 0),
+                                        reverse=True
+                                    )[:2]
+
+                                    for entry in dist:
+                                        all_pokemon.append({
+                                            "name": mon_name,
+                                            "speed": entry["speed"],
+                                            "is_yours": False,
+                                            "base_speed": base_stats.speed,
+                                            "tailwind_speed": entry["speed"] * 2 if include_tailwind else None
+                                        })
+
+                                    meta_pokemon_added.add(mon_name.lower())
+                            except Exception:
+                                # Skip Pokemon that fail to load
+                                continue
+                except Exception:
+                    # Smogon fetch failed, use fallback
+                    pass
+
+            # Fallback to hardcoded data if Smogon didn't provide enough Pokemon
+            if len(meta_pokemon_added) < 10:
+                for mon, data in META_SPEED_TIERS.items():
+                    if mon.lower() in meta_pokemon_added:
+                        continue
+                    for speed in data["common_speeds"][:2]:  # Top 2 common speeds
+                        all_pokemon.append({
+                            "name": mon,
+                            "speed": speed,
+                            "is_yours": False,
+                            "base_speed": data["base"],
+                            "tailwind_speed": speed * 2 if include_tailwind else None
+                        })
+                    meta_pokemon_added.add(mon.lower())
 
         # Sort by speed (descending for normal, ascending for TR)
         if include_trick_room:
@@ -558,10 +618,11 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
                 if your_pokemon:
                     # Get the first user Pokemon as the primary one
                     primary = your_pokemon[0]
-                    # Build speed tiers list for UI
+                    # Build speed tiers list for UI (exclude user's Pokemon - it's added separately)
                     speed_tier_list = [
                         {"name": p["name"], "speed": p["speed"], "common": not p["is_yours"]}
                         for p in all_pokemon
+                        if not p["is_yours"]
                     ]
                     ui_resource = create_speed_tier_resource(
                         pokemon_name=primary["name"],
@@ -571,6 +632,7 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
                             "tailwind": include_tailwind,
                             "trick_room": include_trick_room,
                         },
+                        user_base_speed=primary["speed"],  # Use current speed as base for JS
                     )
                     result = add_ui_metadata(result, ui_resource)
             except Exception:

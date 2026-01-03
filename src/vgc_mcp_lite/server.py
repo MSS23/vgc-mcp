@@ -115,7 +115,7 @@ def main():
     mcp.run()
 
 
-def main_http(host: str = "0.0.0.0", port: int = 8000):
+def main_http(host: str = "0.0.0.0", port: int = None):
     """Entry point for HTTP/SSE transport (for remote/mobile access).
 
     Usage:
@@ -125,8 +125,15 @@ def main_http(host: str = "0.0.0.0", port: int = 8000):
 
     Then add to Goose/Claude.ai:
         URL: https://your-server.com/sse
+
+    Note: Reads PORT from environment variable (for Render/Heroku deployment).
     """
+    import os
     import uvicorn
+
+    # Use PORT env var (Render sets this), fallback to 8000
+    if port is None:
+        port = int(os.environ.get("PORT", 8000))
     from mcp.server.sse import SseServerTransport
     from starlette.applications import Starlette
     from starlette.routing import Mount, Route
