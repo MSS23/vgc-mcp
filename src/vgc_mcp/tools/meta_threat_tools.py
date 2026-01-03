@@ -655,13 +655,14 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                 "speed": threat_base_stats.speed + 40
             }
 
-        from vgc_mcp_core.calc.meta_threats import calculate_simple_damage, _get_simple_effectiveness
+        from vgc_mcp_core.calc.meta_threats import calculate_simple_damage
+        from vgc_mcp_core.calc.modifiers import get_type_effectiveness
 
         # Check if STAB
         stab = move_data.type.lower() in [t.lower() for t in threat_types]
 
         # Calculate type effectiveness
-        type_eff = _get_simple_effectiveness(
+        type_eff = get_type_effectiveness(
             move_data.type.lower(),
             your_types
         )
@@ -874,9 +875,10 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
 
         stab = move_data.type.lower() in [t.lower() for t in threat_types]
 
-        from vgc_mcp_core.calc.meta_threats import calculate_simple_damage, _get_simple_effectiveness
+        from vgc_mcp_core.calc.meta_threats import calculate_simple_damage
+        from vgc_mcp_core.calc.modifiers import get_type_effectiveness
 
-        type_eff = _get_simple_effectiveness(
+        type_eff = get_type_effectiveness(
             move_data.type.lower(),
             your_types
         )
