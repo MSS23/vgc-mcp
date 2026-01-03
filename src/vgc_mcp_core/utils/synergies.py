@@ -17,12 +17,51 @@ ITEM_ABILITY_SYNERGIES: dict[str, list[str]] = {
     "booster energy": ["protosynthesis", "quark drive"],
 }
 
+# Smogon API returns concatenated item names (e.g., "lifeorb")
+# This maps them to the spaced format used in ITEM_ABILITY_SYNERGIES
+ITEM_ALIASES: dict[str, str] = {
+    "lifeorb": "life orb",
+    "choiceband": "choice band",
+    "choicespecs": "choice specs",
+    "choicescarf": "choice scarf",
+    "assaultvest": "assault vest",
+    "rockyhelmet": "rocky helmet",
+    "blacksludge": "black sludge",
+    "flameorb": "flame orb",
+    "toxicorb": "toxic orb",
+    "boosterenergy": "booster energy",
+    "focussash": "focus sash",
+    "sitrusberry": "sitrus berry",
+    "lumberry": "lum berry",
+    "clearamulet": "clear amulet",
+    "covertcloak": "covert cloak",
+    "safetygoggles": "safety goggles",
+    "mentalherb": "mental herb",
+    "powerherb": "power herb",
+    "ejectbutton": "eject button",
+    "ejectpack": "eject pack",
+    "expertbelt": "expert belt",
+    "scopelens": "scope lens",
+    "widelens": "wide lens",
+    "zoomlens": "zoom lens",
+    "airballoon": "air balloon",
+    "heavydutyboots": "heavy duty boots",
+}
+
 
 def normalize_item_name(item: str) -> str:
-    """Normalize item name for consistent lookup."""
+    """Normalize item name for consistent lookup.
+
+    Handles both hyphenated format ("life-orb") and Smogon's
+    concatenated format ("lifeorb") to produce spaced format ("life orb").
+    """
     if not item:
         return ""
-    return item.lower().replace("-", " ").replace("_", " ")
+    # First replace hyphens/underscores with spaces
+    lower = item.lower().replace("-", " ").replace("_", " ")
+    # Check if the concatenated version has an alias
+    concat = lower.replace(" ", "")
+    return ITEM_ALIASES.get(concat, lower)
 
 
 def normalize_ability_name(ability: str) -> str:
