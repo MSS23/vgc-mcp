@@ -15,6 +15,25 @@ from .modifiers import get_type_effectiveness
 from ..utils.damage_verdicts import calculate_ko_verdict, calculate_ko_probability
 
 
+# Ruinous Pokemon and their aura effects on opponents' stats
+# Sword of Ruin: -25% Defense to all other Pokemon
+# Tablets of Ruin: -25% Attack to all other Pokemon
+# Beads of Ruin: -25% Special Defense to all other Pokemon
+# Vessel of Ruin: -25% Special Attack to all other Pokemon
+RUINOUS_POKEMON = {
+    "chien-pao": {"ability": "Sword of Ruin", "affected_stat": "defense", "modifier": 0.75},
+    "ting-lu": {"ability": "Tablets of Ruin", "affected_stat": "attack", "modifier": 0.75},
+    "chi-yu": {"ability": "Beads of Ruin", "affected_stat": "special_defense", "modifier": 0.75},
+    "wo-chien": {"ability": "Vessel of Ruin", "affected_stat": "special_attack", "modifier": 0.75},
+}
+
+
+def get_ruinous_info(pokemon_name: str) -> Optional[dict]:
+    """Get ruinous ability info for a Pokemon if applicable."""
+    normalized = pokemon_name.lower().replace(" ", "-").replace("_", "-")
+    return RUINOUS_POKEMON.get(normalized)
+
+
 @dataclass
 class ThreatDamageResult:
     """Result of threat analysis for a single matchup."""
@@ -50,7 +69,8 @@ def calculate_simple_damage(
     is_physical: bool,
     stab: bool = False,
     type_effectiveness: float = 1.0,
-    is_spread: bool = False
+    is_spread: bool = False,
+    defense_modifier: float = 1.0
 ) -> dict:
     """
     Calculate simplified damage without full move/modifier infrastructure.
@@ -58,12 +78,26 @@ def calculate_simple_damage(
     This is used for quick threat analysis where we don't have full
     move data but want to estimate damage ranges.
 
+    Args:
+        attacker_stats: Attacker's stats dict
+        defender_stats: Defender's stats dict
+        move_power: Base power of the move
+        is_physical: True for physical moves, False for special
+        stab: Whether the move gets STAB
+        type_effectiveness: Type effectiveness multiplier
+        is_spread: Whether this is a spread move (0.75x in doubles)
+        defense_modifier: Modifier to defender's defense stat (e.g., 0.75 for Sword of Ruin)
+
     Returns:
         Dict with min/max damage, percentage, and KO probabilities
     """
     # Get attacking and defending stats
     atk_stat = attacker_stats["attack"] if is_physical else attacker_stats["special_attack"]
     def_stat = defender_stats["defense"] if is_physical else defender_stats["special_defense"]
+
+    # Apply defense modifier (e.g., Sword of Ruin reduces opponent's Defense by 25%)
+    def_stat = int(def_stat * defense_modifier)
+
     defender_hp = defender_stats["hp"]
 
     # Level 50 calculation

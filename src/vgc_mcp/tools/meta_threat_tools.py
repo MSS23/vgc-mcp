@@ -875,13 +875,27 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
 
         stab = move_data.type.lower() in [t.lower() for t in threat_types]
 
-        from vgc_mcp_core.calc.meta_threats import calculate_simple_damage
+        from vgc_mcp_core.calc.meta_threats import calculate_simple_damage, get_ruinous_info
         from vgc_mcp_core.calc.modifiers import get_type_effectiveness
 
         type_eff = get_type_effectiveness(
             move_data.type.lower(),
             your_types
         )
+
+        # Check for ruinous abilities (Sword of Ruin, Beads of Ruin, etc.)
+        ruinous_info = get_ruinous_info(threat_pokemon)
+        defense_modifier = 1.0
+        ruinous_ability_applied = None
+
+        if ruinous_info:
+            affected_stat = ruinous_info["affected_stat"]
+            # Sword of Ruin affects Defense (for physical moves)
+            # Beads of Ruin affects Special Defense (for special moves)
+            if (affected_stat == "defense" and move_is_physical) or \
+               (affected_stat == "special_defense" and not move_is_physical):
+                defense_modifier = ruinous_info["modifier"]
+                ruinous_ability_applied = ruinous_info["ability"]
 
         best_spread = None
         min_total_evs = 999
@@ -915,7 +929,8 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                     move_data.power or 80,
                     move_is_physical,
                     stab=stab,
-                    type_effectiveness=type_eff
+                    type_effectiveness=type_eff,
+                    defense_modifier=defense_modifier
                 )
 
                 # Calculate survival percentage from damage rolls
@@ -980,13 +995,14 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
 
         if not best_spread:
             # Build message based on what's achievable
+            ruinous_note = f" (with {ruinous_ability_applied})" if ruinous_ability_applied else ""
             if max_achievable_survival > 0:
                 message = (
-                    f"Cannot achieve {survival_threshold}% survival against {threat_pokemon}'s {threat_move}. "
+                    f"Cannot achieve {survival_threshold}% survival against {threat_pokemon}'s {threat_move}{ruinous_note}. "
                     f"Max achievable is {max_achievable_survival:.1f}% with max bulk investment."
                 )
             else:
-                message = f"Cannot survive {threat_pokemon}'s {threat_move} even with max bulk investment"
+                message = f"Cannot survive {threat_pokemon}'s {threat_move}{ruinous_note} even with max bulk investment"
 
             result = {
                 "pokemon": pokemon_name,
@@ -998,13 +1014,18 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                 "threshold_requested": survival_threshold,
                 "max_achievable_survival": round(max_achievable_survival, 1),
                 "max_achievable_spread": max_achievable_spread,
-                "message": message
+                "message": message,
+                "ruinous_ability_applied": ruinous_ability_applied
             }
         else:
             # Build analysis message with HP remaining for clarity
             threshold_note = ""
             if survival_threshold < 100:
                 threshold_note = f" (meets {survival_threshold}% threshold)"
+
+            ruinous_note = ""
+            if ruinous_ability_applied:
+                ruinous_note = f" (accounts for {ruinous_ability_applied})"
 
             result = {
                 "pokemon": pokemon_name,
@@ -1017,6 +1038,7 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                 "move_category": "Physical" if move_is_physical else "Special",
                 "threshold_requested": survival_threshold,
                 "minimum_evs": best_spread,
+                "ruinous_ability_applied": ruinous_ability_applied,
                 "analysis": (
                     f"Minimum {best_spread['total_evs']} total EVs needed: "
                     f"{best_spread['hp_evs']} HP / "
@@ -1024,7 +1046,7 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                     f"{best_spread['spd_evs']} SpD "
                     f"to survive {best_spread['survival_percent']}% of rolls "
                     f"({best_spread['survival_rolls']}), "
-                    f"left with {best_spread['hp_remaining_percent']} HP{threshold_note}"
+                    f"left with {best_spread['hp_remaining_percent']} HP{threshold_note}{ruinous_note}"
                 )
             }
 
@@ -1044,6 +1066,8 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                 f"| HP Remaining         | {best_spread['hp_remaining_percent']:<40} |",
                 f"| Survival Rate        | {best_spread['survival_percent']}% ({best_spread['survival_rolls']}){' ':<20} |",
             ]
+            if ruinous_ability_applied:
+                table_lines.append(f"| Ability Applied      | {ruinous_ability_applied:<40} |")
             result["spread_table"] = "\n".join(table_lines)
 
         if has_unseen_fist:
