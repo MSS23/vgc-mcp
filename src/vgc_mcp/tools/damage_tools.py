@@ -934,6 +934,17 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             def_types = await pokeapi.get_pokemon_types(defender_name)
             move = await pokeapi.get_move(move_name, user_name=attacker_name)
 
+            # Auto-detect Ruinous abilities from attacker
+            sword_of_ruin = False
+            beads_of_ruin = False
+            atk_abilities = await pokeapi.get_pokemon_abilities(attacker_name)
+            if atk_abilities:
+                attacker_ability = atk_abilities[0].lower().replace(" ", "-")
+                if attacker_ability == "sword-of-ruin":
+                    sword_of_ruin = True
+                elif attacker_ability == "beads-of-ruin":
+                    beads_of_ruin = True
+
             # Parse natures
             atk_nature = Nature(attacker_nature.lower())
             def_nature = Nature(defender_nature.lower())
@@ -959,8 +970,16 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 )
             )
 
+            # Create modifiers with Ruinous abilities
+            modifiers = DamageModifiers(
+                is_doubles=True,
+                sword_of_ruin=sword_of_ruin,
+                beads_of_ruin=beads_of_ruin
+            )
+
             result = calculate_ko_threshold(
                 attacker, defender, move,
+                modifiers=modifiers,
                 target_ko_chance=target_ko_chance
             )
 
@@ -1051,6 +1070,17 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             def_types = await pokeapi.get_pokemon_types(defender_name)
             move = await pokeapi.get_move(move_name, user_name=attacker_name)
 
+            # Auto-detect Ruinous abilities from attacker
+            sword_of_ruin = False
+            beads_of_ruin = False
+            atk_abilities = await pokeapi.get_pokemon_abilities(attacker_name)
+            if atk_abilities:
+                attacker_ability = atk_abilities[0].lower().replace(" ", "-")
+                if attacker_ability == "sword-of-ruin":
+                    sword_of_ruin = True
+                elif attacker_ability == "beads-of-ruin":
+                    beads_of_ruin = True
+
             # Parse natures
             atk_nature = Nature(attacker_nature.lower())
             def_nature = Nature(defender_nature.lower())
@@ -1077,8 +1107,16 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 evs=EVSpread()
             )
 
+            # Create modifiers with Ruinous abilities
+            modifiers = DamageModifiers(
+                is_doubles=True,
+                sword_of_ruin=sword_of_ruin,
+                beads_of_ruin=beads_of_ruin
+            )
+
             result = calculate_bulk_threshold(
                 attacker, defender, move,
+                modifiers=modifiers,
                 target_survival_chance=target_survival_chance
             )
 
