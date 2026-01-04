@@ -125,7 +125,11 @@ def register_coverage_tools(mcp: FastMCP, team_manager, pokeapi):
                         moves=moves_for_ui,
                         coverage=coverage_dict,
                     )
-                    output = add_ui_metadata(output, ui_resource)
+                    output = add_ui_metadata(
+                        output, ui_resource,
+                        display_type="inline",
+                        name="Type Coverage"
+                    )
             except Exception:
                 # UI is optional
                 pass

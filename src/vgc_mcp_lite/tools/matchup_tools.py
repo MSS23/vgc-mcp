@@ -77,7 +77,11 @@ def register_matchup_tools(mcp: FastMCP, team_manager: TeamManager):
                     survives=analysis.survives,
                     notes=analysis.notes,
                 )
-                return add_ui_metadata(result, ui_resource)
+                return add_ui_metadata(
+                    result, ui_resource,
+                    display_type="inline",
+                    name="Threat Analysis"
+                )
             return result
 
         except Exception as e:

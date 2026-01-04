@@ -697,7 +697,11 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         move_category=move.category,
                         move_power=move.power,
                     )
-                    response = add_ui_metadata(response, ui_resource)
+                    response = add_ui_metadata(
+                        response, ui_resource,
+                        display_type="inline",
+                        name="Damage Calculator"
+                    )
                 except Exception:
                     # UI is optional - continue without it if there's an issue
                     pass
@@ -1267,7 +1271,11 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         survival_chance=survival_chance,
                         survives=survives_guaranteed,
                     )
-                    response = add_ui_metadata(response, ui_resource)
+                    response = add_ui_metadata(
+                        response, ui_resource,
+                        display_type="inline",
+                        name="Multi-Hit Calculator"
+                    )
                 except Exception:
                     pass  # UI is optional
 

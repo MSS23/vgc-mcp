@@ -132,10 +132,12 @@ def register_build_tools(
             }
 
             # Add UI metadata
-            return add_ui_metadata(result, {
-                "uri": f"ui://vgc/build/{pokemon_name.lower()}",
-                "content": {"type": "rawHtml", "htmlString": html},
-            })
+            return add_ui_metadata(
+                result,
+                {"uri": f"ui://vgc/build/{pokemon_name.lower()}", "content": {"type": "rawHtml", "htmlString": html}},
+                display_type="inline",
+                name="Pokemon Build"
+            )
 
         except Exception as e:
             return {"success": False, "error": str(e)}
@@ -242,10 +244,12 @@ def register_build_tools(
                 "build_id": build_id,
             }
 
-            return add_ui_metadata(result, {
-                "uri": f"ui://vgc/build/{build['pokemon'].lower()}",
-                "content": {"type": "rawHtml", "htmlString": html},
-            })
+            return add_ui_metadata(
+                result,
+                {"uri": f"ui://vgc/build/{build['pokemon'].lower()}", "content": {"type": "rawHtml", "htmlString": html}},
+                display_type="inline",
+                name="Pokemon Build"
+            )
 
         except Exception as e:
             return {"success": False, "error": str(e)}
@@ -314,10 +318,12 @@ def register_build_tools(
                 "build_id": build_id,
             }
 
-            return add_ui_metadata(result, {
-                "uri": f"ui://vgc/build/{build['pokemon'].lower()}",
-                "content": {"type": "rawHtml", "htmlString": html},
-            })
+            return add_ui_metadata(
+                result,
+                {"uri": f"ui://vgc/build/{build['pokemon'].lower()}", "content": {"type": "rawHtml", "htmlString": html}},
+                display_type="inline",
+                name="Pokemon Build"
+            )
 
         except Exception as e:
             return {"success": False, "error": str(e)}

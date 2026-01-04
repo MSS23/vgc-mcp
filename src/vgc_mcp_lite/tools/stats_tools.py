@@ -153,7 +153,11 @@ def register_stats_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                         level=level,
                         types=types,
                     )
-                    result = add_ui_metadata(result, ui_resource)
+                    result = add_ui_metadata(
+                        result, ui_resource,
+                        display_type="inline",
+                        name="Pokemon Stats"
+                    )
                 except Exception:
                     pass  # UI is optional
 
@@ -254,7 +258,11 @@ def register_stats_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                         highlight_rows=["Final Speed"],
                         analysis=f"{pokemon_name} reaches {speed} Speed ({min_speed} min, {max_speed} max possible)",
                     )
-                    result = add_ui_metadata(result, ui_resource)
+                    result = add_ui_metadata(
+                        result, ui_resource,
+                        display_type="inline",
+                        name="Speed Stats"
+                    )
                 except Exception:
                     pass  # UI is optional
 

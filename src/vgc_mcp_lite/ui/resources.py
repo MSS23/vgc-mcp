@@ -574,24 +574,54 @@ def create_coverage_resource(
 def add_ui_metadata(
     result: dict[str, Any],
     ui_resource: dict[str, Any],
+    display_type: str = "inline",
+    name: str = "VGC Tool",
 ) -> dict[str, Any]:
-    """Add UI metadata to a tool result for compatible clients.
+    """Add UI metadata to a tool result in Goose-compatible format.
 
-    This adds the _meta field that MCP-UI clients look for to
-    render interactive components.
+    This adds the _meta field and content array that Goose MCP-UI expects
+    to render interactive components.
 
     Args:
         result: The existing tool result dict
         ui_resource: The UI resource created by create_*_resource functions
+        display_type: "inline" (in chat) or "sidecar" (side panel)
+        name: Display name for the UI component
 
     Returns:
-        The result dict with _meta UI information added
+        The result dict with Goose-compatible UI information added
     """
     if not MCP_UI_AVAILABLE:
         return result
 
+    # Extract HTML content from ui_resource
+    html_content = ""
+    if "content" in ui_resource and "htmlString" in ui_resource["content"]:
+        html_content = ui_resource["content"]["htmlString"]
+    elif "resource" in ui_resource and "text" in ui_resource["resource"]:
+        html_content = ui_resource["resource"]["text"]
+
+    # Goose-compatible _meta structure
     result["_meta"] = {
-        "ui/resourceUri": ui_resource.get("uri", ""),
-        "ui/resource": ui_resource,
+        "goose": {
+            "toolUI": {
+                "displayType": display_type,
+                "name": name,
+                "renderer": "mcp-ui"
+            }
+        }
     }
+
+    # Add content array with embedded resource (Goose format)
+    result["content"] = [
+        {
+            "type": "resource",
+            "resource": {
+                "uri": ui_resource.get("uri", "ui://vgc/tool"),
+                "mimeType": "text/html",
+                "text": html_content
+            }
+        }
+    ]
+
     return result

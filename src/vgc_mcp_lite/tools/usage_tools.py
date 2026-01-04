@@ -67,7 +67,11 @@ def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
                     format_name=reg_name,
                     month_display=meta.get("month_display", ""),
                 )
-                return add_ui_metadata(usage, ui_resource)
+                return add_ui_metadata(
+                    usage, ui_resource,
+                    display_type="inline",
+                    name="Usage Stats"
+                )
             return usage
 
         except Exception as e:

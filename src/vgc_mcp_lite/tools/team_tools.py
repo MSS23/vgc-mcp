@@ -267,7 +267,11 @@ def register_team_tools(
                     if team_manager.size > 0:
                         team_ui_data = [_pokemon_to_ui_dict(p) for p in team_manager.team]
                         ui_resource = create_team_roster_resource(team=team_ui_data)
-                        result = add_ui_metadata(result, ui_resource)
+                        result = add_ui_metadata(
+                            result, ui_resource,
+                            display_type="inline",
+                            name="Team Roster"
+                        )
                 except Exception:
                     # UI is optional
                     pass

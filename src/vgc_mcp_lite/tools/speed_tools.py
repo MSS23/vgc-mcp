@@ -195,7 +195,11 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
                         highlight_rows=["Result"],
                         analysis=result,
                     )
-                    result_dict = add_ui_metadata(result_dict, ui_resource)
+                    result_dict = add_ui_metadata(
+                        result_dict, ui_resource,
+                        display_type="inline",
+                        name="Speed Comparison"
+                    )
                 except Exception:
                     pass  # UI is optional
 
@@ -278,7 +282,11 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
                             highlight_rows=["Result"],
                             analysis=f"{pokemon_name} cannot reach {target_speed} Speed with {nature} nature. Max achievable is {max_speed}.",
                         )
-                        result_dict = add_ui_metadata(result_dict, ui_resource)
+                        result_dict = add_ui_metadata(
+                            result_dict, ui_resource,
+                            display_type="inline",
+                            name="Speed EVs"
+                        )
                     except Exception:
                         pass
 
@@ -326,7 +334,11 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
                         highlight_rows=["EVs Needed", "Actual Speed"],
                         analysis=f"{pokemon_name} needs {evs_needed} Speed EVs to reach {actual_speed} Speed (target: {target_speed}).",
                     )
-                    result_dict = add_ui_metadata(result_dict, ui_resource)
+                    result_dict = add_ui_metadata(
+                        result_dict, ui_resource,
+                        display_type="inline",
+                        name="Speed EVs"
+                    )
                 except Exception:
                     pass
 
@@ -634,7 +646,11 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
                         },
                         user_base_speed=primary["speed"],  # Use current speed as base for JS
                     )
-                    result = add_ui_metadata(result, ui_resource)
+                    result = add_ui_metadata(
+                        result, ui_resource,
+                        display_type="inline",
+                        name="Speed Tiers"
+                    )
             except Exception:
                 # UI is optional
                 pass
@@ -938,7 +954,11 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
                         target_spreads=target_spreads,
                         outspeed_percent=outspeed_percent,
                     )
-                    result_dict = add_ui_metadata(result_dict, ui_resource)
+                    result_dict = add_ui_metadata(
+                        result_dict, ui_resource,
+                        display_type="inline",
+                        name="Outspeed Chart"
+                    )
                 except Exception:
                     pass  # UI is optional
 
