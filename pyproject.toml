@@ -30,13 +30,14 @@ vgc-mcp = "vgc_mcp.server:main"
 vgc-mcp-http = "vgc_mcp.server:main_http"
 vgc-mcp-lite = "vgc_mcp_lite.server:main"
 vgc-mcp-lite-http = "vgc_mcp_lite.server:main_http"
+vgc-mcp-micro = "vgc_mcp_micro.server:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/vgc_mcp_core", "src/vgc_mcp", "src/vgc_mcp_lite"]
+packages = ["src/vgc_mcp_core", "src/vgc_mcp", "src/vgc_mcp_lite", "src/vgc_mcp_micro"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
