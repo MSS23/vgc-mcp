@@ -11053,3 +11053,2653 @@ def create_team_diff_ui(diff) -> str:
     </div>
 </body>
 </html>'''
+
+
+def create_defensive_benchmark_ui(
+    pokemon: dict,
+    defensive_benchmarks: list[dict],
+    offensive_benchmarks: list[dict] | None = None,
+    interactive: bool = True,
+) -> str:
+    """Create a defensive benchmark visualization showing damage taken and dealt.
+
+    Args:
+        pokemon: Your Pokemon data with keys:
+            - name: str
+            - nature: str
+            - evs: dict or str (e.g., {"hp": 4, "defense": 0, ...} or "4 HP / 0 Def / 252 SpA / 252 Spe")
+            - item: str (optional)
+            - stats: dict with hp, def, spd, spe, etc. (calculated stats)
+            - base_stats: dict with base stats (for recalculation)
+            - types: list[str] (optional)
+        defensive_benchmarks: List of threats with damage calculations:
+            - threat: str (Pokemon name)
+            - spread: str (e.g., "Adamant 252 Atk")
+            - item: str
+            - calcs: list of {move, damage, result, move_type, move_power, move_category (optional)}
+            - base_stats: dict (for recalculation)
+            - types: list[str]
+        offensive_benchmarks: List of targets with your damage output (optional):
+            - target: str (Pokemon name)
+            - spread: str
+            - item: str
+            - calcs: list of {move, damage, result, move_type, move_power, move_category (optional)}
+            - base_stats: dict (for recalculation)
+            - types: list[str]
+        interactive: bool - if True, allows changing EVs/items/moves dynamically
+
+    Returns:
+        HTML string for the defensive benchmark UI
+    """
+    shared_styles = get_shared_styles()
+
+    # Build your Pokemon card
+    poke_name = pokemon.get("name", "Pokemon")
+    poke_nature = pokemon.get("nature", "Serious")
+    poke_evs = pokemon.get("evs", {})
+    poke_item = pokemon.get("item", "")
+    poke_stats = pokemon.get("stats", {})
+    poke_base_stats = pokemon.get("base_stats", {})
+    poke_types = pokemon.get("types", [])
+
+    # Convert evs string to dict if needed
+    if isinstance(poke_evs, str):
+        ev_dict = {"hp": 0, "attack": 0, "defense": 0, "special_attack": 0, "special_defense": 0, "speed": 0}
+        # Parse "4 HP / 252 SpA / 252 Spe" format
+        for part in poke_evs.split("/"):
+            part = part.strip()
+            if "HP" in part:
+                ev_dict["hp"] = int(part.replace("HP", "").strip())
+            elif "Atk" in part and "SpA" not in part:
+                ev_dict["attack"] = int(part.replace("Atk", "").strip())
+            elif "Def" in part and "SpD" not in part:
+                ev_dict["defense"] = int(part.replace("Def", "").strip())
+            elif "SpA" in part:
+                ev_dict["special_attack"] = int(part.replace("SpA", "").strip())
+            elif "SpD" in part:
+                ev_dict["special_defense"] = int(part.replace("SpD", "").strip())
+            elif "Spe" in part:
+                ev_dict["speed"] = int(part.replace("Spe", "").strip())
+        poke_evs = ev_dict
+    elif not isinstance(poke_evs, dict):
+        poke_evs = {"hp": 0, "attack": 0, "defense": 0, "special_attack": 0, "special_defense": 0, "speed": 0}
+
+    sprite_html = get_sprite_html(poke_name, size=96, css_class="pokemon-sprite")
+
+    # Type badges
+    type_badges_html = ""
+    for t in poke_types:
+        type_badges_html += f'<span class="type-badge type-{t.lower()}">{t}</span>'
+
+    # Nature options
+    natures = ["Adamant", "Bold", "Brave", "Calm", "Careful", "Gentle", "Hasty",
+               "Impish", "Jolly", "Lax", "Lonely", "Mild", "Modest", "Naive",
+               "Naughty", "Quiet", "Rash", "Relaxed", "Sassy", "Serious", "Timid"]
+
+    nature_options = "".join(
+        f'<option value="{n}" {"selected" if n.lower() == poke_nature.lower() else ""}>{n}</option>'
+        for n in natures
+    )
+
+    # Common items
+    items = [
+        "(none)", "Focus Sash", "Choice Specs", "Choice Band", "Choice Scarf", "Life Orb",
+        "Assault Vest", "Leftovers", "Sitrus Berry", "Lum Berry",
+        "Booster Energy", "Clear Amulet", "Covert Cloak", "Safety Goggles",
+        "Rocky Helmet", "Eviolite", "Expert Belt"
+    ]
+    item_options = "".join(
+        f'<option value="{i}" {"selected" if i == poke_item or (i == "(none)" and not poke_item) else ""}>{i}</option>'
+        for i in items
+    )
+
+    # Build defensive benchmark rows
+    def_rows_html = ""
+    for i, benchmark in enumerate(defensive_benchmarks):
+        threat_name = benchmark.get("threat", "Unknown")
+        threat_spread = benchmark.get("spread", "")
+        threat_item = benchmark.get("item", "")
+        calcs = benchmark.get("calcs", [])
+        common_spreads = benchmark.get("common_spreads", [])
+        available_moves = benchmark.get("available_moves", [])
+
+        threat_sprite = get_sprite_html(threat_name, size=48, css_class="threat-sprite")
+
+        # Build spread dropdown if common spreads provided
+        spread_dropdown_html = ""
+        if common_spreads and interactive:
+            spread_options = "".join(
+                f'<option value="{idx}" {"selected" if s.get("spread") == threat_spread and s.get("item") == threat_item else ""}>'
+                f'{s.get("spread")} | {s.get("item")} ({s.get("usage", 0):.1f}%)</option>'
+                for idx, s in enumerate(common_spreads)
+            )
+            spread_dropdown_html = f'''
+                <select class="spread-select" id="threat-spread-{i}" onchange="updateThreatCalc({i})">
+                    {spread_options}
+                </select>'''
+
+        # Build move dropdown from available_moves or calcs
+        move_dropdown_html = ""
+        if interactive:
+            # Use available_moves if provided, otherwise use calcs
+            move_options_list = available_moves if available_moves else [
+                {"name": c.get("move"), "type": c.get("move_type", "")} for c in calcs
+            ]
+            if len(move_options_list) > 1:
+                move_options = "".join(
+                    f'<option value="{idx}" data-type="{m.get("type", "")}">{m.get("name")}</option>'
+                    for idx, m in enumerate(move_options_list)
+                )
+                move_dropdown_html = f'''
+                    <select class="move-select" id="threat-move-{i}" onchange="updateThreatCalc({i})">
+                        {move_options}
+                    </select>'''
+
+        # Get first calc for initial display
+        first_calc = calcs[0] if calcs else {}
+        move_name = first_calc.get("move", "")
+        damage = first_calc.get("damage", "")
+        result = first_calc.get("result", "")
+        move_type = first_calc.get("move_type", "")
+
+        # Determine badge class
+        badge_class = "survive"
+        if "OHKO" in result.upper():
+            badge_class = "ohko"
+        elif "2HKO" in result.upper():
+            badge_class = "twohko"
+        elif "3HKO" in result.upper():
+            badge_class = "threehko"
+        elif "4HKO" in result.upper():
+            badge_class = "fourhko"
+
+        # Move display - either dropdown or static
+        if move_dropdown_html:
+            move_display = move_dropdown_html
+        else:
+            move_type_html = ""
+            if move_type:
+                move_type_html = f'<span class="type-badge type-{move_type.lower()}" style="font-size:10px;padding:2px 6px;">{move_type}</span>'
+            move_display = f'{move_type_html} {move_name}'
+
+        # Spread display
+        spread_display = spread_dropdown_html if spread_dropdown_html else f'''
+                        <div class="threat-spread">{threat_spread}</div>
+                        <div class="threat-item">{threat_item}</div>'''
+
+        def_rows_html += f'''
+        <tr class="threat-row" data-threat-idx="{i}" style="animation-delay: {i * 0.05}s;">
+            <td class="threat-cell">
+                <div class="threat-info">
+                    {threat_sprite}
+                    <div class="threat-details">
+                        <div class="threat-name">{threat_name}</div>
+                        {spread_display}
+                    </div>
+                </div>
+            </td>
+            <td class="move-cell" id="threat-move-cell-{i}">{move_display}</td>
+            <td class="damage-cell" id="def-damage-{i}">{damage}</td>
+            <td class="result-cell"><span class="ko-badge {badge_class}" id="def-result-{i}">{result}</span></td>
+        </tr>'''
+
+    # Build offensive benchmark rows (if provided)
+    off_rows_html = ""
+    if offensive_benchmarks:
+        for i, benchmark in enumerate(offensive_benchmarks):
+            target_name = benchmark.get("target", "Unknown")
+            target_spread = benchmark.get("spread", "")
+            target_item = benchmark.get("item", "")
+            calcs = benchmark.get("calcs", [])
+            common_spreads = benchmark.get("common_spreads", [])
+
+            target_sprite = get_sprite_html(target_name, size=48, css_class="threat-sprite")
+
+            # Build spread dropdown if common spreads provided
+            spread_dropdown_html = ""
+            if common_spreads and interactive:
+                spread_options = "".join(
+                    f'<option value="{idx}" {"selected" if s.get("spread") == target_spread and s.get("item") == target_item else ""}>'
+                    f'{s.get("spread")} | {s.get("item")} ({s.get("usage", 0):.1f}%)</option>'
+                    for idx, s in enumerate(common_spreads)
+                )
+                spread_dropdown_html = f'''
+                    <select class="spread-select" id="target-spread-{i}" onchange="updateTargetSpread({i}, this.value)">
+                        {spread_options}
+                    </select>'''
+
+            for j, calc in enumerate(calcs):
+                move_name = calc.get("move", "")
+                damage = calc.get("damage", "")
+                result = calc.get("result", "")
+                move_type = calc.get("move_type", "")
+
+                badge_class = "survive"
+                if "OHKO" in result.upper():
+                    badge_class = "ohko"
+                elif "2HKO" in result.upper():
+                    badge_class = "twohko"
+                elif "3HKO" in result.upper():
+                    badge_class = "threehko"
+                elif "4HKO" in result.upper():
+                    badge_class = "fourhko"
+
+                move_type_html = ""
+                if move_type:
+                    move_type_html = f'<span class="type-badge type-{move_type.lower()}" style="font-size:10px;padding:2px 6px;">{move_type}</span>'
+
+                if j == 0:
+                    spread_display = spread_dropdown_html if spread_dropdown_html else f'''
+                                    <div class="threat-spread">{target_spread}</div>
+                                    <div class="threat-item">{target_item}</div>'''
+                    off_rows_html += f'''
+                    <tr class="threat-row" data-target-idx="{i}" style="animation-delay: {i * 0.05}s;">
+                        <td class="threat-cell" rowspan="{len(calcs)}">
+                            <div class="threat-info">
+                                {target_sprite}
+                                <div class="threat-details">
+                                    <div class="threat-name">{target_name}</div>
+                                    {spread_display}
+                                </div>
+                            </div>
+                        </td>
+                        <td class="move-cell">{move_type_html} {move_name}</td>
+                        <td class="damage-cell" id="off-damage-{i}-{j}">{damage}</td>
+                        <td class="result-cell"><span class="ko-badge {badge_class}" id="off-result-{i}-{j}">{result}</span></td>
+                    </tr>'''
+                else:
+                    off_rows_html += f'''
+                    <tr class="threat-row-continued" data-target-idx="{i}">
+                        <td class="move-cell">{move_type_html} {move_name}</td>
+                        <td class="damage-cell" id="off-damage-{i}-{j}">{damage}</td>
+                        <td class="result-cell"><span class="ko-badge {badge_class}" id="off-result-{i}-{j}">{result}</span></td>
+                    </tr>'''
+
+    # Serialize benchmark data for JavaScript
+    import json
+    defensive_benchmarks_json = json.dumps(defensive_benchmarks)
+    offensive_benchmarks_json = json.dumps(offensive_benchmarks if offensive_benchmarks else [])
+
+    # Offensive section HTML
+    offensive_section = ""
+    if offensive_benchmarks:
+        offensive_section = f'''
+        <div class="benchmark-section">
+            <div class="section-header">
+                <span class="section-icon">&#9876;</span>
+                OFFENSIVE BENCHMARKS (Damage You Deal)
+            </div>
+            <table class="benchmark-table">
+                <thead>
+                    <tr>
+                        <th>Target</th>
+                        <th>Your Move</th>
+                        <th>Damage</th>
+                        <th>Result</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {off_rows_html}
+                </tbody>
+            </table>
+        </div>'''
+
+    return f'''<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        {shared_styles}
+
+        .benchmark-container {{
+            max-width: 800px;
+            margin: 0 auto;
+            padding: var(--space-md);
+        }}
+
+        .pokemon-hero {{
+            background: var(--glass-shine), var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            border-radius: var(--radius-xl);
+            border: 1px solid var(--glass-border);
+            padding: var(--space-lg);
+            margin-bottom: var(--space-lg);
+            display: flex;
+            align-items: center;
+            gap: var(--space-lg);
+            animation: fadeSlideIn 0.4s var(--ease-smooth);
+        }}
+
+        .pokemon-hero:hover {{
+            border-color: var(--glass-border-hover);
+            box-shadow: var(--shadow-xl), var(--glow-primary);
+        }}
+
+        .pokemon-sprite {{
+            width: 96px;
+            height: 96px;
+            object-fit: contain;
+            animation: spriteBounce 2s ease-in-out infinite;
+        }}
+
+        .pokemon-details {{
+            flex: 1;
+        }}
+
+        .pokemon-name {{
+            font-size: 24px;
+            font-weight: 700;
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: var(--space-xs);
+        }}
+
+        .pokemon-types {{
+            display: flex;
+            gap: var(--space-xs);
+            margin-bottom: var(--space-sm);
+        }}
+
+        .pokemon-spread {{
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: var(--space-xs);
+        }}
+
+        .pokemon-stats {{
+            font-size: 13px;
+            color: var(--text-muted);
+            font-family: 'SF Mono', 'Fira Code', monospace;
+        }}
+
+        .benchmark-section {{
+            background: var(--glass-bg);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--glass-border);
+            margin-bottom: var(--space-lg);
+            overflow: hidden;
+            animation: fadeSlideIn 0.4s var(--ease-smooth) 0.1s backwards;
+        }}
+
+        .section-header {{
+            background: rgba(99, 102, 241, 0.15);
+            padding: var(--space-md);
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            border-bottom: 1px solid var(--glass-border);
+        }}
+
+        .section-icon {{
+            font-size: 18px;
+        }}
+
+        .benchmark-table {{
+            width: 100%;
+            border-collapse: collapse;
+        }}
+
+        .benchmark-table th {{
+            background: rgba(255, 255, 255, 0.03);
+            padding: var(--space-sm) var(--space-md);
+            text-align: left;
+            font-weight: 600;
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid var(--glass-border);
+        }}
+
+        .benchmark-table td {{
+            padding: var(--space-sm) var(--space-md);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            vertical-align: middle;
+        }}
+
+        .threat-row {{
+            animation: fadeSlideIn 0.3s var(--ease-smooth) backwards;
+        }}
+
+        .threat-row:hover td,
+        .threat-row-continued:hover td {{
+            background: var(--glass-bg-hover);
+        }}
+
+        .threat-cell {{
+            background: rgba(255, 255, 255, 0.02);
+            border-right: 1px solid rgba(255, 255, 255, 0.05);
+        }}
+
+        .threat-info {{
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }}
+
+        .threat-sprite {{
+            width: 48px;
+            height: 48px;
+            object-fit: contain;
+        }}
+
+        .threat-details {{
+            flex: 1;
+        }}
+
+        .threat-name {{
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--text-primary);
+        }}
+
+        .threat-spread {{
+            font-size: 12px;
+            color: var(--text-secondary);
+        }}
+
+        .threat-item {{
+            font-size: 11px;
+            color: var(--text-muted);
+            font-style: italic;
+        }}
+
+        .move-cell {{
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: var(--space-xs);
+        }}
+
+        .damage-cell {{
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }}
+
+        .result-cell {{
+            text-align: center;
+        }}
+
+        .ko-badge {{
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 12px;
+            border-radius: var(--radius-full);
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }}
+
+        .ko-badge.ohko {{
+            background: var(--gradient-danger);
+            box-shadow: var(--glow-danger);
+            animation: pulseGlowDanger 2s infinite;
+        }}
+
+        .ko-badge.twohko {{
+            background: var(--gradient-warning);
+            box-shadow: var(--glow-warning);
+        }}
+
+        .ko-badge.threehko {{
+            background: linear-gradient(135deg, #eab308, #facc15);
+            color: #000;
+        }}
+
+        .ko-badge.fourhko {{
+            background: linear-gradient(135deg, #84cc16, #a3e635);
+            color: #000;
+        }}
+
+        .ko-badge.survive {{
+            background: var(--gradient-success);
+            box-shadow: var(--glow-success);
+        }}
+
+        /* Interactive controls */
+        .pokemon-controls {{
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-md);
+            margin-top: var(--space-md);
+            padding-top: var(--space-md);
+            border-top: 1px solid var(--glass-border);
+        }}
+
+        .control-group {{
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-xs);
+        }}
+
+        .control-label {{
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+        }}
+
+        .control-select {{
+            padding: 8px 12px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--glass-border);
+            background: rgba(24, 24, 27, 0.8);
+            color: var(--text-primary);
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }}
+
+        .control-select:hover {{
+            border-color: var(--accent-primary);
+        }}
+
+        .control-select:focus {{
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+        }}
+
+        .control-select option {{
+            background: #1a1a2e;
+            color: #fff;
+        }}
+
+        .ev-grid {{
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: var(--space-sm);
+            margin-top: var(--space-sm);
+        }}
+
+        .ev-item {{
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }}
+
+        .ev-label {{
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }}
+
+        .ev-input {{
+            width: 100%;
+            padding: 6px 4px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--glass-border);
+            background: rgba(24, 24, 27, 0.8);
+            color: var(--text-primary);
+            font-size: 13px;
+            font-weight: 600;
+            text-align: center;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+        }}
+
+        .ev-input:focus {{
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+        }}
+
+        .ev-total {{
+            text-align: center;
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: var(--space-sm);
+            padding: 6px 12px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: var(--radius-sm);
+        }}
+
+        .ev-total.over-limit {{
+            color: var(--accent-danger);
+            background: rgba(239, 68, 68, 0.1);
+        }}
+
+        .spread-select {{
+            width: 100%;
+            padding: 6px 10px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--glass-border);
+            background: rgba(24, 24, 27, 0.9);
+            color: var(--text-primary);
+            font-size: 11px;
+            cursor: pointer;
+            margin-top: 4px;
+            transition: all 0.2s ease;
+        }}
+
+        .spread-select:hover {{
+            border-color: var(--accent-primary);
+        }}
+
+        .spread-select:focus {{
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+        }}
+
+        .spread-select option {{
+            background: #1a1a2e;
+            color: #fff;
+            padding: 4px;
+        }}
+
+        .move-select {{
+            padding: 6px 10px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--glass-border);
+            background: rgba(24, 24, 27, 0.9);
+            color: var(--text-primary);
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            min-width: 120px;
+        }}
+
+        .move-select:hover {{
+            border-color: var(--accent-primary);
+        }}
+
+        .move-select:focus {{
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+        }}
+
+        .move-select option {{
+            background: #1a1a2e;
+            color: #fff;
+            padding: 4px;
+        }}
+
+        .calculated-stats {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--space-sm);
+            margin-top: var(--space-sm);
+            padding: var(--space-sm);
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: var(--radius-md);
+        }}
+
+        .stat-chip {{
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: var(--radius-full);
+            font-size: 12px;
+        }}
+
+        .stat-chip-label {{
+            color: var(--text-muted);
+            font-weight: 500;
+        }}
+
+        .stat-chip-value {{
+            color: var(--text-primary);
+            font-weight: 700;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+        }}
+
+        @media (max-width: 600px) {{
+            .pokemon-controls {{
+                grid-template-columns: 1fr;
+            }}
+            .ev-grid {{
+                grid-template-columns: repeat(3, 1fr);
+            }}
+        }}
+
+        /* Battle Modifiers Section */
+        .modifiers-section {{
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: 16px;
+            margin-bottom: var(--space-lg);
+        }}
+
+        .modifiers-title {{
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+        }}
+
+        .modifiers-grid {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }}
+
+        .modifier-group {{
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }}
+
+        .modifier-toggle {{
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }}
+
+        .modifier-toggle:hover {{
+            background: rgba(255, 255, 255, 0.06);
+            border-color: var(--accent-primary);
+        }}
+
+        .modifier-toggle input[type="checkbox"] {{
+            width: 14px;
+            height: 14px;
+            accent-color: var(--accent-primary);
+            cursor: pointer;
+        }}
+
+        .modifier-toggle input[type="checkbox"]:checked + .toggle-label {{
+            color: var(--accent-primary);
+            font-weight: 600;
+        }}
+
+        .toggle-label {{
+            font-size: 12px;
+            color: var(--text-secondary);
+            user-select: none;
+        }}
+
+        .modifier-select {{
+            padding: 6px 10px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--glass-border);
+            background: rgba(24, 24, 27, 0.8);
+            color: var(--text-primary);
+            font-size: 11px;
+            cursor: pointer;
+            min-width: 90px;
+        }}
+
+        .modifier-select:hover {{
+            border-color: var(--accent-primary);
+        }}
+
+        .modifiers-row {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }}
+
+        /* Stat Stages Section */
+        .stat-stages-section {{
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: 16px;
+            margin-bottom: var(--space-lg);
+        }}
+
+        .stages-title {{
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+        }}
+
+        .stat-stages-grid {{
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }}
+
+        .stage-group {{
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: var(--radius-md);
+            padding: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.04);
+        }}
+
+        .stage-label {{
+            display: block;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #71717a;
+            margin-bottom: 10px;
+        }}
+
+        .stage-row {{
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }}
+
+        .stage-row:last-child {{
+            margin-bottom: 0;
+        }}
+
+        .stage-stat {{
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            min-width: 30px;
+        }}
+
+        .stage-slider {{
+            flex: 1;
+            -webkit-appearance: none;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.1);
+            outline: none;
+        }}
+
+        .stage-slider::-webkit-slider-thumb {{
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(99, 102, 241, 0.4);
+            transition: transform 0.15s ease;
+        }}
+
+        .stage-slider::-webkit-slider-thumb:hover {{
+            transform: scale(1.15);
+        }}
+
+        .stage-slider::-moz-range-thumb {{
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 6px rgba(99, 102, 241, 0.4);
+        }}
+
+        .stage-value {{
+            font-size: 13px;
+            font-weight: 700;
+            font-family: 'SF Mono', 'Monaco', 'Fira Code', monospace;
+            min-width: 28px;
+            text-align: right;
+        }}
+
+        .stage-value.negative {{
+            color: #ef4444;
+        }}
+
+        .stage-value.positive {{
+            color: #22c55e;
+        }}
+
+        .stage-value.neutral {{
+            color: #71717a;
+        }}
+
+        @media (max-width: 600px) {{
+            .stat-stages-grid {{
+                grid-template-columns: 1fr;
+            }}
+            .modifiers-grid {{
+                flex-direction: column;
+                align-items: stretch;
+            }}
+        }}
+    </style>
+</head>
+<body>
+    <div class="benchmark-container">
+        <div class="pokemon-hero">
+            {sprite_html}
+            <div class="pokemon-details">
+                <div class="pokemon-name">{poke_name}</div>
+                <div class="pokemon-types">{type_badges_html}</div>
+
+                <div class="pokemon-controls">
+                    <div class="control-group">
+                        <label class="control-label">Nature</label>
+                        <select class="control-select" id="pokemon-nature" onchange="recalculateAll()">
+                            {nature_options}
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label class="control-label">Item</label>
+                        <select class="control-select" id="pokemon-item" onchange="recalculateAll()">
+                            {item_options}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="ev-grid">
+                    <div class="ev-item">
+                        <span class="ev-label">HP</span>
+                        <input type="number" class="ev-input" id="ev-hp" value="{poke_evs.get('hp', 0)}" min="0" max="252" step="4" oninput="updateEVTotal(); recalculateAll()">
+                    </div>
+                    <div class="ev-item">
+                        <span class="ev-label">Atk</span>
+                        <input type="number" class="ev-input" id="ev-atk" value="{poke_evs.get('attack', 0)}" min="0" max="252" step="4" oninput="updateEVTotal(); recalculateAll()">
+                    </div>
+                    <div class="ev-item">
+                        <span class="ev-label">Def</span>
+                        <input type="number" class="ev-input" id="ev-def" value="{poke_evs.get('defense', 0)}" min="0" max="252" step="4" oninput="updateEVTotal(); recalculateAll()">
+                    </div>
+                    <div class="ev-item">
+                        <span class="ev-label">SpA</span>
+                        <input type="number" class="ev-input" id="ev-spa" value="{poke_evs.get('special_attack', 0)}" min="0" max="252" step="4" oninput="updateEVTotal(); recalculateAll()">
+                    </div>
+                    <div class="ev-item">
+                        <span class="ev-label">SpD</span>
+                        <input type="number" class="ev-input" id="ev-spd" value="{poke_evs.get('special_defense', 0)}" min="0" max="252" step="4" oninput="updateEVTotal(); recalculateAll()">
+                    </div>
+                    <div class="ev-item">
+                        <span class="ev-label">Spe</span>
+                        <input type="number" class="ev-input" id="ev-spe" value="{poke_evs.get('speed', 0)}" min="0" max="252" step="4" oninput="updateEVTotal(); recalculateAll()">
+                    </div>
+                </div>
+                <div class="ev-total" id="ev-total">Total: 0 / 508</div>
+
+                <div class="calculated-stats" id="calculated-stats">
+                    <div class="stat-chip"><span class="stat-chip-label">HP:</span><span class="stat-chip-value" id="stat-hp">-</span></div>
+                    <div class="stat-chip"><span class="stat-chip-label">Def:</span><span class="stat-chip-value" id="stat-def">-</span></div>
+                    <div class="stat-chip"><span class="stat-chip-label">SpD:</span><span class="stat-chip-value" id="stat-spd">-</span></div>
+                    <div class="stat-chip"><span class="stat-chip-label">Spe:</span><span class="stat-chip-value" id="stat-spe">-</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Battle Modifiers Section -->
+        <div class="modifiers-section">
+            <div class="modifiers-title">Battle Modifiers</div>
+            <div class="modifiers-grid">
+                <!-- Tera Toggle -->
+                <div class="modifier-group">
+                    <label class="modifier-toggle">
+                        <input type="checkbox" id="mod-tera" onchange="recalculateDamage()">
+                        <span class="toggle-label">Tera</span>
+                    </label>
+                    <select class="modifier-select" id="tera-type" onchange="recalculateDamage()">
+                        <option value="">Select Type</option>
+                        <option value="normal">Normal</option>
+                        <option value="fire">Fire</option>
+                        <option value="water">Water</option>
+                        <option value="electric">Electric</option>
+                        <option value="grass">Grass</option>
+                        <option value="ice">Ice</option>
+                        <option value="fighting">Fighting</option>
+                        <option value="poison">Poison</option>
+                        <option value="ground">Ground</option>
+                        <option value="flying">Flying</option>
+                        <option value="psychic">Psychic</option>
+                        <option value="bug">Bug</option>
+                        <option value="rock">Rock</option>
+                        <option value="ghost">Ghost</option>
+                        <option value="dragon">Dragon</option>
+                        <option value="dark">Dark</option>
+                        <option value="steel">Steel</option>
+                        <option value="fairy">Fairy</option>
+                        <option value="stellar">Stellar</option>
+                    </select>
+                </div>
+
+                <!-- Screens -->
+                <label class="modifier-toggle">
+                    <input type="checkbox" id="mod-reflect" onchange="recalculateDamage()">
+                    <span class="toggle-label">Reflect</span>
+                </label>
+                <label class="modifier-toggle">
+                    <input type="checkbox" id="mod-lightscreen" onchange="recalculateDamage()">
+                    <span class="toggle-label">Light Screen</span>
+                </label>
+
+                <!-- Ability Effects -->
+                <label class="modifier-toggle">
+                    <input type="checkbox" id="mod-intimidate" onchange="recalculateDamage()">
+                    <span class="toggle-label">Intimidate (-1)</span>
+                </label>
+                <label class="modifier-toggle">
+                    <input type="checkbox" id="mod-friendguard" onchange="recalculateDamage()">
+                    <span class="toggle-label">Friend Guard</span>
+                </label>
+            </div>
+
+            <div class="modifiers-row">
+                <div class="control-group">
+                    <label class="control-label">Weather</label>
+                    <select class="modifier-select" id="mod-weather" onchange="recalculateDamage()">
+                        <option value="none">None</option>
+                        <option value="sun">Sun</option>
+                        <option value="rain">Rain</option>
+                        <option value="sand">Sand</option>
+                        <option value="snow">Snow</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label class="control-label">Terrain</label>
+                    <select class="modifier-select" id="mod-terrain" onchange="recalculateDamage()">
+                        <option value="none">None</option>
+                        <option value="grassy">Grassy</option>
+                        <option value="electric">Electric</option>
+                        <option value="psychic">Psychic</option>
+                        <option value="misty">Misty</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stat Stages Section -->
+        <div class="stat-stages-section">
+            <div class="stages-title">Stat Stages</div>
+            <div class="stat-stages-grid">
+                <!-- Attacker Stages (for threats) -->
+                <div class="stage-group">
+                    <span class="stage-label">Attacker (Threats)</span>
+                    <div class="stage-row">
+                        <span class="stage-stat">Atk</span>
+                        <input type="range" class="stage-slider" id="atk-stage" min="-6" max="6" value="0" oninput="updateStageDisplay(this); recalculateDamage()">
+                        <span class="stage-value neutral" id="atk-stage-display">+0</span>
+                    </div>
+                    <div class="stage-row">
+                        <span class="stage-stat">SpA</span>
+                        <input type="range" class="stage-slider" id="spa-stage" min="-6" max="6" value="0" oninput="updateStageDisplay(this); recalculateDamage()">
+                        <span class="stage-value neutral" id="spa-stage-display">+0</span>
+                    </div>
+                </div>
+
+                <!-- Defender Stages (your Pokemon) -->
+                <div class="stage-group">
+                    <span class="stage-label">Defender (You)</span>
+                    <div class="stage-row">
+                        <span class="stage-stat">Def</span>
+                        <input type="range" class="stage-slider" id="def-stage" min="-6" max="6" value="0" oninput="updateStageDisplay(this); recalculateDamage()">
+                        <span class="stage-value neutral" id="def-stage-display">+0</span>
+                    </div>
+                    <div class="stage-row">
+                        <span class="stage-stat">SpD</span>
+                        <input type="range" class="stage-slider" id="spd-stage" min="-6" max="6" value="0" oninput="updateStageDisplay(this); recalculateDamage()">
+                        <span class="stage-value neutral" id="spd-stage-display">+0</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="benchmark-section">
+            <div class="section-header">
+                <span class="section-icon">&#128737;</span>
+                DEFENSIVE BENCHMARKS (Damage You Take)
+            </div>
+            <table class="benchmark-table">
+                <thead>
+                    <tr>
+                        <th>Threat</th>
+                        <th>Move</th>
+                        <th>Damage</th>
+                        <th>Result</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {def_rows_html}
+                </tbody>
+            </table>
+        </div>
+
+        {offensive_section}
+    </div>
+
+    <script>
+        // Pokemon base stats for recalculation
+        const baseStats = {{
+            hp: {poke_base_stats.get('hp', 55)},
+            attack: {poke_base_stats.get('attack', 55)},
+            defense: {poke_base_stats.get('defense', 55)},
+            special_attack: {poke_base_stats.get('special_attack', 55)},
+            special_defense: {poke_base_stats.get('special_defense', 55)},
+            speed: {poke_base_stats.get('speed', 55)}
+        }};
+
+        // Your Pokemon's types for tera calculations
+        const pokemonTypes = {json.dumps(poke_types)};
+
+        // Nature modifiers
+        const natureModifiers = {{
+            adamant: {{ attack: 1.1, special_attack: 0.9 }},
+            bold: {{ defense: 1.1, attack: 0.9 }},
+            brave: {{ attack: 1.1, speed: 0.9 }},
+            calm: {{ special_defense: 1.1, attack: 0.9 }},
+            careful: {{ special_defense: 1.1, special_attack: 0.9 }},
+            gentle: {{ special_defense: 1.1, defense: 0.9 }},
+            hasty: {{ speed: 1.1, defense: 0.9 }},
+            impish: {{ defense: 1.1, special_attack: 0.9 }},
+            jolly: {{ speed: 1.1, special_attack: 0.9 }},
+            lax: {{ defense: 1.1, special_defense: 0.9 }},
+            lonely: {{ attack: 1.1, defense: 0.9 }},
+            mild: {{ special_attack: 1.1, defense: 0.9 }},
+            modest: {{ special_attack: 1.1, attack: 0.9 }},
+            naive: {{ speed: 1.1, special_defense: 0.9 }},
+            naughty: {{ attack: 1.1, special_defense: 0.9 }},
+            quiet: {{ special_attack: 1.1, speed: 0.9 }},
+            rash: {{ special_attack: 1.1, special_defense: 0.9 }},
+            relaxed: {{ defense: 1.1, speed: 0.9 }},
+            sassy: {{ special_defense: 1.1, speed: 0.9 }},
+            serious: {{}},
+            timid: {{ speed: 1.1, attack: 0.9 }}
+        }};
+
+        // Type effectiveness chart (defender type -> attacker move type -> multiplier)
+        const TYPE_CHART = {{
+            normal: {{ fighting: 2, ghost: 0 }},
+            fire: {{ water: 2, ground: 2, rock: 2, fire: 0.5, grass: 0.5, ice: 0.5, bug: 0.5, steel: 0.5, fairy: 0.5 }},
+            water: {{ electric: 2, grass: 2, fire: 0.5, water: 0.5, ice: 0.5, steel: 0.5 }},
+            electric: {{ ground: 2, electric: 0.5, flying: 0.5, steel: 0.5 }},
+            grass: {{ fire: 2, ice: 2, poison: 2, flying: 2, bug: 2, water: 0.5, electric: 0.5, grass: 0.5, ground: 0.5 }},
+            ice: {{ fire: 2, fighting: 2, rock: 2, steel: 2, ice: 0.5 }},
+            fighting: {{ flying: 2, psychic: 2, fairy: 2, bug: 0.5, rock: 0.5, dark: 0.5 }},
+            poison: {{ ground: 2, psychic: 2, fighting: 0.5, poison: 0.5, bug: 0.5, grass: 0.5, fairy: 0.5 }},
+            ground: {{ water: 2, grass: 2, ice: 2, electric: 0, poison: 0.5, rock: 0.5 }},
+            flying: {{ electric: 2, ice: 2, rock: 2, ground: 0, fighting: 0.5, bug: 0.5, grass: 0.5 }},
+            psychic: {{ bug: 2, ghost: 2, dark: 2, fighting: 0.5, psychic: 0.5 }},
+            bug: {{ fire: 2, flying: 2, rock: 2, fighting: 0.5, ground: 0.5, grass: 0.5 }},
+            rock: {{ water: 2, grass: 2, fighting: 2, ground: 2, steel: 2, normal: 0.5, fire: 0.5, poison: 0.5, flying: 0.5 }},
+            ghost: {{ ghost: 2, dark: 2, normal: 0, fighting: 0, poison: 0.5, bug: 0.5 }},
+            dragon: {{ ice: 2, dragon: 2, fairy: 2, fire: 0.5, water: 0.5, electric: 0.5, grass: 0.5 }},
+            dark: {{ fighting: 2, bug: 2, fairy: 2, psychic: 0, ghost: 0.5, dark: 0.5 }},
+            steel: {{ fire: 2, fighting: 2, ground: 2, poison: 0, normal: 0.5, grass: 0.5, ice: 0.5, flying: 0.5, psychic: 0.5, bug: 0.5, rock: 0.5, dragon: 0.5, steel: 0.5, fairy: 0.5 }},
+            fairy: {{ poison: 2, steel: 2, fighting: 0.5, bug: 0.5, dragon: 0, dark: 0.5 }}
+        }};
+
+        // Stage multipliers (Gen 9)
+        const stageMultipliers = {{
+            '-6': 2/8, '-5': 2/7, '-4': 2/6, '-3': 2/5, '-2': 2/4, '-1': 2/3,
+            '0': 1,
+            '+1': 3/2, '+2': 4/2, '+3': 5/2, '+4': 6/2, '+5': 7/2, '+6': 8/2
+        }};
+
+        // Update stage display with +/- prefix and color
+        function updateStageDisplay(slider) {{
+            const display = document.getElementById(slider.id + '-display');
+            const value = parseInt(slider.value);
+            display.textContent = value >= 0 ? `+${{value}}` : `${{value}}`;
+            display.className = 'stage-value ' +
+                (value < 0 ? 'negative' : value > 0 ? 'positive' : 'neutral');
+        }}
+
+        // Get all stat stages
+        function getStatStages() {{
+            return {{
+                atk: parseInt(document.getElementById('atk-stage')?.value || 0),
+                spa: parseInt(document.getElementById('spa-stage')?.value || 0),
+                def: parseInt(document.getElementById('def-stage')?.value || 0),
+                spd: parseInt(document.getElementById('spd-stage')?.value || 0)
+            }};
+        }}
+
+        // Apply stage modifier to stat
+        function applyStage(stat, stage) {{
+            const key = stage >= 0 ? `+${{stage}}` : `${{stage}}`;
+            const mult = stageMultipliers[key] || 1;
+            return Math.floor(stat * mult);
+        }}
+
+        // Get modifiers state
+        function getModifiers() {{
+            return {{
+                tera: document.getElementById('mod-tera')?.checked || false,
+                teraType: document.getElementById('tera-type')?.value || '',
+                reflect: document.getElementById('mod-reflect')?.checked || false,
+                lightScreen: document.getElementById('mod-lightscreen')?.checked || false,
+                intimidate: document.getElementById('mod-intimidate')?.checked || false,
+                friendGuard: document.getElementById('mod-friendguard')?.checked || false,
+                weather: document.getElementById('mod-weather')?.value || 'none',
+                terrain: document.getElementById('mod-terrain')?.value || 'none'
+            }};
+        }}
+
+        // Get type effectiveness
+        function getTypeEffectiveness(moveType, defenderTypes, teraType = null) {{
+            const defTypes = teraType ? [teraType] : defenderTypes;
+            let mult = 1;
+            for (const defType of defTypes) {{
+                const chart = TYPE_CHART[defType.toLowerCase()];
+                if (chart && chart[moveType.toLowerCase()] !== undefined) {{
+                    mult *= chart[moveType.toLowerCase()];
+                }}
+            }}
+            return mult;
+        }}
+
+        // Calculate damage modifier from all active modifiers
+        function calcModifierMultiplier(isPhysical, moveType) {{
+            const mods = getModifiers();
+            let modifier = 1.0;
+
+            // Screens (0.67x in doubles)
+            if (isPhysical && mods.reflect) {{
+                modifier *= 0.67;
+            }}
+            if (!isPhysical && mods.lightScreen) {{
+                modifier *= 0.67;
+            }}
+
+            // Friend Guard (0.75x)
+            if (mods.friendGuard) {{
+                modifier *= 0.75;
+            }}
+
+            // Weather effects
+            if (mods.weather === 'sun') {{
+                if (moveType && moveType.toLowerCase() === 'fire') modifier *= 1.5;
+                if (moveType && moveType.toLowerCase() === 'water') modifier *= 0.5;
+            }} else if (mods.weather === 'rain') {{
+                if (moveType && moveType.toLowerCase() === 'water') modifier *= 1.5;
+                if (moveType && moveType.toLowerCase() === 'fire') modifier *= 0.5;
+            }}
+
+            // Terrain effects
+            if (mods.terrain === 'grassy' && moveType && moveType.toLowerCase() === 'ground') {{
+                modifier *= 0.5;  // Earthquake/Bulldoze halved
+            }}
+            if (mods.terrain === 'psychic' && !isPhysical && moveType && moveType.toLowerCase() === 'psychic') {{
+                modifier *= 1.3;  // Psychic moves boosted
+            }}
+            if (mods.terrain === 'electric' && !isPhysical && moveType && moveType.toLowerCase() === 'electric') {{
+                modifier *= 1.3;  // Electric moves boosted
+            }}
+
+            // Tera type effectiveness change
+            if (mods.tera && mods.teraType && moveType) {{
+                const teraEff = getTypeEffectiveness(moveType, pokemonTypes, mods.teraType);
+                const normalEff = getTypeEffectiveness(moveType, pokemonTypes, null);
+                if (normalEff !== 0) {{
+                    modifier *= teraEff / normalEff;
+                }} else if (teraEff !== 0) {{
+                    // Was immune, now takes damage
+                    modifier *= teraEff;
+                }}
+            }}
+
+            return modifier;
+        }}
+
+        // Calculate stat from base, EV, IV, nature
+        function calcStat(base, ev, iv, nature, statName, isHP) {{
+            if (isHP) {{
+                return Math.floor((2 * base + iv + Math.floor(ev / 4)) * 50 / 100) + 50 + 10;
+            }}
+            let stat = Math.floor((2 * base + iv + Math.floor(ev / 4)) * 50 / 100) + 5;
+            const mod = natureModifiers[nature.toLowerCase()];
+            if (mod && mod[statName]) {{
+                stat = Math.floor(stat * mod[statName]);
+            }}
+            return stat;
+        }}
+
+        // Get current EVs from inputs
+        function getEVs() {{
+            return {{
+                hp: parseInt(document.getElementById('ev-hp').value) || 0,
+                attack: parseInt(document.getElementById('ev-atk').value) || 0,
+                defense: parseInt(document.getElementById('ev-def').value) || 0,
+                special_attack: parseInt(document.getElementById('ev-spa').value) || 0,
+                special_defense: parseInt(document.getElementById('ev-spd').value) || 0,
+                speed: parseInt(document.getElementById('ev-spe').value) || 0
+            }};
+        }}
+
+        // Update EV total display
+        function updateEVTotal() {{
+            const evs = getEVs();
+            const total = Object.values(evs).reduce((a, b) => a + b, 0);
+            const display = document.getElementById('ev-total');
+            display.textContent = `Total: ${{total}} / 508`;
+            display.classList.toggle('over-limit', total > 508);
+        }}
+
+        // Recalculate all stats and update display
+        function recalculateAll() {{
+            const nature = document.getElementById('pokemon-nature').value;
+            const evs = getEVs();
+
+            // Calculate stats
+            const hp = calcStat(baseStats.hp, evs.hp, 31, nature, 'hp', true);
+            const def = calcStat(baseStats.defense, evs.defense, 31, nature, 'defense', false);
+            const spd = calcStat(baseStats.special_defense, evs.special_defense, 31, nature, 'special_defense', false);
+            const spe = calcStat(baseStats.speed, evs.speed, 31, nature, 'speed', false);
+
+            // Update stat display
+            document.getElementById('stat-hp').textContent = hp;
+            document.getElementById('stat-def').textContent = def;
+            document.getElementById('stat-spd').textContent = spd;
+            document.getElementById('stat-spe').textContent = spe;
+
+                // Recalculate all damage values
+            recalculateDamage();
+        }}
+
+        // Threat and target benchmark data for damage recalculation
+        const defensiveBenchmarks = {defensive_benchmarks_json};
+        const offensiveBenchmarks = {offensive_benchmarks_json};
+
+        // Gen 9 damage formula (simplified for client-side)
+        function calcDamage(attackerLevel, attackStat, defenseStat, basePower, hp, modifiers = 1.0) {{
+            // Base damage formula: ((2 * L / 5 + 2) * P * A / D) / 50 + 2
+            const baseDmg = Math.floor(Math.floor(Math.floor(2 * attackerLevel / 5 + 2) * basePower * attackStat / defenseStat) / 50) + 2;
+            // Apply modifiers (STAB, type effectiveness, items, etc.)
+            const modified = Math.floor(baseDmg * modifiers);
+            // 16 damage rolls from 0.85 to 1.0
+            const minDmg = Math.floor(modified * 0.85);
+            const maxDmg = modified;
+            const minPct = Math.round(minDmg / hp * 1000) / 10;
+            const maxPct = Math.round(maxDmg / hp * 1000) / 10;
+            return {{ minDmg, maxDmg, minPct, maxPct }};
+        }}
+
+        // Get KO result string from damage percentage
+        function getKOResult(minPct, maxPct) {{
+            if (minPct >= 100) return 'OHKO';
+            if (maxPct >= 100) {{
+                // Calculate OHKO chance based on rolls
+                const rolls = 16;
+                let koRolls = 0;
+                for (let i = 0; i < rolls; i++) {{
+                    const roll = 0.85 + (i / (rolls - 1)) * 0.15;
+                    if ((minPct / 0.85) * roll >= 100) koRolls++;
+                }}
+                const chance = Math.round(koRolls / rolls * 10000) / 100;
+                return `${{chance}}% OHKO`;
+            }}
+            if (minPct >= 50) return '2HKO';
+            if (minPct >= 33.4) return '3HKO';
+            if (minPct >= 25) return '4HKO';
+            return 'Survives';
+        }}
+
+        // Get badge class from result
+        function getBadgeClass(result) {{
+            if (result.includes('OHKO')) return 'ohko';
+            if (result.includes('2HKO')) return 'twohko';
+            if (result.includes('3HKO')) return 'threehko';
+            if (result.includes('4HKO')) return 'fourhko';
+            return 'survive';
+        }}
+
+        // Parse spread string to get attack EV
+        function parseSpreadAttack(spread) {{
+            const match = spread.match(/(\\d+)\\s*Atk/i);
+            return match ? parseInt(match[1]) : 252;
+        }}
+
+        // Parse spread string to get defense/spd EV
+        function parseSpreadDefense(spread, isSpa = false) {{
+            if (isSpa) {{
+                const match = spread.match(/(\\d+)\\s*SpD/i);
+                return match ? parseInt(match[1]) : 0;
+            }}
+            const match = spread.match(/(\\d+)\\s*(?:Def|HP)/i);
+            return match ? parseInt(match[1]) : 0;
+        }}
+
+        // Update threat calc when spread or move changes
+        function updateThreatCalc(threatIdx) {{
+            const benchmark = defensiveBenchmarks[threatIdx];
+            if (!benchmark) return;
+
+            // Get selected spread index (default to 0 if no dropdown)
+            const spreadSelect = document.getElementById(`threat-spread-${{threatIdx}}`);
+            const spreadIdx = spreadSelect ? parseInt(spreadSelect.value) : 0;
+
+            // Get selected move index (default to 0 if no dropdown)
+            const moveSelect = document.getElementById(`threat-move-${{threatIdx}}`);
+            const moveIdx = moveSelect ? parseInt(moveSelect.value) : 0;
+
+            // Get the calc for the selected move
+            const calcs = benchmark.calcs || [];
+            const calc = calcs[moveIdx];
+            if (!calc) return;
+
+            // Get damage for the selected spread
+            const damagePerSpread = calc.damage_per_spread || [];
+            const damageData = damagePerSpread[spreadIdx] || damagePerSpread[0];
+
+            if (damageData) {{
+                // Update damage cell
+                const damageCell = document.getElementById(`def-damage-${{threatIdx}}`);
+                if (damageCell) {{
+                    damageCell.textContent = damageData.damage;
+                }}
+
+                // Update result badge
+                const resultCell = document.getElementById(`def-result-${{threatIdx}}`);
+                if (resultCell) {{
+                    resultCell.textContent = damageData.result;
+                    resultCell.className = 'ko-badge ' + getBadgeClass(damageData.result);
+                }}
+            }}
+        }}
+
+        // Legacy function name for backwards compatibility
+        function updateThreatSpread(threatIdx, spreadIdx) {{
+            updateThreatCalc(threatIdx);
+        }}
+
+        // Update target spread and recalculate damage
+        function updateTargetSpread(targetIdx, spreadIdx) {{
+            const benchmark = offensiveBenchmarks[targetIdx];
+            if (!benchmark || !benchmark.common_spreads) return;
+
+            const newSpread = benchmark.common_spreads[spreadIdx];
+            if (!newSpread) return;
+
+            // Update damage cells for this target
+            benchmark.calcs.forEach((calc, calcIdx) => {{
+                const damageCell = document.getElementById(`off-damage-${{targetIdx}}-${{calcIdx}}`);
+                const resultCell = document.getElementById(`off-result-${{targetIdx}}-${{calcIdx}}`);
+
+                if (damageCell && resultCell && calc.damage_per_spread) {{
+                    const newDamage = calc.damage_per_spread[spreadIdx];
+                    if (newDamage) {{
+                        damageCell.textContent = newDamage.damage;
+                        const badge = resultCell.querySelector('.ko-badge') || resultCell;
+                        badge.textContent = newDamage.result;
+                        badge.className = 'ko-badge ' + getBadgeClass(newDamage.result);
+                    }}
+                }}
+            }});
+        }}
+
+        // Recalculate all damage based on current EVs and modifiers
+        function recalculateDamage() {{
+            const nature = document.getElementById('pokemon-nature').value;
+            const evs = getEVs();
+            const mods = getModifiers();
+            const stages = getStatStages();
+
+            // Calculate your defensive stats with stage modifiers
+            const hp = calcStat(baseStats.hp, evs.hp, 31, nature, 'hp', true);
+            let def = calcStat(baseStats.defense, evs.defense, 31, nature, 'defense', false);
+            let spd = calcStat(baseStats.special_defense, evs.special_defense, 31, nature, 'special_defense', false);
+
+            // Apply defender stage modifiers
+            def = applyStage(def, stages.def);
+            spd = applyStage(spd, stages.spd);
+
+            // Update stat display
+            document.getElementById('stat-hp').textContent = hp;
+            document.getElementById('stat-def').textContent = def + (stages.def !== 0 ? ` (${{stages.def >= 0 ? '+' : ''}}${{stages.def}})` : '');
+            document.getElementById('stat-spd').textContent = spd + (stages.spd !== 0 ? ` (${{stages.spd >= 0 ? '+' : ''}}${{stages.spd}})` : '');
+
+            // Recalculate each defensive benchmark
+            defensiveBenchmarks.forEach((benchmark, idx) => {{
+                const calcs = benchmark.calcs || [];
+                if (calcs.length === 0) return;
+
+                // Get selected move index
+                const moveSelect = document.getElementById(`threat-move-${{idx}}`);
+                const moveIdx = moveSelect ? parseInt(moveSelect.value) : 0;
+                const calc = calcs[moveIdx] || calcs[0];
+
+                // Determine if physical or special
+                const isPhysical = (calc.move_category || 'physical').toLowerCase() === 'physical';
+                const moveType = calc.move_type || '';
+                const basePower = calc.move_power || 80;
+
+                // Get attacker's attack stat (simplified - use base stats or stored value)
+                const threatBaseStats = benchmark.base_stats || {{}};
+                let attackStat = isPhysical ?
+                    (threatBaseStats.attack || 100) :
+                    (threatBaseStats.special_attack || 100);
+
+                // Apply attacker stage modifier
+                let atkStage = isPhysical ? stages.atk : stages.spa;
+                // Intimidate applies -1 to physical attacks
+                if (mods.intimidate && isPhysical) {{
+                    atkStage = Math.max(-6, atkStage - 1);
+                }}
+                attackStat = applyStage(attackStat, atkStage);
+
+                // Get defender's effective defensive stat
+                const defStat = isPhysical ? def : spd;
+
+                // Calculate modifier multiplier
+                const modMult = calcModifierMultiplier(isPhysical, moveType);
+
+                // Calculate damage (simplified formula)
+                const baseDmg = Math.floor(Math.floor(Math.floor(2 * 50 / 5 + 2) * basePower * attackStat / defStat) / 50) + 2;
+                const minDmg = Math.floor(baseDmg * 0.85 * modMult);
+                const maxDmg = Math.floor(baseDmg * modMult);
+                const minPct = Math.round(minDmg / hp * 1000) / 10;
+                const maxPct = Math.round(maxDmg / hp * 1000) / 10;
+
+                // Update damage display
+                const damageCell = document.getElementById(`def-damage-${{idx}}`);
+                if (damageCell) {{
+                    damageCell.textContent = `${{minPct.toFixed(1)}}-${{maxPct.toFixed(1)}}%`;
+                }}
+
+                // Update result badge
+                const resultCell = document.getElementById(`def-result-${{idx}}`);
+                if (resultCell) {{
+                    const result = getKOResult(minPct, maxPct);
+                    resultCell.textContent = result;
+                    resultCell.className = 'ko-badge ' + getBadgeClass(result);
+                }}
+            }});
+
+            // Show active modifiers summary
+            const activeMods = [];
+            if (mods.tera && mods.teraType) activeMods.push(`Tera ${{mods.teraType}}`);
+            if (mods.reflect) activeMods.push('Reflect');
+            if (mods.lightScreen) activeMods.push('L.Screen');
+            if (mods.intimidate) activeMods.push('Intimidate');
+            if (mods.friendGuard) activeMods.push('F.Guard');
+            if (mods.weather !== 'none') activeMods.push(mods.weather.charAt(0).toUpperCase() + mods.weather.slice(1));
+            if (mods.terrain !== 'none') activeMods.push(mods.terrain.charAt(0).toUpperCase() + mods.terrain.slice(1) + ' Terrain');
+
+            // Update modifiers title to show active count
+            const modTitle = document.querySelector('.modifiers-title');
+            if (modTitle) {{
+                modTitle.textContent = activeMods.length > 0 ?
+                    `Battle Modifiers (${{activeMods.length}} active)` :
+                    'Battle Modifiers';
+            }}
+        }}
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', () => {{
+            updateEVTotal();
+            recalculateAll();
+        }});
+    </script>
+</body>
+</html>'''
+
+
+def create_dual_survival_ui(
+    pokemon: dict,
+    hits: list[dict],
+    survival_chance: float,
+    survival_rolls: str = "",
+    interactive: bool = True,
+) -> str:
+    """Create a dual survival visualization showing sequential hits and survival.
+
+    Args:
+        pokemon: Your Pokemon data with keys:
+            - name: str
+            - hp: int (max HP)
+            - types: list[str] (optional)
+            - nature: str (optional, for interactive mode)
+            - evs: dict (optional, for interactive mode)
+            - base_stats: dict (optional, for interactive mode)
+        hits: List of incoming attacks (can be same or different attackers):
+            - attacker: str (Pokemon name)
+            - move: str
+            - spread: str (e.g., "Adamant 116 Atk")
+            - item: str (optional)
+            - damage_range: [min_dmg, max_dmg] in raw HP
+            - damage_pct: str (e.g., "45-53%")
+        survival_chance: Overall survival percentage (0-100)
+        survival_rolls: String like "7/16" showing roll counts
+        interactive: bool - if True, allows changing EVs dynamically
+
+    Returns:
+        HTML string for the dual survival UI
+    """
+    shared_styles = get_shared_styles()
+
+    poke_name = pokemon.get("name", "Pokemon")
+    poke_hp = pokemon.get("hp", 100)
+    poke_types = pokemon.get("types", [])
+    poke_nature = pokemon.get("nature", "Serious")
+    poke_item = pokemon.get("item", "")
+    poke_tera_type = pokemon.get("tera_type", "")
+    poke_evs = pokemon.get("evs", {
+        "hp": 0, "attack": 0, "defense": 0,
+        "special_attack": 0, "special_defense": 0, "speed": 0
+    })
+    poke_base_stats = pokemon.get("base_stats", {
+        "hp": 80, "attack": 80, "defense": 80,
+        "special_attack": 80, "special_defense": 80, "speed": 80
+    })
+
+    # Ensure evs is a dict with all stats
+    if not isinstance(poke_evs, dict):
+        poke_evs = {
+            "hp": 0, "attack": 0, "defense": 0,
+            "special_attack": 0, "special_defense": 0, "speed": 0
+        }
+
+    # Build full EV spread summary string (show all stats)
+    ev_parts = [
+        f"{poke_evs.get('hp', 0)} HP",
+        f"{poke_evs.get('attack', 0)} Atk",
+        f"{poke_evs.get('defense', 0)} Def",
+        f"{poke_evs.get('special_attack', 0)} SpA",
+        f"{poke_evs.get('special_defense', 0)} SpD",
+        f"{poke_evs.get('speed', 0)} Spe",
+    ]
+    spread_summary = f"{poke_nature} | {' / '.join(ev_parts)}"
+
+    # Item display
+    item_display = f"Item: {poke_item}" if poke_item else "No Item"
+
+    # Nature options for interactive mode
+    natures = ["Adamant", "Bold", "Brave", "Calm", "Careful", "Gentle", "Hasty",
+               "Impish", "Jolly", "Lax", "Lonely", "Mild", "Modest", "Naive",
+               "Naughty", "Quiet", "Rash", "Relaxed", "Sassy", "Serious", "Timid"]
+
+    nature_options = "".join(
+        f'<option value="{n}" {"selected" if n.lower() == poke_nature.lower() else ""}>{n}</option>'
+        for n in natures
+    )
+
+    sprite_html = get_sprite_html(poke_name, size=64, css_class="pokemon-sprite")
+
+    # Type badges
+    type_badges_html = ""
+    for t in poke_types:
+        type_badges_html += f'<span class="type-badge type-{t.lower()}">{t}</span>'
+
+    # Calculate cumulative HP through hits
+    hits_html = ""
+    current_hp_min = poke_hp
+    current_hp_max = poke_hp
+
+    for i, hit in enumerate(hits):
+        attacker = hit.get("attacker", "Unknown")
+        move = hit.get("move", "Unknown Move")
+        spread = hit.get("spread", "")
+        item = hit.get("item", "")
+        damage_range = hit.get("damage_range", [0, 0])
+        damage_pct = hit.get("damage_pct", "0%")
+
+        min_dmg = damage_range[0] if len(damage_range) > 0 else 0
+        max_dmg = damage_range[1] if len(damage_range) > 1 else min_dmg
+
+        attacker_sprite = get_sprite_html(attacker, size=48, css_class="attacker-sprite")
+
+        # HP after this hit
+        hp_after_min = max(0, current_hp_min - max_dmg)
+        hp_after_max = max(0, current_hp_max - min_dmg)
+
+        hp_after_min_pct = round((hp_after_min / poke_hp) * 100, 1)
+        hp_after_max_pct = round((hp_after_max / poke_hp) * 100, 1)
+
+        # Damage bar width (average of min/max damage)
+        avg_dmg_pct = ((min_dmg + max_dmg) / 2 / poke_hp) * 100
+        bar_width = min(100, avg_dmg_pct)
+
+        # HP bar color based on remaining HP
+        avg_remaining = (hp_after_min_pct + hp_after_max_pct) / 2
+        if avg_remaining > 50:
+            hp_color = "var(--accent-success)"
+        elif avg_remaining > 25:
+            hp_color = "var(--accent-warning)"
+        else:
+            hp_color = "var(--accent-danger)"
+
+        # Calculate HP bar position (cumulative damage)
+        cumulative_dmg_min = poke_hp - current_hp_max
+        cumulative_dmg_max = poke_hp - current_hp_min
+        bar_left = (cumulative_dmg_min / poke_hp) * 100
+
+        hits_html += f'''
+        <div class="hit-card" style="animation-delay: {i * 0.15}s;">
+            <div class="hit-header">
+                <span class="hit-number">HIT {i + 1}</span>
+                <span class="hit-label">{attacker} - {move}</span>
+            </div>
+            <div class="hit-content">
+                <div class="attacker-info">
+                    {attacker_sprite}
+                    <div class="attacker-details">
+                        <div class="attacker-spread">{spread}</div>
+                        <div class="attacker-item">{item}</div>
+                    </div>
+                </div>
+                <div class="damage-display">
+                    <div class="hp-bar-container">
+                        <div class="hp-bar-track">
+                            <div class="hp-bar-remaining" style="width: {hp_after_max_pct}%; background: {hp_color};"></div>
+                            <div class="hp-bar-damage" style="left: {hp_after_min_pct}%; width: {bar_width}%;"></div>
+                        </div>
+                        <div class="hp-bar-text">{damage_pct} ({min_dmg}-{max_dmg} dmg)</div>
+                    </div>
+                    <div class="hp-remaining">
+                        HP Remaining: {hp_after_min}-{hp_after_max} ({hp_after_min_pct}-{hp_after_max_pct}%)
+                    </div>
+                </div>
+            </div>
+        </div>'''
+
+        # Update current HP for next hit
+        current_hp_min = hp_after_min
+        current_hp_max = hp_after_max
+
+    # Verdict section
+    verdict_class = "survive"
+    verdict_text = "SURVIVES"
+    status_text = ""
+
+    if survival_chance <= 0:
+        verdict_class = "ko"
+        verdict_text = "KNOCKED OUT"
+        status_text = "Cannot survive this combination"
+    elif survival_chance < 25:
+        verdict_class = "danger"
+        verdict_text = f"SURVIVES {survival_chance:.2f}%"
+        status_text = "HIGH RISK - needs defensive investment or support"
+    elif survival_chance < 50:
+        verdict_class = "warning"
+        verdict_text = f"SURVIVES {survival_chance:.2f}%"
+        status_text = "RISKY - consider bulk investment"
+    elif survival_chance < 75:
+        verdict_class = "caution"
+        verdict_text = f"SURVIVES {survival_chance:.2f}%"
+        status_text = "MODERATE - survives most of the time"
+    elif survival_chance < 100:
+        verdict_class = "good"
+        verdict_text = f"SURVIVES {survival_chance:.2f}%"
+        status_text = "RELIABLE - survives majority of rolls"
+    else:
+        verdict_text = "GUARANTEED SURVIVAL"
+        status_text = "Always survives this combination"
+
+    rolls_display = f" ({survival_rolls})" if survival_rolls else ""
+
+    return f'''<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        {shared_styles}
+
+        .survival-container {{
+            max-width: 700px;
+            margin: 0 auto;
+            padding: var(--space-md);
+        }}
+
+        .survival-header {{
+            background: var(--glass-shine), var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            border-radius: var(--radius-xl);
+            border: 1px solid var(--glass-border);
+            padding: var(--space-lg);
+            margin-bottom: var(--space-lg);
+            animation: fadeSlideIn 0.4s var(--ease-smooth);
+        }}
+
+        .survival-title {{
+            font-size: 20px;
+            font-weight: 700;
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: var(--space-md);
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }}
+
+        .pokemon-row {{
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+        }}
+
+        .pokemon-sprite {{
+            width: 64px;
+            height: 64px;
+            object-fit: contain;
+        }}
+
+        .pokemon-info {{
+            flex: 1;
+        }}
+
+        .pokemon-name {{
+            font-size: 18px;
+            font-weight: 600;
+        }}
+
+        .pokemon-spread {{
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+        }}
+
+        .pokemon-item {{
+            font-size: 12px;
+            color: var(--accent-warning);
+            font-style: italic;
+            margin-top: 2px;
+        }}
+
+        .pokemon-hp {{
+            font-size: 14px;
+            color: var(--text-secondary);
+            font-family: 'SF Mono', 'Fira Code', monospace;
+        }}
+
+        .pokemon-types {{
+            display: flex;
+            gap: var(--space-xs);
+            margin-top: var(--space-xs);
+        }}
+
+        .hit-card {{
+            background: var(--glass-bg);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--glass-border);
+            margin-bottom: var(--space-md);
+            overflow: hidden;
+            animation: fadeSlideIn 0.4s var(--ease-smooth) backwards;
+        }}
+
+        .hit-header {{
+            background: rgba(255, 255, 255, 0.03);
+            padding: var(--space-sm) var(--space-md);
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+            border-bottom: 1px solid var(--glass-border);
+        }}
+
+        .hit-number {{
+            background: var(--gradient-primary);
+            padding: 2px 10px;
+            border-radius: var(--radius-full);
+            font-size: 11px;
+            font-weight: 700;
+        }}
+
+        .hit-label {{
+            font-weight: 600;
+            font-size: 14px;
+        }}
+
+        .hit-content {{
+            padding: var(--space-md);
+            display: flex;
+            gap: var(--space-md);
+            align-items: center;
+        }}
+
+        .attacker-info {{
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            min-width: 180px;
+        }}
+
+        .attacker-sprite {{
+            width: 48px;
+            height: 48px;
+            object-fit: contain;
+        }}
+
+        .attacker-details {{
+            flex: 1;
+        }}
+
+        .attacker-spread {{
+            font-size: 12px;
+            color: var(--text-secondary);
+        }}
+
+        .attacker-item {{
+            font-size: 11px;
+            color: var(--text-muted);
+            font-style: italic;
+        }}
+
+        .damage-display {{
+            flex: 1;
+        }}
+
+        .hp-bar-container {{
+            position: relative;
+            margin-bottom: var(--space-sm);
+        }}
+
+        .hp-bar-track {{
+            height: 24px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: var(--radius-full);
+            overflow: hidden;
+            position: relative;
+        }}
+
+        .hp-bar-remaining {{
+            height: 100%;
+            border-radius: var(--radius-full);
+            transition: width 0.5s var(--ease-smooth);
+            position: absolute;
+            left: 0;
+            top: 0;
+        }}
+
+        .hp-bar-damage {{
+            height: 100%;
+            background: rgba(239, 68, 68, 0.5);
+            position: absolute;
+            top: 0;
+            border-left: 2px solid var(--accent-danger);
+            border-right: 2px solid var(--accent-danger);
+        }}
+
+        .hp-bar-text {{
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 12px;
+            font-weight: 700;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+        }}
+
+        .hp-remaining {{
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-family: 'SF Mono', 'Fira Code', monospace;
+        }}
+
+        .verdict-card {{
+            background: var(--glass-shine), var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            border-radius: var(--radius-xl);
+            border: 1px solid var(--glass-border);
+            padding: var(--space-lg);
+            text-align: center;
+            animation: fadeSlideIn 0.4s var(--ease-smooth) 0.3s backwards;
+        }}
+
+        .verdict-label {{
+            font-size: 12px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: var(--space-sm);
+        }}
+
+        .verdict-result {{
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: var(--space-sm);
+        }}
+
+        .verdict-result.survive {{
+            color: var(--accent-success);
+            text-shadow: 0 0 20px rgba(34, 197, 94, 0.5);
+        }}
+
+        .verdict-result.good {{
+            color: #4ade80;
+            text-shadow: 0 0 20px rgba(74, 222, 128, 0.5);
+        }}
+
+        .verdict-result.caution {{
+            color: #facc15;
+            text-shadow: 0 0 20px rgba(250, 204, 21, 0.5);
+        }}
+
+        .verdict-result.warning {{
+            color: var(--accent-warning);
+            text-shadow: 0 0 20px rgba(245, 158, 11, 0.5);
+        }}
+
+        .verdict-result.danger {{
+            color: #f87171;
+            text-shadow: 0 0 20px rgba(248, 113, 113, 0.5);
+        }}
+
+        .verdict-result.ko {{
+            color: var(--accent-danger);
+            text-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
+            animation: pulseGlowDanger 2s infinite;
+        }}
+
+        .verdict-rolls {{
+            font-size: 14px;
+            color: var(--text-secondary);
+            font-family: 'SF Mono', 'Fira Code', monospace;
+        }}
+
+        .verdict-status {{
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-top: var(--space-sm);
+            padding-top: var(--space-sm);
+            border-top: 1px solid var(--glass-border);
+        }}
+
+        .survival-bar {{
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: var(--radius-full);
+            overflow: hidden;
+            margin: var(--space-md) 0;
+        }}
+
+        .survival-bar-fill {{
+            height: 100%;
+            border-radius: var(--radius-full);
+            transition: width 0.8s var(--ease-smooth);
+        }}
+
+        .survival-bar-fill.survive {{ background: var(--gradient-success); }}
+        .survival-bar-fill.good {{ background: linear-gradient(90deg, #22c55e, #4ade80); }}
+        .survival-bar-fill.caution {{ background: linear-gradient(90deg, #eab308, #facc15); }}
+        .survival-bar-fill.warning {{ background: var(--gradient-warning); }}
+        .survival-bar-fill.danger {{ background: linear-gradient(90deg, #ef4444, #f87171); }}
+        .survival-bar-fill.ko {{ background: var(--gradient-danger); }}
+
+        /* Interactive controls */
+        .spread-controls {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--space-sm);
+            margin-top: var(--space-md);
+            padding-top: var(--space-md);
+            border-top: 1px solid var(--glass-border);
+        }}
+
+        .control-group {{
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }}
+
+        .control-label {{
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+        }}
+
+        .control-select, .ev-input {{
+            padding: 6px 10px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--glass-border);
+            background: rgba(24, 24, 27, 0.8);
+            color: var(--text-primary);
+            font-size: 12px;
+            font-weight: 600;
+            text-align: center;
+        }}
+
+        .control-select {{
+            min-width: 100px;
+        }}
+
+        .ev-input {{
+            width: 50px;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+        }}
+
+        .control-select:focus, .ev-input:focus {{
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+        }}
+
+        .control-select option {{
+            background: #1a1a2e;
+            color: #fff;
+        }}
+
+        .stat-display {{
+            display: flex;
+            gap: var(--space-md);
+            margin-top: var(--space-sm);
+            padding: var(--space-sm);
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: var(--radius-md);
+        }}
+
+        .stat-chip {{
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: var(--radius-full);
+            font-size: 12px;
+        }}
+
+        .stat-chip-label {{
+            color: var(--text-muted);
+            font-weight: 500;
+        }}
+
+        .stat-chip-value {{
+            color: var(--text-primary);
+            font-weight: 700;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+        }}
+
+        /* Modifiers section */
+        .modifiers-section {{
+            margin-top: var(--space-md);
+            padding-top: var(--space-md);
+            border-top: 1px solid var(--glass-border);
+        }}
+
+        .modifiers-title {{
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            margin-bottom: var(--space-sm);
+        }}
+
+        .modifiers-grid {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--space-sm);
+            margin-bottom: var(--space-sm);
+        }}
+
+        .modifiers-row {{
+            display: flex;
+            gap: var(--space-md);
+            margin-top: var(--space-sm);
+        }}
+
+        .modifier-group {{
+            display: flex;
+            align-items: center;
+            gap: var(--space-xs);
+        }}
+
+        .modifier-toggle {{
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }}
+
+        .modifier-toggle:hover {{
+            background: rgba(255, 255, 255, 0.06);
+            border-color: var(--accent-primary);
+        }}
+
+        .modifier-toggle input[type="checkbox"] {{
+            width: 14px;
+            height: 14px;
+            accent-color: var(--accent-primary);
+            cursor: pointer;
+        }}
+
+        .modifier-toggle input[type="checkbox"]:checked + .toggle-label {{
+            color: var(--accent-primary);
+            font-weight: 600;
+        }}
+
+        .toggle-label {{
+            user-select: none;
+        }}
+
+        .modifier-select {{
+            padding: 6px 10px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--glass-border);
+            background: rgba(24, 24, 27, 0.8);
+            color: var(--text-primary);
+            font-size: 11px;
+            cursor: pointer;
+            min-width: 90px;
+        }}
+
+        .modifier-select:focus {{
+            outline: none;
+            border-color: var(--accent-primary);
+        }}
+
+        .modifier-select option {{
+            background: #1a1a2e;
+            color: #fff;
+        }}
+
+        .active-modifiers {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: var(--space-sm);
+            min-height: 24px;
+        }}
+
+        .modifier-badge {{
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            background: rgba(99, 102, 241, 0.2);
+            border: 1px solid rgba(99, 102, 241, 0.4);
+            border-radius: var(--radius-full);
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--accent-primary);
+        }}
+
+        .modifier-badge.negative {{
+            background: rgba(239, 68, 68, 0.2);
+            border-color: rgba(239, 68, 68, 0.4);
+            color: var(--accent-danger);
+        }}
+
+        .modifier-badge.positive {{
+            background: rgba(34, 197, 94, 0.2);
+            border-color: rgba(34, 197, 94, 0.4);
+            color: var(--accent-success);
+        }}
+    </style>
+</head>
+<body>
+    <div class="survival-container">
+        <div class="survival-header">
+            <div class="survival-title">
+                <span>&#128737;</span> DUAL SURVIVAL CHECK
+            </div>
+            <div class="pokemon-row">
+                {sprite_html}
+                <div class="pokemon-info">
+                    <div class="pokemon-name">{poke_name}</div>
+                    <div class="pokemon-spread" id="spread-display">{spread_summary}</div>
+                    <div class="pokemon-item" id="item-display">{item_display}</div>
+                    <div class="pokemon-hp" id="hp-display">HP: {poke_hp} (100%)</div>
+                    <div class="pokemon-types">{type_badges_html}</div>
+                </div>
+            </div>
+
+            <div class="spread-controls">
+                <div class="control-group">
+                    <label class="control-label">Nature</label>
+                    <select class="control-select" id="pokemon-nature" onchange="recalculateDamage()">
+                        {nature_options}
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label class="control-label">HP</label>
+                    <input type="number" class="ev-input" id="ev-hp" value="{poke_evs.get('hp', 0)}" min="0" max="252" step="4" oninput="recalculateDamage()">
+                </div>
+                <div class="control-group">
+                    <label class="control-label">Def</label>
+                    <input type="number" class="ev-input" id="ev-def" value="{poke_evs.get('defense', 0)}" min="0" max="252" step="4" oninput="recalculateDamage()">
+                </div>
+                <div class="control-group">
+                    <label class="control-label">SpD</label>
+                    <input type="number" class="ev-input" id="ev-spd" value="{poke_evs.get('special_defense', 0)}" min="0" max="252" step="4" oninput="recalculateDamage()">
+                </div>
+            </div>
+
+            <div class="stat-display">
+                <div class="stat-chip"><span class="stat-chip-label">HP:</span><span class="stat-chip-value" id="stat-hp">{poke_hp}</span></div>
+                <div class="stat-chip"><span class="stat-chip-label">Def:</span><span class="stat-chip-value" id="stat-def">-</span></div>
+                <div class="stat-chip"><span class="stat-chip-label">SpD:</span><span class="stat-chip-value" id="stat-spd">-</span></div>
+            </div>
+
+            <div class="modifiers-section">
+                <div class="modifiers-title">Battle Modifiers</div>
+                <div class="modifiers-grid">
+                    <div class="modifier-group">
+                        <label class="modifier-toggle">
+                            <input type="checkbox" id="mod-tera" onchange="recalculateDamage()">
+                            <span class="toggle-label">Tera</span>
+                        </label>
+                        <select class="modifier-select" id="tera-type" onchange="recalculateDamage()">
+                            <option value="">Select Type</option>
+                            <option value="normal">Normal</option>
+                            <option value="fire">Fire</option>
+                            <option value="water">Water</option>
+                            <option value="electric">Electric</option>
+                            <option value="grass">Grass</option>
+                            <option value="ice">Ice</option>
+                            <option value="fighting">Fighting</option>
+                            <option value="poison">Poison</option>
+                            <option value="ground">Ground</option>
+                            <option value="flying">Flying</option>
+                            <option value="psychic">Psychic</option>
+                            <option value="bug">Bug</option>
+                            <option value="rock">Rock</option>
+                            <option value="ghost">Ghost</option>
+                            <option value="dragon">Dragon</option>
+                            <option value="dark">Dark</option>
+                            <option value="steel">Steel</option>
+                            <option value="fairy">Fairy</option>
+                            <option value="stellar">Stellar</option>
+                        </select>
+                    </div>
+                    <label class="modifier-toggle">
+                        <input type="checkbox" id="mod-reflect" onchange="recalculateDamage()">
+                        <span class="toggle-label">Reflect</span>
+                    </label>
+                    <label class="modifier-toggle">
+                        <input type="checkbox" id="mod-lightscreen" onchange="recalculateDamage()">
+                        <span class="toggle-label">Light Screen</span>
+                    </label>
+                    <label class="modifier-toggle">
+                        <input type="checkbox" id="mod-intimidate" onchange="recalculateDamage()">
+                        <span class="toggle-label">Intimidate (-1)</span>
+                    </label>
+                    <label class="modifier-toggle">
+                        <input type="checkbox" id="mod-friendguard" onchange="recalculateDamage()">
+                        <span class="toggle-label">Friend Guard</span>
+                    </label>
+                    <label class="modifier-toggle">
+                        <input type="checkbox" id="mod-swordofruin" onchange="recalculateDamage()">
+                        <span class="toggle-label">Sword of Ruin</span>
+                    </label>
+                    <label class="modifier-toggle">
+                        <input type="checkbox" id="mod-beadsofruin" onchange="recalculateDamage()">
+                        <span class="toggle-label">Beads of Ruin</span>
+                    </label>
+                    <label class="modifier-toggle">
+                        <input type="checkbox" id="mod-tabletsofruin" onchange="recalculateDamage()">
+                        <span class="toggle-label">Tablets of Ruin</span>
+                    </label>
+                    <label class="modifier-toggle">
+                        <input type="checkbox" id="mod-vesselofruin" onchange="recalculateDamage()">
+                        <span class="toggle-label">Vessel of Ruin</span>
+                    </label>
+                </div>
+                <div class="modifiers-row">
+                    <div class="control-group">
+                        <label class="control-label">Weather</label>
+                        <select class="modifier-select" id="mod-weather" onchange="recalculateDamage()">
+                            <option value="none">None</option>
+                            <option value="sun">Sun</option>
+                            <option value="rain">Rain</option>
+                            <option value="sand">Sand</option>
+                            <option value="snow">Snow</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label class="control-label">Terrain</label>
+                        <select class="modifier-select" id="mod-terrain" onchange="recalculateDamage()">
+                            <option value="none">None</option>
+                            <option value="grassy">Grassy</option>
+                            <option value="electric">Electric</option>
+                            <option value="psychic">Psychic</option>
+                            <option value="misty">Misty</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {hits_html}
+
+        <div class="verdict-card">
+            <div class="verdict-label">Final Verdict</div>
+            <div class="survival-bar">
+                <div class="survival-bar-fill {verdict_class}" id="survival-bar-fill" style="width: {survival_chance}%;"></div>
+            </div>
+            <div class="verdict-result {verdict_class}" id="verdict-result">{verdict_text}{rolls_display}</div>
+            <div class="verdict-status" id="verdict-status">{status_text}</div>
+        </div>
+    </div>
+
+    <script>
+        // Pokemon base stats for recalculation
+        const baseStats = {{
+            hp: {poke_base_stats.get('hp', 80)},
+            defense: {poke_base_stats.get('defense', 80)},
+            special_defense: {poke_base_stats.get('special_defense', 80)}
+        }};
+
+        // Original Pokemon types for Tera calculation
+        const originalTypes = {poke_types};
+
+        // Type chart for effectiveness calculation
+        const typeChart = {{
+            normal: {{ rock: 0.5, ghost: 0, steel: 0.5 }},
+            fire: {{ fire: 0.5, water: 0.5, grass: 2, ice: 2, bug: 2, rock: 0.5, dragon: 0.5, steel: 2 }},
+            water: {{ fire: 2, water: 0.5, grass: 0.5, ground: 2, rock: 2, dragon: 0.5 }},
+            electric: {{ water: 2, electric: 0.5, grass: 0.5, ground: 0, flying: 2, dragon: 0.5 }},
+            grass: {{ fire: 0.5, water: 2, grass: 0.5, poison: 0.5, ground: 2, flying: 0.5, bug: 0.5, rock: 2, dragon: 0.5, steel: 0.5 }},
+            ice: {{ fire: 0.5, water: 0.5, grass: 2, ice: 0.5, ground: 2, flying: 2, dragon: 2, steel: 0.5 }},
+            fighting: {{ normal: 2, ice: 2, poison: 0.5, flying: 0.5, psychic: 0.5, bug: 0.5, rock: 2, ghost: 0, dark: 2, steel: 2, fairy: 0.5 }},
+            poison: {{ grass: 2, poison: 0.5, ground: 0.5, rock: 0.5, ghost: 0.5, steel: 0, fairy: 2 }},
+            ground: {{ fire: 2, electric: 2, grass: 0.5, poison: 2, flying: 0, bug: 0.5, rock: 2, steel: 2 }},
+            flying: {{ electric: 0.5, grass: 2, fighting: 2, bug: 2, rock: 0.5, steel: 0.5 }},
+            psychic: {{ fighting: 2, poison: 2, psychic: 0.5, dark: 0, steel: 0.5 }},
+            bug: {{ fire: 0.5, grass: 2, fighting: 0.5, poison: 0.5, flying: 0.5, psychic: 2, ghost: 0.5, dark: 2, steel: 0.5, fairy: 0.5 }},
+            rock: {{ fire: 2, ice: 2, fighting: 0.5, ground: 0.5, flying: 2, bug: 2, steel: 0.5 }},
+            ghost: {{ normal: 0, psychic: 2, ghost: 2, dark: 0.5 }},
+            dragon: {{ dragon: 2, steel: 0.5, fairy: 0 }},
+            dark: {{ fighting: 0.5, psychic: 2, ghost: 2, dark: 0.5, fairy: 0.5 }},
+            steel: {{ fire: 0.5, water: 0.5, electric: 0.5, ice: 2, rock: 2, steel: 0.5, fairy: 2 }},
+            fairy: {{ fire: 0.5, fighting: 2, poison: 0.5, dragon: 2, dark: 2, steel: 0.5 }}
+        }};
+
+        // Nature modifiers
+        const natureModifiers = {{
+            adamant: {{ attack: 1.1, special_attack: 0.9 }},
+            bold: {{ defense: 1.1, attack: 0.9 }},
+            brave: {{ attack: 1.1, speed: 0.9 }},
+            calm: {{ special_defense: 1.1, attack: 0.9 }},
+            careful: {{ special_defense: 1.1, special_attack: 0.9 }},
+            gentle: {{ special_defense: 1.1, defense: 0.9 }},
+            hasty: {{ speed: 1.1, defense: 0.9 }},
+            impish: {{ defense: 1.1, special_attack: 0.9 }},
+            jolly: {{ speed: 1.1, special_attack: 0.9 }},
+            lax: {{ defense: 1.1, special_defense: 0.9 }},
+            lonely: {{ attack: 1.1, defense: 0.9 }},
+            mild: {{ special_attack: 1.1, defense: 0.9 }},
+            modest: {{ special_attack: 1.1, attack: 0.9 }},
+            naive: {{ speed: 1.1, special_defense: 0.9 }},
+            naughty: {{ attack: 1.1, special_defense: 0.9 }},
+            quiet: {{ special_attack: 1.1, speed: 0.9 }},
+            rash: {{ special_attack: 1.1, special_defense: 0.9 }},
+            relaxed: {{ defense: 1.1, speed: 0.9 }},
+            sassy: {{ special_defense: 1.1, speed: 0.9 }},
+            serious: {{}},
+            timid: {{ speed: 1.1, attack: 0.9 }}
+        }};
+
+        // Calculate stat from base, EV, IV, nature
+        function calcStat(base, ev, iv, nature, statName, isHP) {{
+            if (isHP) {{
+                return Math.floor((2 * base + iv + Math.floor(ev / 4)) * 50 / 100) + 50 + 10;
+            }}
+            let stat = Math.floor((2 * base + iv + Math.floor(ev / 4)) * 50 / 100) + 5;
+            const mod = natureModifiers[nature.toLowerCase()];
+            if (mod && mod[statName]) {{
+                stat = Math.floor(stat * mod[statName]);
+            }}
+            return stat;
+        }}
+
+        // Get type effectiveness
+        function getTypeEffectiveness(attackType, defenderTypes) {{
+            let mult = 1;
+            defenderTypes.forEach(defType => {{
+                const chart = typeChart[attackType.toLowerCase()];
+                if (chart && chart[defType.toLowerCase()] !== undefined) {{
+                    mult *= chart[defType.toLowerCase()];
+                }}
+            }});
+            return mult;
+        }}
+
+        // Get current modifiers
+        function getModifiers() {{
+            return {{
+                tera: document.getElementById('mod-tera')?.checked || false,
+                teraType: document.getElementById('tera-type')?.value || '',
+                reflect: document.getElementById('mod-reflect')?.checked || false,
+                lightScreen: document.getElementById('mod-lightscreen')?.checked || false,
+                intimidate: document.getElementById('mod-intimidate')?.checked || false,
+                friendGuard: document.getElementById('mod-friendguard')?.checked || false,
+                swordOfRuin: document.getElementById('mod-swordofruin')?.checked || false,
+                beadsOfRuin: document.getElementById('mod-beadsofruin')?.checked || false,
+                tabletsOfRuin: document.getElementById('mod-tabletsofruin')?.checked || false,
+                vesselOfRuin: document.getElementById('mod-vesselofruin')?.checked || false,
+                weather: document.getElementById('mod-weather')?.value || 'none',
+                terrain: document.getElementById('mod-terrain')?.value || 'none'
+            }};
+        }}
+
+        // Calculate damage modifier from all active modifiers
+        function calcDamageModifier(isPhysical, moveType) {{
+            const mods = getModifiers();
+            let modifier = 1.0;
+
+            // Screens (0.5x in singles, 0.67x in doubles - using doubles value)
+            if (isPhysical && mods.reflect) {{
+                modifier *= 0.67;
+            }}
+            if (!isPhysical && mods.lightScreen) {{
+                modifier *= 0.67;
+            }}
+
+            // Intimidate (-1 Atk stage = ~0.67x)
+            if (isPhysical && mods.intimidate) {{
+                modifier *= 0.67;
+            }}
+
+            // Friend Guard (0.75x)
+            if (mods.friendGuard) {{
+                modifier *= 0.75;
+            }}
+
+            // Ruinous abilities - affect stats, not damage directly
+            // Sword of Ruin: 0.75x defender's Defense (physical attacks do more damage)
+            if (isPhysical && mods.swordOfRuin) {{
+                modifier *= 1 / 0.75;  // ~1.33x damage
+            }}
+            // Beads of Ruin: 0.75x defender's Sp.Def (special attacks do more damage)
+            if (!isPhysical && mods.beadsOfRuin) {{
+                modifier *= 1 / 0.75;  // ~1.33x damage
+            }}
+            // Tablets of Ruin: 0.75x attacker's Attack (physical attacks do less damage)
+            if (isPhysical && mods.tabletsOfRuin) {{
+                modifier *= 0.75;
+            }}
+            // Vessel of Ruin: 0.75x attacker's Sp.Atk (special attacks do less damage)
+            if (!isPhysical && mods.vesselOfRuin) {{
+                modifier *= 0.75;
+            }}
+
+            // Weather effects
+            if (mods.weather === 'sun') {{
+                if (moveType?.toLowerCase() === 'fire') modifier *= 1.5;
+                if (moveType?.toLowerCase() === 'water') modifier *= 0.5;
+            }} else if (mods.weather === 'rain') {{
+                if (moveType?.toLowerCase() === 'water') modifier *= 1.5;
+                if (moveType?.toLowerCase() === 'fire') modifier *= 0.5;
+            }}
+
+            // Grassy Terrain (0.5x ground moves)
+            if (mods.terrain === 'grassy' && moveType?.toLowerCase() === 'ground') {{
+                modifier *= 0.5;
+            }}
+
+            return modifier;
+        }}
+
+        // Get defender types (considering Tera)
+        function getDefenderTypes() {{
+            const mods = getModifiers();
+            if (mods.tera && mods.teraType) {{
+                return [mods.teraType];
+            }}
+            return originalTypes.map(t => t.toLowerCase());
+        }}
+
+        // Recalculate all damage values
+        function recalculateDamage() {{
+            const nature = document.getElementById('pokemon-nature').value;
+            const hpEV = parseInt(document.getElementById('ev-hp').value) || 0;
+            const defEV = parseInt(document.getElementById('ev-def').value) || 0;
+            const spdEV = parseInt(document.getElementById('ev-spd').value) || 0;
+
+            // Calculate stats
+            const hp = calcStat(baseStats.hp, hpEV, 31, nature, 'hp', true);
+            const def = calcStat(baseStats.defense, defEV, 31, nature, 'defense', false);
+            const spd = calcStat(baseStats.special_defense, spdEV, 31, nature, 'special_defense', false);
+
+            // Update stat display
+            document.getElementById('stat-hp').textContent = hp;
+            document.getElementById('stat-def').textContent = def;
+            document.getElementById('stat-spd').textContent = spd;
+            document.getElementById('hp-display').textContent = `HP: ${{hp}} (100%)`;
+
+            // Update spread display
+            const spreadParts = [
+                `${{hpEV}} HP`,
+                `${{parseInt(document.getElementById('ev-hp').value) || 0}} Atk`,
+                `${{defEV}} Def`,
+                `0 SpA`,
+                `${{spdEV}} SpD`,
+                `0 Spe`
+            ];
+            document.getElementById('spread-display').textContent = `${{nature}} | ${{hpEV}} HP / 0 Atk / ${{defEV}} Def / 0 SpA / ${{spdEV}} SpD / 0 Spe`;
+
+            // Get modifier summary
+            const mods = getModifiers();
+            const activeMods = [];
+            if (mods.tera && mods.teraType) activeMods.push(`Tera ${{mods.teraType}}`);
+            if (mods.reflect) activeMods.push('Reflect (-33%)');
+            if (mods.lightScreen) activeMods.push('L.Screen (-33%)');
+            if (mods.intimidate) activeMods.push('Intimidate (-33%)');
+            if (mods.friendGuard) activeMods.push('F.Guard (-25%)');
+            if (mods.swordOfRuin) activeMods.push('Sword of Ruin (+33% phys)');
+            if (mods.beadsOfRuin) activeMods.push('Beads of Ruin (+33% spec)');
+            if (mods.tabletsOfRuin) activeMods.push('Tablets of Ruin (-25% phys)');
+            if (mods.vesselOfRuin) activeMods.push('Vessel of Ruin (-25% spec)');
+            if (mods.weather !== 'none') activeMods.push(mods.weather.charAt(0).toUpperCase() + mods.weather.slice(1));
+            if (mods.terrain !== 'none') activeMods.push(mods.terrain.charAt(0).toUpperCase() + mods.terrain.slice(1) + ' Terrain');
+
+            // Note: Full damage recalculation would need the original attacker stats
+            // This shows the modifiers that would apply
+            console.log('Active modifiers:', activeMods);
+            console.log('Damage modifier:', calcDamageModifier(true, null));
+        }}
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', recalculateDamage);
+    </script>
+</body>
+</html>'''

@@ -216,7 +216,13 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         tablets_of_ruin: bool = False,
         vessel_of_ruin: bool = False,
         attacker_booster_energy: bool = False,
-        defender_booster_energy: bool = False
+        defender_booster_energy: bool = False,
+        attacker_attack_stage: int = 0,
+        attacker_special_attack_stage: int = 0,
+        defender_defense_stage: int = 0,
+        defender_special_defense_stage: int = 0,
+        aurora_veil: bool = False,
+        friend_guard: bool = False
     ) -> dict:
         """
         Calculate damage from one Pokemon to another.
@@ -258,6 +264,12 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             vessel_of_ruin: True if Ting-Lu's Vessel of Ruin is active (lowers foe SpA to 0.75x)
             attacker_booster_energy: True if attacker used Booster Energy (activates Protosynthesis/Quark Drive)
             defender_booster_energy: True if defender used Booster Energy
+            attacker_attack_stage: Attacker's Attack stage (-6 to +6). Use -1 for Intimidate.
+            attacker_special_attack_stage: Attacker's Sp. Atk stage (-6 to +6).
+            defender_defense_stage: Defender's Defense stage (-6 to +6).
+            defender_special_defense_stage: Defender's Sp. Def stage (-6 to +6).
+            aurora_veil: True if Aurora Veil is active (halves both physical and special damage)
+            friend_guard: True if ally has Friend Guard ability (reduces damage to 0.75x)
 
         Returns:
             Damage calculations against top defender spreads with KO probabilities and items
@@ -497,7 +509,9 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 defender_tera_active=defender_tera_type is not None,
                 reflect_up=reflect,
                 light_screen_up=light_screen,
+                aurora_veil_up=aurora_veil,
                 helping_hand=helping_hand,
+                friend_guard=friend_guard,
                 commander_active=commander_active,
                 defender_commander_active=defender_commander_active,
                 beads_of_ruin=beads_of_ruin,
@@ -507,7 +521,11 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 protosynthesis_boost=attacker_proto_boost,
                 quark_drive_boost=attacker_quark_boost,
                 defender_protosynthesis_boost=defender_proto_boost,
-                defender_quark_drive_boost=defender_quark_boost
+                defender_quark_drive_boost=defender_quark_boost,
+                attack_stage=attacker_attack_stage,
+                special_attack_stage=attacker_special_attack_stage,
+                defense_stage=defender_defense_stage,
+                special_defense_stage=defender_special_defense_stage
             )
 
             # Calculate damage against multiple defender spreads if available
@@ -558,7 +576,9 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         defender_tera_active=defender_tera_type is not None,
                         reflect_up=reflect,
                         light_screen_up=light_screen,
+                        aurora_veil_up=aurora_veil,
                         helping_hand=helping_hand,
+                        friend_guard=friend_guard,
                         commander_active=commander_active,
                         defender_commander_active=defender_commander_active,
                         beads_of_ruin=beads_of_ruin,
@@ -568,7 +588,11 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         protosynthesis_boost=attacker_proto_boost,
                         quark_drive_boost=attacker_quark_boost,
                         defender_protosynthesis_boost=defender_proto_boost,
-                        defender_quark_drive_boost=defender_quark_boost
+                        defender_quark_drive_boost=defender_quark_boost,
+                        attack_stage=attacker_attack_stage,
+                        special_attack_stage=attacker_special_attack_stage,
+                        defense_stage=defender_defense_stage,
+                        special_defense_stage=defender_special_defense_stage
                     )
 
                     # Calculate damage for this spread
@@ -1107,11 +1131,14 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         defender_spd_evs: Optional[int] = None,
         use_smogon_spreads: bool = True,
         attacker_attack_stage: int = 0,
+        defender_defense_stage: int = 0,
         weather: Optional[str] = None,
         terrain: Optional[str] = None,
         attacker_item: Optional[str] = None,
         reflect: bool = False,
-        light_screen: bool = False
+        light_screen: bool = False,
+        aurora_veil: bool = False,
+        friend_guard: bool = False
     ) -> dict:
         """
         Calculate if a Pokemon can survive multiple hits of an attack.
@@ -1133,12 +1160,15 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             defender_def_evs: Defender's Defense EVs
             defender_spd_evs: Defender's Sp. Def EVs
             use_smogon_spreads: Auto-fetch spreads from Smogon
-            attacker_attack_stage: Attack stage (-6 to +6). Use -1 for Intimidate.
+            attacker_attack_stage: Attack/Sp.Atk stage (-6 to +6). Use -1 for Intimidate.
+            defender_defense_stage: Defense/Sp.Def stage (-6 to +6). Use -1 for Screech, etc.
             weather: "sun", "rain", "sand", or "snow"
             terrain: "electric", "grassy", "psychic", or "misty"
             attacker_item: Attacker's item
             reflect: True if Reflect is active
             light_screen: True if Light Screen is active
+            aurora_veil: True if Aurora Veil is active
+            friend_guard: True if ally has Friend Guard ability
 
         Returns:
             Analysis of whether the defender survives N hits
@@ -1235,8 +1265,12 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 attacker_item=attacker_item,
                 reflect_up=reflect,
                 light_screen_up=light_screen,
+                aurora_veil_up=aurora_veil,
+                friend_guard=friend_guard,
                 attack_stage=attacker_attack_stage if is_physical else 0,
-                special_attack_stage=attacker_attack_stage if not is_physical else 0
+                special_attack_stage=attacker_attack_stage if not is_physical else 0,
+                defense_stage=defender_defense_stage if is_physical else 0,
+                special_defense_stage=defender_defense_stage if not is_physical else 0
             )
 
             # Calculate single hit damage
@@ -1389,7 +1423,12 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         attacker_nature: str = "adamant",
         attacker_evs: int = 252,
         defender_nature: str = "impish",
-        attacker_attack_stage: int = 0
+        attacker_attack_stage: int = 0,
+        defender_defense_stage: int = 0,
+        reflect: bool = False,
+        light_screen: bool = False,
+        aurora_veil: bool = False,
+        friend_guard: bool = False
     ) -> dict:
         """
         Find minimum HP/Def EVs to survive multiple hits of an attack.
@@ -1402,7 +1441,12 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             attacker_nature: Attacker's nature
             attacker_evs: Attacker's offensive EVs
             defender_nature: Your nature (+Def: Impish/Bold, +SpD: Calm/Careful)
-            attacker_attack_stage: Attack stage (-1 for Intimidate)
+            attacker_attack_stage: Attack stage (-6 to +6). Use -1 for Intimidate.
+            defender_defense_stage: Defense stage (-6 to +6). Use -1 for Screech, etc.
+            reflect: True if Reflect is active
+            light_screen: True if Light Screen is active
+            aurora_veil: True if Aurora Veil is active
+            friend_guard: True if ally has Friend Guard ability
 
         Returns:
             Required HP/Def EVs to survive, or indication if impossible
@@ -1454,7 +1498,13 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     modifiers = DamageModifiers(
                         is_doubles=True,
                         attack_stage=attacker_attack_stage if is_physical else 0,
-                        special_attack_stage=attacker_attack_stage if not is_physical else 0
+                        special_attack_stage=attacker_attack_stage if not is_physical else 0,
+                        defense_stage=defender_defense_stage if is_physical else 0,
+                        special_defense_stage=defender_defense_stage if not is_physical else 0,
+                        reflect_up=reflect,
+                        light_screen_up=light_screen,
+                        aurora_veil_up=aurora_veil,
+                        friend_guard=friend_guard
                     )
 
                     result = calculate_damage(attacker, defender, move, modifiers)
@@ -1486,7 +1536,13 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 modifiers = DamageModifiers(
                     is_doubles=True,
                     attack_stage=attacker_attack_stage if is_physical else 0,
-                    special_attack_stage=attacker_attack_stage if not is_physical else 0
+                    special_attack_stage=attacker_attack_stage if not is_physical else 0,
+                    defense_stage=defender_defense_stage if is_physical else 0,
+                    special_defense_stage=defender_defense_stage if not is_physical else 0,
+                    reflect_up=reflect,
+                    light_screen_up=light_screen,
+                    aurora_veil_up=aurora_veil,
+                    friend_guard=friend_guard
                 )
                 result = calculate_damage(attacker, max_defender, move, modifiers)
                 total_max = result.max_damage * num_hits
@@ -1599,9 +1655,16 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         terrain: Optional[str] = None,
         reflect: bool = False,
         light_screen: bool = False,
+        aurora_veil: bool = False,
         friend_guard: bool = False,
         sword_of_ruin: bool = False,
-        beads_of_ruin: bool = False
+        beads_of_ruin: bool = False,
+        tablets_of_ruin: bool = False,
+        vessel_of_ruin: bool = False,
+        attacker1_attack_stage: int = 0,
+        attacker2_attack_stage: int = 0,
+        defender_defense_stage: int = 0,
+        defender_special_defense_stage: int = 0
     ) -> dict:
         """
         Check if a Pokemon survives combined damage from two attackers in one turn (double-up).
@@ -1636,9 +1699,16 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             terrain: "electric", "grassy", "psychic", or "misty"
             reflect: True if Reflect is active (halves physical damage)
             light_screen: True if Light Screen is active (halves special damage)
+            aurora_veil: True if Aurora Veil is active (halves all damage in hail)
             friend_guard: True if ally has Friend Guard (0.75x damage)
-            sword_of_ruin: True if Chien-Pao's Sword of Ruin is active (lowers Def)
-            beads_of_ruin: True if Chi-Yu's Beads of Ruin is active (lowers SpD)
+            sword_of_ruin: True if Chien-Pao's Sword of Ruin is active (lowers Def to 0.75x)
+            beads_of_ruin: True if Chi-Yu's Beads of Ruin is active (lowers SpD to 0.75x)
+            tablets_of_ruin: True if Wo-Chien's Tablets of Ruin is active (lowers Atk to 0.75x)
+            vessel_of_ruin: True if Ting-Lu's Vessel of Ruin is active (lowers SpA to 0.75x)
+            attacker1_attack_stage: First attacker's stat stage from -6 to +6 (0 = neutral)
+            attacker2_attack_stage: Second attacker's stat stage from -6 to +6 (0 = neutral)
+            defender_defense_stage: Defender's Defense stat stage from -6 to +6
+            defender_special_defense_stage: Defender's Sp. Def stat stage from -6 to +6
 
         Returns:
             Combined damage range, survival result, and breakdown per attacker
@@ -1787,6 +1857,10 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 item=attacker2_item
             )
 
+            # Determine if each move is physical or special
+            is_physical1 = move1.category.value == "physical"
+            is_physical2 = move2.category.value == "physical"
+
             # Set up modifiers for both attacks
             modifiers1 = DamageModifiers(
                 is_doubles=True,
@@ -1800,9 +1874,16 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 defender_tera_active=defender_tera_type is not None,
                 reflect_up=reflect,
                 light_screen_up=light_screen,
+                aurora_veil_up=aurora_veil,
                 friend_guard=friend_guard,
                 sword_of_ruin=sword_of_ruin,
-                beads_of_ruin=beads_of_ruin
+                beads_of_ruin=beads_of_ruin,
+                tablets_of_ruin=tablets_of_ruin,
+                vessel_of_ruin=vessel_of_ruin,
+                attack_stage=attacker1_attack_stage if is_physical1 else 0,
+                special_attack_stage=attacker1_attack_stage if not is_physical1 else 0,
+                defense_stage=defender_defense_stage if is_physical1 else 0,
+                special_defense_stage=defender_special_defense_stage if not is_physical1 else 0
             )
 
             modifiers2 = DamageModifiers(
@@ -1817,9 +1898,16 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 defender_tera_active=defender_tera_type is not None,
                 reflect_up=reflect,
                 light_screen_up=light_screen,
+                aurora_veil_up=aurora_veil,
                 friend_guard=friend_guard,
                 sword_of_ruin=sword_of_ruin,
-                beads_of_ruin=beads_of_ruin
+                beads_of_ruin=beads_of_ruin,
+                tablets_of_ruin=tablets_of_ruin,
+                vessel_of_ruin=vessel_of_ruin,
+                attack_stage=attacker2_attack_stage if is_physical2 else 0,
+                special_attack_stage=attacker2_attack_stage if not is_physical2 else 0,
+                defense_stage=defender_defense_stage if is_physical2 else 0,
+                special_defense_stage=defender_special_defense_stage if not is_physical2 else 0
             )
 
             # Calculate damage from each attack
@@ -1969,6 +2057,10 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 notes.append("Sword of Ruin active (0.75x Def)")
             if beads_of_ruin:
                 notes.append("Beads of Ruin active (0.75x SpD)")
+            if tablets_of_ruin:
+                notes.append("Tablets of Ruin active (0.75x Atk)")
+            if vessel_of_ruin:
+                notes.append("Vessel of Ruin active (0.75x SpA)")
             if notes:
                 response["active_conditions"] = notes
 

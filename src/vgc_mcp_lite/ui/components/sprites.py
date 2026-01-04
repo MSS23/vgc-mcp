@@ -2,6 +2,44 @@
 """Pokemon sprite and type color utilities."""
 
 
+# Pokemon Showdown sprite name overrides for Pokemon with non-standard names
+# Maps normalized name (lowercase, spaces to hyphens) to Showdown sprite name
+SHOWDOWN_SPRITE_NAMES = {
+    # Treasures of Ruin (hyphens removed in Showdown)
+    "chien-pao": "chienpao",
+    "chi-yu": "chiyu",
+    "ting-lu": "tinglu",
+    "wo-chien": "wochien",
+    # Urshifu forms
+    "urshifu-rapid-strike": "urshifu-rapidstrike",
+    "urshifu-single-strike": "urshifu",
+    # Paradox Pokemon (spaces removed)
+    "flutter mane": "fluttermane",
+    "iron hands": "ironhands",
+    "iron bundle": "ironbundle",
+    "iron jugulis": "ironjugulis",
+    "iron moth": "ironmoth",
+    "iron thorns": "ironthorns",
+    "iron valiant": "ironvaliant",
+    "iron leaves": "ironleaves",
+    "iron boulder": "ironboulder",
+    "iron crown": "ironcrown",
+    "great tusk": "greattusk",
+    "scream tail": "screamtail",
+    "brute bonnet": "brutebonnet",
+    "slither wing": "slitherwing",
+    "sandy shocks": "sandyshocks",
+    "roaring moon": "roaringmoon",
+    "walking wake": "walkingwake",
+    "gouging fire": "gougingfire",
+    "raging bolt": "ragingbolt",
+    # Other special cases
+    "ogerpon-wellspring": "ogerpon-wellspring",
+    "ogerpon-hearthflame": "ogerpon-hearthflame",
+    "ogerpon-cornerstone": "ogerpon-cornerstone",
+}
+
+
 def get_sprite_url(pokemon_name: str, animated: bool = True) -> str:
     """Get Pokemon sprite URL - animated GIF from Showdown or static PNG fallback.
 
@@ -14,18 +52,25 @@ def get_sprite_url(pokemon_name: str, animated: bool = True) -> str:
         URL string for the Pokemon sprite
     """
     if animated:
-        # Pokemon Showdown format: no spaces, forms use single hyphen
-        # "Flutter Mane" -> "fluttermane"
-        # "Urshifu-Rapid-Strike" -> "urshifu-rapidstrike"
-        normalized = pokemon_name.lower().replace(" ", "").replace(".", "")
+        # Check for known overrides first
+        lookup_key = pokemon_name.lower()
+        if lookup_key in SHOWDOWN_SPRITE_NAMES:
+            normalized = SHOWDOWN_SPRITE_NAMES[lookup_key]
+        else:
+            # Also check with hyphen replacement for flexibility
+            lookup_key_hyphen = pokemon_name.lower().replace(" ", "-")
+            if lookup_key_hyphen in SHOWDOWN_SPRITE_NAMES:
+                normalized = SHOWDOWN_SPRITE_NAMES[lookup_key_hyphen]
+            else:
+                # Default: remove spaces and dots, handle form hyphens
+                normalized = pokemon_name.lower().replace(" ", "").replace(".", "")
 
-        # Collapse form hyphens: "rapid-strike" -> "rapidstrike"
-        # But keep the base-form hyphen: "urshifu-rapidstrike"
-        parts = normalized.split("-")
-        if len(parts) >= 2:
-            base = parts[0]
-            form = "".join(parts[1:])
-            normalized = f"{base}-{form}" if form else base
+                # For forms like "urshifu-rapid-strike", collapse to "urshifu-rapidstrike"
+                parts = normalized.split("-")
+                if len(parts) >= 2:
+                    base = parts[0]
+                    form = "".join(parts[1:])
+                    normalized = f"{base}-{form}" if form else base
 
         return f"https://play.pokemonshowdown.com/sprites/ani/{normalized}.gif"
     else:
