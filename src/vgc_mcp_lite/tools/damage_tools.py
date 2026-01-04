@@ -14,7 +14,6 @@ from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name, suggest_nature
 
 # MCP-UI support (enabled in vgc-mcp-lite)
 from ..ui.resources import (
-    create_damage_calc_resource,
     create_interactive_damage_calc_resource,
     create_summary_table_resource,
     create_multi_hit_survival_resource,
@@ -754,6 +753,17 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             def_types = await pokeapi.get_pokemon_types(defender_name)
             move = await pokeapi.get_move(move_name, user_name=attacker_name)
 
+            # Auto-detect Ruinous abilities from attacker
+            sword_of_ruin = False
+            beads_of_ruin = False
+            atk_abilities = await pokeapi.get_pokemon_abilities(attacker_name)
+            if atk_abilities:
+                attacker_ability = atk_abilities[0].lower().replace(" ", "-")
+                if attacker_ability == "sword-of-ruin":
+                    sword_of_ruin = True
+                elif attacker_ability == "beads-of-ruin":
+                    beads_of_ruin = True
+
             # Parse natures
             atk_nature = Nature(attacker_nature.lower())
             def_nature = Nature(defender_nature.lower())
@@ -779,8 +789,16 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 )
             )
 
+            # Create modifiers with Ruinous abilities
+            modifiers = DamageModifiers(
+                is_doubles=True,
+                sword_of_ruin=sword_of_ruin,
+                beads_of_ruin=beads_of_ruin
+            )
+
             result = calculate_ko_threshold(
                 attacker, defender, move,
+                modifiers=modifiers,
                 target_ko_chance=target_ko_chance
             )
 

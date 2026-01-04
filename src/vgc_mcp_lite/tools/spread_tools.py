@@ -492,6 +492,13 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         except Exception as e:
             return {"error": str(e)}
 
+    # Speed stage multipliers (Gen 9)
+    SPEED_STAGE_MULTIPLIERS = {
+        -6: 2/8, -5: 2/7, -4: 2/6, -3: 2/5, -2: 2/4, -1: 2/3,
+        0: 1,
+        1: 3/2, 2: 4/2, 3: 5/2, 4: 6/2, 5: 7/2, 6: 8/2
+    }
+
     @mcp.tool()
     async def design_spread_with_benchmarks(
         pokemon_name: str,
@@ -499,6 +506,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         outspeed_pokemon: Optional[str] = None,
         outspeed_pokemon_nature: str = "jolly",
         outspeed_pokemon_evs: int = 252,
+        outspeed_at_speed_stage: int = 0,
         survive_pokemon: Optional[str] = None,
         survive_move: Optional[str] = None,
         survive_pokemon_nature: str = "adamant",
@@ -511,7 +519,14 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         offensive_evs: int = 0
     ) -> dict:
         """
-        Design an EV spread that meets specific speed and survival benchmarks.
+        Design an EV spread that meets specific speed and SINGLE survival benchmarks.
+
+        Use this when asked questions like:
+        - "I need Entei to survive Surging Strikes and outspeed Chien-Pao"
+        - "Make my Flutter Mane live Sacred Sword while being faster than Rillaboom"
+        - "Build a max Attack Entei that outspeeds Chien-Pao after Icy Wind"
+
+        For surviving TWO DIFFERENT attacks, use optimize_dual_survival_spread instead.
 
         IMPORTANT - ASK ABOUT TERA BEFORE CALLING:
         Before using this tool for survival calculations, ASK the user:
@@ -530,6 +545,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             outspeed_pokemon: Pokemon to outspeed
             outspeed_pokemon_nature: Target's nature (default: jolly)
             outspeed_pokemon_evs: Target's speed EVs (default: 252)
+            outspeed_at_speed_stage: Target's speed stage (-1 = after Icy Wind, -2 = after 2x Icy Wind, etc.)
             survive_pokemon: Attacker to survive
             survive_move: Move to survive
             survive_pokemon_nature: Attacker's nature (default: adamant)
@@ -569,6 +585,12 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         target_base.speed, 31, outspeed_pokemon_evs, 50, target_speed_mod
                     )
 
+                    # Apply speed stage modifier (e.g., -1 for after Icy Wind)
+                    original_target_speed = target_speed
+                    if outspeed_at_speed_stage != 0:
+                        stage_mult = SPEED_STAGE_MULTIPLIERS.get(outspeed_at_speed_stage, 1)
+                        target_speed = int(target_speed * stage_mult)
+
                     # Find minimum EVs to outspeed (level 50 breakpoints)
                     my_speed_mod = get_nature_modifier(parsed_nature, "speed")
                     for ev in EV_BREAKPOINTS_LV50:
@@ -579,13 +601,20 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     else:
                         speed_evs_needed = 252  # Max out if can't outspeed
 
-                    results["benchmarks"]["speed"] = {
+                    speed_benchmark = {
                         "target": outspeed_pokemon,
                         "target_speed": target_speed,
                         "evs_needed": speed_evs_needed,
                         "my_speed": calculate_stat(my_base.speed, 31, speed_evs_needed, 50, my_speed_mod),
                         "outspeeds": calculate_stat(my_base.speed, 31, speed_evs_needed, 50, my_speed_mod) > target_speed
                     }
+                    # Add speed stage info if applicable
+                    if outspeed_at_speed_stage != 0:
+                        speed_benchmark["target_base_speed"] = original_target_speed
+                        speed_benchmark["target_speed_stage"] = outspeed_at_speed_stage
+                        stage_name = "after Icy Wind" if outspeed_at_speed_stage == -1 else f"at {outspeed_at_speed_stage:+d} stage"
+                        speed_benchmark["speed_stage_note"] = f"Target at {target_speed} Speed ({stage_name})"
+                    results["benchmarks"]["speed"] = speed_benchmark
                 except Exception as e:
                     results["benchmarks"]["speed"] = {"error": str(e)}
 
@@ -660,6 +689,27 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         if not survive_pokemon_ability:
                             survive_pokemon_ability = "unseen-fist"
 
+                    # Auto-detect Ruinous abilities from attacker
+                    sword_of_ruin = False
+                    beads_of_ruin = False
+                    if survive_pokemon_ability:
+                        ability_lower = survive_pokemon_ability.lower().replace(" ", "-").replace("_", "-")
+                        if ability_lower == "sword-of-ruin":
+                            sword_of_ruin = True
+                        elif ability_lower == "beads-of-ruin":
+                            beads_of_ruin = True
+                    else:
+                        # If no ability specified, auto-detect from Pokemon
+                        atk_abilities = await pokeapi.get_pokemon_abilities(survive_pokemon)
+                        if atk_abilities:
+                            ability_lower = atk_abilities[0].lower().replace(" ", "-")
+                            if ability_lower == "sword-of-ruin":
+                                sword_of_ruin = True
+                                survive_pokemon_ability = "sword-of-ruin"
+                            elif ability_lower == "beads-of-ruin":
+                                beads_of_ruin = True
+                                survive_pokemon_ability = "beads-of-ruin"
+
                     # Create attacker build
                     attacker = PokemonBuild(
                         name=survive_pokemon,
@@ -730,7 +780,9 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                                     tera_active=survive_pokemon_tera_type is not None,
                                     defender_tera_type=defender_tera_type,
                                     defender_tera_active=defender_tera_type is not None,
-                                    is_critical=move.always_crit
+                                    is_critical=move.always_crit,
+                                    sword_of_ruin=sword_of_ruin,
+                                    beads_of_ruin=beads_of_ruin
                                 )
                                 result = calculate_damage(attacker, defender, move, modifiers)
 
@@ -971,10 +1023,20 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         target_survival: float = 93.75
     ) -> dict:
         """
-        Find optimal EV spread to survive TWO different attacks while meeting a speed benchmark.
+        Find optimal EV spread to survive TWO DIFFERENT attacks while meeting a speed benchmark.
+
+        IMPORTANT - WHEN TO USE THIS TOOL:
+        - Use ONLY when the user wants to survive TWO DIFFERENT attacks from TWO DIFFERENT attackers
+        - Examples: "survive Wicked Blow AND Sludge Bomb", "live both Moonblast and Sacred Sword"
+
+        DO NOT USE THIS TOOL when:
+        - User only mentions ONE attacker or ONE move (use design_spread_with_benchmarks instead)
+        - User wants to survive the same attack twice (that's a 2HKO check, not dual survival)
+        - User is asking about max Attack/SpA builds (use design_spread_with_benchmarks with prioritize="offense")
 
         Use this when asked questions like:
-        "I want my Ogerpon-Wellspring to survive Tera Dark Wicked Blow AND Sludge Bomb, while outspeeding Lando-I"
+        - "I want my Ogerpon-Wellspring to survive Tera Dark Wicked Blow AND Sludge Bomb"
+        - "Can Rillaboom live both Moonblast from Flutter Mane AND Heat Wave from Tornadus?"
 
         This tool searches ALL valid (HP, Def, SpD) combinations to find the optimal spread,
         or reports if the benchmarks are mathematically impossible.
@@ -982,9 +1044,9 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         Args:
             pokemon_name: Your Pokemon (e.g., "ogerpon-wellspring")
             nature: Your Pokemon's nature (e.g., "jolly")
-            survive_hit1_attacker: First attacker to survive (e.g., "urshifu")
+            survive_hit1_attacker: First attacker to survive (e.g., "urshifu") - MUST be different from hit2
             survive_hit1_move: First move to survive (e.g., "wicked-blow")
-            survive_hit2_attacker: Second attacker to survive (e.g., "landorus-incarnate")
+            survive_hit2_attacker: Second attacker to survive (e.g., "landorus-incarnate") - MUST be different from hit1
             survive_hit2_move: Second move to survive (e.g., "sludge-bomb")
             outspeed_pokemon: Pokemon to outspeed (optional)
             outspeed_pokemon_nature: Target's nature (default "timid")
@@ -1087,6 +1149,48 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 if not survive_hit2_ability:
                     survive_hit2_ability = "unseen-fist"
 
+            # Auto-detect Ruinous abilities for attacker 1
+            sword_of_ruin1 = False
+            beads_of_ruin1 = False
+            if survive_hit1_ability:
+                ability_lower = survive_hit1_ability.lower().replace(" ", "-").replace("_", "-")
+                if ability_lower == "sword-of-ruin":
+                    sword_of_ruin1 = True
+                elif ability_lower == "beads-of-ruin":
+                    beads_of_ruin1 = True
+            else:
+                # Auto-detect from Pokemon
+                atk1_abilities = await pokeapi.get_pokemon_abilities(survive_hit1_attacker)
+                if atk1_abilities:
+                    ability_lower = atk1_abilities[0].lower().replace(" ", "-")
+                    if ability_lower == "sword-of-ruin":
+                        sword_of_ruin1 = True
+                        survive_hit1_ability = "sword-of-ruin"
+                    elif ability_lower == "beads-of-ruin":
+                        beads_of_ruin1 = True
+                        survive_hit1_ability = "beads-of-ruin"
+
+            # Auto-detect Ruinous abilities for attacker 2
+            sword_of_ruin2 = False
+            beads_of_ruin2 = False
+            if survive_hit2_ability:
+                ability_lower = survive_hit2_ability.lower().replace(" ", "-").replace("_", "-")
+                if ability_lower == "sword-of-ruin":
+                    sword_of_ruin2 = True
+                elif ability_lower == "beads-of-ruin":
+                    beads_of_ruin2 = True
+            else:
+                # Auto-detect from Pokemon
+                atk2_abilities = await pokeapi.get_pokemon_abilities(survive_hit2_attacker)
+                if atk2_abilities:
+                    ability_lower = atk2_abilities[0].lower().replace(" ", "-")
+                    if ability_lower == "sword-of-ruin":
+                        sword_of_ruin2 = True
+                        survive_hit2_ability = "sword-of-ruin"
+                    elif ability_lower == "beads-of-ruin":
+                        beads_of_ruin2 = True
+                        survive_hit2_ability = "beads-of-ruin"
+
             # Calculate speed EVs needed
             speed_evs_needed = 0
             target_speed = 0
@@ -1177,7 +1281,9 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     tera_active=survive_hit1_tera_type is not None,
                     defender_tera_type=defender_tera_type,
                     defender_tera_active=defender_tera_type is not None,
-                    is_critical=move1.always_crit
+                    is_critical=move1.always_crit,
+                    sword_of_ruin=sword_of_ruin1,
+                    beads_of_ruin=beads_of_ruin1
                 )
                 result1 = calculate_damage(attacker1, defender, move1, modifiers1)
                 modifiers2 = DamageModifiers(
@@ -1186,7 +1292,9 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     tera_active=survive_hit2_tera_type is not None,
                     defender_tera_type=defender_tera_type,
                     defender_tera_active=defender_tera_type is not None,
-                    is_critical=move2.always_crit
+                    is_critical=move2.always_crit,
+                    sword_of_ruin=sword_of_ruin2,
+                    beads_of_ruin=beads_of_ruin2
                 )
                 result2 = calculate_damage(attacker2, defender, move2, modifiers2)
                 survive_rolls1 = sum(1 for r in result1.rolls if r < result1.defender_hp)

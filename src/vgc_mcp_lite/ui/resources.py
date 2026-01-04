@@ -23,7 +23,6 @@ from .components import (
     create_speed_tier_ui,
     create_usage_stats_ui,
     create_stats_card_ui,
-    create_pokemon_build_card_ui,
 )
 
 
@@ -43,48 +42,6 @@ def register_ui_resources(mcp: FastMCP) -> None:
     # The actual UI content is generated dynamically by tools and returned
     # with metadata pointing to these resource patterns.
     pass
-
-
-def create_damage_calc_resource(
-    attacker: str,
-    defender: str,
-    move: str,
-    damage_min: float,
-    damage_max: float,
-    ko_chance: str,
-    type_effectiveness: float = 1.0,
-    attacker_item: str | None = None,
-    defender_item: str | None = None,
-    move_type: str | None = None,
-    notes: list[str] | None = None,
-) -> dict[str, Any]:
-    """Create a damage calculator UI resource.
-
-    Returns a dict with the UI resource that can be included in tool results.
-    Compatible clients will render this as an interactive damage display.
-    """
-    html = create_damage_calc_ui(
-        attacker=attacker,
-        defender=defender,
-        move=move,
-        damage_min=damage_min,
-        damage_max=damage_max,
-        ko_chance=ko_chance,
-        type_effectiveness=type_effectiveness,
-        attacker_item=attacker_item,
-        defender_item=defender_item,
-        move_type=move_type,
-        notes=notes,
-    )
-
-    return create_ui_resource({
-        "uri": f"ui://vgc/damage-calc/{attacker.lower()}-vs-{defender.lower()}",
-        "content": {
-            "type": "rawHtml",
-            "htmlString": html,
-        },
-        "encoding": "text",
-    })
 
 
 def create_interactive_damage_calc_resource(
@@ -389,31 +346,40 @@ def create_multi_hit_survival_resource(
 def create_speed_outspeed_graph_resource(
     pokemon_name: str,
     pokemon_speed: int,
-    outspeed_data: list[dict[str, Any]],
+    target_pokemon: str,
+    target_spreads: list[dict[str, Any]],
+    outspeed_percent: float,
 ) -> dict[str, Any]:
     """Create a speed outspeed graph UI resource.
 
     Args:
-        pokemon_name: Pokemon name
-        pokemon_speed: Current speed stat
-        outspeed_data: List of Pokemon with speed comparisons
+        pokemon_name: Your Pokemon name
+        pokemon_speed: Your current speed stat
+        target_pokemon: Target Pokemon to compare against
+        target_spreads: List of target spreads with speed and usage
+        outspeed_percent: Overall outspeed percentage
     """
     rows_html = ""
-    for entry in outspeed_data[:10]:
-        name = entry.get("name", "Unknown")
-        speed = entry.get("speed", 0)
+    for spread in target_spreads[:10]:
+        speed = spread.get("speed", 0)
+        usage = spread.get("usage", 0)
         outspeed = "faster" if pokemon_speed > speed else ("tied" if pokemon_speed == speed else "slower")
         color = "#2e7d32" if outspeed == "faster" else ("#f57c00" if outspeed == "tied" else "#c62828")
-        rows_html += f'<tr><td style="padding: 6px; border-bottom: 1px solid #eee;">{name}</td><td style="padding: 6px; border-bottom: 1px solid #eee;">{speed}</td><td style="padding: 6px; border-bottom: 1px solid #eee; color: {color};">{outspeed}</td></tr>'
+        usage_str = f"{usage:.1f}%" if usage >= 0.1 else "<0.1%"
+        rows_html += f'<tr><td style="padding: 6px; border-bottom: 1px solid #eee;">{speed}</td><td style="padding: 6px; border-bottom: 1px solid #eee;">{usage_str}</td><td style="padding: 6px; border-bottom: 1px solid #eee; color: {color};">{outspeed}</td></tr>'
+
+    # Summary color based on outspeed percent
+    summary_color = "#2e7d32" if outspeed_percent >= 75 else ("#f57c00" if outspeed_percent >= 25 else "#c62828")
 
     html = f"""
     <div style="font-family: system-ui, sans-serif; max-width: 500px;">
-        <h3 style="margin: 0 0 12px 0; color: #333;">{pokemon_name} Speed Analysis ({pokemon_speed} Spe)</h3>
+        <h3 style="margin: 0 0 8px 0; color: #333;">{pokemon_name} ({pokemon_speed} Spe) vs {target_pokemon}</h3>
+        <p style="margin: 0 0 12px 0; font-size: 14px; color: {summary_color}; font-weight: bold;">Outspeeds {outspeed_percent:.1f}% of spreads</p>
         <table style="width: 100%; border-collapse: collapse;">
             <thead>
                 <tr style="background: #f5f5f5;">
-                    <th style="padding: 8px; text-align: left;">Pokemon</th>
                     <th style="padding: 8px; text-align: left;">Speed</th>
+                    <th style="padding: 8px; text-align: left;">Usage</th>
                     <th style="padding: 8px; text-align: left;">Result</th>
                 </tr>
             </thead>
@@ -425,7 +391,7 @@ def create_speed_outspeed_graph_resource(
     """
 
     return create_ui_resource({
-        "uri": f"ui://vgc/speed/outspeed/{pokemon_name.lower()}",
+        "uri": f"ui://vgc/speed/outspeed/{pokemon_name.lower()}-vs-{target_pokemon.lower()}",
         "content": {
             "type": "rawHtml",
             "htmlString": html,
