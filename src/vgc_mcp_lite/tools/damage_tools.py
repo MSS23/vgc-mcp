@@ -276,6 +276,28 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 if def_abilities:
                     defender_ability = def_abilities[0].lower().replace(" ", "-")
 
+            # Auto-detect Ruinous abilities from attacker
+            # These abilities affect all OTHER Pokemon on the field
+            if attacker_ability:
+                ability_lower = attacker_ability.lower().replace(" ", "-").replace("_", "-")
+                if ability_lower == "sword-of-ruin" and not sword_of_ruin:
+                    sword_of_ruin = True
+                elif ability_lower == "beads-of-ruin" and not beads_of_ruin:
+                    beads_of_ruin = True
+                # Note: Tablets/Vessel from attacker affect attacker's own stats,
+                # but in a damage calc the attacker is calculating damage TO defender,
+                # so we don't auto-apply these (they'd reduce attacker's own offense)
+
+            # Auto-detect Ruinous abilities from defender that affect attacker
+            if defender_ability:
+                ability_lower = defender_ability.lower().replace(" ", "-").replace("_", "-")
+                if ability_lower == "tablets-of-ruin" and not tablets_of_ruin:
+                    tablets_of_ruin = True
+                elif ability_lower == "vessel-of-ruin" and not vessel_of_ruin:
+                    vessel_of_ruin = True
+                # Note: Sword/Beads from defender affect defender's own stats,
+                # so we don't auto-apply these (they'd reduce defender's own defense)
+
             # Helper function to determine which stat Protosynthesis/Quark Drive boosts
             def get_paradox_boost_stat(base_stats, nature_enum, evs_dict) -> Optional[str]:
                 """Determine which stat gets boosted by Protosynthesis/Quark Drive.
@@ -821,6 +843,17 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             def_types = await pokeapi.get_pokemon_types(defender_name)
             move = await pokeapi.get_move(move_name, user_name=attacker_name)
 
+            # Auto-detect Ruinous abilities from attacker
+            sword_of_ruin = False
+            beads_of_ruin = False
+            atk_abilities = await pokeapi.get_pokemon_abilities(attacker_name)
+            if atk_abilities:
+                attacker_ability = atk_abilities[0].lower().replace(" ", "-")
+                if attacker_ability == "sword-of-ruin":
+                    sword_of_ruin = True
+                elif attacker_ability == "beads-of-ruin":
+                    beads_of_ruin = True
+
             # Parse natures
             atk_nature = Nature(attacker_nature.lower())
             def_nature = Nature(defender_nature.lower())
@@ -847,8 +880,16 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 evs=EVSpread()
             )
 
+            # Create modifiers with Ruinous abilities
+            modifiers = DamageModifiers(
+                is_doubles=True,
+                sword_of_ruin=sword_of_ruin,
+                beads_of_ruin=beads_of_ruin
+            )
+
             result = calculate_bulk_threshold(
                 attacker, defender, move,
+                modifiers=modifiers,
                 target_survival_chance=target_survival_chance
             )
 
