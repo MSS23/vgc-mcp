@@ -37,6 +37,12 @@ META_SYNERGIES = {
     "urshifu": ("Choice Band", "Unseen Fist"),
     "urshifu-single-strike": ("Choice Band", "Unseen Fist"),
     "urshifu-rapid-strike": ("Choice Band", "Unseen Fist"),
+    # Ogerpon forms with their signature masks
+    "ogerpon": ("Teal Mask", "Defiant"),
+    "ogerpon-teal-mask": ("Teal Mask", "Defiant"),
+    "ogerpon-hearthflame": ("Hearthflame Mask", "Mold Breaker"),
+    "ogerpon-wellspring": ("Wellspring Mask", "Water Absorb"),
+    "ogerpon-cornerstone": ("Cornerstone Mask", "Sturdy"),
 }
 
 
@@ -691,7 +697,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 try:
                     atk_base = await pokeapi.get_base_stats(survive_pokemon)
                     atk_types = await pokeapi.get_pokemon_types(survive_pokemon)
-                    move = await pokeapi.get_move(survive_move)
+                    move = await pokeapi.get_move(survive_move, user_name=survive_pokemon)
 
                     is_physical = move.category == MoveCategory.PHYSICAL
 
