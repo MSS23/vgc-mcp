@@ -1624,9 +1624,9 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 ),
                 "analysis": (
                     f"With {nature.title()} {best_spread['hp']} HP / {best_spread['def']} Def / {best_spread['spd']} SpD / {speed_evs_needed} Spe, "
-                    f"{pokemon_name.title()} takes {r1.min_percent:.1f}-{r1.max_percent:.1f}% from {survive_hit1_move} "
+                    f"{pokemon_name.title()} takes {r1.min_percent:.1f}-{r1.max_percent:.1f}% from {atk1_spread_str}'s {survive_hit1_move} "
                     f"({best_results['survival_pct1']:.1f}% survival) and "
-                    f"{r2.min_percent:.1f}-{r2.max_percent:.1f}% from {survive_hit2_move} "
+                    f"{r2.min_percent:.1f}-{r2.max_percent:.1f}% from {atk2_spread_str}'s {survive_hit2_move} "
                     f"({best_results['survival_pct2']:.1f}% survival)"
                 )
             }
