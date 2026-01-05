@@ -751,16 +751,24 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                             survive_pokemon_ability = "unseen-fist"
 
                     # Auto-detect Ruinous abilities from attacker
-                    sword_of_ruin = False
-                    beads_of_ruin = False
-                    if survive_pokemon_ability:
+                    # First: Direct detection from Pokemon name (most reliable)
+                    sword_of_ruin = normalized_attacker == "chien-pao"
+                    beads_of_ruin = normalized_attacker == "chi-yu"
+                    if sword_of_ruin and not survive_pokemon_ability:
+                        survive_pokemon_ability = "sword-of-ruin"
+                    if beads_of_ruin and not survive_pokemon_ability:
+                        survive_pokemon_ability = "beads-of-ruin"
+
+                    # Second: Check from ability string if set
+                    if not sword_of_ruin and not beads_of_ruin and survive_pokemon_ability:
                         ability_lower = survive_pokemon_ability.lower().replace(" ", "-").replace("_", "-")
                         if ability_lower == "sword-of-ruin":
                             sword_of_ruin = True
                         elif ability_lower == "beads-of-ruin":
                             beads_of_ruin = True
-                    else:
-                        # If no ability specified, auto-detect from Pokemon
+
+                    # Third: Fallback to PokeAPI
+                    if not sword_of_ruin and not beads_of_ruin and not survive_pokemon_ability:
                         atk_abilities = await pokeapi.get_pokemon_abilities(survive_pokemon)
                         if atk_abilities:
                             ability_lower = atk_abilities[0].lower().replace(" ", "-")
