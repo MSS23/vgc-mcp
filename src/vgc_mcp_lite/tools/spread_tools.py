@@ -1582,7 +1582,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     "spd_evs": best_spread["spd"],
                     "spe_evs": speed_evs_needed,
                     "total": best_spread["hp"] + best_spread["def"] + best_spread["spd"] + speed_evs_needed,
-                    "offensive_evs_available": 508 - speed_evs_needed - best_spread["hp"] - best_spread["def"] - best_spread["spd"]
+                    "offensive_evs_available": normalize_evs(508 - speed_evs_needed - best_spread["hp"] - best_spread["def"] - best_spread["spd"])
                 },
                 "final_stats": {
                     "hp": final_hp,
