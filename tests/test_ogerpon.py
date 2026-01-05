@@ -1,14 +1,15 @@
 """Tests for Ogerpon form-specific mechanics.
 
 Tests cover:
-- Mask items giving 1.2x type boost to matching moves
+- Mask items giving 1.2x boost to ALL moves (Hearthflame/Wellspring/Cornerstone only)
+- Teal Mask provides NO boost
 - Embody Aspect ability stat boosts when Terastallized
 - Ivy Cudgel form-dependent type changes
 - Fixed Tera types enforcement
 """
 
 import pytest
-from vgc_mcp_core.calc.damage import calculate_damage, _get_type_boost_item_mod_4096
+from vgc_mcp_core.calc.damage import calculate_damage, _get_ogerpon_mask_boost_4096
 from vgc_mcp_core.calc.modifiers import DamageModifiers, get_type_effectiveness
 from vgc_mcp_core.calc.items import get_fixed_tera_type, get_signature_item
 from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, BaseStats, EVSpread
@@ -34,45 +35,52 @@ def make_ogerpon(form: str, types: list[str], item: str) -> PokemonBuild:
     )
 
 
-class TestOgerponMaskTypeBoosts:
-    """Test mask items give 1.2x boost to matching move types."""
+class TestOgerponMaskBoosts:
+    """Test mask items give 1.2x boost to ALL moves (not just type-matching).
 
-    def test_hearthflame_mask_boosts_fire_moves(self):
-        """Hearthflame Mask gives 1.2x boost to Fire-type moves."""
-        # Test the modifier directly
-        mod = _get_type_boost_item_mod_4096("hearthflame-mask", "Fire")
+    Per Smogon research, Ogerpon's masks boost ALL of Ogerpon's moves by 1.2x:
+    - Hearthflame Mask: 1.2x to ALL moves (when held by Ogerpon)
+    - Wellspring Mask: 1.2x to ALL moves (when held by Ogerpon)
+    - Cornerstone Mask: 1.2x to ALL moves (when held by Ogerpon)
+    - Teal Mask: NO boost (this is the key difference from other masks)
+    """
+
+    def test_hearthflame_mask_boosts_all_moves(self):
+        """Hearthflame Mask gives 1.2x boost to ALL moves for Ogerpon."""
+        # Test boost on Fire move (STAB)
+        mod = _get_ogerpon_mask_boost_4096("hearthflame-mask", "ogerpon-hearthflame")
         assert mod == 4915  # 1.2x in 4096 scale
 
-        # Also verify it doesn't boost non-Fire moves
-        mod_grass = _get_type_boost_item_mod_4096("hearthflame-mask", "Grass")
-        assert mod_grass == 4096  # 1.0x (no boost)
+        # Also boosts non-Fire moves (coverage)
+        mod_coverage = _get_ogerpon_mask_boost_4096("hearthflame-mask", "ogerpon-hearthflame")
+        assert mod_coverage == 4915  # 1.2x boost applies to ALL moves
 
-    def test_wellspring_mask_boosts_water_moves(self):
-        """Wellspring Mask gives 1.2x boost to Water-type moves."""
-        mod = _get_type_boost_item_mod_4096("wellspring-mask", "Water")
+    def test_wellspring_mask_boosts_all_moves(self):
+        """Wellspring Mask gives 1.2x boost to ALL moves for Ogerpon."""
+        mod = _get_ogerpon_mask_boost_4096("wellspring-mask", "ogerpon-wellspring")
         assert mod == 4915  # 1.2x in 4096 scale
 
-        # Also verify it doesn't boost non-Water moves
-        mod_grass = _get_type_boost_item_mod_4096("wellspring-mask", "Grass")
-        assert mod_grass == 4096  # 1.0x (no boost)
-
-    def test_cornerstone_mask_boosts_rock_moves(self):
-        """Cornerstone Mask gives 1.2x boost to Rock-type moves."""
-        mod = _get_type_boost_item_mod_4096("cornerstone-mask", "Rock")
+    def test_cornerstone_mask_boosts_all_moves(self):
+        """Cornerstone Mask gives 1.2x boost to ALL moves for Ogerpon."""
+        mod = _get_ogerpon_mask_boost_4096("cornerstone-mask", "ogerpon-cornerstone")
         assert mod == 4915  # 1.2x in 4096 scale
 
-        # Also verify it doesn't boost non-Rock moves
-        mod_grass = _get_type_boost_item_mod_4096("cornerstone-mask", "Grass")
-        assert mod_grass == 4096  # 1.0x (no boost)
+    def test_teal_mask_provides_no_boost(self):
+        """Teal Mask provides NO boost (unlike other masks)."""
+        mod = _get_ogerpon_mask_boost_4096("teal-mask", "ogerpon")
+        assert mod == 4096  # 1.0x (NO boost)
 
-    def test_teal_mask_boosts_grass_moves(self):
-        """Teal Mask gives 1.2x boost to Grass-type moves."""
-        mod = _get_type_boost_item_mod_4096("teal-mask", "Grass")
-        assert mod == 4915  # 1.2x in 4096 scale
+        mod_teal = _get_ogerpon_mask_boost_4096("teal-mask", "ogerpon-teal-mask")
+        assert mod_teal == 4096  # 1.0x (NO boost)
 
-        # Also verify it doesn't boost non-Grass moves
-        mod_fire = _get_type_boost_item_mod_4096("teal-mask", "Fire")
-        assert mod_fire == 4096  # 1.0x (no boost)
+    def test_masks_only_work_for_ogerpon(self):
+        """Masks only provide boost when held by Ogerpon, not other Pokemon."""
+        # Other Pokemon holding masks get no boost
+        mod = _get_ogerpon_mask_boost_4096("hearthflame-mask", "ferrothorn")
+        assert mod == 4096  # 1.0x (no boost for non-Ogerpon)
+
+        mod_landorus = _get_ogerpon_mask_boost_4096("wellspring-mask", "landorus")
+        assert mod_landorus == 4096  # 1.0x (no boost)
 
     def test_hearthflame_mask_damage_calculation(self):
         """Hearthflame Mask 1.2x boost affects actual damage calculation."""

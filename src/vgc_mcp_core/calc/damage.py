@@ -893,11 +893,18 @@ def calculate_damage(
                 power = 60
 
     # Apply type-boosting item to base power (NOT final damage)
-    # This matches Showdown's behavior where items like Charcoal, masks go into bpMods
+    # This matches Showdown's behavior where items like Charcoal go into bpMods
     # Use effective_move_type to account for type-changing abilities
     bp_item_mod_4096 = _get_type_boost_item_mod_4096(modifiers.attacker_item, effective_move_type)
     if bp_item_mod_4096 != MOD_NEUTRAL:
         power = apply_mod(power, bp_item_mod_4096)
+
+    # Apply Ogerpon mask boost (1.2x to ALL moves, not just type-matching)
+    # Only Hearthflame/Wellspring/Cornerstone masks provide this boost (not Teal Mask)
+    attacker_name = attacker.name if attacker else None
+    ogerpon_mask_mod_4096 = _get_ogerpon_mask_boost_4096(modifiers.attacker_item, attacker_name)
+    if ogerpon_mask_mod_4096 != MOD_NEUTRAL:
+        power = apply_mod(power, ogerpon_mask_mod_4096)
 
     # Level constant for level 50: floor(2*50/5+2) = 22
     level_factor = 22
@@ -1335,13 +1342,50 @@ def _get_screen_mod_4096(modifiers: DamageModifiers, is_physical: bool) -> int:
         return MOD_SCREEN_SINGLES  # 2048/4096 = 0.5x
 
 
+def _get_ogerpon_mask_boost_4096(item: str | None, attacker_name: str | None) -> int:
+    """
+    Get Ogerpon mask boost modifier for BASE POWER.
+
+    Ogerpon's masks (Hearthflame, Wellspring, Cornerstone) boost ALL moves by 1.2x,
+    not just type-matching moves. This is different from regular type-boosting items.
+    Note: Teal Mask provides NO boost.
+
+    The boost only works when Ogerpon holds its corresponding mask.
+    """
+    if not item or not attacker_name:
+        return MOD_NEUTRAL
+
+    item = normalize_item(item)
+    attacker = attacker_name.lower().replace(" ", "-")
+
+    # Only Ogerpon gets the mask boost
+    if not attacker.startswith("ogerpon"):
+        return MOD_NEUTRAL
+
+    # Only these three masks provide the 1.2x boost to ALL moves
+    # Teal Mask provides NO boost
+    ogerpon_masks = {
+        "hearthflame-mask",
+        "wellspring-mask",
+        "cornerstone-mask",
+    }
+
+    if item in ogerpon_masks:
+        return MOD_TYPE_BOOST  # 4915/4096 = ~1.2x to ALL moves
+
+    return MOD_NEUTRAL
+
+
 def _get_type_boost_item_mod_4096(item: str | None, move_type: str) -> int:
     """
     Get type-boosting item modifier for BASE POWER (not final damage).
 
-    In Pokemon, type-boosting items like Charcoal, Mystic Water, and Ogerpon masks
+    In Pokemon, type-boosting items like Charcoal and Mystic Water
     are applied as base power modifiers, NOT final damage modifiers.
     This matches Showdown's bpMods behavior.
+
+    Note: Ogerpon masks are handled separately by _get_ogerpon_mask_boost_4096()
+    because they boost ALL moves, not just type-matching moves.
     """
     if not item:
         return MOD_NEUTRAL
@@ -1369,11 +1413,7 @@ def _get_type_boost_item_mod_4096(item: str | None, move_type: str) -> int:
         "metal-coat": "Steel",
         "silk-scarf": "Normal",
         "fairy-feather": "Fairy",
-        # Ogerpon masks
-        "hearthflame-mask": "Fire",
-        "wellspring-mask": "Water",
-        "cornerstone-mask": "Rock",
-        "teal-mask": "Grass",
+        # Note: Ogerpon masks are NOT here - they boost ALL moves, handled separately
     }
 
     if item in type_items and type_items[item] == move_type:
