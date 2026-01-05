@@ -367,13 +367,17 @@ def create_speed_outspeed_graph_resource(
 
     # Sort spreads by speed for cleaner display
     sorted_spreads = sorted(target_spreads, key=lambda s: s.get("speed", 0))
+    # Normalize percentages so they add up to 100%
+    raw_total = sum(s.get("usage", 0) for s in sorted_spreads)
     rows_html = ""
     for spread in sorted_spreads[:10]:
         speed = spread.get("speed", 0)
-        usage = spread.get("usage", 0)
+        raw_usage = spread.get("usage", 0)
+        # Normalize to 100% of known spreads
+        normalized_usage = (raw_usage / raw_total * 100) if raw_total > 0 else 0
         outspeed = "faster" if pokemon_speed > speed else ("tie" if pokemon_speed == speed else "slower")
         color = "#2e7d32" if outspeed == "faster" else ("#f57c00" if outspeed == "tie" else "#c62828")
-        usage_str = f"{usage:.1f}%" if usage >= 0.1 else "<0.1%"
+        usage_str = f"{normalized_usage:.1f}%" if normalized_usage >= 0.1 else "<0.1%"
         rows_html += f'<tr><td style="padding: 6px; border-bottom: 1px solid #eee;">{speed}</td><td style="padding: 6px; border-bottom: 1px solid #eee;">{usage_str}</td><td style="padding: 6px; border-bottom: 1px solid #eee; color: {color};">{outspeed}</td></tr>'
 
     # Summary color based on outspeed percent

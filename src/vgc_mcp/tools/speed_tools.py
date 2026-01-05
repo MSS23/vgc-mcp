@@ -210,16 +210,20 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
             ]
             # Sort spreads by speed for cleaner display
             sorted_spreads = sorted(target_spreads, key=lambda s: s["speed"])
+            # Normalize percentages so they add up to 100%
+            raw_total = sum(s["usage"] for s in sorted_spreads)
             for spread in sorted_spreads:
                 speed = spread["speed"]
-                usage = spread["usage"]
+                raw_usage = spread["usage"]
+                # Normalize to 100% of known spreads
+                normalized_usage = (raw_usage / raw_total * 100) if raw_total > 0 else 0
                 if your_speed > speed:
                     result_label = "faster"
                 elif your_speed == speed:
                     result_label = "tie"
                 else:
                     result_label = "slower"
-                summary_lines.append(f"{speed} Spe ({usage:.1f}%) - {result_label}")
+                summary_lines.append(f"{speed} Spe ({normalized_usage:.1f}%) - {result_label}")
 
             return {
                 "pokemon": pokemon_name,
