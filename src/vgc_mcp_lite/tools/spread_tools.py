@@ -518,6 +518,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         outspeed_pokemon_nature: str = "jolly",
         outspeed_pokemon_evs: int = 252,
         outspeed_at_speed_stage: int = 0,
+        outspeed_target_has_booster: bool = False,
+        outspeed_target_has_tailwind: bool = False,
         survive_pokemon: Optional[str] = None,
         survive_move: Optional[str] = None,
         survive_pokemon_nature: str = "adamant",
@@ -557,6 +559,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             outspeed_pokemon_nature: Target's nature (default: jolly)
             outspeed_pokemon_evs: Target's speed EVs (default: 252)
             outspeed_at_speed_stage: Target's speed stage (-1 = after Icy Wind, -2 = after 2x Icy Wind, etc.)
+            outspeed_target_has_booster: True if target has Protosynthesis/Quark Drive speed boost active (1.5x)
+            outspeed_target_has_tailwind: True if target has Tailwind active (2x speed)
             survive_pokemon: Attacker to survive
             survive_move: Move to survive
             survive_pokemon_nature: Attacker's nature (default: adamant)
@@ -596,11 +600,22 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         target_base.speed, 31, outspeed_pokemon_evs, 50, target_speed_mod
                     )
 
-                    # Apply speed stage modifier (e.g., -1 for after Icy Wind)
+                    # Apply Protosynthesis/Quark Drive speed boost if active (1.5x, floored)
                     original_target_speed = target_speed
+                    if outspeed_target_has_booster:
+                        target_speed = int(target_speed * 1.5)
+
+                    # Apply speed stage modifier (e.g., -1 for after Icy Wind)
+                    # Pokemon floors the result: floor(speed * multiplier)
+                    pre_stage_speed = target_speed
                     if outspeed_at_speed_stage != 0:
                         stage_mult = SPEED_STAGE_MULTIPLIERS.get(outspeed_at_speed_stage, 1)
                         target_speed = int(target_speed * stage_mult)
+
+                    # Apply Tailwind (2x speed, floored)
+                    pre_tailwind_speed = target_speed
+                    if outspeed_target_has_tailwind:
+                        target_speed = int(target_speed * 2)
 
                     # Find minimum EVs to outspeed (level 50 breakpoints)
                     my_speed_mod = get_nature_modifier(parsed_nature, "speed")
@@ -619,12 +634,20 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         "my_speed": calculate_stat(my_base.speed, 31, speed_evs_needed, 50, my_speed_mod),
                         "outspeeds": calculate_stat(my_base.speed, 31, speed_evs_needed, 50, my_speed_mod) > target_speed
                     }
-                    # Add speed stage info if applicable
-                    if outspeed_at_speed_stage != 0:
+                    # Add booster, speed stage, and tailwind info if applicable
+                    if outspeed_target_has_booster:
                         speed_benchmark["target_base_speed"] = original_target_speed
+                        speed_benchmark["target_boosted_speed"] = pre_stage_speed
+                        speed_benchmark["booster_note"] = f"Protosynthesis/Quark Drive: {original_target_speed} -> {pre_stage_speed}"
+                    if outspeed_at_speed_stage != 0:
+                        if not outspeed_target_has_booster:
+                            speed_benchmark["target_base_speed"] = original_target_speed
                         speed_benchmark["target_speed_stage"] = outspeed_at_speed_stage
                         stage_name = "after Icy Wind" if outspeed_at_speed_stage == -1 else f"at {outspeed_at_speed_stage:+d} stage"
-                        speed_benchmark["speed_stage_note"] = f"Target at {target_speed} Speed ({stage_name})"
+                        speed_benchmark["speed_stage_note"] = f"Target at {pre_tailwind_speed} Speed ({stage_name})"
+                    if outspeed_target_has_tailwind:
+                        speed_benchmark["target_tailwind_speed"] = target_speed
+                        speed_benchmark["tailwind_note"] = f"With Tailwind: {pre_tailwind_speed} -> {target_speed}"
                     results["benchmarks"]["speed"] = speed_benchmark
                 except Exception as e:
                     results["benchmarks"]["speed"] = {"error": str(e)}
@@ -1019,6 +1042,9 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         outspeed_pokemon: Optional[str] = None,
         outspeed_pokemon_nature: str = "timid",
         outspeed_pokemon_evs: int = 252,
+        outspeed_at_speed_stage: int = 0,
+        outspeed_target_has_booster: bool = False,
+        outspeed_target_has_tailwind: bool = False,
         speed_evs: Optional[int] = None,
         survive_hit1_nature: Optional[str] = None,
         survive_hit1_evs: Optional[int] = None,
@@ -1062,6 +1088,9 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             outspeed_pokemon: Pokemon to outspeed (optional)
             outspeed_pokemon_nature: Target's nature (default "timid")
             outspeed_pokemon_evs: Target's speed EVs (default 252)
+            outspeed_at_speed_stage: Target's speed stage (-1 = after Icy Wind, -2 = after 2x Icy Wind)
+            outspeed_target_has_booster: True if target has Protosynthesis/Quark Drive speed boost (1.5x)
+            outspeed_target_has_tailwind: True if target has Tailwind active (2x speed)
             speed_evs: Override speed EVs directly instead of calculating from outspeed target
             survive_hit1_nature: First attacker's nature (auto-fetched from Smogon if not specified)
             survive_hit1_evs: First attacker's offensive EVs
@@ -1233,6 +1262,20 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     target_speed = calculate_stat(
                         target_base.speed, 31, outspeed_pokemon_evs, 50, target_speed_mod
                     )
+
+                    # Apply Protosynthesis/Quark Drive speed boost if active (1.5x, floored)
+                    if outspeed_target_has_booster:
+                        target_speed = int(target_speed * 1.5)
+
+                    # Apply speed stage modifier (e.g., -1 for after Icy Wind)
+                    # Pokemon floors the result: floor(speed * multiplier)
+                    if outspeed_at_speed_stage != 0:
+                        stage_mult = SPEED_STAGE_MULTIPLIERS.get(outspeed_at_speed_stage, 1)
+                        target_speed = int(target_speed * stage_mult)
+
+                    # Apply Tailwind (2x speed, floored)
+                    if outspeed_target_has_tailwind:
+                        target_speed = int(target_speed * 2)
 
                     my_speed_mod = get_nature_modifier(parsed_nature, "speed")
                     for ev in EV_BREAKPOINTS_LV50:
