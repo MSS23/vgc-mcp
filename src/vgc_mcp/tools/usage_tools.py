@@ -16,7 +16,7 @@ def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
     async def get_usage_stats(
         pokemon_name: str,
         format_name: Optional[str] = None,
-        rating: int = 1760
+        rating: int = 0
     ) -> dict:
         """
         Get Smogon usage statistics for a Pokemon in VGC.
@@ -64,7 +64,7 @@ def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
     async def get_common_sets(
         pokemon_name: str,
         format_name: Optional[str] = None,
-        rating: int = 1760
+        rating: int = 0
     ) -> dict:
         """
         Get the most common competitive sets for a Pokemon.
@@ -72,7 +72,7 @@ def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
         Args:
             pokemon_name: Name of the Pokemon
             format_name: VGC format (auto-detects latest if not specified)
-            rating: Rating cutoff (0=all, 1500, 1630, 1760=top players). Default 1760.
+            rating: Rating cutoff (0=1500+, 1500, 1630, 1760=top players). Default 0.
 
         Returns:
             Top items, abilities, moves, EV spreads, and Tera types with usage rates
@@ -92,7 +92,7 @@ def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
     async def suggest_teammates(
         pokemon_name: str,
         format_name: Optional[str] = None,
-        rating: int = 1760,
+        rating: int = 0,
         limit: int = 10
     ) -> dict:
         """
@@ -101,7 +101,7 @@ def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
         Args:
             pokemon_name: Pokemon to find teammates for
             format_name: VGC format (auto-detects latest if not specified)
-            rating: Rating cutoff (0=all, 1500, 1630, 1760=top players). Default 1760.
+            rating: Rating cutoff (0=1500+, 1500, 1630, 1760=top players). Default 0.
             limit: Number of suggestions to return (default 10)
 
         Returns:
@@ -152,7 +152,7 @@ def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
     @mcp.tool()
     async def get_top_pokemon(
         format_name: Optional[str] = None,
-        rating: int = 1760,
+        rating: int = 0,
         limit: int = 20
     ) -> dict:
         """
@@ -198,7 +198,7 @@ def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
     async def compare_pokemon_month_over_month(
         pokemon_name: str,
         format_name: Optional[str] = None,
-        rating: int = 1760
+        rating: int = 0
     ) -> dict:
         """
         Compare a Pokemon's usage between current and previous month.

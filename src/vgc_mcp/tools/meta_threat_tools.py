@@ -703,19 +703,39 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
         normalized_threat = threat_pokemon.lower().replace(" ", "-")
         has_unseen_fist = normalized_threat in ("urshifu", "urshifu-single-strike", "urshifu-rapid-strike")
 
+        # Build threat spread string for analysis
+        if threat_spread:
+            # Extract relevant EVs based on move category
+            threat_evs_dict = threat_spread.get("evs", {})
+            threat_atk_evs = threat_evs_dict.get("attack", 0) if is_physical else threat_evs_dict.get("special_attack", 0)
+            threat_stat_name = "Atk" if is_physical else "SpA"
+            threat_nature_name = threat_spread.get("nature", "")
+            # Determine nature modifier
+            from vgc_mcp_core.calc.stats import get_nature_modifier
+            try:
+                threat_nature_enum = Nature(threat_nature_name.lower())
+                nature_mod = get_nature_modifier(threat_nature_enum, "attack" if is_physical else "special_attack")
+                nature_indicator = "+" if nature_mod > 1.0 else ("-" if nature_mod < 1.0 else "")
+            except (ValueError, KeyError):
+                nature_indicator = ""
+            threat_spread_str = f"{threat_atk_evs}{nature_indicator} {threat_stat_name} {threat_pokemon}"
+        else:
+            # Fallback when no Smogon data
+            threat_spread_str = f"max invested {threat_pokemon}"
+
         # Build analysis message with HP remaining for clarity
         if survives_guaranteed:
             analysis_msg = (
-                f"Your {pokemon_name} survives all rolls from {threat_pokemon}'s {threat_move}, "
+                f"Your {pokemon_name} survives all rolls from {threat_move} ({threat_spread_str}), "
                 f"left with {hp_remaining_min_pct}-{hp_remaining_max_pct}% HP"
             )
         elif survival_percent == 0:
-            analysis_msg = f"Your {pokemon_name} does NOT survive any rolls from {threat_pokemon}'s {threat_move}"
+            analysis_msg = f"Your {pokemon_name} does NOT survive any rolls from {threat_move} ({threat_spread_str})"
         else:
             threshold_status = "MEETS" if meets_threshold else "does NOT meet"
             analysis_msg = (
                 f"Your {pokemon_name} survives {survival_percent:.1f}% of rolls "
-                f"({survival_count}/16) from {threat_pokemon}'s {threat_move}. "
+                f"({survival_count}/16) from {threat_move} ({threat_spread_str}). "
                 f"When surviving, left with {hp_remaining_min_pct}-{hp_remaining_max_pct}% HP. "
                 f"{threshold_status} {survival_threshold}% threshold."
             )
@@ -993,16 +1013,36 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
         normalized_threat = threat_pokemon.lower().replace(" ", "-")
         has_unseen_fist = normalized_threat in ("urshifu", "urshifu-single-strike", "urshifu-rapid-strike")
 
+        # Build threat spread string for analysis
+        if threat_spread:
+            # Extract relevant EVs based on move category
+            threat_evs_dict = threat_spread.get("evs", {})
+            threat_atk_evs = threat_evs_dict.get("attack", 0) if move_is_physical else threat_evs_dict.get("special_attack", 0)
+            threat_stat_name = "Atk" if move_is_physical else "SpA"
+            threat_nature_name = threat_spread.get("nature", "")
+            # Determine nature modifier
+            from vgc_mcp_core.calc.stats import get_nature_modifier
+            try:
+                threat_nature_enum = Nature(threat_nature_name.lower())
+                nature_mod = get_nature_modifier(threat_nature_enum, "attack" if move_is_physical else "special_attack")
+                nature_indicator = "+" if nature_mod > 1.0 else ("-" if nature_mod < 1.0 else "")
+            except (ValueError, KeyError):
+                nature_indicator = ""
+            threat_spread_str = f"{threat_atk_evs}{nature_indicator} {threat_stat_name} {threat_pokemon}"
+        else:
+            # Fallback when no Smogon data
+            threat_spread_str = f"max invested {threat_pokemon}"
+
         if not best_spread:
             # Build message based on what's achievable
             ruinous_note = f" (with {ruinous_ability_applied})" if ruinous_ability_applied else ""
             if max_achievable_survival > 0:
                 message = (
-                    f"Cannot achieve {survival_threshold}% survival against {threat_pokemon}'s {threat_move}{ruinous_note}. "
+                    f"Cannot achieve {survival_threshold}% survival against {threat_move} ({threat_spread_str}){ruinous_note}. "
                     f"Max achievable is {max_achievable_survival:.1f}% with max bulk investment."
                 )
             else:
-                message = f"Cannot survive {threat_pokemon}'s {threat_move}{ruinous_note} even with max bulk investment"
+                message = f"Cannot survive {threat_move} ({threat_spread_str}){ruinous_note} even with max bulk investment"
 
             result = {
                 "pokemon": pokemon_name,
@@ -1045,7 +1085,7 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                     f"{best_spread['def_evs']} Def / "
                     f"{best_spread['spd_evs']} SpD "
                     f"to survive {best_spread['survival_percent']}% of rolls "
-                    f"({best_spread['survival_rolls']}), "
+                    f"({best_spread['survival_rolls']}) from {threat_move} ({threat_spread_str}), "
                     f"left with {best_spread['hp_remaining_percent']} HP{threshold_note}{ruinous_note}"
                 )
             }

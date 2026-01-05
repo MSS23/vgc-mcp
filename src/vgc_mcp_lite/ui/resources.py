@@ -161,7 +161,7 @@ def create_usage_stats_resource(
     spreads: list[dict[str, Any]],
     tera_types: list[dict[str, Any]] | None = None,
     teammates: list[dict[str, Any]] | None = None,
-    rating: int = 1760,
+    rating: int = 0,
     format_name: str = "VGC",
     month_display: str = "",
 ) -> dict[str, Any]:

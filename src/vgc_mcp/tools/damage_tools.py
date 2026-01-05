@@ -1016,12 +1016,18 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     "summary_table": "\n".join(table_lines)
                 }
 
+            # Build defender spread string
+            is_physical = move.category.value == "physical"
+            relevant_def_evs = defender_def_evs if is_physical else defender_def_evs
+            def_stat_name = "Def" if is_physical else "SpD"
+            defender_spread_str = f"{defender_hp_evs} HP / {relevant_def_evs} {def_stat_name} {defender_name}"
+
             # Build summary table
             table_lines = [
                 "| Metric           | Value                                      |",
                 "|------------------|---------------------------------------------|",
                 f"| Attacker         | {attacker_name}                            |",
-                f"| Defender         | {defender_name}                            |",
+                f"| Defender         | {defender_spread_str}                      |",
                 f"| Move             | {move_name}                                |",
                 f"| Required EVs     | {result['evs_needed']} {result['stat_name']} |",
                 f"| Damage Range     | {result['damage_range']}                   |",
@@ -1031,6 +1037,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             return {
                 "attacker": attacker_name,
                 "defender": defender_name,
+                "defender_spread": defender_spread_str,
                 "move": move_name,
                 "achievable": True,
                 "evs_needed": result["evs_needed"],
@@ -1038,7 +1045,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "ko_chance": f"{result['ko_chance']:.2f}%",
                 "damage_range": result["damage_range"],
                 "summary_table": "\n".join(table_lines),
-                "analysis": f"Need {result['evs_needed']} {result['stat_name']} EVs to {result['ko_chance']:.0f}% OHKO {defender_name} with {move_name}"
+                "analysis": f"Need {result['evs_needed']} {result['stat_name']} EVs to {result['ko_chance']:.0f}% OHKO {defender_spread_str} with {move_name}"
             }
 
         except Exception as e:
@@ -1152,12 +1159,20 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     "summary_table": "\n".join(table_lines)
                 }
 
+            # Build attacker spread string
+            stat_name = "Atk" if is_physical else "SpA"
+            atk_nature_mod = get_nature_modifier(atk_nature, "attack" if is_physical else "special_attack")
+            nature_boost = "+" if atk_nature_mod > 1.0 else ""
+            nature_penalty = "-" if atk_nature_mod < 1.0 else ""
+            nature_indicator = nature_boost or nature_penalty
+            attacker_spread_str = f"{attacker_evs}{nature_indicator} {stat_name} {attacker_name}"
+
             # Build summary table
             total_evs = result["hp_evs"] + result["def_evs"]
             table_lines = [
                 "| Metric           | Value                                      |",
                 "|------------------|---------------------------------------------|",
-                f"| Threat           | {attacker_name}'s {move_name}              |",
+                f"| Threat           | {attacker_spread_str}'s {move_name}        |",
                 f"| Defender         | {defender_name}                            |",
                 f"| HP EVs           | {result['hp_evs']}                         |",
                 f"| {result['def_stat_name']} EVs      | {result['def_evs']}                         |",
@@ -1168,6 +1183,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
 
             return {
                 "attacker": attacker_name,
+                "attacker_spread": attacker_spread_str,
                 "defender": defender_name,
                 "move": move_name,
                 "achievable": True,
@@ -1177,7 +1193,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "survival_chance": f"{result['survival_chance']:.2f}%",
                 "damage_range": result["damage_range"],
                 "summary_table": "\n".join(table_lines),
-                "analysis": f"Need {result['hp_evs']} HP / {result['def_evs']} {result['def_stat_name']} EVs to survive {attacker_name}'s {move_name} — takes {result['damage_range']}"
+                "analysis": f"Need {result['hp_evs']} HP / {result['def_evs']} {result['def_stat_name']} EVs to survive {move_name} from {attacker_spread_str} — takes {result['damage_range']}"
             }
 
         except Exception as e:
@@ -1650,13 +1666,21 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     "summary_table": "\n".join(table_lines)
                 }
 
+            # Build attacker spread string
+            stat_name = "Atk" if is_physical else "SpA"
+            atk_nature_mod = get_nature_modifier(atk_nature, "attack" if is_physical else "special_attack")
+            nature_boost = "+" if atk_nature_mod > 1.0 else ""
+            nature_penalty = "-" if atk_nature_mod < 1.0 else ""
+            nature_indicator = nature_boost or nature_penalty
+            attacker_spread_str = f"{attacker_evs}{nature_indicator} {stat_name} {attacker_name}"
+
             # Build summary table for success case
             hp_remain_pct = round(best_spread["remaining_hp"] / best_spread["defender_hp"] * 100, 1)
             def_stat_name = "Def" if is_physical else "SpD"
             table_lines = [
                 "| Metric           | Value                                      |",
                 "|------------------|---------------------------------------------|",
-                f"| Threat           | {attacker_name}'s {move_name} x{num_hits}  |",
+                f"| Threat           | {attacker_spread_str}'s {move_name} x{num_hits} |",
                 f"| Defender         | {defender_name}                            |",
                 f"| HP EVs           | {best_spread['hp_evs']}                    |",
                 f"| {def_stat_name} EVs          | {best_spread['def_evs']}                    |",
@@ -1669,6 +1693,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
 
             return {
                 "attacker": attacker_name,
+                "attacker_spread": attacker_spread_str,
                 "defender": defender_name,
                 "move": move_name,
                 "num_hits": num_hits,
@@ -1687,7 +1712,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     "hp_remaining": best_spread["remaining_hp"]
                 },
                 "summary_table": "\n".join(table_lines),
-                "analysis": f"Need {best_spread['hp_evs']} HP / {best_spread['def_evs']} {def_stat_name} EVs to survive {num_hits}x {move_name} from {attacker_name}, left at {hp_remain_pct}% HP"
+                "analysis": f"Need {best_spread['hp_evs']} HP / {best_spread['def_evs']} {def_stat_name} EVs to survive {num_hits}x {move_name} from {attacker_spread_str}, left at {hp_remain_pct}% HP"
             }
 
         except Exception as e:
@@ -2046,9 +2071,26 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 f"| **Verdict**      | {verdict}                                  |",
             ]
 
+            # Build attacker spread strings
+            # Attacker 1
+            atk1_stat_name = "Atk" if is_physical1 else "SpA"
+            atk1_evs = attacker1_atk_evs if is_physical1 else attacker1_spa_evs
+            atk1_nature_mod = get_nature_modifier(atk1_nature, "attack" if is_physical1 else "special_attack")
+            atk1_nature_indicator = "+" if atk1_nature_mod > 1.0 else ("-" if atk1_nature_mod < 1.0 else "")
+            atk1_item_str = f" {attacker1_item}" if attacker1_item else ""
+            atk1_spread_str = f"{atk1_evs}{atk1_nature_indicator} {atk1_stat_name}{atk1_item_str} {attacker1_name}"
+
+            # Attacker 2
+            atk2_stat_name = "Atk" if is_physical2 else "SpA"
+            atk2_evs = attacker2_atk_evs if is_physical2 else attacker2_spa_evs
+            atk2_nature_mod = get_nature_modifier(atk2_nature, "attack" if is_physical2 else "special_attack")
+            atk2_nature_indicator = "+" if atk2_nature_mod > 1.0 else ("-" if atk2_nature_mod < 1.0 else "")
+            atk2_item_str = f" {attacker2_item}" if attacker2_item else ""
+            atk2_spread_str = f"{atk2_evs}{atk2_nature_indicator} {atk2_stat_name}{atk2_item_str} {attacker2_name}"
+
             # Build analysis prose
             survival_word = "survives" if survives_min_roll else ("may survive" if survives_max_roll else "does not survive")
-            analysis = f"{defender_name} {survival_word} {attacker1_name}'s {move1_name} + {attacker2_name}'s {move2_name} double-up — takes {combined_min_pct}-{combined_max_pct}% combined damage, left at {hp_remain_min_pct}-{hp_remain_max_pct}% HP ({survival_chance}% survival chance)"
+            analysis = f"{defender_name} {survival_word} {move1_name} from {atk1_spread_str} + {move2_name} from {atk2_spread_str} — takes {combined_min_pct}-{combined_max_pct}% combined damage, left at {hp_remain_min_pct}-{hp_remain_max_pct}% HP ({survival_chance}% survival chance)"
 
             # Determine move priorities for turn order info
             priority_info = []

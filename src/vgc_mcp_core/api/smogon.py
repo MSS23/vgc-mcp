@@ -142,7 +142,7 @@ class SmogonStatsClient:
     async def get_usage_stats(
         self,
         format_name: Optional[str] = None,
-        rating: int = 1760,
+        rating: int = 0,
         month: Optional[str] = None
     ) -> dict:
         """
@@ -196,7 +196,7 @@ class SmogonStatsClient:
         self,
         pokemon_name: str,
         format_name: Optional[str] = None,
-        rating: int = 1760
+        rating: int = 0
     ) -> Optional[dict]:
         """Get usage stats for a specific Pokemon."""
         stats = await self.get_usage_stats(format_name, rating)
@@ -309,7 +309,7 @@ class SmogonStatsClient:
         self,
         pokemon_name: str,
         format_name: Optional[str] = None,
-        rating: int = 1760,
+        rating: int = 0,
         limit: int = 5
     ) -> Optional[dict]:
         """Get the most common competitive sets for a Pokemon."""
@@ -343,7 +343,7 @@ class SmogonStatsClient:
         self,
         pokemon_name: str,
         format_name: Optional[str] = None,
-        rating: int = 1760,
+        rating: int = 0,
         limit: int = 10
     ) -> Optional[dict]:
         """Get suggested teammates based on usage data."""
@@ -416,7 +416,7 @@ class SmogonStatsClient:
         self,
         pokemon_name: str,
         format_name: Optional[str] = None,
-        rating: int = 1760
+        rating: int = 0
     ) -> Optional[dict]:
         """
         Compare a Pokemon's usage between current and previous month.
@@ -550,7 +550,7 @@ class SmogonStatsClient:
         pokemon_name: str,
         base_speed: int,
         format_name: Optional[str] = None,
-        rating: int = 1760
+        rating: int = 0
     ) -> Optional[dict]:
         """
         Get speed distribution from Smogon spreads.

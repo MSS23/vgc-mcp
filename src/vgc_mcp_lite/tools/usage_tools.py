@@ -17,7 +17,7 @@ def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
     async def get_usage_stats(
         pokemon_name: str,
         format_name: Optional[str] = None,
-        rating: int = 1760
+        rating: int = 0
     ) -> dict:
         """
         Get Smogon usage statistics for a Pokemon in VGC.
@@ -165,7 +165,7 @@ def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
     @mcp.tool()
     async def get_top_pokemon(
         format_name: Optional[str] = None,
-        rating: int = 1760,
+        rating: int = 0,
         limit: int = 20
     ) -> dict:
         """
@@ -211,7 +211,7 @@ def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
     async def compare_pokemon_month_over_month(
         pokemon_name: str,
         format_name: Optional[str] = None,
-        rating: int = 1760
+        rating: int = 0
     ) -> dict:
         """
         Compare a Pokemon's usage between current and previous month.
