@@ -1108,14 +1108,34 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         except Exception as e:
             return {"error": str(e)}
 
+    # Natures to try when auto-selecting, prioritizing BULK-BOOSTING natures
+    # Speed EVs are cheap, nature boost is precious - use EVs for speed, nature for bulk
+    NATURE_CANDIDATES = [
+        # Bulk-boosting natures FIRST - use Speed EVs to hit benchmark, nature boosts bulk
+        ("bold", {"speed": 1.0, "attack": 0.9, "defense": 1.1, "special_attack": 1.0, "special_defense": 1.0}),
+        ("calm", {"speed": 1.0, "attack": 0.9, "defense": 1.0, "special_attack": 1.0, "special_defense": 1.1}),
+        ("impish", {"speed": 1.0, "attack": 1.0, "defense": 1.1, "special_attack": 0.9, "special_defense": 1.0}),
+        ("careful", {"speed": 1.0, "attack": 1.0, "defense": 1.0, "special_attack": 0.9, "special_defense": 1.1}),
+        # Neutral
+        ("serious", {"speed": 1.0, "attack": 1.0, "defense": 1.0, "special_attack": 1.0, "special_defense": 1.0}),
+        # +Speed natures LAST RESORT - only if can't outspeed at 252 Spe with bulk nature
+        ("jolly", {"speed": 1.1, "attack": 1.0, "defense": 1.0, "special_attack": 0.9, "special_defense": 1.0}),
+        ("timid", {"speed": 1.1, "attack": 0.9, "defense": 1.0, "special_attack": 1.0, "special_defense": 1.0}),
+        # -Speed natures (0.9x) - need most speed EVs, kept for edge cases
+        ("brave", {"speed": 0.9, "attack": 1.1, "defense": 1.0, "special_attack": 1.0, "special_defense": 1.0}),
+        ("quiet", {"speed": 0.9, "attack": 1.0, "defense": 1.0, "special_attack": 1.1, "special_defense": 1.0}),
+        ("relaxed", {"speed": 0.9, "attack": 1.0, "defense": 1.1, "special_attack": 1.0, "special_defense": 1.0}),
+        ("sassy", {"speed": 0.9, "attack": 1.0, "defense": 1.0, "special_attack": 1.0, "special_defense": 1.1}),
+    ]
+
     @mcp.tool()
     async def optimize_dual_survival_spread(
         pokemon_name: str,
-        nature: str,
         survive_hit1_attacker: str,
         survive_hit1_move: str,
         survive_hit2_attacker: str,
         survive_hit2_move: str,
+        nature: Optional[str] = None,
         outspeed_pokemon: Optional[str] = None,
         outspeed_pokemon_nature: str = "timid",
         outspeed_pokemon_evs: int = 252,
@@ -1141,6 +1161,13 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         """
         Find optimal EV spread to survive TWO DIFFERENT attacks while meeting a speed benchmark.
 
+        PRIORITY ORDER: Speed EVs first (minimum needed), then bulk optimization, nature selected last.
+
+        If nature is not specified, the tool automatically selects the best nature that:
+        1. Requires minimum Speed EVs to outspeed the target
+        2. Can still survive both attacks at 100%
+        3. Leaves maximum EVs for bulk/offense
+
         IMPORTANT - WHEN TO USE THIS TOOL:
         - Use ONLY when the user wants to survive TWO DIFFERENT attacks from TWO DIFFERENT attackers
         - Examples: "survive Wicked Blow AND Sludge Bomb", "live both Moonblast and Sacred Sword"
@@ -1159,7 +1186,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
 
         Args:
             pokemon_name: Your Pokemon (e.g., "ogerpon-wellspring")
-            nature: Your Pokemon's nature (e.g., "jolly")
+            nature: Your Pokemon's nature (optional - auto-selects best if not provided)
             survive_hit1_attacker: First attacker to survive (e.g., "urshifu") - MUST be different from hit2
             survive_hit1_move: First move to survive (e.g., "wicked-blow")
             survive_hit2_attacker: Second attacker to survive (e.g., "landorus-incarnate") - MUST be different from hit1
@@ -1194,10 +1221,15 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             my_base = await pokeapi.get_base_stats(pokemon_name)
             my_types = await pokeapi.get_pokemon_types(pokemon_name)
 
-            try:
-                parsed_nature = Nature(nature.lower())
-            except ValueError:
-                return {"error": f"Invalid nature: {nature}"}
+            # Track if nature was auto-selected
+            nature_auto_selected = nature is None
+
+            # If nature specified, validate it
+            if nature is not None:
+                try:
+                    parsed_nature = Nature(nature.lower())
+                except ValueError:
+                    return {"error": f"Invalid nature: {nature}"}
 
             # Fetch attacker 1 data
             atk1_base = await pokeapi.get_base_stats(survive_hit1_attacker)
@@ -1328,18 +1360,16 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         beads_of_ruin2 = True
                         survive_hit2_ability = "beads-of-ruin"
 
-            # Calculate speed EVs needed
-            speed_evs_needed = 0
+            # Calculate target speed first (independent of our nature)
             target_speed = 0
-            my_speed_stat = 0
-
             if speed_evs is not None:
-                speed_evs_needed = speed_evs
+                # User specified exact speed EVs
+                pass
             elif outspeed_pokemon:
                 try:
                     target_base = await pokeapi.get_base_stats(outspeed_pokemon)
-                    target_nature = Nature(outspeed_pokemon_nature.lower())
-                    target_speed_mod = get_nature_modifier(target_nature, "speed")
+                    target_nature_parsed = Nature(outspeed_pokemon_nature.lower())
+                    target_speed_mod = get_nature_modifier(target_nature_parsed, "speed")
                     target_speed = calculate_stat(
                         target_base.speed, 31, outspeed_pokemon_evs, 50, target_speed_mod
                     )
@@ -1349,7 +1379,6 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         target_speed = int(target_speed * 1.5)
 
                     # Apply speed stage modifier (e.g., -1 for after Icy Wind)
-                    # Pokemon floors the result: floor(speed * multiplier)
                     if outspeed_at_speed_stage != 0:
                         stage_mult = SPEED_STAGE_MULTIPLIERS.get(outspeed_at_speed_stage, 1)
                         target_speed = int(target_speed * stage_mult)
@@ -1357,29 +1386,41 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     # Apply Tailwind (2x speed, floored)
                     if outspeed_target_has_tailwind:
                         target_speed = int(target_speed * 2)
-
-                    my_speed_mod = get_nature_modifier(parsed_nature, "speed")
-                    for ev in EV_BREAKPOINTS_LV50:
-                        my_speed = calculate_stat(my_base.speed, 31, ev, 50, my_speed_mod)
-                        my_effective_speed = my_speed
-                        # Apply MY Booster Energy (Protosynthesis/Quark Drive) - 1.5x, floored
-                        if my_pokemon_has_booster:
-                            my_effective_speed = int(my_effective_speed * 1.5)
-                        # Apply MY Tailwind - 2x, floored
-                        if my_pokemon_has_tailwind:
-                            my_effective_speed = int(my_effective_speed * 2)
-                        if my_effective_speed > target_speed:
-                            speed_evs_needed = ev
-                            my_speed_stat = my_speed
-                            break
-                    else:
-                        speed_evs_needed = 252
-                        my_speed_stat = calculate_stat(my_base.speed, 31, 252, 50, my_speed_mod)
                 except Exception:
                     pass
 
-            # Calculate remaining EVs for bulk
-            remaining_evs = 508 - speed_evs_needed
+            def calc_min_speed_evs(base_speed: int, my_speed_mod: float) -> tuple[int, int]:
+                """Calculate minimum speed EVs needed to outspeed target. Returns (evs, final_speed)."""
+                if speed_evs is not None:
+                    my_speed = calculate_stat(base_speed, 31, speed_evs, 50, my_speed_mod)
+                    return speed_evs, my_speed
+                if target_speed == 0:
+                    return 0, calculate_stat(base_speed, 31, 0, 50, my_speed_mod)
+
+                for ev in EV_BREAKPOINTS_LV50:
+                    my_speed = calculate_stat(base_speed, 31, ev, 50, my_speed_mod)
+                    my_effective_speed = my_speed
+                    if my_pokemon_has_booster:
+                        my_effective_speed = int(my_effective_speed * 1.5)
+                    if my_pokemon_has_tailwind:
+                        my_effective_speed = int(my_effective_speed * 2)
+                    if my_effective_speed > target_speed:
+                        return ev, my_speed
+                # Can't outspeed even at max
+                return 252, calculate_stat(base_speed, 31, 252, 50, my_speed_mod)
+
+            # Determine natures to try
+            if nature_auto_selected:
+                natures_to_try = NATURE_CANDIDATES
+            else:
+                # User specified nature - only try that one
+                natures_to_try = [(nature.lower(), {
+                    "speed": get_nature_modifier(parsed_nature, "speed"),
+                    "defense": get_nature_modifier(parsed_nature, "defense"),
+                    "special_defense": get_nature_modifier(parsed_nature, "special_defense"),
+                    "attack": get_nature_modifier(parsed_nature, "attack"),
+                    "special_attack": get_nature_modifier(parsed_nature, "special_attack"),
+                })]
 
             # Parse attacker natures
             atk1_nature = Nature(survive_hit1_nature.lower())
@@ -1414,155 +1455,212 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 tera_type=survive_hit2_tera_type
             )
 
-            # Search for MINIMUM EVs spread
-            # Use coarse grid (0, 52, 100, 148, 196, 252) for speed, then refine
-            best_spread = None
-            best_results = None
-
-            def_nature_mod = get_nature_modifier(parsed_nature, "defense")
-            spd_nature_mod = get_nature_modifier(parsed_nature, "special_defense")
-
-            # Coarse EV steps: 0, 52, 100, 148, 196, 252 = 6 values per stat = 216 combos max
-            COARSE_EVS = [0, 52, 100, 148, 196, 252]
-
-            def test_spread(hp_ev: int, def_ev: int, spd_ev: int) -> tuple:
-                """Test a specific spread. Returns (survives_both, margin, result1, result2, pcts)."""
-                defender = PokemonBuild(
-                    name=pokemon_name, base_stats=my_base, types=my_types,
-                    nature=parsed_nature,
-                    evs=EVSpread(hp=hp_ev, defense=def_ev, special_defense=spd_ev),
-                    tera_type=defender_tera_type
-                )
-                modifiers1 = DamageModifiers(
-                    is_doubles=True, attacker_item=survive_hit1_item,
-                    attacker_ability=survive_hit1_ability, tera_type=survive_hit1_tera_type,
-                    tera_active=survive_hit1_tera_type is not None,
-                    defender_tera_type=defender_tera_type,
-                    defender_tera_active=defender_tera_type is not None,
-                    is_critical=move1.always_crit,
-                    sword_of_ruin=sword_of_ruin1,
-                    beads_of_ruin=beads_of_ruin1
-                )
-                result1 = calculate_damage(attacker1, defender, move1, modifiers1)
-                modifiers2 = DamageModifiers(
-                    is_doubles=True, attacker_item=survive_hit2_item,
-                    attacker_ability=survive_hit2_ability, tera_type=survive_hit2_tera_type,
-                    tera_active=survive_hit2_tera_type is not None,
-                    defender_tera_type=defender_tera_type,
-                    defender_tera_active=defender_tera_type is not None,
-                    is_critical=move2.always_crit,
-                    sword_of_ruin=sword_of_ruin2,
-                    beads_of_ruin=beads_of_ruin2
-                )
-                result2 = calculate_damage(attacker2, defender, move2, modifiers2)
-                survive_rolls1 = sum(1 for r in result1.rolls if r < result1.defender_hp)
-                survive_rolls2 = sum(1 for r in result2.rolls if r < result2.defender_hp)
-                survival_pct1 = (survive_rolls1 / 16) * 100
-                survival_pct2 = (survive_rolls2 / 16) * 100
-                survives1 = survival_pct1 >= target_survival
-                survives2 = survival_pct2 >= target_survival
-                margin = min(100 - result1.max_percent, 100 - result2.max_percent)
-                return (survives1 and survives2, margin, result1, result2, survival_pct1, survival_pct2, survives1, survives2)
-
             # Determine attack categories for HP-first optimization
-            # is_physical1 and is_physical2 tell us whether to optimize Def or SpD
             both_physical = is_physical1 and is_physical2
             both_special = (not is_physical1) and (not is_physical2)
             is_mixed = not both_physical and not both_special
 
-            def find_min_stat_to_survive(hp_ev: int, stat_ev_idx: int, attack_idx: int) -> int:
-                """Find minimum Def or SpD EVs to survive a specific attack at given HP."""
-                # stat_ev_idx: 0=defense, 1=special_defense
-                max_ev = min(252, remaining_evs - hp_ev)
+            # Coarse EV steps for fallback search
+            COARSE_EVS = [0, 52, 100, 148, 196, 252]
 
-                for test_ev in EV_BREAKPOINTS_LV50:
-                    if test_ev > max_ev:
+            # Track best result across all natures
+            overall_best = None  # (nature_name, speed_evs, spread, results, mods)
+
+            for nature_name, nature_mods in natures_to_try:
+                # Calculate speed EVs needed for this nature
+                speed_mod = nature_mods["speed"]
+                speed_evs_needed, my_speed_stat = calc_min_speed_evs(my_base.speed, speed_mod)
+
+                # Check if we can even outspeed (if required)
+                if target_speed > 0:
+                    test_speed = calculate_stat(my_base.speed, 31, speed_evs_needed, 50, speed_mod)
+                    effective_speed = test_speed
+                    if my_pokemon_has_booster:
+                        effective_speed = int(effective_speed * 1.5)
+                    if my_pokemon_has_tailwind:
+                        effective_speed = int(effective_speed * 2)
+                    if effective_speed <= target_speed:
+                        continue  # This nature can't outspeed, skip
+
+                remaining_evs = 508 - speed_evs_needed
+                def_nature_mod = nature_mods["defense"]
+                spd_nature_mod = nature_mods["special_defense"]
+
+                # Create a nature enum for this iteration
+                try:
+                    current_nature = Nature(nature_name)
+                except ValueError:
+                    current_nature = Nature.SERIOUS
+
+                def test_spread(hp_ev: int, def_ev: int, spd_ev: int) -> tuple:
+                    """Test a specific spread. Returns (survives_both, margin, result1, result2, pcts)."""
+                    defender = PokemonBuild(
+                        name=pokemon_name, base_stats=my_base, types=my_types,
+                        nature=current_nature,
+                        evs=EVSpread(hp=hp_ev, defense=def_ev, special_defense=spd_ev),
+                        tera_type=defender_tera_type
+                    )
+                    modifiers1 = DamageModifiers(
+                        is_doubles=True, attacker_item=survive_hit1_item,
+                        attacker_ability=survive_hit1_ability, tera_type=survive_hit1_tera_type,
+                        tera_active=survive_hit1_tera_type is not None,
+                        defender_tera_type=defender_tera_type,
+                        defender_tera_active=defender_tera_type is not None,
+                        is_critical=move1.always_crit,
+                        sword_of_ruin=sword_of_ruin1,
+                        beads_of_ruin=beads_of_ruin1
+                    )
+                    result1 = calculate_damage(attacker1, defender, move1, modifiers1)
+                    modifiers2 = DamageModifiers(
+                        is_doubles=True, attacker_item=survive_hit2_item,
+                        attacker_ability=survive_hit2_ability, tera_type=survive_hit2_tera_type,
+                        tera_active=survive_hit2_tera_type is not None,
+                        defender_tera_type=defender_tera_type,
+                        defender_tera_active=defender_tera_type is not None,
+                        is_critical=move2.always_crit,
+                        sword_of_ruin=sword_of_ruin2,
+                        beads_of_ruin=beads_of_ruin2
+                    )
+                    result2 = calculate_damage(attacker2, defender, move2, modifiers2)
+                    survive_rolls1 = sum(1 for r in result1.rolls if r < result1.defender_hp)
+                    survive_rolls2 = sum(1 for r in result2.rolls if r < result2.defender_hp)
+                    survival_pct1 = (survive_rolls1 / 16) * 100
+                    survival_pct2 = (survive_rolls2 / 16) * 100
+                    survives1 = survival_pct1 >= target_survival
+                    survives2 = survival_pct2 >= target_survival
+                    margin = min(100 - result1.max_percent, 100 - result2.max_percent)
+                    return (survives1 and survives2, margin, result1, result2, survival_pct1, survival_pct2, survives1, survives2)
+
+                def find_min_stat_to_survive(hp_ev: int, stat_ev_idx: int, attack_idx: int) -> int:
+                    """Find minimum Def or SpD EVs to survive a specific attack at given HP."""
+                    max_ev = min(252, remaining_evs - hp_ev)
+                    for test_ev in EV_BREAKPOINTS_LV50:
+                        if test_ev > max_ev:
+                            break
+                        def_ev = test_ev if stat_ev_idx == 0 else 0
+                        spd_ev = test_ev if stat_ev_idx == 1 else 0
+                        survives, margin, r1, r2, pct1, pct2, s1, s2 = test_spread(hp_ev, def_ev, spd_ev)
+                        target_survives = s1 if attack_idx == 1 else s2
+                        if target_survives:
+                            return test_ev
+                    return -1
+
+                # HP-first search for this nature
+                best_spread = None
+                best_results = None
+                best_total = float('inf')
+
+                for hp_ev in EV_BREAKPOINTS_LV50:
+                    if hp_ev > min(252, remaining_evs):
                         break
 
-                    def_ev = test_ev if stat_ev_idx == 0 else 0
-                    spd_ev = test_ev if stat_ev_idx == 1 else 0
-
-                    survives, margin, r1, r2, pct1, pct2, s1, s2 = test_spread(hp_ev, def_ev, spd_ev)
-                    target_survives = s1 if attack_idx == 1 else s2
-
-                    if target_survives:
-                        return test_ev
-
-                return -1  # Can't survive even at max EVs
-
-            # HP-first search: For each HP value, find minimum Def+SpD needed
-            best_total = float('inf')
-            best_hp, best_def, best_spd = 0, 0, 0
-            best_results_data = None
-
-            for hp_ev in EV_BREAKPOINTS_LV50:
-                if hp_ev > min(252, remaining_evs):
-                    break
-
-                if is_mixed:
-                    # Mixed attacks: need both Def and SpD
-                    # Find minimum Def for physical attack, minimum SpD for special attack
-                    phys_attack_idx = 1 if is_physical1 else 2
-                    spec_attack_idx = 2 if is_physical1 else 1
-
-                    min_def = find_min_stat_to_survive(hp_ev, 0, phys_attack_idx)
-                    min_spd = find_min_stat_to_survive(hp_ev, 1, spec_attack_idx)
-
-                    if min_def < 0 or min_spd < 0:
-                        continue  # Can't survive at this HP
-
-                    if hp_ev + min_def + min_spd > remaining_evs:
-                        continue  # Not enough EVs
-
-                    # Verify the combined spread actually works
-                    survives, margin, r1, r2, pct1, pct2, s1, s2 = test_spread(hp_ev, min_def, min_spd)
-                    if survives:
-                        total = hp_ev + min_def + min_spd
-                        if total < best_total:
-                            best_total = total
-                            best_hp, best_def, best_spd = hp_ev, min_def, min_spd
-                            best_results_data = (r1, r2, pct1, pct2, s1, s2)
-
-                elif both_physical:
-                    # Both physical: only need HP + Def
-                    for def_ev in EV_BREAKPOINTS_LV50:
-                        if hp_ev + def_ev > remaining_evs:
-                            break
-                        survives, margin, r1, r2, pct1, pct2, s1, s2 = test_spread(hp_ev, def_ev, 0)
+                    if is_mixed:
+                        phys_attack_idx = 1 if is_physical1 else 2
+                        spec_attack_idx = 2 if is_physical1 else 1
+                        min_def = find_min_stat_to_survive(hp_ev, 0, phys_attack_idx)
+                        min_spd = find_min_stat_to_survive(hp_ev, 1, spec_attack_idx)
+                        if min_def < 0 or min_spd < 0:
+                            continue
+                        if hp_ev + min_def + min_spd > remaining_evs:
+                            continue
+                        survives, margin, r1, r2, pct1, pct2, s1, s2 = test_spread(hp_ev, min_def, min_spd)
                         if survives:
-                            total = hp_ev + def_ev
+                            total = hp_ev + min_def + min_spd
                             if total < best_total:
                                 best_total = total
-                                best_hp, best_def, best_spd = hp_ev, def_ev, 0
-                                best_results_data = (r1, r2, pct1, pct2, s1, s2)
-                            break  # Found minimum Def for this HP, move to next HP
+                                best_spread = {"hp": hp_ev, "def": min_def, "spd": min_spd}
+                                best_results = {"result1": r1, "result2": r2, "survival_pct1": pct1, "survival_pct2": pct2, "survives1": s1, "survives2": s2}
 
-                else:  # both_special
-                    # Both special: only need HP + SpD
-                    for spd_ev in EV_BREAKPOINTS_LV50:
-                        if hp_ev + spd_ev > remaining_evs:
-                            break
-                        survives, margin, r1, r2, pct1, pct2, s1, s2 = test_spread(hp_ev, 0, spd_ev)
-                        if survives:
-                            total = hp_ev + spd_ev
-                            if total < best_total:
-                                best_total = total
-                                best_hp, best_def, best_spd = hp_ev, 0, spd_ev
-                                best_results_data = (r1, r2, pct1, pct2, s1, s2)
-                            break  # Found minimum SpD for this HP, move to next HP
+                    elif both_physical:
+                        for def_ev in EV_BREAKPOINTS_LV50:
+                            if hp_ev + def_ev > remaining_evs:
+                                break
+                            survives, margin, r1, r2, pct1, pct2, s1, s2 = test_spread(hp_ev, def_ev, 0)
+                            if survives:
+                                total = hp_ev + def_ev
+                                if total < best_total:
+                                    best_total = total
+                                    best_spread = {"hp": hp_ev, "def": def_ev, "spd": 0}
+                                    best_results = {"result1": r1, "result2": r2, "survival_pct1": pct1, "survival_pct2": pct2, "survives1": s1, "survives2": s2}
+                                break
 
-            if best_results_data:
-                r1, r2, pct1, pct2, s1, s2 = best_results_data
-                best_spread = {"hp": best_hp, "def": best_def, "spd": best_spd}
-                best_results = {
-                    "result1": r1, "result2": r2,
-                    "survival_pct1": pct1, "survival_pct2": pct2,
-                    "survives1": s1, "survives2": s2
-                }
+                    else:  # both_special
+                        for spd_ev in EV_BREAKPOINTS_LV50:
+                            if hp_ev + spd_ev > remaining_evs:
+                                break
+                            survives, margin, r1, r2, pct1, pct2, s1, s2 = test_spread(hp_ev, 0, spd_ev)
+                            if survives:
+                                total = hp_ev + spd_ev
+                                if total < best_total:
+                                    best_total = total
+                                    best_spread = {"hp": hp_ev, "def": 0, "spd": spd_ev}
+                                    best_results = {"result1": r1, "result2": r2, "survival_pct1": pct1, "survival_pct2": pct2, "survives1": s1, "survives2": s2}
+                                break
 
-            # If no valid spread, find best effort at max EVs
-            if best_spread is None:
+                # If this nature found a valid spread, check if it's better than previous
+                if best_spread and best_results and best_results["survives1"] and best_results["survives2"]:
+                    total_evs = speed_evs_needed + best_spread["hp"] + best_spread["def"] + best_spread["spd"]
+                    if overall_best is None or speed_evs_needed < overall_best[1] or (speed_evs_needed == overall_best[1] and total_evs < overall_best[5]):
+                        overall_best = (nature_name, speed_evs_needed, best_spread, best_results, nature_mods, total_evs, my_speed_stat)
+                        # Early exit: NATURE_CANDIDATES is ordered with bulk natures first
+                        # So the first valid nature we find uses nature boost for bulk, not speed
+                        break
+
+            # If no nature found a valid spread, try best effort with first nature
+            if overall_best is None:
+                # Use first nature for best effort
+                nature_name, nature_mods = natures_to_try[0]
+                speed_mod = nature_mods["speed"]
+                speed_evs_needed, my_speed_stat = calc_min_speed_evs(my_base.speed, speed_mod)
+                remaining_evs = 508 - speed_evs_needed
+                def_nature_mod = nature_mods["defense"]
+                spd_nature_mod = nature_mods["special_defense"]
+                try:
+                    current_nature = Nature(nature_name)
+                except ValueError:
+                    current_nature = Nature.SERIOUS
+
+                def test_spread_fallback(hp_ev: int, def_ev: int, spd_ev: int) -> tuple:
+                    defender = PokemonBuild(
+                        name=pokemon_name, base_stats=my_base, types=my_types,
+                        nature=current_nature,
+                        evs=EVSpread(hp=hp_ev, defense=def_ev, special_defense=spd_ev),
+                        tera_type=defender_tera_type
+                    )
+                    modifiers1 = DamageModifiers(
+                        is_doubles=True, attacker_item=survive_hit1_item,
+                        attacker_ability=survive_hit1_ability, tera_type=survive_hit1_tera_type,
+                        tera_active=survive_hit1_tera_type is not None,
+                        defender_tera_type=defender_tera_type,
+                        defender_tera_active=defender_tera_type is not None,
+                        is_critical=move1.always_crit,
+                        sword_of_ruin=sword_of_ruin1,
+                        beads_of_ruin=beads_of_ruin1
+                    )
+                    result1 = calculate_damage(attacker1, defender, move1, modifiers1)
+                    modifiers2 = DamageModifiers(
+                        is_doubles=True, attacker_item=survive_hit2_item,
+                        attacker_ability=survive_hit2_ability, tera_type=survive_hit2_tera_type,
+                        tera_active=survive_hit2_tera_type is not None,
+                        defender_tera_type=defender_tera_type,
+                        defender_tera_active=defender_tera_type is not None,
+                        is_critical=move2.always_crit,
+                        sword_of_ruin=sword_of_ruin2,
+                        beads_of_ruin=beads_of_ruin2
+                    )
+                    result2 = calculate_damage(attacker2, defender, move2, modifiers2)
+                    survive_rolls1 = sum(1 for r in result1.rolls if r < result1.defender_hp)
+                    survive_rolls2 = sum(1 for r in result2.rolls if r < result2.defender_hp)
+                    survival_pct1 = (survive_rolls1 / 16) * 100
+                    survival_pct2 = (survive_rolls2 / 16) * 100
+                    survives1 = survival_pct1 >= target_survival
+                    survives2 = survival_pct2 >= target_survival
+                    margin = min(100 - result1.max_percent, 100 - result2.max_percent)
+                    return (survives1 and survives2, margin, result1, result2, survival_pct1, survival_pct2, survives1, survives2)
+
                 best_margin = -float('inf')
+                best_spread = None
+                best_results = None
                 for hp_ev in COARSE_EVS:
                     if hp_ev > min(252, remaining_evs):
                         break
@@ -1571,29 +1669,33 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                             break
                         spd_ev = min(252, remaining_evs - hp_ev - def_ev)
                         spd_ev = normalize_evs(spd_ev)
-                        survives, margin, r1, r2, pct1, pct2, s1, s2 = test_spread(hp_ev, def_ev, spd_ev)
+                        survives, margin, r1, r2, pct1, pct2, s1, s2 = test_spread_fallback(hp_ev, def_ev, spd_ev)
                         if margin > best_margin:
                             best_margin = margin
                             best_spread = {"hp": hp_ev, "def": def_ev, "spd": spd_ev}
-                            best_results = {
-                                "result1": r1, "result2": r2,
-                                "survival_pct1": pct1, "survival_pct2": pct2,
-                                "survives1": s1, "survives2": s2
-                            }
+                            best_results = {"result1": r1, "result2": r2, "survival_pct1": pct1, "survival_pct2": pct2, "survives1": s1, "survives2": s2}
 
-            if best_spread is None:
-                return {
-                    "verdict": "IMPOSSIBLE",
-                    "error": "No valid EV spread found - try reducing speed requirement or changing nature",
-                    "speed_evs_needed": speed_evs_needed,
-                    "remaining_for_bulk": remaining_evs
-                }
+                if best_spread is None:
+                    return {
+                        "verdict": "IMPOSSIBLE",
+                        "error": "No valid EV spread found - benchmarks may be impossible",
+                        "speed_evs_needed": speed_evs_needed,
+                        "remaining_for_bulk": remaining_evs
+                    }
+
+                overall_best = (nature_name, speed_evs_needed, best_spread, best_results, nature_mods, 508, my_speed_stat)
+
+            # Unpack the best result
+            chosen_nature, speed_evs_needed, best_spread, best_results, nature_mods, total_evs, my_speed_stat = overall_best
+            def_nature_mod = nature_mods["defense"]
+            spd_nature_mod = nature_mods["special_defense"]
+            speed_nature_mod = nature_mods["speed"]
 
             # Calculate final stats
             final_hp = calculate_hp(my_base.hp, 31, best_spread["hp"], 50)
             final_def = calculate_stat(my_base.defense, 31, best_spread["def"], 50, def_nature_mod)
             final_spd = calculate_stat(my_base.special_defense, 31, best_spread["spd"], 50, spd_nature_mod)
-            final_spe = calculate_stat(my_base.speed, 31, speed_evs_needed, 50, get_nature_modifier(parsed_nature, "speed"))
+            final_spe = calculate_stat(my_base.speed, 31, speed_evs_needed, 50, speed_nature_mod)
 
             r1 = best_results["result1"]
             r2 = best_results["result2"]
@@ -1622,9 +1724,17 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 atk2_spread_str += f" {survive_hit2_item.replace('-', ' ').title()}"
             atk2_spread_str += f" {survive_hit2_attacker}"
 
+            # Build nature reason
+            if nature_auto_selected:
+                nature_reason = f"Auto-selected: {speed_evs_needed} Spe EVs needed to outspeed target"
+            else:
+                nature_reason = "User specified"
+
             return {
                 "pokemon": pokemon_name,
-                "nature": nature,
+                "nature": chosen_nature,
+                "nature_auto_selected": nature_auto_selected,
+                "nature_reason": nature_reason,
                 "verdict": verdict,
                 "spread": {
                     "hp_evs": best_spread["hp"],
@@ -1677,11 +1787,11 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     }
                 ],
                 "summary": (
-                    f"{pokemon_name.title()} @ {nature.title()}: "
+                    f"{pokemon_name.title()} @ {chosen_nature.title()}: "
                     f"{best_spread['hp']} HP / {best_spread['def']} Def / {best_spread['spd']} SpD / {speed_evs_needed} Spe"
                 ),
                 "analysis": (
-                    f"With {nature.title()} {best_spread['hp']} HP / {best_spread['def']} Def / {best_spread['spd']} SpD / {speed_evs_needed} Spe, "
+                    f"With {chosen_nature.title()} {best_spread['hp']} HP / {best_spread['def']} Def / {best_spread['spd']} SpD / {speed_evs_needed} Spe, "
                     f"{pokemon_name.title()} takes {r1.min_percent:.2f}-{r1.max_percent:.2f}% from {survive_hit1_move} "
                     f"({best_results['survival_pct1']:.2f}% survival) and "
                     f"{r2.min_percent:.2f}-{r2.max_percent:.2f}% from {survive_hit2_move} "
