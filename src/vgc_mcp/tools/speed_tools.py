@@ -87,7 +87,7 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
         target_pokemon: str,
         nature: str = "serious",
         speed_evs: int = 0,
-        speed_stat: int | None = None
+        speed_stat: Optional[int] = None
     ) -> dict:
         """
         Analyze what percentage of a target Pokemon's common spreads you outspeed.
