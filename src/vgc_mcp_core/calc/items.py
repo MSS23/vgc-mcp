@@ -75,6 +75,7 @@ def get_fixed_tera_type(pokemon_name: str) -> str | None:
 
 SIGNATURE_ITEMS: dict[str, str] = {
     # Ogerpon masks (required for form)
+    "ogerpon": "teal-mask",  # Base form defaults to Teal Mask (no boost)
     "ogerpon-hearthflame": "hearthflame-mask",
     "ogerpon-hearthflame-mask": "hearthflame-mask",
     "ogerpon-wellspring": "wellspring-mask",

@@ -301,6 +301,20 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             # Pass attacker_name for form-dependent move types (e.g., Ivy Cudgel)
             move = await pokeapi.get_move(move_name, user_name=attacker_name)
 
+            # Auto-detect Ogerpon mask from Ivy Cudgel type
+            # If user passes "ogerpon" with Fire-type Ivy Cudgel, assign Hearthflame Mask
+            normalized_attacker = attacker_name.lower().replace(" ", "-")
+            if normalized_attacker.startswith("ogerpon") and move.name.lower().replace(" ", "-") == "ivy-cudgel":
+                mask_from_type = {
+                    "Fire": "hearthflame-mask",
+                    "Water": "wellspring-mask",
+                    "Rock": "cornerstone-mask",
+                    "Grass": "teal-mask",
+                }
+                inferred_mask = mask_from_type.get(move.type)
+                if inferred_mask and attacker_item is None:
+                    attacker_item = inferred_mask
+
             # Track what spreads we used for the response
             attacker_spread_source = "custom"
             defender_spread_source = "custom"
