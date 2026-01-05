@@ -917,8 +917,8 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
 
             # Build compact summary with full breakdown
             summary_lines = [
-                f"At {your_speed} Speed ({nature} nature, {speed_evs} EVs):",
-                f"Outspeed: {round(outspeed_percent, 1)}% | Tie: {round(tie_percent, 1)}% | Outsped by: {outsped_by_percent}%",
+                f"At {your_speed} Speed ({nature}, {speed_evs} EVs):",
+                f"You outspeed: {round(outspeed_percent, 1)}% | Tie: {round(tie_percent, 1)}% | They outspeed you: {outsped_by_percent}%",
                 "",
                 "Speed Tier Breakdown:",
             ]
@@ -950,7 +950,7 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
                 "result": result_text,
                 "data_source": data_source,
                 "summary_table": "\n".join(summary_lines),
-                "analysis": f"{pokemon_name} at {your_speed} Speed: >{round(outspeed_percent, 1)}% | ={round(tie_percent, 1)}% | <{outsped_by_percent}%"
+                "analysis": f"{pokemon_name} at {your_speed} Speed: You outspeed {round(outspeed_percent, 1)}% | Tie {round(tie_percent, 1)}% | They outspeed you {outsped_by_percent}%"
             }
 
             # Add MCP-UI outspeed graph

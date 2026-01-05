@@ -383,7 +383,7 @@ def create_speed_outspeed_graph_resource(
     <div style="font-family: system-ui, sans-serif; max-width: 500px;">
         <h3 style="margin: 0 0 8px 0; color: #333;">{pokemon_name} ({pokemon_speed} Speed) vs {target_pokemon}</h3>
         <p style="margin: 0 0 4px 0; font-size: 14px; color: {summary_color}; font-weight: bold;">
-            Outspeed: {outspeed_percent:.1f}% | Tie: {tie_percent:.1f}% | Outsped by: {outsped_by_percent:.1f}%
+            You outspeed: {outspeed_percent:.1f}% | Tie: {tie_percent:.1f}% | They outspeed you: {outsped_by_percent:.1f}%
         </p>
         <table style="width: 100%; border-collapse: collapse; margin-top: 12px;">
             <thead>
