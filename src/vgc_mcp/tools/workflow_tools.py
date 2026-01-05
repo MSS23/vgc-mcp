@@ -2343,8 +2343,8 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                         benchmarks_hit.append(f"Hits {actual_speed} Speed (target: {target_speed})")
                         break
                 else:
-                    # Can't reach target, try with +Speed nature
-                    for nature_try in ["jolly", "timid"]:
+                    # Can't reach target, try bulk-first natures (prefer bulk boost over speed boost)
+                    for nature_try in ["bold", "calm", "impish", "careful", "serious", "jolly", "timid"]:
                         try:
                             test_nature = Nature(nature_try)
                             test_mod = get_nature_modifier(test_nature, "speed")
@@ -2382,8 +2382,8 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                                 benchmarks_hit.append(f"Outspeeds {outspeed_pokemon} ({my_speed} vs {target_speed_stat})")
                                 break
                         else:
-                            # Try +Speed nature
-                            for nature_try in ["jolly", "timid"]:
+                            # Try bulk-first natures (prefer bulk boost over speed boost)
+                            for nature_try in ["bold", "calm", "impish", "careful", "serious", "jolly", "timid"]:
                                 try:
                                     test_nature = Nature(nature_try)
                                     test_mod = get_nature_modifier(test_nature, "speed")
