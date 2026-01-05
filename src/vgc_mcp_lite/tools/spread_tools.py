@@ -1580,6 +1580,11 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 atk2_spread_str += f" {survive_hit2_item.replace('-', ' ').title()}"
             atk2_spread_str += f" {survive_hit2_attacker}"
 
+            # Calculate offensive EVs (normalized to valid breakpoints)
+            raw_offensive = 508 - speed_evs_needed - best_spread["hp"] - best_spread["def"] - best_spread["spd"]
+            offensive_evs = normalize_evs(raw_offensive)
+            wasted_evs = raw_offensive - offensive_evs  # EVs that don't hit a breakpoint
+
             return {
                 "pokemon": pokemon_name,
                 "nature": nature,
@@ -1589,8 +1594,9 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     "def_evs": best_spread["def"],
                     "spd_evs": best_spread["spd"],
                     "spe_evs": speed_evs_needed,
-                    "total": best_spread["hp"] + best_spread["def"] + best_spread["spd"] + speed_evs_needed,
-                    "offensive_evs_available": normalize_evs(508 - speed_evs_needed - best_spread["hp"] - best_spread["def"] - best_spread["spd"])
+                    "spa_evs": offensive_evs,  # Leftover EVs for offense (normalized)
+                    "total": best_spread["hp"] + best_spread["def"] + best_spread["spd"] + speed_evs_needed + offensive_evs,
+                    "wasted_evs": wasted_evs  # EVs that don't hit a stat point (e.g., 16 -> 12 wastes 4)
                 },
                 "final_stats": {
                     "hp": final_hp,
@@ -1628,7 +1634,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 ],
                 "summary": (
                     f"{pokemon_name.title()} @ {nature.title()}: "
-                    f"{best_spread['hp']} HP / {best_spread['def']} Def / {best_spread['spd']} SpD / {speed_evs_needed} Spe"
+                    f"{best_spread['hp']} HP / {best_spread['def']} Def / {offensive_evs} SpA / {best_spread['spd']} SpD / {speed_evs_needed} Spe"
+                    + (f" ({wasted_evs} EVs unused)" if wasted_evs > 0 else "")
                 ),
                 "analysis": (
                     f"With {nature.title()} {best_spread['hp']} HP / {best_spread['def']} Def / {best_spread['spd']} SpD / {speed_evs_needed} Spe, "
