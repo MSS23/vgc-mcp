@@ -190,8 +190,24 @@ def main_http(host: str = "0.0.0.0", port: int = None):
             "tools": tool_count
         })
 
+    async def root(request):
+        """Root endpoint with server info."""
+        tool_count = len(mcp._tool_manager._tools) if hasattr(mcp, '_tool_manager') else 0
+        return JSONResponse({
+            "name": "vgc-mcp",
+            "version": "1.0.0",
+            "description": "Pokemon VGC MCP Server - damage calcs, spreads, team building",
+            "tools": tool_count,
+            "endpoints": {
+                "sse": "/sse",
+                "health": "/health",
+                "messages": "/messages/"
+            }
+        })
+
     app = Starlette(
         routes=[
+            Route("/", endpoint=root, methods=["GET"]),
             Route("/health", endpoint=health_check, methods=["GET"]),
             Route("/sse", endpoint=handle_sse),
             Mount("/messages/", app=sse.handle_post_message),
