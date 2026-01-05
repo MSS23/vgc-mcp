@@ -51,12 +51,13 @@ def register_speed_probability_tools(mcp: FastMCP, smogon, pokeapi, team_manager
         Returns:
             Outspeed probability breakdown with analysis
         """
-        # Get your Pokemon's data
-        your_data = await pokeapi.get_pokemon(your_pokemon)
-        if not your_data:
+        # Get your Pokemon's base stats
+        try:
+            your_base_stats = await pokeapi.get_base_stats(your_pokemon)
+        except Exception:
             return {"error": f"Pokemon not found: {your_pokemon}"}
 
-        your_base_speed = your_data["base_stats"]["speed"]
+        your_base_speed = your_base_stats.speed
 
         # Parse nature to get speed modifier
         try:
@@ -67,12 +68,13 @@ def register_speed_probability_tools(mcp: FastMCP, smogon, pokeapi, team_manager
         # Calculate your speed stat
         your_speed = calculate_speed(your_base_speed, ev=your_speed_evs, nature=nature_enum)
 
-        # Get target Pokemon's data
-        target_data = await pokeapi.get_pokemon(target_pokemon)
-        if not target_data:
+        # Get target Pokemon's base stats
+        try:
+            target_base_stats = await pokeapi.get_base_stats(target_pokemon)
+        except Exception:
             return {"error": f"Pokemon not found: {target_pokemon}"}
 
-        target_base_speed = target_data["base_stats"]["speed"]
+        target_base_speed = target_base_stats.speed
 
         # Try to use get_speed_distribution() first (more efficient)
         speed_dist = await smogon.get_speed_distribution(target_pokemon, target_base_speed)
@@ -165,12 +167,13 @@ def register_speed_probability_tools(mcp: FastMCP, smogon, pokeapi, team_manager
             nature=pokemon.nature
         )
 
-        # Get target Pokemon's data
-        target_data = await pokeapi.get_pokemon(target_pokemon)
-        if not target_data:
+        # Get target Pokemon's base stats
+        try:
+            target_base_stats = await pokeapi.get_base_stats(target_pokemon)
+        except Exception:
             return {"error": f"Pokemon not found: {target_pokemon}"}
 
-        target_base_speed = target_data["base_stats"]["speed"]
+        target_base_speed = target_base_stats.speed
 
         # Try to use get_speed_distribution() first (more efficient)
         speed_dist = await smogon.get_speed_distribution(target_pokemon, target_base_speed)
@@ -243,12 +246,13 @@ def register_speed_probability_tools(mcp: FastMCP, smogon, pokeapi, team_manager
         Returns:
             Meta-wide speed analysis with threats and outspeeds
         """
-        # Get your Pokemon's data
-        your_data = await pokeapi.get_pokemon(your_pokemon)
-        if not your_data:
+        # Get your Pokemon's base stats
+        try:
+            your_base_stats = await pokeapi.get_base_stats(your_pokemon)
+        except Exception:
             return {"error": f"Pokemon not found: {your_pokemon}"}
 
-        your_base_speed = your_data["base_stats"]["speed"]
+        your_base_speed = your_base_stats.speed
 
         try:
             nature_enum = Nature(your_nature.lower())
@@ -272,8 +276,9 @@ def register_speed_probability_tools(mcp: FastMCP, smogon, pokeapi, team_manager
         top_pokemon_data = []
         for mon_name, mon_data in sorted_pokemon:
             # Get base stats for each Pokemon
-            mon_api_data = await pokeapi.get_pokemon(mon_name)
-            if not mon_api_data:
+            try:
+                mon_base_stats = await pokeapi.get_base_stats(mon_name)
+            except Exception:
                 continue
 
             mon_usage = await smogon.get_pokemon_usage(mon_name)
@@ -281,7 +286,7 @@ def register_speed_probability_tools(mcp: FastMCP, smogon, pokeapi, team_manager
 
             top_pokemon_data.append({
                 "name": mon_name,
-                "base_speed": mon_api_data["base_stats"]["speed"],
+                "base_speed": mon_base_stats.speed,
                 "usage_percent": round(mon_data.get("usage", 0) * 100, 2),
                 "spreads": spreads
             })
@@ -335,19 +340,21 @@ def register_speed_probability_tools(mcp: FastMCP, smogon, pokeapi, team_manager
         Returns:
             Required Speed EVs and resulting stats
         """
-        # Get your Pokemon's data
-        your_data = await pokeapi.get_pokemon(your_pokemon)
-        if not your_data:
+        # Get your Pokemon's base stats
+        try:
+            your_base_stats = await pokeapi.get_base_stats(your_pokemon)
+        except Exception:
             return {"error": f"Pokemon not found: {your_pokemon}"}
 
-        your_base_speed = your_data["base_stats"]["speed"]
+        your_base_speed = your_base_stats.speed
 
-        # Get target Pokemon's data
-        target_data = await pokeapi.get_pokemon(target_pokemon)
-        if not target_data:
+        # Get target Pokemon's base stats
+        try:
+            target_base_stats = await pokeapi.get_base_stats(target_pokemon)
+        except Exception:
             return {"error": f"Pokemon not found: {target_pokemon}"}
 
-        target_base_speed = target_data["base_stats"]["speed"]
+        target_base_speed = target_base_stats.speed
 
         # Get target's spread distribution
         target_usage = await smogon.get_pokemon_usage(target_pokemon)
@@ -410,18 +417,20 @@ def register_speed_probability_tools(mcp: FastMCP, smogon, pokeapi, team_manager
         else:
             ev_list = [0, 52, 100, 156, 196, 252]
 
-        # Get Pokemon data
-        your_data = await pokeapi.get_pokemon(pokemon_name)
-        if not your_data:
+        # Get Pokemon base stats
+        try:
+            your_base_stats = await pokeapi.get_base_stats(pokemon_name)
+        except Exception:
             return {"error": f"Pokemon not found: {pokemon_name}"}
 
-        your_base_speed = your_data["base_stats"]["speed"]
+        your_base_speed = your_base_stats.speed
 
-        target_data = await pokeapi.get_pokemon(target_pokemon)
-        if not target_data:
+        try:
+            target_base_stats = await pokeapi.get_base_stats(target_pokemon)
+        except Exception:
             return {"error": f"Pokemon not found: {target_pokemon}"}
 
-        target_base_speed = target_data["base_stats"]["speed"]
+        target_base_speed = target_base_stats.speed
 
         # Get target spreads
         target_usage = await smogon.get_pokemon_usage(target_pokemon)
@@ -524,12 +533,13 @@ def register_visualize_outspeed_tool(mcp: FastMCP, smogon, pokeapi):
         if mode == "single" and not target_pokemon:
             return {"error": "target_pokemon is required when mode='single'"}
 
-        # Get your Pokemon's data
-        your_data = await pokeapi.get_pokemon(pokemon_name)
-        if not your_data:
+        # Get your Pokemon's base stats
+        try:
+            your_base_stats = await pokeapi.get_base_stats(pokemon_name)
+        except Exception:
             return {"error": f"Pokemon not found: {pokemon_name}"}
 
-        base_speed = your_data["base_stats"]["speed"]
+        base_speed = your_base_stats.speed
 
         # Calculate current speed stat
         current_speed = calculate_speed_stat(base_speed, nature, speed_evs)
@@ -549,8 +559,9 @@ def register_visualize_outspeed_tool(mcp: FastMCP, smogon, pokeapi):
 
             top_pokemon_data = []
             for mon_name, mon_data in sorted_pokemon:
-                mon_api_data = await pokeapi.get_pokemon(mon_name)
-                if not mon_api_data:
+                try:
+                    mon_base_stats = await pokeapi.get_base_stats(mon_name)
+                except Exception:
                     continue
 
                 mon_usage = await smogon.get_pokemon_usage(mon_name)
@@ -558,7 +569,7 @@ def register_visualize_outspeed_tool(mcp: FastMCP, smogon, pokeapi):
 
                 top_pokemon_data.append({
                     "name": mon_name,
-                    "base_speed": mon_api_data["base_stats"]["speed"],
+                    "base_speed": mon_base_stats.speed,
                     "usage_percent": round(mon_data.get("usage", 0) * 100, 2),
                     "spreads": spreads
                 })
@@ -571,11 +582,12 @@ def register_visualize_outspeed_tool(mcp: FastMCP, smogon, pokeapi):
 
         else:
             # Single target mode
-            target_data = await pokeapi.get_pokemon(target_pokemon)
-            if not target_data:
+            try:
+                target_base_stats = await pokeapi.get_base_stats(target_pokemon)
+            except Exception:
                 return {"error": f"Pokemon not found: {target_pokemon}"}
 
-            target_base_speed = target_data["base_stats"]["speed"]
+            target_base_speed = target_base_stats.speed
 
             target_usage = await smogon.get_pokemon_usage(target_pokemon)
             if not target_usage:
