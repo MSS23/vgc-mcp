@@ -86,7 +86,8 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
         pokemon_name: str,
         target_pokemon: str,
         nature: str = "serious",
-        speed_evs: int = 0
+        speed_evs: int = 0,
+        speed_stat: int | None = None
     ) -> dict:
         """
         Analyze what percentage of a target Pokemon's common spreads you outspeed.
@@ -95,8 +96,9 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
         Args:
             pokemon_name: Your Pokemon's name
             target_pokemon: The target Pokemon to compare against
-            nature: Your Pokemon's nature
-            speed_evs: Your Pokemon's Speed EVs
+            nature: Your Pokemon's nature (ignored if speed_stat provided)
+            speed_evs: Your Pokemon's Speed EVs (ignored if speed_stat provided)
+            speed_stat: Your Pokemon's final Speed stat (overrides nature/EVs calculation)
 
         Returns:
             Analysis showing what percentage of target spreads you outspeed
@@ -110,8 +112,11 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
             except ValueError:
                 return {"error": f"Invalid nature: {nature}"}
 
-            # Calculate your speed
-            your_speed = calculate_speed(base_stats.speed, 31, speed_evs, 50, parsed_nature)
+            # Calculate your speed - use speed_stat directly if provided
+            if speed_stat is not None:
+                your_speed = speed_stat
+            else:
+                your_speed = calculate_speed(base_stats.speed, 31, speed_evs, 50, parsed_nature)
 
             # Normalize target name
             target_lower = target_pokemon.lower().replace(" ", "-")
@@ -193,8 +198,12 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
                 result_text = f"{pokemon_name} is outsped by all common {target_pokemon} spreads"
 
             # Build compact summary with full breakdown
+            if speed_stat is not None:
+                speed_source = f"At {your_speed} Speed:"
+            else:
+                speed_source = f"At {your_speed} Speed ({nature}, {speed_evs} EVs):"
             summary_lines = [
-                f"At {your_speed} Speed ({nature}, {speed_evs} EVs):",
+                speed_source,
                 f"You outspeed: {round(outspeed_percent, 1)}% | Tie: {round(tie_percent, 1)}% | They outspeed you: {outsped_by_percent}%",
                 "",
                 "Speed Tier Breakdown:",
@@ -215,8 +224,9 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
             return {
                 "pokemon": pokemon_name,
                 "your_speed": your_speed,
-                "nature": nature,
-                "speed_evs": speed_evs,
+                "nature": nature if speed_stat is None else None,
+                "speed_evs": speed_evs if speed_stat is None else None,
+                "speed_stat": speed_stat,
                 "target_pokemon": target_pokemon,
                 "target_base_speed": target_base_speed,
                 "target_spreads": target_spreads,
