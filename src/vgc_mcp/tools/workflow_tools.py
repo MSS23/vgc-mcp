@@ -2344,7 +2344,7 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                         break
                 else:
                     # Can't reach target, try bulk-first natures (prefer bulk boost over speed boost)
-                    for nature_try in ["bold", "calm", "impish", "careful", "serious", "jolly", "timid"]:
+                    for nature_try in ["bold", "calm", "impish", "careful", "jolly", "timid"]:
                         try:
                             test_nature = Nature(nature_try)
                             test_mod = get_nature_modifier(test_nature, "speed")
@@ -2383,7 +2383,7 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                                 break
                         else:
                             # Try bulk-first natures (prefer bulk boost over speed boost)
-                            for nature_try in ["bold", "calm", "impish", "careful", "serious", "jolly", "timid"]:
+                            for nature_try in ["bold", "calm", "impish", "careful", "jolly", "timid"]:
                                 try:
                                     test_nature = Nature(nature_try)
                                     test_mod = get_nature_modifier(test_nature, "speed")

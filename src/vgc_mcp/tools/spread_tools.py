@@ -1116,8 +1116,6 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         ("calm", {"speed": 1.0, "attack": 0.9, "defense": 1.0, "special_attack": 1.0, "special_defense": 1.1}),
         ("impish", {"speed": 1.0, "attack": 1.0, "defense": 1.1, "special_attack": 0.9, "special_defense": 1.0}),
         ("careful", {"speed": 1.0, "attack": 1.0, "defense": 1.0, "special_attack": 0.9, "special_defense": 1.1}),
-        # Neutral
-        ("serious", {"speed": 1.0, "attack": 1.0, "defense": 1.0, "special_attack": 1.0, "special_defense": 1.0}),
         # +Speed natures LAST RESORT - only if can't outspeed at 252 Spe with bulk nature
         ("jolly", {"speed": 1.1, "attack": 1.0, "defense": 1.0, "special_attack": 0.9, "special_defense": 1.0}),
         ("timid", {"speed": 1.1, "attack": 0.9, "defense": 1.0, "special_attack": 1.0, "special_defense": 1.0}),
@@ -1741,8 +1739,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     "def_evs": best_spread["def"],
                     "spd_evs": best_spread["spd"],
                     "spe_evs": speed_evs_needed,
-                    "total": best_spread["hp"] + best_spread["def"] + best_spread["spd"] + speed_evs_needed,
-                    "offensive_evs_available": 508 - speed_evs_needed - best_spread["hp"] - best_spread["def"] - best_spread["spd"]
+                    "total": best_spread["hp"] + best_spread["def"] + best_spread["spd"] + speed_evs_needed
                 },
                 "final_stats": {
                     "hp": final_hp,
