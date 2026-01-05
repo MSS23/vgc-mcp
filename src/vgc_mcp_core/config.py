@@ -54,7 +54,7 @@ class Settings:
     # VGC defaults
     DEFAULT_LEVEL: int = 50
     DEFAULT_FORMAT: str = "gen9vgc2025regg"
-    DEFAULT_RATING: int = 1760
+    DEFAULT_RATING: int = 1500
 
     # Team settings
     MAX_TEAM_SIZE: int = 6

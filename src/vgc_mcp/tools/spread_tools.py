@@ -1136,7 +1136,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         survive_hit2_ability: Optional[str] = None,
         survive_hit2_tera_type: Optional[str] = None,
         defender_tera_type: Optional[str] = None,
-        target_survival: float = 93.75
+        target_survival: float = 100.0
     ) -> dict:
         """
         Find optimal EV spread to survive TWO DIFFERENT attacks while meeting a speed benchmark.
@@ -1601,9 +1601,9 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             both_survive = best_results["survives1"] and best_results["survives2"]
 
             if both_survive:
-                verdict = f"POSSIBLE - Survives both at {target_survival}%+ threshold"
+                verdict = "POSSIBLE - Survives both attacks (100% of rolls)"
             else:
-                verdict = f"BEST EFFORT - Cannot hit {target_survival}% on both"
+                verdict = "IMPOSSIBLE - Cannot guarantee survival on both attacks"
 
             # Build attacker spread strings
             atk1_stat = "Atk" if is_physical1 else "SpA"
@@ -1651,20 +1651,28 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         "attacker": survive_hit1_attacker,
                         "move": survive_hit1_move,
                         "attacker_spread": atk1_spread_str,
+                        "attacker_nature": survive_hit1_nature,
+                        "attacker_evs": survive_hit1_evs,
+                        "attacker_item": survive_hit1_item,
+                        "attacker_ability": survive_hit1_ability,
                         "tera_type": survive_hit1_tera_type,
                         "damage_range": r1.damage_range,
-                        "damage_percent": f"{r1.min_percent:.1f}-{r1.max_percent:.1f}%",
-                        "survival_chance": f"{best_results['survival_pct1']:.1f}%",
+                        "damage_percent": f"{r1.min_percent:.2f}-{r1.max_percent:.2f}%",
+                        "survival_chance": f"{best_results['survival_pct1']:.2f}%",
                         "survives_target": best_results["survives1"]
                     },
                     {
                         "attacker": survive_hit2_attacker,
                         "move": survive_hit2_move,
                         "attacker_spread": atk2_spread_str,
+                        "attacker_nature": survive_hit2_nature,
+                        "attacker_evs": survive_hit2_evs,
+                        "attacker_item": survive_hit2_item,
+                        "attacker_ability": survive_hit2_ability,
                         "tera_type": survive_hit2_tera_type,
                         "damage_range": r2.damage_range,
-                        "damage_percent": f"{r2.min_percent:.1f}-{r2.max_percent:.1f}%",
-                        "survival_chance": f"{best_results['survival_pct2']:.1f}%",
+                        "damage_percent": f"{r2.min_percent:.2f}-{r2.max_percent:.2f}%",
+                        "survival_chance": f"{best_results['survival_pct2']:.2f}%",
                         "survives_target": best_results["survives2"]
                     }
                 ],
@@ -1674,10 +1682,10 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 ),
                 "analysis": (
                     f"With {nature.title()} {best_spread['hp']} HP / {best_spread['def']} Def / {best_spread['spd']} SpD / {speed_evs_needed} Spe, "
-                    f"{pokemon_name.title()} takes {r1.min_percent:.1f}-{r1.max_percent:.1f}% from {survive_hit1_move} "
-                    f"({best_results['survival_pct1']:.1f}% survival) and "
-                    f"{r2.min_percent:.1f}-{r2.max_percent:.1f}% from {survive_hit2_move} "
-                    f"({best_results['survival_pct2']:.1f}% survival)"
+                    f"{pokemon_name.title()} takes {r1.min_percent:.2f}-{r1.max_percent:.2f}% from {survive_hit1_move} "
+                    f"({best_results['survival_pct1']:.2f}% survival) and "
+                    f"{r2.min_percent:.2f}-{r2.max_percent:.2f}% from {survive_hit2_move} "
+                    f"({best_results['survival_pct2']:.2f}% survival)"
                 )
             }
 
