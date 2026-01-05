@@ -895,8 +895,12 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
                 except Exception:
                     return {"error": f"Could not find data for {target_pokemon}"}
 
-            # Calculate outspeed percentage
+            # Calculate outspeed percentage with interpolation for speeds between known tiers
             total_usage = sum(s["usage"] for s in target_spreads)
+            sorted_by_speed = sorted(target_spreads, key=lambda s: s["speed"])
+            speeds = [s["speed"] for s in sorted_by_speed]
+
+            # Base calculation: speeds we definitively outspeed or tie
             outsped_usage = sum(
                 s["usage"] for s in target_spreads
                 if your_speed > s["speed"]
@@ -906,9 +910,38 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
                 if your_speed == s["speed"]
             )
 
+            # Interpolation: if user speed is between two known tiers, estimate partial credit
+            # This accounts for unknown spreads that likely exist between reported tiers
+            interpolation_bonus = 0.0
+            if your_speed not in speeds and len(speeds) >= 2:
+                # Find the two tiers we're between
+                lower_tier = None
+                upper_tier = None
+                for i, spd in enumerate(speeds):
+                    if spd > your_speed:
+                        upper_tier = sorted_by_speed[i]
+                        if i > 0:
+                            lower_tier = sorted_by_speed[i - 1]
+                        break
+
+                # If we're between two tiers, interpolate
+                if lower_tier and upper_tier:
+                    lower_speed = lower_tier["speed"]
+                    upper_speed = upper_tier["speed"]
+                    upper_usage = upper_tier["usage"]
+                    # How far through the gap are we? (0 = at lower tier, 1 = at upper tier)
+                    gap_progress = (your_speed - lower_speed) / (upper_speed - lower_speed)
+                    # Estimate that gap_progress % of the upper tier's "hidden neighbors" are below us
+                    # Use a fraction of the upper tier's usage as the "gap pool"
+                    interpolation_bonus = upper_usage * gap_progress * 0.5  # Conservative estimate
+
+            outsped_usage += interpolation_bonus
             outspeed_percent = (outsped_usage / total_usage * 100) if total_usage > 0 else 0
             tie_percent = (tied_usage / total_usage * 100) if total_usage > 0 else 0
             outsped_by_percent = round(100 - outspeed_percent - tie_percent, 1)
+
+            # Flag if interpolation was used
+            used_interpolation = interpolation_bonus > 0
 
             # Determine result description
             if outspeed_percent >= 100:
@@ -925,9 +958,14 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
                 speed_source = f"At {your_speed} Speed:"
             else:
                 speed_source = f"At {your_speed} Speed ({nature}, {speed_evs} EVs):"
+
+            # Add disclaimer about estimation
+            disclaimer = "(Estimated from Smogon usage data)"
+
             summary_lines = [
                 speed_source,
                 f"You outspeed: {round(outspeed_percent, 1)}% | Tie: {round(tie_percent, 1)}% | They outspeed you: {outsped_by_percent}%",
+                disclaimer,
                 "",
                 "Speed Tier Breakdown:",
             ]
@@ -948,6 +986,9 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
                     result_label = "slower"
                 summary_lines.append(f"{speed} Spe ({normalized_usage:.1f}%) - {result_label}")
 
+            # Build analysis string with disclaimer
+            analysis_str = f"{pokemon_name} at {your_speed} Speed: You outspeed {round(outspeed_percent, 1)}% | Tie {round(tie_percent, 1)}% | They outspeed you {outsped_by_percent}% {disclaimer}"
+
             result_dict = {
                 "pokemon": pokemon_name,
                 "your_speed": your_speed,
@@ -961,10 +1002,11 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
                 "outspeed_percent": round(outspeed_percent, 1),
                 "tie_percent": round(tie_percent, 1),
                 "outsped_by_percent": outsped_by_percent,
+                "used_interpolation": used_interpolation,
                 "result": result_text,
                 "data_source": data_source,
                 "summary_table": "\n".join(summary_lines),
-                "analysis": f"{pokemon_name} at {your_speed} Speed: You outspeed {round(outspeed_percent, 1)}% | Tie {round(tie_percent, 1)}% | They outspeed you {outsped_by_percent}%"
+                "analysis": analysis_str
             }
 
             # Add MCP-UI outspeed graph

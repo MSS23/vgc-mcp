@@ -389,7 +389,10 @@ def create_speed_outspeed_graph_resource(
         <p style="margin: 0 0 4px 0; font-size: 14px; color: {summary_color}; font-weight: bold;">
             You outspeed: {outspeed_percent:.1f}% | Tie: {tie_percent:.1f}% | They outspeed you: {outsped_by_percent:.1f}%
         </p>
-        <table style="width: 100%; border-collapse: collapse; margin-top: 12px;">
+        <p style="margin: 0 0 8px 0; font-size: 11px; color: #666; font-style: italic;">
+            (Estimated from Smogon usage data)
+        </p>
+        <table style="width: 100%; border-collapse: collapse; margin-top: 8px;">
             <thead>
                 <tr style="background: #f5f5f5;">
                     <th style="padding: 8px; text-align: left;">Speed</th>
