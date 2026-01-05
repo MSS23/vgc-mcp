@@ -1547,10 +1547,19 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     "remaining_for_bulk": remaining_evs
                 }
 
-            # Calculate final stats
+            # Calculate offensive EVs (normalized to valid breakpoints)
+            raw_offensive = 508 - speed_evs_needed - best_spread["hp"] - best_spread["def"] - best_spread["spd"]
+            offensive_evs = normalize_evs(raw_offensive)
+            leftover = raw_offensive - offensive_evs
+
+            # Put leftover EVs in SpD (4 EVs = +1 stat point at level 50)
+            extra_spd = normalize_evs(leftover) if leftover >= 4 else 0
+            final_spd_evs = best_spread["spd"] + extra_spd
+
+            # Calculate final stats (using final_spd_evs for SpD)
             final_hp = calculate_hp(my_base.hp, 31, best_spread["hp"], 50)
             final_def = calculate_stat(my_base.defense, 31, best_spread["def"], 50, def_nature_mod)
-            final_spd = calculate_stat(my_base.special_defense, 31, best_spread["spd"], 50, spd_nature_mod)
+            final_spd_stat = calculate_stat(my_base.special_defense, 31, final_spd_evs, 50, spd_nature_mod)
             final_spe = calculate_stat(my_base.speed, 31, speed_evs_needed, 50, get_nature_modifier(parsed_nature, "speed"))
 
             r1 = best_results["result1"]
@@ -1580,11 +1589,6 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 atk2_spread_str += f" {survive_hit2_item.replace('-', ' ').title()}"
             atk2_spread_str += f" {survive_hit2_attacker}"
 
-            # Calculate offensive EVs (normalized to valid breakpoints)
-            raw_offensive = 508 - speed_evs_needed - best_spread["hp"] - best_spread["def"] - best_spread["spd"]
-            offensive_evs = normalize_evs(raw_offensive)
-            wasted_evs = raw_offensive - offensive_evs  # EVs that don't hit a breakpoint
-
             return {
                 "pokemon": pokemon_name,
                 "nature": nature,
@@ -1592,16 +1596,15 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "spread": {
                     "hp_evs": best_spread["hp"],
                     "def_evs": best_spread["def"],
-                    "spd_evs": best_spread["spd"],
+                    "spd_evs": final_spd_evs,  # Includes extra EVs if available
                     "spe_evs": speed_evs_needed,
                     "spa_evs": offensive_evs,  # Leftover EVs for offense (normalized)
-                    "total": best_spread["hp"] + best_spread["def"] + best_spread["spd"] + speed_evs_needed + offensive_evs,
-                    "wasted_evs": wasted_evs  # EVs that don't hit a stat point (e.g., 16 -> 12 wastes 4)
+                    "total": best_spread["hp"] + best_spread["def"] + final_spd_evs + speed_evs_needed + offensive_evs
                 },
                 "final_stats": {
                     "hp": final_hp,
                     "defense": final_def,
-                    "special_defense": final_spd,
+                    "special_defense": final_spd_stat,
                     "speed": final_spe
                 },
                 "speed_benchmark": {
@@ -1634,11 +1637,10 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 ],
                 "summary": (
                     f"{pokemon_name.title()} @ {nature.title()}: "
-                    f"{best_spread['hp']} HP / {best_spread['def']} Def / {offensive_evs} SpA / {best_spread['spd']} SpD / {speed_evs_needed} Spe"
-                    + (f" ({wasted_evs} EVs unused)" if wasted_evs > 0 else "")
+                    f"{best_spread['hp']} HP / {best_spread['def']} Def / {offensive_evs} SpA / {final_spd_evs} SpD / {speed_evs_needed} Spe"
                 ),
                 "analysis": (
-                    f"With {nature.title()} {best_spread['hp']} HP / {best_spread['def']} Def / {best_spread['spd']} SpD / {speed_evs_needed} Spe, "
+                    f"With {nature.title()} {best_spread['hp']} HP / {best_spread['def']} Def / {final_spd_evs} SpD / {speed_evs_needed} Spe, "
                     f"{pokemon_name.title()} takes {r1.min_percent:.1f}-{r1.max_percent:.1f}% from {atk1_spread_str}'s {survive_hit1_move} "
                     f"({best_results['survival_pct1']:.1f}% survival) and "
                     f"{r2.min_percent:.1f}-{r2.max_percent:.1f}% from {atk2_spread_str}'s {survive_hit2_move} "
