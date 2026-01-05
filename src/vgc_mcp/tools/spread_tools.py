@@ -1110,17 +1110,35 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
 
     # Natures to try when auto-selecting, prioritizing BULK-BOOSTING natures
     # Speed EVs are cheap, nature boost is precious - use EVs for speed, nature for bulk
-    NATURE_CANDIDATES = [
-        # Bulk-boosting natures FIRST - use Speed EVs to hit benchmark, nature boosts bulk
+    # Separate lists for physical vs special attackers to avoid -Atk/-SpA penalties on their main stat
+
+    # For PHYSICAL attackers (Atk > SpA): Jolly before Timid, prefer -SpA natures
+    NATURE_CANDIDATES_PHYSICAL = [
+        # Bulk-boosting natures FIRST (prefer -SpA over -Atk for physical attackers)
+        ("impish", {"speed": 1.0, "attack": 1.0, "defense": 1.1, "special_attack": 0.9, "special_defense": 1.0}),
+        ("careful", {"speed": 1.0, "attack": 1.0, "defense": 1.0, "special_attack": 0.9, "special_defense": 1.1}),
+        ("bold", {"speed": 1.0, "attack": 0.9, "defense": 1.1, "special_attack": 1.0, "special_defense": 1.0}),
+        ("calm", {"speed": 1.0, "attack": 0.9, "defense": 1.0, "special_attack": 1.0, "special_defense": 1.1}),
+        # +Speed natures - Jolly first (doesn't hurt Atk)
+        ("jolly", {"speed": 1.1, "attack": 1.0, "defense": 1.0, "special_attack": 0.9, "special_defense": 1.0}),
+        ("timid", {"speed": 1.1, "attack": 0.9, "defense": 1.0, "special_attack": 1.0, "special_defense": 1.0}),
+        # -Speed natures
+        ("brave", {"speed": 0.9, "attack": 1.1, "defense": 1.0, "special_attack": 1.0, "special_defense": 1.0}),
+        ("relaxed", {"speed": 0.9, "attack": 1.0, "defense": 1.1, "special_attack": 1.0, "special_defense": 1.0}),
+        ("sassy", {"speed": 0.9, "attack": 1.0, "defense": 1.0, "special_attack": 1.0, "special_defense": 1.1}),
+    ]
+
+    # For SPECIAL attackers (SpA > Atk): Timid before Jolly, prefer -Atk natures
+    NATURE_CANDIDATES_SPECIAL = [
+        # Bulk-boosting natures FIRST (prefer -Atk over -SpA for special attackers)
         ("bold", {"speed": 1.0, "attack": 0.9, "defense": 1.1, "special_attack": 1.0, "special_defense": 1.0}),
         ("calm", {"speed": 1.0, "attack": 0.9, "defense": 1.0, "special_attack": 1.0, "special_defense": 1.1}),
         ("impish", {"speed": 1.0, "attack": 1.0, "defense": 1.1, "special_attack": 0.9, "special_defense": 1.0}),
         ("careful", {"speed": 1.0, "attack": 1.0, "defense": 1.0, "special_attack": 0.9, "special_defense": 1.1}),
-        # +Speed natures LAST RESORT - only if can't outspeed at 252 Spe with bulk nature
-        ("jolly", {"speed": 1.1, "attack": 1.0, "defense": 1.0, "special_attack": 0.9, "special_defense": 1.0}),
+        # +Speed natures - Timid first (doesn't hurt SpA)
         ("timid", {"speed": 1.1, "attack": 0.9, "defense": 1.0, "special_attack": 1.0, "special_defense": 1.0}),
-        # -Speed natures (0.9x) - need most speed EVs, kept for edge cases
-        ("brave", {"speed": 0.9, "attack": 1.1, "defense": 1.0, "special_attack": 1.0, "special_defense": 1.0}),
+        ("jolly", {"speed": 1.1, "attack": 1.0, "defense": 1.0, "special_attack": 0.9, "special_defense": 1.0}),
+        # -Speed natures
         ("quiet", {"speed": 0.9, "attack": 1.0, "defense": 1.0, "special_attack": 1.1, "special_defense": 1.0}),
         ("relaxed", {"speed": 0.9, "attack": 1.0, "defense": 1.1, "special_attack": 1.0, "special_defense": 1.0}),
         ("sassy", {"speed": 0.9, "attack": 1.0, "defense": 1.0, "special_attack": 1.0, "special_defense": 1.1}),
@@ -1409,7 +1427,9 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
 
             # Determine natures to try
             if nature_auto_selected:
-                natures_to_try = NATURE_CANDIDATES
+                # Choose nature list based on whether Pokemon is physical or special attacker
+                is_special_attacker = my_base.special_attack > my_base.attack
+                natures_to_try = NATURE_CANDIDATES_SPECIAL if is_special_attacker else NATURE_CANDIDATES_PHYSICAL
             else:
                 # User specified nature - only try that one
                 natures_to_try = [(nature.lower(), {
