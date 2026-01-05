@@ -180,6 +180,7 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
 
             outspeed_percent = (outsped_usage / total_usage * 100) if total_usage > 0 else 0
             tie_percent = (tied_usage / total_usage * 100) if total_usage > 0 else 0
+            outsped_by_percent = round(100 - outspeed_percent - tie_percent, 1)
 
             # Determine result description
             if outspeed_percent >= 100:
@@ -190,6 +191,26 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
                 result_text = f"{pokemon_name} outspeeds some common {target_pokemon} spreads"
             else:
                 result_text = f"{pokemon_name} is outsped by all common {target_pokemon} spreads"
+
+            # Build compact summary with full breakdown
+            summary_lines = [
+                f"At {your_speed} Speed ({nature} nature, {speed_evs} EVs):",
+                f"Outspeed: {round(outspeed_percent, 1)}% | Tie: {round(tie_percent, 1)}% | Outsped by: {outsped_by_percent}%",
+                "",
+                "Speed Tier Breakdown:",
+            ]
+            # Sort spreads by speed for cleaner display
+            sorted_spreads = sorted(target_spreads, key=lambda s: s["speed"])
+            for spread in sorted_spreads:
+                speed = spread["speed"]
+                usage = spread["usage"]
+                if your_speed > speed:
+                    result_label = "faster"
+                elif your_speed == speed:
+                    result_label = "tie"
+                else:
+                    result_label = "slower"
+                summary_lines.append(f"{speed} Spe ({usage:.1f}%) - {result_label}")
 
             return {
                 "pokemon": pokemon_name,
@@ -202,9 +223,11 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
                 "target_stats": target_stats,
                 "outspeed_percent": round(outspeed_percent, 1),
                 "tie_percent": round(tie_percent, 1),
+                "outsped_by_percent": outsped_by_percent,
                 "result": result_text,
                 "data_source": data_source,
-                "analysis": f"{pokemon_name} ({your_speed} Speed) outspeeds {round(outspeed_percent, 1)}% of {target_pokemon} spreads"
+                "summary_table": "\n".join(summary_lines),
+                "analysis": f"{pokemon_name} at {your_speed} Speed: >{round(outspeed_percent, 1)}% | ={round(tie_percent, 1)}% | <{outsped_by_percent}%"
             }
 
         except Exception as e:

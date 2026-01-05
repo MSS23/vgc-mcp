@@ -359,12 +359,20 @@ def create_speed_outspeed_graph_resource(
         target_spreads: List of target spreads with speed and usage
         outspeed_percent: Overall outspeed percentage
     """
+    # Calculate tie and outsped-by percentages
+    total_usage = sum(s.get("usage", 0) for s in target_spreads)
+    tie_usage = sum(s.get("usage", 0) for s in target_spreads if pokemon_speed == s.get("speed", 0))
+    tie_percent = (tie_usage / total_usage * 100) if total_usage > 0 else 0
+    outsped_by_percent = 100 - outspeed_percent - tie_percent
+
+    # Sort spreads by speed for cleaner display
+    sorted_spreads = sorted(target_spreads, key=lambda s: s.get("speed", 0))
     rows_html = ""
-    for spread in target_spreads[:10]:
+    for spread in sorted_spreads[:10]:
         speed = spread.get("speed", 0)
         usage = spread.get("usage", 0)
-        outspeed = "faster" if pokemon_speed > speed else ("tied" if pokemon_speed == speed else "slower")
-        color = "#2e7d32" if outspeed == "faster" else ("#f57c00" if outspeed == "tied" else "#c62828")
+        outspeed = "faster" if pokemon_speed > speed else ("tie" if pokemon_speed == speed else "slower")
+        color = "#2e7d32" if outspeed == "faster" else ("#f57c00" if outspeed == "tie" else "#c62828")
         usage_str = f"{usage:.1f}%" if usage >= 0.1 else "<0.1%"
         rows_html += f'<tr><td style="padding: 6px; border-bottom: 1px solid #eee;">{speed}</td><td style="padding: 6px; border-bottom: 1px solid #eee;">{usage_str}</td><td style="padding: 6px; border-bottom: 1px solid #eee; color: {color};">{outspeed}</td></tr>'
 
@@ -373,9 +381,11 @@ def create_speed_outspeed_graph_resource(
 
     html = f"""
     <div style="font-family: system-ui, sans-serif; max-width: 500px;">
-        <h3 style="margin: 0 0 8px 0; color: #333;">{pokemon_name} ({pokemon_speed} Spe) vs {target_pokemon}</h3>
-        <p style="margin: 0 0 12px 0; font-size: 14px; color: {summary_color}; font-weight: bold;">Outspeeds {outspeed_percent:.1f}% of spreads</p>
-        <table style="width: 100%; border-collapse: collapse;">
+        <h3 style="margin: 0 0 8px 0; color: #333;">{pokemon_name} ({pokemon_speed} Speed) vs {target_pokemon}</h3>
+        <p style="margin: 0 0 4px 0; font-size: 14px; color: {summary_color}; font-weight: bold;">
+            Outspeed: {outspeed_percent:.1f}% | Tie: {tie_percent:.1f}% | Outsped by: {outsped_by_percent:.1f}%
+        </p>
+        <table style="width: 100%; border-collapse: collapse; margin-top: 12px;">
             <thead>
                 <tr style="background: #f5f5f5;">
                     <th style="padding: 8px; text-align: left;">Speed</th>
