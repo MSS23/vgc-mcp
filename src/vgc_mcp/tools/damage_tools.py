@@ -827,10 +827,10 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             item_str = f" {attacker_item.replace('-', ' ').title()}" if attacker_item else ""
             attacker_spread_str = f"{relevant_atk_evs}{nature_indicator} {stat_name}{item_str} {attacker_name}"
 
-            # Build defender spread string (e.g., "132 HP / 196 Def")
+            # Build defender spread string (e.g., "Impish 132 HP / 196 Def")
             relevant_def_evs = defender_def_evs if is_physical else defender_spd_evs
             def_stat_name = "Def" if is_physical else "SpD"
-            defender_spread_str = f"{defender_hp_evs} HP / {relevant_def_evs} {def_stat_name} {defender_name}"
+            defender_spread_str = f"{defender_nature.title()} {defender_hp_evs} HP / {relevant_def_evs} {def_stat_name} {defender_name}"
 
             response["analysis"] = f"{attacker_spread_str}'s {move_name} vs {defender_spread_str}: {min_pct}-{max_pct}% ({hp_remain_min_pct}-{hp_remain_max_pct}% remaining). {result.ko_chance}."
 
@@ -1020,7 +1020,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             is_physical = move.category.value == "physical"
             relevant_def_evs = defender_def_evs if is_physical else defender_def_evs
             def_stat_name = "Def" if is_physical else "SpD"
-            defender_spread_str = f"{defender_hp_evs} HP / {relevant_def_evs} {def_stat_name} {defender_name}"
+            defender_spread_str = f"{defender_nature.title()} {defender_hp_evs} HP / {relevant_def_evs} {def_stat_name} {defender_name}"
 
             # Build summary table
             table_lines = [
@@ -1436,10 +1436,10 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             item_str = f" {attacker_item.replace('-', ' ').title()}" if attacker_item else ""
             attacker_spread_str = f"{relevant_atk_evs}{nature_indicator} {stat_name}{item_str} {attacker_name}"
 
-            # Build defender spread string (e.g., "132 HP / 196 Def")
+            # Build defender spread string (e.g., "Impish 132 HP / 196 Def")
             relevant_def_evs = defender_def_evs if is_physical else defender_spd_evs
             def_stat_name = "Def" if is_physical else "SpD"
-            defender_spread_str = f"{defender_hp_evs} HP / {relevant_def_evs} {def_stat_name} {defender_name}"
+            defender_spread_str = f"{defender_nature.title()} {defender_hp_evs} HP / {relevant_def_evs} {def_stat_name} {defender_name}"
 
             analysis_str = f"{defender_spread_str} {survival_word} {num_hits}x {attacker_spread_str}'s {move_name} — takes {total_min_percent:.0f}-{total_max_percent:.0f}% total, left at {hp_remain_min_pct}-{hp_remain_max_pct}% HP"
 
