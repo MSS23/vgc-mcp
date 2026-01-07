@@ -92,7 +92,7 @@ class PokePasteClient:
             content = response.text
 
             # Cache the result
-            self.cache.set("pokepaste", cache_key, content)
+            self.cache.set("pokepaste", cache_key, value=content)
             logger.debug(f"Fetched PokePaste: {paste_id}")
 
             return content

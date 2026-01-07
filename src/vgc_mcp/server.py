@@ -67,6 +67,7 @@ from .tools.build_tools import register_build_tools
 from .tools.diff_tools import register_diff_tools
 from .tools.report_tools import register_report_tools
 from .tools.speed_tools import register_speed_tools
+from .tools.tournament_tools import register_tournament_tools
 
 # Note: MCP-UI is only enabled in vgc-mcp-lite for smaller footprint
 # Full server focuses on tool completeness over visual components
@@ -135,6 +136,9 @@ register_report_tools(mcp, pokeapi)
 
 # Consolidated speed tools (complements speed_analysis and speed_probability)
 register_speed_tools(mcp, pokeapi, smogon)
+
+# Tournament matchup analysis tools
+register_tournament_tools(mcp, pokepaste, pokeapi, smogon)
 
 
 def main():
