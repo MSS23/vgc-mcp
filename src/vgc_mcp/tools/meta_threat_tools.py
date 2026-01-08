@@ -1079,16 +1079,22 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                 "threshold_requested": survival_threshold,
                 "minimum_evs": best_spread,
                 "ruinous_ability_applied": ruinous_ability_applied,
-                "analysis": (
-                    f"Minimum {best_spread['total_evs']} total EVs needed: "
-                    f"{best_spread['hp_evs']} HP / "
-                    f"{best_spread['def_evs']} Def / "
-                    f"{best_spread['spd_evs']} SpD "
-                    f"to survive {best_spread['survival_percent']}% of rolls "
-                    f"({best_spread['survival_rolls']}) from {threat_move} ({threat_spread_str}), "
-                    f"left with {best_spread['hp_remaining_percent']} HP{threshold_note}{ruinous_note}"
-                )
             }
+
+            # Build EV string showing only non-zero stats
+            ev_parts = []
+            if best_spread['hp_evs']: ev_parts.append(f"{best_spread['hp_evs']} HP")
+            if best_spread['def_evs']: ev_parts.append(f"{best_spread['def_evs']} Def")
+            if best_spread['spd_evs']: ev_parts.append(f"{best_spread['spd_evs']} SpD")
+            ev_str = " / ".join(ev_parts) if ev_parts else "0 EVs"
+
+            result["analysis"] = (
+                f"Minimum {best_spread['total_evs']} total EVs needed: "
+                f"{ev_str} "
+                f"to survive {best_spread['survival_percent']}% of rolls "
+                f"({best_spread['survival_rolls']}) from {threat_move} ({threat_spread_str}), "
+                f"left with {best_spread['hp_remaining_percent']} HP{threshold_note}{ruinous_note}"
+            )
 
             # Build spread result table
             table_lines = [
