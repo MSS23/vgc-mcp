@@ -1464,6 +1464,11 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 ]
                 return {
                     "attacker": attacker_name,
+                    # Top-level attacker info for LLM visibility
+                    "attacker_item": attacker_item.replace("-", " ").title() if attacker_item else "None",
+                    "attacker_nature": attacker_nature.title(),
+                    "attacker_ev_spread": ev_string,
+                    "attacker_ability": attacker_ability_name.replace("-", " ").title() if attacker_ability_name else None,
                     "attacker_spread": attacker_spread_info,
                     "defender": defender_name,
                     "move": move_name,
@@ -1498,8 +1503,16 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 reg_str = f" [{reg}]" if reg else ""
                 table_lines.append(f"| Spread Source    | Smogon ({usage:.1f}% usage){reg_str}        |")
 
+            # Build analysis string with explicit item mention
+            item_str = f" with {attacker_item.replace('-', ' ').title()}" if attacker_item else ""
+
             response = {
                 "attacker": attacker_name,
+                # Top-level attacker info for LLM visibility
+                "attacker_item": attacker_item.replace("-", " ").title() if attacker_item else "None",
+                "attacker_nature": attacker_nature.title(),
+                "attacker_ev_spread": ev_string,
+                "attacker_ability": attacker_ability_name.replace("-", " ").title() if attacker_ability_name else None,
                 "attacker_spread": attacker_spread_info,
                 "defender": defender_name,
                 "move": move_name,
@@ -1510,7 +1523,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "survival_chance": f"{result['survival_chance']:.2f}%",
                 "damage_range": result["damage_range"],
                 "summary_table": "\n".join(table_lines),
-                "analysis": f"Need {result['hp_evs']} HP / {result['def_evs']} {result['def_stat_name']} EVs to survive {move_name} from {attacker_spread_str} — takes {result['damage_range']}"
+                "analysis": f"Need {result['hp_evs']} HP / {result['def_evs']} {result['def_stat_name']} EVs to survive {move_name} from {attacker_nature.title()} {ev_string}{item_str} {attacker_name} — takes {result['damage_range']}"
             }
 
             # Add regulation to top-level response for visibility
