@@ -442,7 +442,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             
             if best_stats['special_attack'] != current_stats['special_attack']:
                 diff = best_stats['special_attack'] - current_stats['special_attack']
-                markdown_lines.append(f"- Sp.Atk: {current_stats['special_attack']} → {best_stats['special_attack']} ({'+' if diff > 0 else ''}{diff}) - {'You don't use special moves anyway' if is_physical else 'Nature adjustment'}")
+                spa_reason = "Not used for special moves" if is_physical else "Nature adjustment"
+                markdown_lines.append(f"- Sp.Atk: {current_stats['special_attack']} → {best_stats['special_attack']} ({'+' if diff > 0 else ''}{diff}) - {spa_reason}")
             
             if best_stats['speed'] != current_stats['speed']:
                 diff = best_stats['speed'] - current_stats['speed']
