@@ -88,7 +88,15 @@ from .tools.onboarding_tools import register_onboarding_tools
 # Initialize MCP server
 mcp = FastMCP(
     "VGC Team Builder",
-    instructions="MCP server for VGC Pokemon team building with damage calc, usage stats, and team analysis"
+    instructions="""VGC Pokemon team building server with damage calc, usage stats, and team analysis.
+
+IMPORTANT - For ALL damage calculations, ALWAYS show full spreads for BOTH Pokemon:
+**Attacker:** [Nature] [HP]/[Atk]/[Def]/[SpA]/[SpD]/[Spe] [Pokemon] @ [Item]
+**Defender:** [Nature] [HP]/[Atk]/[Def]/[SpA]/[SpD]/[Spe] [Pokemon] @ [Item]
+**Result:** [damage]% ([verdict])
+
+Example: "**Attacker:** Adamant 4/252/0/0/0/252 Urshifu @ Choice Scarf"
+Users need EXACT spreads to verify calculations themselves."""
 )
 
 
