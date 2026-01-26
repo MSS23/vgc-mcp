@@ -131,7 +131,7 @@ def register_help_tools(mcp: FastMCP):
                     "- **Priority Moves**: Always go first (Fake Out, Extreme Speed)",
                     "",
                     "### Tools",
-                    "- `visualize_speed_tiers()` - See speed comparisons",
+                    "- `visualize_team_speed_tiers()` - See speed comparisons",
                     "- `compare_speed()` - Compare two Pokemon's speeds"
                 ]
                 response = {

@@ -163,7 +163,7 @@ def register_onboarding_tools(mcp: FastMCP):
                     "",
                     "### Tools Available",
                     "- `compare_speed()` - Compare two Pokemon speeds",
-                    "- `visualize_speed_tiers()` - Speed tier chart",
+                    "- `visualize_team_speed_tiers()` - Speed tier chart",
                     "- `find_speed_evs()` - EVs to outspeed target"
                 ]
                 response = {

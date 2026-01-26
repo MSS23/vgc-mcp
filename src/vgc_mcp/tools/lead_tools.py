@@ -8,8 +8,8 @@ from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.utils.errors import api_error
 
 
-def register_lead_tools_new(mcp: FastMCP, pokeapi: PokeAPIClient):
-    """Register lead pair analysis tools (new comprehensive version)."""
+def register_lead_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
+    """Register lead pair analysis tools."""
 
     @mcp.tool()
     async def analyze_lead_pairs(

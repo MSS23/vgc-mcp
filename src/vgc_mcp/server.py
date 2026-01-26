@@ -59,7 +59,6 @@ from .tools.meta_threat_tools import register_meta_threat_tools
 from .tools.workflow_tools import register_workflow_tools
 from .tools.item_tools import register_item_tools
 from .tools.chip_damage_tools import register_chip_damage_tools
-from .tools.lead_tools import register_lead_tools
 from .tools.preset_tools import register_preset_tools
 from .tools.sample_team_tools import register_sample_team_tools
 from .tools.pokepaste_tools import register_pokepaste_tools
@@ -71,7 +70,7 @@ from .tools.tournament_tools import register_tournament_tools
 from .tools.multi_threat_tools import register_multi_threat_tools
 from .tools.team_matchup_tools import register_team_matchup_tools
 from .tools.tera_tools import register_tera_tools
-from .tools.lead_tools import register_lead_tools_new
+from .tools.lead_tools import register_lead_tools
 from .tools.speed_viz_tools import register_speed_viz_tools
 from .tools.readiness_tools import register_readiness_tools
 from .tools.glossary_tools import register_glossary_tools
@@ -223,7 +222,6 @@ register_workflow_tools(mcp, pokeapi, smogon, team_manager, analyzer)
 # Phase 9 tools - Advanced battle mechanics
 register_item_tools(mcp, pokeapi)
 register_chip_damage_tools(mcp, pokeapi)
-register_lead_tools(mcp, team_manager)
 
 # Phase 10 tools - Quality of life improvements
 register_preset_tools(mcp, smogon)
@@ -247,7 +245,7 @@ register_tournament_tools(mcp, pokepaste, pokeapi, smogon)
 register_multi_threat_tools(mcp, pokeapi)
 register_team_matchup_tools(mcp, pokeapi, smogon, team_manager)
 register_tera_tools(mcp, pokeapi)
-register_lead_tools_new(mcp, pokeapi)
+register_lead_tools(mcp, pokeapi)
 register_speed_viz_tools(mcp, pokeapi, smogon)
 register_readiness_tools(mcp, pokeapi)
 

@@ -15,7 +15,7 @@ def register_speed_viz_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
     """Register speed tier visualization tools."""
 
     @mcp.tool()
-    async def visualize_speed_tiers(
+    async def visualize_team_speed_tiers(
         team_pokemon: List[Dict],
         include_weather: bool = True,
         include_tailwind: bool = True,
@@ -146,5 +146,5 @@ def register_speed_viz_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
             return response
             
         except Exception as e:
-            logger.error(f"Error in visualize_speed_tiers: {e}", exc_info=True)
+            logger.error(f"Error in visualize_team_speed_tiers: {e}", exc_info=True)
             return api_error(str(e))
