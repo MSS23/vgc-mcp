@@ -188,9 +188,19 @@ Use the RIGHT tool for survival calculations:
 ### Common Mistakes to Avoid
 
 - **DON'T give offensive spreads when asked about survival** - If user asks "what spread survives X?", return defensive EVs (HP/Def), not offensive (Atk/Spe)
-- **ALWAYS verify the Smogon spread** - Show the exact attacker spread used in your response
+- **ALWAYS show the FULL attacker spread with EVs** - Don't just say "Adamant Choice Scarf Urshifu", say "Adamant 4 HP / 252 Atk / 252 Spe Choice Scarf Urshifu"
 - **Understand damage calc notation**: "252 Atk" = neutral nature, "252+ Atk" = boosting nature (Adamant)
 - **Don't hallucinate numbers** - If the tool returns 81.8-96.2%, don't say 81.2-98.7%
+
+### CRITICAL: Always Show Full Spreads
+
+When reporting damage calculations, ALWAYS include the full EV spread for the attacker. The tool response includes `attacker_ev_spread` at the top level - USE IT.
+
+**Good:** "survives Surging Strikes from **Adamant 4 HP / 252 Atk / 252 Spe Choice Scarf Urshifu** (67.4-78.6%)"
+
+**Bad:** "survives Surging Strikes from Adamant Choice Scarf Urshifu (67.4-78.6%)"
+
+The user needs to know the EXACT spread used to verify the calculation themselves.
 
 ### Example: Correct Survival Response
 
@@ -198,17 +208,15 @@ User: "What EVs does Ogerpon need to survive Urshifu Surging Strikes?"
 
 Good response:
 ```
-Using find_survival_evs with Urshifu's Smogon spread:
-- Attacker: Jolly 252 Atk / 4 SpD / 252 Spe @ Choice Band
-- Result: You need 252 HP / 4 Def to survive (takes 81.8-96.2%)
+Urshifu's Smogon spread: Adamant 4 HP / 252 Atk / 252 Spe @ Choice Scarf
 
-Recommended spread: 252 HP / 4 Def / 252 Spe Jolly
+With 252 HP / 4 Def / 252 Spe Jolly, you survive taking 67.4-78.6% (126-147 damage).
 ```
 
 Bad response (DON'T DO THIS):
 ```
-Here's a spread: 252 Atk / 4 SpD / 252 Spe Jolly
-[This is an offensive spread that doesn't answer the survival question!]
+You survive Adamant Choice Scarf Urshifu with 252 HP / 4 Def.
+[Missing the attacker's EV spread! User can't verify.]
 ```
 
 ## User Onboarding
