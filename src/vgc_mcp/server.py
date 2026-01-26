@@ -176,6 +176,37 @@ Show me a speed tier chart with my Pokemon highlighted, and tell me what
 outspeeds what under different conditions."""
 
 
+@mcp.prompt()
+def find_survival_spread() -> str:
+    """Find EVs to survive a specific attack"""
+    return """I want to find the EVs needed to survive a specific attack.
+
+Please ask me:
+1. What Pokemon is attacking? (e.g., Urshifu-Rapid-Strike)
+2. What move are they using? (e.g., Surging Strikes)
+3. What Pokemon needs to survive? (your Pokemon)
+4. What nature do you want? (e.g., Jolly for speed, Impish for defense)
+
+Use the find_survival_evs tool with the attacker's Smogon spread (auto-fetched).
+IMPORTANT: Always show the EXACT attacker spread used (nature, EVs, item) and
+the resulting survival percentage so I can verify the calculation."""
+
+
+@mcp.prompt()
+def check_survival() -> str:
+    """Check if a spread survives an attack"""
+    return """I want to check if my Pokemon's spread survives a specific attack.
+
+Please ask me:
+1. What Pokemon is attacking and with what move?
+2. What is my Pokemon and its EXACT spread (HP/Def EVs, nature)?
+
+Use calculate_damage_output and show:
+- The damage range as a percentage
+- Whether it survives (damage < 100%)
+- The EXACT attacker spread used (so I can verify)"""
+
+
 # ============================================================================
 # Initialize shared state
 # ============================================================================

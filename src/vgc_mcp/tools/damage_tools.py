@@ -441,7 +441,14 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             friend_guard: True if ally has Friend Guard ability (reduces damage to 0.75x)
 
         Returns:
-            Damage calculations against top defender spreads with KO probabilities and items
+            Damage calculations against top defender spreads with KO probabilities and items.
+            IMPORTANT: The response includes 'attacker_spread' showing the exact spread used.
+            Always show this to the user so they know what nature/EVs/item were assumed.
+
+        Note:
+            Uses Smogon VGC spreads by default. If damage seems wrong, check the
+            attacker_spread field - it shows the EXACT nature/EVs/item used.
+            "252 Atk" notation means neutral nature; "252+ Atk" means boosting nature.
         """
         try:
             # Auto-assign signature items for Pokemon that require them
@@ -1210,7 +1217,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             return api_error("PokeAPI", str(e), is_retryable=True)
 
     @mcp.tool()
-    async def find_bulk_evs(
+    async def find_survival_evs(
         attacker_name: str,
         defender_name: str,
         move_name: str,
@@ -1222,21 +1229,31 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         use_smogon_spreads: bool = True
     ) -> dict:
         """
-        Find minimum HP/Def EVs needed to survive an attack.
+        Find minimum HP/Defense EVs needed to SURVIVE a specific attack.
+
+        USE THIS TOOL when user asks:
+        - "What EVs to survive X?"
+        - "Can my Pokemon survive Y?"
+        - "How much bulk/HP do I need?"
+        - "What spread survives Z?"
+
+        This tool auto-fetches the attacker's Smogon spread (nature, EVs, item)
+        unless you specify them manually. Always show the attacker_spread_info
+        in your response so the user knows what spread was used.
 
         Args:
-            attacker_name: Attacking Pokemon
-            defender_name: Defending Pokemon (your Pokemon)
-            move_name: Move to survive
+            attacker_name: The Pokemon attacking you (e.g., "Urshifu-Rapid-Strike")
+            defender_name: YOUR Pokemon that needs to survive
+            move_name: The attack to survive (e.g., "Surging Strikes")
             attacker_nature: Attacker's nature (auto-fetched from Smogon if not provided)
             attacker_evs: Attacker's offensive EVs (auto-fetched from Smogon if not provided)
             attacker_item: Attacker's item (auto-fetched from Smogon if not provided)
-            defender_nature: Your nature
-            target_survival_chance: Target survival % (100 = always survive)
+            defender_nature: Your Pokemon's nature (default: Calm for SpD, use Impish for Def)
+            target_survival_chance: Target survival % (100 = always survive max roll)
             use_smogon_spreads: Auto-fetch attacker spread from Smogon (default True)
 
         Returns:
-            Required HP/Def EVs and resulting calculation with full attacker spread info
+            Required HP/Def EVs, damage calculation, and full attacker spread info
         """
         try:
             # Fetch data
