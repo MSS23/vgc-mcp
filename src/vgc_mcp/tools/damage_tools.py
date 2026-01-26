@@ -592,6 +592,12 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 # Note: Sword/Beads from defender affect defender's own stats,
                 # so we don't auto-apply these (they'd reduce defender's own defense)
 
+            # Auto-detect Booster Energy from item to trigger Protosynthesis/Quark Drive
+            if attacker_item and attacker_item.lower().replace(" ", "-") == "booster-energy":
+                attacker_booster_energy = True
+            if defender_item and defender_item.lower().replace(" ", "-") == "booster-energy":
+                defender_booster_energy = True
+
             # Helper function to determine which stat Protosynthesis/Quark Drive boosts
             def get_paradox_boost_stat(base_stats, nature_enum, evs_dict) -> Optional[str]:
                 """Determine which stat gets boosted by Protosynthesis/Quark Drive.
@@ -621,7 +627,12 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         get_nature_modifier(nature_enum, "speed")
                     ),
                 }
-                return max(stats, key=stats.get)
+                # Find highest stat - Speed takes priority when tied
+                max_value = max(stats.values())
+                tied_stats = [stat for stat, val in stats.items() if val == max_value]
+                if "speed" in tied_stats:
+                    return "speed"
+                return tied_stats[0]
 
             # Parse natures
             try:
@@ -1318,6 +1329,43 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     "speed": 0
                 }
 
+            # Auto-detect Protosynthesis/Quark Drive from attacker ability + Booster Energy
+            protosynthesis_boost = None
+            quark_drive_boost = None
+            if attacker_ability_name:
+                ability_normalized = attacker_ability_name.lower().replace(" ", "-")
+                if ability_normalized == "protosynthesis":
+                    if attacker_item and attacker_item.lower().replace(" ", "-") == "booster-energy":
+                        # Calculate which stat gets boosted (highest non-HP stat, Speed priority when tied)
+                        from vgc_mcp_core.calc.stats import calculate_stat, calculate_speed
+                        from vgc_mcp_core.models.pokemon import get_nature_modifier
+                        stats = {
+                            "attack": calculate_stat(atk_base.attack, 31, attacker_full_evs.get("attack", 0), 50, get_nature_modifier(atk_nature, "attack")),
+                            "defense": calculate_stat(atk_base.defense, 31, attacker_full_evs.get("defense", 0), 50, get_nature_modifier(atk_nature, "defense")),
+                            "special_attack": calculate_stat(atk_base.special_attack, 31, attacker_full_evs.get("special_attack", 0), 50, get_nature_modifier(atk_nature, "special_attack")),
+                            "special_defense": calculate_stat(atk_base.special_defense, 31, attacker_full_evs.get("special_defense", 0), 50, get_nature_modifier(atk_nature, "special_defense")),
+                            "speed": calculate_speed(atk_base.speed, 31, attacker_full_evs.get("speed", 0), 50, get_nature_modifier(atk_nature, "speed")),
+                        }
+                        # Speed takes priority when tied
+                        max_value = max(stats.values())
+                        tied_stats = [stat for stat, val in stats.items() if val == max_value]
+                        protosynthesis_boost = "speed" if "speed" in tied_stats else tied_stats[0]
+                elif ability_normalized == "quark-drive":
+                    if attacker_item and attacker_item.lower().replace(" ", "-") == "booster-energy":
+                        from vgc_mcp_core.calc.stats import calculate_stat, calculate_speed
+                        from vgc_mcp_core.models.pokemon import get_nature_modifier
+                        stats = {
+                            "attack": calculate_stat(atk_base.attack, 31, attacker_full_evs.get("attack", 0), 50, get_nature_modifier(atk_nature, "attack")),
+                            "defense": calculate_stat(atk_base.defense, 31, attacker_full_evs.get("defense", 0), 50, get_nature_modifier(atk_nature, "defense")),
+                            "special_attack": calculate_stat(atk_base.special_attack, 31, attacker_full_evs.get("special_attack", 0), 50, get_nature_modifier(atk_nature, "special_attack")),
+                            "special_defense": calculate_stat(atk_base.special_defense, 31, attacker_full_evs.get("special_defense", 0), 50, get_nature_modifier(atk_nature, "special_defense")),
+                            "speed": calculate_speed(atk_base.speed, 31, attacker_full_evs.get("speed", 0), 50, get_nature_modifier(atk_nature, "speed")),
+                        }
+                        # Speed takes priority when tied
+                        max_value = max(stats.values())
+                        tied_stats = [stat for stat, val in stats.items() if val == max_value]
+                        quark_drive_boost = "speed" if "speed" in tied_stats else tied_stats[0]
+
             # Create builds
             attacker = PokemonBuild(
                 name=attacker_name,
@@ -1343,12 +1391,14 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 evs=EVSpread()
             )
 
-            # Create modifiers with Ruinous abilities and item
+            # Create modifiers with Ruinous abilities, item, and Paradox boosts
             modifiers = DamageModifiers(
                 is_doubles=True,
                 sword_of_ruin=sword_of_ruin,
                 beads_of_ruin=beads_of_ruin,
-                attacker_item=attacker_item
+                attacker_item=attacker_item,
+                protosynthesis_boost=protosynthesis_boost,
+                quark_drive_boost=quark_drive_boost
             )
 
             result = calculate_bulk_threshold(
