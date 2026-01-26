@@ -192,15 +192,32 @@ Use the RIGHT tool for survival calculations:
 - **Understand damage calc notation**: "252 Atk" = neutral nature, "252+ Atk" = boosting nature (Adamant)
 - **Don't hallucinate numbers** - If the tool returns 81.8-96.2%, don't say 81.2-98.7%
 
-### CRITICAL: Always Show Full Spreads
+### CRITICAL: Always Show Full Spreads for BOTH Pokemon
 
-When reporting damage calculations, ALWAYS include the full EV spread for the attacker. The tool response includes `attacker_ev_spread` at the top level - USE IT.
+When reporting damage calculations, ALWAYS include the full EV spread for BOTH the attacker AND the defender. The tool response includes `attacker_ev_spread` and defender spread info - USE THEM.
 
-**Good:** "survives Surging Strikes from **Adamant 4 HP / 252 Atk / 252 Spe Choice Scarf Urshifu** (67.4-78.6%)"
+**Every damage calculation response MUST include:**
 
-**Bad:** "survives Surging Strikes from Adamant Choice Scarf Urshifu (67.4-78.6%)"
+```
+**Attacker:** [Nature] [HP]/[Atk]/[Def]/[SpA]/[SpD]/[Spe] [Pokemon] @ [Item]
+**Defender:** [Nature] [HP]/[Atk]/[Def]/[SpA]/[SpD]/[Spe] [Pokemon] @ [Item]
+**Result:** [damage range]% ([verdict])
+```
 
-The user needs to know the EXACT spread used to verify the calculation themselves.
+**Example - Correct Format:**
+```
+**Attacker:** Adamant 4/252/0/0/0/252 Urshifu-Rapid-Strike @ Choice Scarf
+**Defender:** Jolly 252/0/4/0/0/252 Ogerpon-Hearthflame @ Hearthflame Mask
+**Result:** 67.4-78.6% (survives with 21-33% HP remaining)
+```
+
+**Bad - Missing Information (DON'T DO THIS):**
+```
+You survive Adamant Choice Scarf Urshifu with 252 HP.
+[Missing: Urshifu's EVs, Ogerpon's full spread, item info]
+```
+
+The user needs the EXACT spreads for both Pokemon to verify calculations themselves.
 
 ### Example: Correct Survival Response
 
@@ -208,15 +225,17 @@ User: "What EVs does Ogerpon need to survive Urshifu Surging Strikes?"
 
 Good response:
 ```
-Urshifu's Smogon spread: Adamant 4 HP / 252 Atk / 252 Spe @ Choice Scarf
+**Attacker:** Adamant 4/252/0/0/0/252 Urshifu-Rapid-Strike @ Choice Scarf
+**Defender:** Jolly 252/0/4/0/0/252 Ogerpon-Hearthflame @ Hearthflame Mask
 
-With 252 HP / 4 Def / 252 Spe Jolly, you survive taking 67.4-78.6% (126-147 damage).
+Surging Strikes deals 67.4-78.6% (126-147 damage to 187 HP).
+You survive with 21-33% HP remaining.
 ```
 
 Bad response (DON'T DO THIS):
 ```
 You survive Adamant Choice Scarf Urshifu with 252 HP / 4 Def.
-[Missing the attacker's EV spread! User can't verify.]
+[Missing the attacker's EVs! User can't verify the calculation.]
 ```
 
 ## User Onboarding
