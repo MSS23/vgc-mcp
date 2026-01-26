@@ -14,7 +14,19 @@ Run VGC team building tools **locally** on your computer with Claude Desktop.
 
 ---
 
-## Quick Setup (Recommended)
+## One-Click Setup (Windows)
+
+**Easiest method for Windows users:**
+
+1. Install Python from https://python.org (check "Add to PATH")
+2. Download this project (ZIP or git clone)
+3. **Double-click `setup.bat`**
+
+That's it! The script installs everything and configures Claude Desktop automatically.
+
+---
+
+## Manual Setup
 
 ### Step 1: Install Python
 
