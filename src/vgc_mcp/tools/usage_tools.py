@@ -107,26 +107,42 @@ def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
         """
         Get information about the currently detected VGC format.
 
+        Shows both the configured regulation and the actual regulation
+        the data is from (they may differ if Smogon doesn't have the
+        latest regulation's stats yet).
+
         Returns:
-            Current format name, month, regulation, and available formats.
-            Includes a notice if newer data became available mid-session.
+            Current format name, month, actual and configured regulation,
+            available formats, and any mismatch warnings.
         """
         try:
             # Trigger a fetch to populate current format info
             await smogon.get_usage_stats()
 
+            actual_reg_letter = smogon.current_regulation_from_data
+            configured_reg = smogon.regulation_config.current_regulation
+            configured_letter = configured_reg.replace("reg_", "").upper()
+
             result = {
                 "current_format": smogon.current_format,
                 "current_month": smogon.current_month,
-                "regulation": smogon.regulation_config.current_regulation_name,
+                "data_regulation": f"Regulation {actual_reg_letter}" if actual_reg_letter else "Unknown",
+                "configured_regulation": smogon.regulation_config.current_regulation_name,
                 "available_formats": smogon.VGC_FORMATS[:5],
                 "rating_cutoffs": smogon.RATING_CUTOFFS
             }
 
-            # Include data freshness notice if available
-            notice = smogon.check_data_freshness()
-            if notice:
-                result["notice"] = notice
+            # Check for regulation mismatch
+            if actual_reg_letter and configured_letter != actual_reg_letter:
+                result["notice"] = (
+                    f"Note: Configured for Reg {configured_letter} but using Reg {actual_reg_letter} data "
+                    f"(Smogon may not have Reg {configured_letter} stats yet)"
+                )
+            else:
+                # Include data freshness notice if available
+                notice = smogon.check_data_freshness()
+                if notice:
+                    result["notice"] = notice
 
             return result
 

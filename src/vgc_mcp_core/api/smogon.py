@@ -83,6 +83,23 @@ class SmogonStatsClient:
         """
         return settings.SMOGON_RATING_CUTOFFS
 
+    @property
+    def current_regulation_from_data(self) -> Optional[str]:
+        """Extract regulation letter from the current format string.
+
+        e.g., 'gen9vgc2025regh' -> 'H', 'gen9vgc2026regf' -> 'F'
+
+        Returns:
+            Single uppercase letter (e.g., 'F', 'G', 'H') or None if not detected
+        """
+        if not self._current_format:
+            return None
+        import re
+        match = re.search(r'reg([a-z])', self._current_format.lower())
+        if match:
+            return match.group(1).upper()
+        return None
+
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client with connection pooling."""
         if self._client is None or self._client.is_closed:
