@@ -1503,8 +1503,9 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 reg_str = f" [{reg}]" if reg else ""
                 table_lines.append(f"| Spread Source    | Smogon ({usage:.1f}% usage){reg_str}        |")
 
-            # Build analysis string with explicit item mention
+            # Build analysis string with explicit attacker and defender info
             item_str = f" with {attacker_item.replace('-', ' ').title()}" if attacker_item else ""
+            defender_ev_str = f"{result['hp_evs']} HP / {result['def_evs']} {result['def_stat_name']}"
 
             response = {
                 "attacker": attacker_name,
@@ -1515,6 +1516,9 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "attacker_ability": attacker_ability_name.replace("-", " ").title() if attacker_ability_name else None,
                 "attacker_spread": attacker_spread_info,
                 "defender": defender_name,
+                # Top-level defender info for LLM visibility
+                "defender_nature": defender_nature.title(),
+                "defender_recommended_spread": defender_ev_str,
                 "move": move_name,
                 "achievable": True,
                 "hp_evs_needed": result["hp_evs"],
@@ -1523,7 +1527,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "survival_chance": f"{result['survival_chance']:.2f}%",
                 "damage_range": result["damage_range"],
                 "summary_table": "\n".join(table_lines),
-                "analysis": f"Need {result['hp_evs']} HP / {result['def_evs']} {result['def_stat_name']} EVs to survive {move_name} from {attacker_nature.title()} {ev_string}{item_str} {attacker_name} — takes {result['damage_range']}"
+                "analysis": f"{defender_name} needs {defender_ev_str} EVs ({defender_nature.title()}) to survive {move_name} from {attacker_nature.title()} {ev_string}{item_str} {attacker_name} — takes {result['damage_range']}"
             }
 
             # Add regulation to top-level response for visibility
