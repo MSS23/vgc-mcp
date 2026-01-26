@@ -869,10 +869,26 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     "value": str(details["defender_stat"]),
                     "notes": f"{'Def' if move.category.value == 'physical' else 'SpD'} stat"
                 })
-            
+
+            # Build attacker EV string for top-level visibility
+            atk_evs_for_string = attacker_spread_info.get("evs", {}) if attacker_spread_info else {
+                "hp": 0, "attack": attacker_atk_evs, "defense": 0,
+                "special_attack": attacker_spa_evs, "special_defense": 0, "speed": 0
+            }
+            ev_parts = []
+            for stat, abbrev in [("hp", "HP"), ("attack", "Atk"), ("defense", "Def"),
+                                  ("special_attack", "SpA"), ("special_defense", "SpD"), ("speed", "Spe")]:
+                ev_val = atk_evs_for_string.get(stat, 0)
+                if ev_val > 0:
+                    ev_parts.append(f"{ev_val} {abbrev}")
+            attacker_ev_string = " / ".join(ev_parts) if ev_parts else "0 EVs"
+
             # Build response
             response = {
                 "attacker": attacker_name,
+                # Top-level attacker info for LLM visibility
+                "attacker_nature": attacker_nature.title(),
+                "attacker_ev_spread": attacker_ev_string,
                 "attacker_ability": attacker_ability,
                 "attacker_item": attacker_item,
                 "attacker_tera": attacker_tera_type,
