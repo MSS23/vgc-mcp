@@ -144,11 +144,39 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
                 except Exception:
                     pass  # Fall through to fallbacks
 
-            # Fallback 1: META_SPEED_TIERS (hardcoded)
+            # Fallback 1: META_SPEED_TIERS (calculated dynamically from spreads)
             if not target_spreads:
-                target_data = META_SPEED_TIERS.get(target_lower)
+                from vgc_mcp_core.calc.speed import get_meta_speed_tier
+                target_data = get_meta_speed_tier(target_pokemon)
                 if target_data:
-                    common_speeds = target_data["common_speeds"]
+                    # Calculate speeds dynamically from spreads if available
+                    common_speeds = target_data.get("common_speeds", [])
+                    if not common_speeds and "spreads" in target_data:
+                        # Calculate from spreads
+                        from vgc_mcp_core.calc.stats import calculate_speed
+                        NATURE_MAP = {
+                            "adamant": Nature.ADAMANT, "bashful": Nature.BASHFUL, "bold": Nature.BOLD,
+                            "brave": Nature.BRAVE, "calm": Nature.CALM, "careful": Nature.CAREFUL,
+                            "docile": Nature.DOCILE, "gentle": Nature.GENTLE, "hardy": Nature.HARDY,
+                            "hasty": Nature.HASTY, "impish": Nature.IMPISH, "jolly": Nature.JOLLY,
+                            "lax": Nature.LAX, "lonely": Nature.LONELY, "mild": Nature.MILD,
+                            "modest": Nature.MODEST, "naive": Nature.NAIVE, "naughty": Nature.NAUGHTY,
+                            "quiet": Nature.QUIET, "quirky": Nature.QUIRKY, "rash": Nature.RASH,
+                            "relaxed": Nature.RELAXED, "sassy": Nature.SASSY, "serious": Nature.SERIOUS,
+                            "timid": Nature.TIMID,
+                        }
+                        base = target_data["base"]
+                        speed_set = set()
+                        for spread in target_data["spreads"]:
+                            nature_str = spread.get("nature", "Serious").lower()
+                            speed_evs = spread.get("evs", 0)
+                            nature = NATURE_MAP.get(nature_str, Nature.SERIOUS)
+                            speed = calculate_speed(base, 31, speed_evs, 50, nature)
+                            if speed not in speed_set:
+                                speed_set.add(speed)
+                                common_speeds.append(speed)
+                        common_speeds.sort(reverse=True)
+                    
                     usage_per = 100 // len(common_speeds) if common_speeds else 100
                     target_spreads = [
                         {"speed": s, "usage": usage_per}

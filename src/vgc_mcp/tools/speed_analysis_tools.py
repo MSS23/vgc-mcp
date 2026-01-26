@@ -351,15 +351,19 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
 
         # Add meta Pokemon for reference
         if compare_to_meta:
-            for mon, data in META_SPEED_TIERS.items():
-                for speed in data["common_speeds"][:2]:  # Top 2 common speeds
-                    all_pokemon.append({
-                        "name": mon,
-                        "speed": speed,
-                        "is_yours": False,
-                        "base_speed": data["base"],
-                        "tailwind_speed": speed * 2 if include_tailwind else None
-                    })
+            from vgc_mcp_core.calc.speed import get_meta_speed_tier
+            for mon in META_SPEED_TIERS.keys():
+                data = get_meta_speed_tier(mon)
+                if data:
+                    common_speeds = data.get("common_speeds", [])
+                    for speed in common_speeds[:2]:  # Top 2 common speeds
+                        all_pokemon.append({
+                            "name": mon,
+                            "speed": speed,
+                            "is_yours": False,
+                            "base_speed": data["base"],
+                            "tailwind_speed": speed * 2 if include_tailwind else None
+                        })
 
         # Sort by speed (descending for normal, ascending for TR)
         if include_trick_room:
@@ -448,10 +452,14 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
             Speed tier information for meta Pokemon
         """
         result = []
+        from vgc_mcp_core.calc.speed import get_meta_speed_tier
 
-        for mon, data in META_SPEED_TIERS.items():
+        for mon in META_SPEED_TIERS.keys():
+            data = get_meta_speed_tier(mon)
+            if not data:
+                continue
             base = data["base"]
-            speeds = data["common_speeds"]
+            speeds = data.get("common_speeds", [])
 
             entry = {
                 "pokemon": mon,
@@ -546,9 +554,14 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
                 results["your_pokemon"] = {"error": str(e)}
 
         # Check meta Pokemon
-        for mon, data in META_SPEED_TIERS.items():
-            max_speed = calculate_speed(data["base"], 31, 252, 50, Nature.JOLLY)
-            neutral_max = calculate_speed(data["base"], 31, 252, 50, Nature.HARDY)
+        from vgc_mcp_core.calc.speed import get_meta_speed_tier
+        for mon in META_SPEED_TIERS.keys():
+            data = get_meta_speed_tier(mon)
+            if not data:
+                continue
+            base = data["base"]
+            max_speed = calculate_speed(base, 31, 252, 50, Nature.JOLLY)
+            neutral_max = calculate_speed(base, 31, 252, 50, Nature.HARDY)
 
             if max_speed == target_speed or neutral_max == target_speed:
                 results["pokemon_at_this_speed"].append({
@@ -784,12 +797,15 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
             # Find what this outspeeds
             outspeeds = []
             underspeeds = []
+            from vgc_mcp_core.calc.speed import get_speed_tier_info
 
-            for mon, data in SPEED_BENCHMARKS.items():
-                if "max_positive" in data:
-                    if modified > data["max_positive"]:
+            for mon in SPEED_BENCHMARKS.keys():
+                data = get_speed_tier_info(mon)
+                if data and data.get("max_positive"):
+                    max_positive = data["max_positive"]
+                    if modified > max_positive:
                         outspeeds.append(f"Max Speed {mon.replace('-', ' ').title()}")
-                    elif modified < data["max_positive"]:
+                    elif modified < max_positive:
                         underspeeds.append(f"Max Speed {mon.replace('-', ' ').title()}")
 
             return {

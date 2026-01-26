@@ -159,33 +159,68 @@ def find_speed_evs_to_underspeed(
     return None  # Cannot underspeed
 
 
-# Common speed benchmarks for VGC (updated for current meta)
+# Common speed benchmarks for VGC - only base speeds stored, calculated dynamically
+# All speed values are calculated using the speed formula, not hardcoded
 SPEED_BENCHMARKS = {
-    # Base speeds for quick reference
-    "regieleki": {"base": 200, "max_positive": 277, "max_neutral": 252},
-    "electrode-hisui": {"base": 150, "max_positive": 222, "max_neutral": 202},
-    "dragapult": {"base": 142, "max_positive": 213, "max_neutral": 194},
-    "iron-bundle": {"base": 136, "max_positive": 205, "max_neutral": 187},
-    "flutter-mane": {"base": 135, "max_positive": 205, "max_neutral": 187},
-    "miraidon": {"base": 135, "max_positive": 205, "max_neutral": 187},
-    "koraidon": {"base": 135, "max_positive": 205, "max_neutral": 187},
-    "raging-bolt": {"base": 91, "max_positive": 139, "max_neutral": 127},
-    "chi-yu": {"base": 100, "max_positive": 152, "max_neutral": 138},
-    "urshifu": {"base": 97, "max_positive": 148, "max_neutral": 135},
-    "urshifu-rapid-strike": {"base": 97, "max_positive": 148, "max_neutral": 135},
-    "palafin-hero": {"base": 100, "max_positive": 152, "max_neutral": 138},
-    "tornadus": {"base": 111, "max_positive": 167, "max_neutral": 152},
-    "landorus": {"base": 101, "max_positive": 154, "max_neutral": 140},
-    "landorus-therian": {"base": 91, "max_positive": 139, "max_neutral": 127},
-    "gholdengo": {"base": 84, "max_positive": 130, "max_neutral": 119},
-    "rillaboom": {"base": 85, "max_positive": 132, "max_neutral": 120},
-    "incineroar": {"base": 60, "neutral_0ev": 80, "min_negative": 58},
-    "kingambit": {"base": 50, "neutral_0ev": 70, "min_negative": 49},
-    "iron-hands": {"base": 50, "neutral_0ev": 70, "min_negative": 49},
-    "amoonguss": {"base": 30, "neutral_0ev": 50, "min_negative": 31},
-    "dondozo": {"base": 35, "neutral_0ev": 55, "min_negative": 36},
-    "ting-lu": {"base": 45, "neutral_0ev": 65, "min_negative": 45},
+    # Base speeds only - all other values calculated dynamically
+    "regieleki": {"base": 200},
+    "electrode-hisui": {"base": 150},
+    "dragapult": {"base": 142},
+    "iron-bundle": {"base": 136},
+    "flutter-mane": {"base": 135},
+    "miraidon": {"base": 135},
+    "koraidon": {"base": 135},
+    "raging-bolt": {"base": 110},
+    "chi-yu": {"base": 100},
+    "urshifu": {"base": 97},
+    "urshifu-rapid-strike": {"base": 97},
+    "palafin-hero": {"base": 100},
+    "tornadus": {"base": 111},
+    "landorus": {"base": 101},
+    "landorus-therian": {"base": 91},
+    "gholdengo": {"base": 84},
+    "rillaboom": {"base": 85},
+    "incineroar": {"base": 60},
+    "kingambit": {"base": 50},
+    "iron-hands": {"base": 50},
+    "amoonguss": {"base": 30},
+    "dondozo": {"base": 35},
+    "ting-lu": {"base": 45},
 }
+
+
+def get_speed_benchmark(pokemon_name: str, benchmark_type: str = "max_positive") -> Optional[int]:
+    """
+    Get a speed benchmark for a Pokemon, calculated dynamically.
+    
+    Args:
+        pokemon_name: Pokemon name (normalized, e.g., "rillaboom")
+        benchmark_type: Type of benchmark:
+            - "max_positive": Max speed with +Speed nature (Jolly/Timid), 252 EVs, 31 IV
+            - "max_neutral": Max speed with neutral nature, 252 EVs, 31 IV
+            - "neutral_0ev": Speed with neutral nature, 0 EVs, 31 IV
+            - "min_negative": Min speed with -Speed nature (Brave/Quiet), 0 EVs, 0 IV
+    
+    Returns:
+        Speed stat value or None if Pokemon not found
+    """
+    data = SPEED_BENCHMARKS.get(pokemon_name.lower().replace(" ", "-"))
+    if not data:
+        return None
+    
+    base = data["base"]
+    
+    if benchmark_type == "max_positive":
+        # Use Jolly for physical attackers, Timid for special - default to Jolly
+        return calculate_speed(base, 31, 252, 50, Nature.JOLLY)
+    elif benchmark_type == "max_neutral":
+        return calculate_speed(base, 31, 252, 50, Nature.SERIOUS)
+    elif benchmark_type == "neutral_0ev":
+        return calculate_speed(base, 31, 0, 50, Nature.SERIOUS)
+    elif benchmark_type == "min_negative":
+        return calculate_speed(base, 0, 0, 50, Nature.BRAVE)
+    
+    return None
 
 
 # VGC Meta Speed Tiers - Common competitive speeds for VGC Pokemon
@@ -750,20 +785,77 @@ META_SPEED_TIERS = {
 
 
 def get_speed_tier_info(pokemon_name: str) -> Optional[dict]:
-    """Get speed benchmark info for a Pokemon."""
+    """
+    Get speed benchmark info for a Pokemon with dynamically calculated values.
+    
+    Returns dict with base speed and calculated benchmarks.
+    """
     name = pokemon_name.lower().replace(" ", "-")
-    return SPEED_BENCHMARKS.get(name)
+    data = SPEED_BENCHMARKS.get(name)
+    if not data:
+        return None
+    
+    base = data["base"]
+    return {
+        "base": base,
+        "max_positive": get_speed_benchmark(name, "max_positive"),
+        "max_neutral": get_speed_benchmark(name, "max_neutral"),
+        "neutral_0ev": get_speed_benchmark(name, "neutral_0ev"),
+        "min_negative": get_speed_benchmark(name, "min_negative"),
+    }
 
 
 def get_meta_speed_tier(pokemon_name: str) -> Optional[dict]:
-    """Get VGC meta speed tier info for a Pokemon (includes common speeds)."""
+    """
+    Get VGC meta speed tier info for a Pokemon with dynamically calculated speeds.
+    
+    Calculates common_speeds from spreads data instead of using hardcoded values.
+    """
     name = pokemon_name.lower().replace(" ", "-")
 
     # Normalize Ogerpon mask form names (e.g., "ogerpon-wellspring-mask" -> "ogerpon-wellspring")
     if name.endswith("-mask"):
         name = name.replace("-mask", "")
 
-    return META_SPEED_TIERS.get(name)
+    data = META_SPEED_TIERS.get(name)
+    if not data:
+        return None
+    
+    # Calculate common_speeds dynamically from spreads if available
+    if "spreads" in data and "base" in data:
+        base = data["base"]
+        calculated_speeds = []
+        speed_set = set()
+        
+        # Nature name -> Nature enum mapping
+        NATURE_MAP = {
+            "adamant": Nature.ADAMANT, "bashful": Nature.BASHFUL, "bold": Nature.BOLD,
+            "brave": Nature.BRAVE, "calm": Nature.CALM, "careful": Nature.CAREFUL,
+            "docile": Nature.DOCILE, "gentle": Nature.GENTLE, "hardy": Nature.HARDY,
+            "hasty": Nature.HASTY, "impish": Nature.IMPISH, "jolly": Nature.JOLLY,
+            "lax": Nature.LAX, "lonely": Nature.LONELY, "mild": Nature.MILD,
+            "modest": Nature.MODEST, "naive": Nature.NAIVE, "naughty": Nature.NAUGHTY,
+            "quiet": Nature.QUIET, "quirky": Nature.QUIRKY, "rash": Nature.RASH,
+            "relaxed": Nature.RELAXED, "sassy": Nature.SASSY, "serious": Nature.SERIOUS,
+            "timid": Nature.TIMID,
+        }
+        
+        for spread in data["spreads"]:
+            nature_str = spread.get("nature", "Serious").lower()
+            speed_evs = spread.get("evs", 0)
+            nature = NATURE_MAP.get(nature_str, Nature.SERIOUS)
+            speed = calculate_speed(base, 31, speed_evs, 50, nature)
+            if speed not in speed_set:
+                speed_set.add(speed)
+                calculated_speeds.append(speed)
+        
+        # Sort descending and return copy with calculated speeds
+        calculated_speeds.sort(reverse=True)
+        result = data.copy()
+        result["common_speeds"] = calculated_speeds
+        return result
+    
+    return data
 
 
 def calculate_speed_tier(
@@ -785,19 +877,24 @@ def calculate_speed_tier(
     underspeeds = []
 
     for mon, data in SPEED_BENCHMARKS.items():
-        if "max_positive" in data:
-            if speed > data["max_positive"]:
+        base = data["base"]
+        max_positive = get_speed_benchmark(mon, "max_positive")
+        max_neutral = get_speed_benchmark(mon, "max_neutral")
+        neutral_0ev = get_speed_benchmark(mon, "neutral_0ev")
+        
+        if max_positive:
+            if speed > max_positive:
                 outspeeds.append(f"Max Speed {mon.replace('-', ' ').title()}")
-            elif speed == data["max_positive"]:
+            elif speed == max_positive:
                 ties_with.append(f"Max Speed {mon.replace('-', ' ').title()}")
 
-        if "max_neutral" in data:
-            if speed > data["max_neutral"]:
-                if speed <= data.get("max_positive", 999):
+        if max_neutral:
+            if speed > max_neutral:
+                if speed <= (max_positive or 999):
                     outspeeds.append(f"Neutral Speed {mon.replace('-', ' ').title()}")
 
-        if "neutral_0ev" in data:
-            if speed < data["neutral_0ev"]:
+        if neutral_0ev:
+            if speed < neutral_0ev:
                 underspeeds.append(f"Base {mon.replace('-', ' ').title()}")
 
     return {
