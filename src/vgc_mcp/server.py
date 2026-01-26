@@ -68,6 +68,20 @@ from .tools.diff_tools import register_diff_tools
 from .tools.report_tools import register_report_tools
 from .tools.speed_tools import register_speed_tools
 from .tools.tournament_tools import register_tournament_tools
+from .tools.multi_threat_tools import register_multi_threat_tools
+from .tools.team_matchup_tools import register_team_matchup_tools
+from .tools.tera_tools import register_tera_tools
+from .tools.lead_tools import register_lead_tools_new
+from .tools.speed_viz_tools import register_speed_viz_tools
+from .tools.readiness_tools import register_readiness_tools
+from .tools.glossary_tools import register_glossary_tools
+from .tools.education_tools import register_education_tools
+from .tools.help_tools import register_help_tools
+from .tools.build_checker_tools import register_build_checker_tools
+from .tools.wizard_tools import register_wizard_tools
+from .tools.type_tools import register_type_tools
+from .tools.onboarding_tools import register_onboarding_tools
+from .tools.command_tools import register_command_tools
 
 # Note: MCP-UI is only enabled in vgc-mcp-lite for smaller footprint
 # Full server focuses on tool completeness over visual components
@@ -139,6 +153,26 @@ register_speed_tools(mcp, pokeapi, smogon)
 
 # Tournament matchup analysis tools
 register_tournament_tools(mcp, pokepaste, pokeapi, smogon)
+
+# New comprehensive tools (Part 2)
+register_multi_threat_tools(mcp, pokeapi)
+register_team_matchup_tools(mcp, pokeapi, smogon, team_manager)
+register_tera_tools(mcp, pokeapi)
+register_lead_tools_new(mcp, pokeapi)
+register_speed_viz_tools(mcp, pokeapi, smogon)
+register_readiness_tools(mcp, pokeapi)
+
+# Beginner-friendly tools (Part 4)
+register_glossary_tools(mcp)
+register_education_tools(mcp, pokeapi)
+register_help_tools(mcp)
+register_build_checker_tools(mcp, pokeapi)
+register_wizard_tools(mcp)
+register_type_tools(mcp, pokeapi)
+
+# Discoverability and onboarding tools (Part 0)
+register_onboarding_tools(mcp)
+register_command_tools(mcp)
 
 
 def main():

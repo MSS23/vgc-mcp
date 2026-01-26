@@ -178,6 +178,178 @@ async def _get_common_spread(pokemon_name: str) -> Optional[dict]:
     return spreads[0] if spreads else None
 
 
+def format_transparent_output(
+    attacker: PokemonBuild,
+    defender: PokemonBuild,
+    move,
+    damage_result,
+    modifiers_applied: list[str],
+    calculation_steps: Optional[list[dict]] = None
+) -> str:
+    """Generate transparent markdown output showing full calculation.
+    
+    Args:
+        attacker: Attacking Pokemon build
+        defender: Defending Pokemon build
+        move: Move object
+        damage_result: DamageResult from calculate_damage
+        modifiers_applied: List of modifier strings
+        calculation_steps: Optional list of calculation step dicts
+        
+    Returns:
+        Formatted markdown string with full calculation breakdown
+    """
+    from vgc_mcp_core.calc.stats import calculate_all_stats
+    
+    # Calculate final stats for both Pokemon
+    attacker_stats = calculate_all_stats(attacker)
+    defender_stats = calculate_all_stats(defender)
+    
+    # Format nature string
+    def format_nature(nature: Nature) -> str:
+        if nature == Nature.SERIOUS:
+            return "Serious"
+        plus_stat = nature.value.split("_")[0].title()
+        minus_stat = nature.value.split("_")[1].title() if "_" in nature.value else ""
+        if minus_stat:
+            return f"{plus_stat} (+{plus_stat}, -{minus_stat})"
+        return plus_stat
+    
+    # Get stat abbreviations
+    def get_stat_abbrev(stat_name: str) -> str:
+        abbrevs = {
+            "hp": "HP", "attack": "Atk", "defense": "Def",
+            "special_attack": "SpA", "special_defense": "SpD", "speed": "Spe"
+        }
+        return abbrevs.get(stat_name, stat_name.title())
+    
+    lines = []
+    lines.append("## Damage Calculation\n")
+    
+    # Attacker section
+    lines.append(f"### Attacker: {attacker.name}")
+    lines.append("| Stat | HP | Atk | Def | SpA | SpD | Spe |")
+    lines.append("|------|-----|-----|-----|-----|-----|-----|")
+    
+    # Base stats
+    base_line = "| Base |"
+    for stat in ["hp", "attack", "defense", "special_attack", "special_defense", "speed"]:
+        base_line += f" {attacker.base_stats.__dict__[stat]} |"
+    lines.append(base_line)
+    
+    # EVs
+    ev_line = "| EVs  |"
+    for stat in ["hp", "attack", "defense", "special_attack", "special_defense", "speed"]:
+        ev_value = attacker.evs.__dict__.get(stat, 0)
+        ev_line += f" {ev_value} |"
+    lines.append(ev_line)
+    
+    # Final stats
+    final_line = "| Final|"
+    for stat in ["hp", "attack", "defense", "special_attack", "special_defense", "speed"]:
+        final_line += f" {attacker_stats[stat]} |"
+    lines.append(final_line)
+    lines.append("")
+    
+    # Attacker details
+    lines.append(f"**Nature:** {format_nature(attacker.nature)}")
+    lines.append(f"**Item:** {attacker.item or 'None'}")
+    lines.append(f"**Ability:** {attacker.ability or 'None'}")
+    if attacker.tera_type:
+        lines.append(f"**Tera:** {attacker.tera_type.title()} (Active)")
+    else:
+        lines.append("**Tera:** None")
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+    
+    # Defender section
+    lines.append(f"### Defender: {defender.name}")
+    lines.append("| Stat | HP | Atk | Def | SpA | SpD | Spe |")
+    lines.append("|------|-----|-----|-----|-----|-----|-----|")
+    
+    # Base stats
+    base_line = "| Base |"
+    for stat in ["hp", "attack", "defense", "special_attack", "special_defense", "speed"]:
+        base_line += f" {defender.base_stats.__dict__[stat]} |"
+    lines.append(base_line)
+    
+    # EVs
+    ev_line = "| EVs  |"
+    for stat in ["hp", "attack", "defense", "special_attack", "special_defense", "speed"]:
+        ev_value = defender.evs.__dict__.get(stat, 0)
+        ev_line += f" {ev_value} |"
+    lines.append(ev_line)
+    
+    # Final stats
+    final_line = "| Final|"
+    for stat in ["hp", "attack", "defense", "special_attack", "special_defense", "speed"]:
+        final_line += f" {defender_stats[stat]} |"
+    lines.append(final_line)
+    lines.append("")
+    
+    # Defender details
+    lines.append(f"**Nature:** {format_nature(defender.nature)}")
+    lines.append(f"**Item:** {defender.item or 'None'}")
+    lines.append(f"**Ability:** {defender.ability or 'None'}")
+    if defender.tera_type:
+        lines.append(f"**Tera:** {defender.tera_type.title()} (Active)")
+    else:
+        lines.append("**Tera:** None")
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+    
+    # Move section
+    lines.append(f"### Move: {move.name}")
+    lines.append("| Base Power | Type | Category | Accuracy |")
+    lines.append("|------------|------|----------|----------|")
+    accuracy_str = f"{move.accuracy}%" if move.accuracy else "—"
+    lines.append(f"| {move.power} | {move.type.title()} | {move.category.value.title()} | {accuracy_str} |")
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+    
+    # Calculation breakdown
+    if calculation_steps:
+        lines.append("### Calculation Breakdown")
+        lines.append("| Step | Value | Notes |")
+        lines.append("|------|-------|-------|")
+        for step in calculation_steps:
+            step_name = step.get("name", "")
+            value = step.get("value", "")
+            notes = step.get("notes", "")
+            lines.append(f"| {step_name} | {value} | {notes} |")
+        lines.append("")
+    
+    # Result section
+    lines.append("### Result")
+    lines.append("| Min | Max | % Range | HP After | Verdict |")
+    lines.append("|-----|-----|---------|----------|---------|")
+    
+    hp_after_min = max(0, defender_stats["hp"] - damage_result.max_damage)
+    hp_after_max = max(0, defender_stats["hp"] - damage_result.min_damage)
+    
+    verdict = damage_result.ko_chance
+    if damage_result.is_guaranteed_ohko:
+        verdict = "OHKO"
+    elif damage_result.is_possible_ohko:
+        verdict = f"{damage_result.ko_chance}"
+    
+    lines.append(f"| {damage_result.min_damage} | {damage_result.max_damage} | "
+                f"{damage_result.min_percent:.1f}-{damage_result.max_percent:.1f}% | "
+                f"{hp_after_min}-{hp_after_max} | {verdict} |")
+    lines.append("")
+    
+    # Modifiers applied
+    if modifiers_applied:
+        lines.append("### Modifiers Applied")
+        for mod in modifiers_applied:
+            lines.append(f"- {mod}")
+    
+    return "\n".join(lines)
+
+
 def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[SmogonStatsClient] = None):
     """Register damage calculation tools with the MCP server."""
     global _smogon_client
@@ -658,6 +830,28 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             # Calculate primary result (first spread or custom)
             result = calculate_damage(attacker, defender, move, modifiers)
 
+            # Build calculation steps for transparent output
+            calculation_steps = []
+            details = result.details
+            if details.get("base_power"):
+                calculation_steps.append({
+                    "name": "Base Power",
+                    "value": str(details["base_power"]),
+                    "notes": f"{move.name} base power"
+                })
+            if details.get("attacker_stat"):
+                calculation_steps.append({
+                    "name": "Attacker Stat",
+                    "value": str(details["attacker_stat"]),
+                    "notes": f"{'Atk' if move.category.value == 'physical' else 'SpA'} stat"
+                })
+            if details.get("defender_stat"):
+                calculation_steps.append({
+                    "name": "Defender Stat",
+                    "value": str(details["defender_stat"]),
+                    "notes": f"{'Def' if move.category.value == 'physical' else 'SpD'} stat"
+                })
+            
             # Build response
             response = {
                 "attacker": attacker_name,
@@ -685,7 +879,15 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "is_possible_ohko": result.is_possible_ohko,
                 "all_rolls": result.rolls,
                 "modifiers": result.details.get("modifiers_applied", []),
-                "type_effectiveness": result.details.get("type_effectiveness", 1.0)
+                "type_effectiveness": result.details.get("type_effectiveness", 1.0),
+                "transparent_output": format_transparent_output(
+                    attacker,
+                    defender,
+                    move,
+                    result,
+                    result.details.get("modifiers_applied", []),
+                    calculation_steps
+                )
             }
 
             # Add multi-spread results if available

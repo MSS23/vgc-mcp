@@ -7316,7 +7316,7 @@ def create_pokemon_build_card_ui(
     Returns:
         Complete HTML string for the build card
     """
-    from .design_system import DESIGN_TOKENS, ANIMATIONS, TYPE_COLORS
+    from ..design_system import DESIGN_TOKENS, ANIMATIONS, TYPE_COLORS
 
     # Default items if not provided
     if items is None:

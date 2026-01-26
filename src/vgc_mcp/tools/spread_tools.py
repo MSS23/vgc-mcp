@@ -17,6 +17,7 @@ from vgc_mcp_core.models.pokemon import Nature, get_nature_modifier, PokemonBuil
 from vgc_mcp_core.models.move import Move, MoveCategory
 from vgc_mcp_core.config import EV_BREAKPOINTS_LV50, normalize_evs
 from vgc_mcp_core.utils.synergies import get_synergy_ability
+import math
 
 
 # Module-level Smogon client reference (set during registration)
@@ -49,6 +50,53 @@ META_SYNERGIES = {
     "ting-lu": ("Leftovers", "Vessel of Ruin"),
     "wo-chien": ("Rocky Helmet", "Tablets of Ruin"),
 }
+
+
+def _find_min_evs_for_stat(base: int, iv: int, target_stat: int, nature_mod: float, level: int = 50) -> int:
+    """
+    Find minimum EVs needed to reach target_stat with given nature modifier.
+    
+    Formula: target_stat = floor((floor((2*base + IV + EV/4) * level/100) + 5) * nature_mod)
+    We need to reverse-engineer EV from target_stat.
+    
+    Args:
+        base: Base stat value
+        iv: IV value (typically 31)
+        target_stat: Target final stat value
+        nature_mod: Nature modifier (0.9, 1.0, or 1.1)
+        level: Pokemon level (default 50)
+        
+    Returns:
+        Minimum EVs needed (0-252)
+    """
+    # Reverse the formula: target_stat = floor((floor((2*base + IV + EV/4) * 0.5) + 5) * nature_mod)
+    # We need: floor((2*base + IV + EV/4) * 0.5) + 5 >= target_stat / nature_mod
+    
+    # Calculate what the inner value needs to be
+    # target_stat / nature_mod gives us the value before nature is applied
+    # But we need to account for flooring
+    required_inner_plus_5 = target_stat / nature_mod
+    
+    # The inner value (before +5) needs to be at least ceil(required_inner_plus_5 - 5)
+    # But actually, we need to account for flooring in the calculation
+    # Let's try a different approach: iterate through EV breakpoints
+    
+    for ev in EV_BREAKPOINTS_LV50:
+        calculated_stat = calculate_stat(base, iv, ev, level, nature_mod)
+        if calculated_stat >= target_stat:
+            return ev
+    
+    # If we can't reach it even with 252 EVs, return 252
+    return 252
+
+
+def _find_min_evs_for_hp(base: int, iv: int, target_hp: int, level: int = 50) -> int:
+    """Find minimum EVs needed to reach target HP."""
+    for ev in EV_BREAKPOINTS_LV50:
+        calculated_hp = calculate_hp(base, iv, ev, level)
+        if calculated_hp >= target_hp:
+            return ev
+    return 252
 
 
 async def _get_common_spread(pokemon_name: str) -> Optional[dict]:
@@ -196,6 +244,256 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             }
 
         except Exception as e:
+            return {"error": str(e)}
+
+    @mcp.tool()
+    async def suggest_nature_optimization(
+        pokemon_name: str,
+        current_nature: str,
+        hp_evs: int,
+        atk_evs: int,
+        def_evs: int,
+        spa_evs: int,
+        spd_evs: int,
+        spe_evs: int,
+        moves: Optional[list[str]] = None
+    ) -> dict:
+        """
+        Suggest a nature change that achieves same stats with fewer EVs.
+        Like Showdown's "Use a different nature to save X EVs" feature.
+        
+        Args:
+            pokemon_name: Pokemon name
+            current_nature: Current nature (e.g., "serious", "timid")
+            hp_evs through spe_evs: Current EV spread
+            moves: Optional list of moves to determine physical/special preference
+            
+        Returns:
+            Nature optimization suggestion with EV savings
+        """
+        try:
+            base_stats = await pokeapi.get_base_stats(pokemon_name)
+            
+            # Parse current nature
+            try:
+                current_nature_enum = Nature(current_nature.lower())
+            except ValueError:
+                return {"error": f"Invalid nature: {current_nature}"}
+            
+            # Calculate current final stats
+            current_stats = {
+                "hp": calculate_hp(base_stats.hp, 31, hp_evs, 50),
+                "attack": calculate_stat(base_stats.attack, 31, atk_evs, 50, get_nature_modifier(current_nature_enum, "attack")),
+                "defense": calculate_stat(base_stats.defense, 31, def_evs, 50, get_nature_modifier(current_nature_enum, "defense")),
+                "special_attack": calculate_stat(base_stats.special_attack, 31, spa_evs, 50, get_nature_modifier(current_nature_enum, "special_attack")),
+                "special_defense": calculate_stat(base_stats.special_defense, 31, spd_evs, 50, get_nature_modifier(current_nature_enum, "special_defense")),
+                "speed": calculate_stat(base_stats.speed, 31, spe_evs, 50, get_nature_modifier(current_nature_enum, "speed"))
+            }
+            
+            current_total_evs = hp_evs + atk_evs + def_evs + spa_evs + spd_evs + spe_evs
+            
+            # Determine if Pokemon is physical or special attacker
+            is_physical = False
+            is_special = False
+            if moves:
+                for move_name in moves:
+                    try:
+                        move = await pokeapi.get_move(move_name)
+                        if move.category == MoveCategory.PHYSICAL:
+                            is_physical = True
+                        elif move.category == MoveCategory.SPECIAL:
+                            is_special = True
+                    except Exception:
+                        continue
+            
+            # Try all natures and find the one that uses fewest EVs
+            best_nature = None
+            best_evs = None
+            best_total_evs = current_total_evs
+            best_stats = None
+            
+            for nature in Nature:
+                # Skip current nature
+                if nature == current_nature_enum:
+                    continue
+                
+                # Don't suggest -Atk for physical attackers
+                if is_physical and get_nature_modifier(nature, "attack") < 1.0:
+                    continue
+                
+                # Don't suggest -SpA for special attackers
+                if is_special and get_nature_modifier(nature, "special_attack") < 1.0:
+                    continue
+                
+                # Calculate minimum EVs needed to reach same stats
+                new_hp_evs = _find_min_evs_for_hp(base_stats.hp, 31, current_stats["hp"], 50)
+                new_atk_evs = _find_min_evs_for_stat(base_stats.attack, 31, current_stats["attack"], get_nature_modifier(nature, "attack"), 50)
+                new_def_evs = _find_min_evs_for_stat(base_stats.defense, 31, current_stats["defense"], get_nature_modifier(nature, "defense"), 50)
+                new_spa_evs = _find_min_evs_for_stat(base_stats.special_attack, 31, current_stats["special_attack"], get_nature_modifier(nature, "special_attack"), 50)
+                new_spd_evs = _find_min_evs_for_stat(base_stats.special_defense, 31, current_stats["special_defense"], get_nature_modifier(nature, "special_defense"), 50)
+                new_spe_evs = _find_min_evs_for_stat(base_stats.speed, 31, current_stats["speed"], get_nature_modifier(nature, "speed"), 50)
+                
+                new_total_evs = new_hp_evs + new_atk_evs + new_def_evs + new_spa_evs + new_spd_evs + new_spe_evs
+                
+                # Verify stats match (should be same or better)
+                new_stats = {
+                    "hp": calculate_hp(base_stats.hp, 31, new_hp_evs, 50),
+                    "attack": calculate_stat(base_stats.attack, 31, new_atk_evs, 50, get_nature_modifier(nature, "attack")),
+                    "defense": calculate_stat(base_stats.defense, 31, new_def_evs, 50, get_nature_modifier(nature, "defense")),
+                    "special_attack": calculate_stat(base_stats.special_attack, 31, new_spa_evs, 50, get_nature_modifier(nature, "special_attack")),
+                    "special_defense": calculate_stat(base_stats.special_defense, 31, new_spd_evs, 50, get_nature_modifier(nature, "special_defense")),
+                    "speed": calculate_stat(base_stats.speed, 31, new_spe_evs, 50, get_nature_modifier(nature, "speed"))
+                }
+                
+                # Check if stats are same or better in important stats
+                # For physical attackers, Attack and Speed must be same or better
+                # For special attackers, SpA and Speed must be same or better
+                # HP and defenses should generally be same or better
+                stats_match = True
+                
+                # HP should be same or better
+                if new_stats["hp"] < current_stats["hp"]:
+                    stats_match = False
+                
+                # Attack must be same or better for physical attackers
+                if is_physical and new_stats["attack"] < current_stats["attack"]:
+                    stats_match = False
+                
+                # Special Attack must be same or better for special attackers
+                if is_special and new_stats["special_attack"] < current_stats["special_attack"]:
+                    stats_match = False
+                
+                # Speed should generally be same or better (unless Trick Room)
+                if new_stats["speed"] < current_stats["speed"]:
+                    stats_match = False
+                
+                # Defenses can be slightly worse if it saves significant EVs
+                # But only if the loss is minimal (1-2 points)
+                if new_stats["defense"] < current_stats["defense"] - 2:
+                    stats_match = False
+                if new_stats["special_defense"] < current_stats["special_defense"] - 2:
+                    stats_match = False
+                
+                if stats_match and new_total_evs < best_total_evs:
+                    best_nature = nature
+                    best_evs = {
+                        "hp": new_hp_evs,
+                        "attack": new_atk_evs,
+                        "defense": new_def_evs,
+                        "special_attack": new_spa_evs,
+                        "special_defense": new_spd_evs,
+                        "speed": new_spe_evs
+                    }
+                    best_total_evs = new_total_evs
+                    best_stats = new_stats
+            
+            # If no better nature found
+            if best_nature is None:
+                return {
+                    "pokemon": pokemon_name,
+                    "current_nature": current_nature,
+                    "optimization_found": False,
+                    "message": "Your nature is already optimal! No EV savings possible.",
+                    "markdown_summary": f"## Nature Optimization: {pokemon_name.title()}\n\n### Result\nYour current nature ({current_nature.title()}) is already optimal. No EV savings possible with a different nature."
+                }
+            
+            ev_savings = current_total_evs - best_total_evs
+            
+            # Build markdown output
+            markdown_lines = [
+                f"## Nature Optimization: {pokemon_name.title()}",
+                "",
+                "### Current Build",
+                "| Nature | HP | Atk | Def | SpA | SpD | Spe | Total EVs |",
+                "|--------|-----|-----|-----|-----|-----|-----|-----------|",
+                f"| {current_nature.title()} | {hp_evs} | {atk_evs} | {def_evs} | {spa_evs} | {spd_evs} | {spe_evs} | **{current_total_evs}** |",
+                "",
+                "### Final Stats (Current)",
+                "| HP | Atk | Def | SpA | SpD | Spe |",
+                "|----|-----|-----|-----|-----|-----|",
+                f"| {current_stats['hp']} | {current_stats['attack']} | {current_stats['defense']} | "
+                f"{current_stats['special_attack']} | {current_stats['special_defense']} | {current_stats['speed']} |",
+                "",
+                "---",
+                "",
+                "### Suggested Optimization",
+                "",
+                f"**Use {best_nature.value.title().replace('_', ' ')} ({best_nature.value.split('_')[0].title() if '_' in best_nature.value else best_nature.value.title()}, "
+                f"-{best_nature.value.split('_')[1].title() if '_' in best_nature.value else 'Atk'}) to save {ev_savings} EVs!**",
+                "",
+                "| Nature | HP | Atk | Def | SpA | SpD | Spe | Total EVs |",
+                "|--------|-----|-----|-----|-----|-----|-----|-----------|",
+                f"| {best_nature.value.title().replace('_', ' ')} | {best_evs['hp']} | **{best_evs['attack']}** | {best_evs['defense']} | "
+                f"{best_evs['special_attack']} | {best_evs['special_defense']} | **{best_evs['speed']}** | **{best_total_evs}** |",
+                "",
+                "### Final Stats (Optimized) - SAME OR BETTER",
+                "| HP | Atk | Def | SpA | SpD | Spe |",
+                "|----|-----|-----|-----|-----|-----|",
+                f"| {best_stats['hp']} | **{best_stats['attack']}** | {best_stats['defense']} | "
+                f"{best_stats['special_attack']} | {best_stats['special_defense']} | {best_stats['speed']} |",
+                "",
+                "### What Changed"
+            ]
+            
+            # Show what changed
+            if best_stats['attack'] != current_stats['attack']:
+                diff = best_stats['attack'] - current_stats['attack']
+                markdown_lines.append(f"- Attack: {current_stats['attack']} → {best_stats['attack']} ({'+' if diff > 0 else ''}{diff}) - Nature boost compensates for fewer EVs")
+            
+            if best_stats['special_attack'] != current_stats['special_attack']:
+                diff = best_stats['special_attack'] - current_stats['special_attack']
+                markdown_lines.append(f"- Sp.Atk: {current_stats['special_attack']} → {best_stats['special_attack']} ({'+' if diff > 0 else ''}{diff}) - {'You don't use special moves anyway' if is_physical else 'Nature adjustment'}")
+            
+            if best_stats['speed'] != current_stats['speed']:
+                diff = best_stats['speed'] - current_stats['speed']
+                markdown_lines.append(f"- Speed: {current_stats['speed']} → {best_stats['speed']} ({'+' if diff > 0 else ''}{diff}) - Nature adjustment")
+            
+            markdown_lines.extend([
+                f"- **{ev_savings} EVs freed up** for other stats!",
+                "",
+                "### Where to Invest Saved EVs",
+                f"With {ev_savings} extra EVs, you could:"
+            ])
+            
+            # Suggest where to invest saved EVs
+            if best_stats['hp'] < 400:  # Reasonable HP cap
+                hp_gain = calculate_hp(base_stats.hp, 31, best_evs['hp'] + ev_savings, 50) - best_stats['hp']
+                markdown_lines.append(f"- Add {ev_savings} to HP ({best_stats['hp']} → {best_stats['hp'] + hp_gain}) for more bulk")
+            
+            if best_stats['defense'] < 300:
+                def_gain = calculate_stat(base_stats.defense, 31, best_evs['defense'] + ev_savings, 50, get_nature_modifier(best_nature, "defense")) - best_stats['defense']
+                markdown_lines.append(f"- Add {ev_savings} to Def ({best_stats['defense']} → {best_stats['defense'] + def_gain}) to survive physical hits")
+            
+            if best_stats['special_defense'] < 300:
+                spd_gain = calculate_stat(base_stats.special_defense, 31, best_evs['special_defense'] + ev_savings, 50, get_nature_modifier(best_nature, "special_defense")) - best_stats['special_defense']
+                markdown_lines.append(f"- Add {ev_savings} to SpD ({best_stats['special_defense']} → {best_stats['special_defense'] + spd_gain}) to survive special hits")
+            
+            response = {
+                "pokemon": pokemon_name,
+                "current_nature": current_nature,
+                "current_evs": {
+                    "hp": hp_evs,
+                    "attack": atk_evs,
+                    "defense": def_evs,
+                    "special_attack": spa_evs,
+                    "special_defense": spd_evs,
+                    "speed": spe_evs
+                },
+                "current_total_evs": current_total_evs,
+                "current_stats": current_stats,
+                "suggested_nature": best_nature.value,
+                "suggested_evs": best_evs,
+                "suggested_total_evs": best_total_evs,
+                "suggested_stats": best_stats,
+                "ev_savings": ev_savings,
+                "optimization_found": True,
+                "markdown_summary": "\n".join(markdown_lines)
+            }
+            
+            return response
+            
+        except Exception as e:
+            logger.error(f"Error in suggest_nature_optimization: {e}", exc_info=True)
             return {"error": str(e)}
 
     @mcp.tool()

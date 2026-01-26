@@ -238,6 +238,32 @@ MOD_SNIPER_CRIT = 9216      # 2.25x (Sniper - crit damage instead of 1.5x)
 MOD_ORICHALCUM = 5461       # ~1.333x (Orichalcum Pulse - Attack in Sun)
 MOD_HADRON = 5461           # ~1.333x (Hadron Engine - SpA in Electric Terrain)
 
+# Stat stage modifiers (4096-based)
+STAT_STAGE_MODS = {
+    -6: 1024,   # 0.25x
+    -5: 1170,   # 0.286x (rounded)
+    -4: 1365,   # 0.333x (rounded)
+    -3: 1638,   # 0.4x
+    -2: 2048,   # 0.5x
+    -1: 2731,   # 0.667x (rounded)
+    0: 4096,    # 1.0x (neutral)
+    1: 6144,    # 1.5x
+    2: 8192,    # 2.0x
+    3: 10240,   # 2.5x
+    4: 12288,   # 3.0x
+    5: 14336,   # 3.5x
+    6: 16384,   # 4.0x
+}
+
+# Ability/Item modifiers for stat calculations
+MOD_STAT_DOUBLE = 8192      # 2.0x (Huge Power, Pure Power, Commander)
+MOD_CHOICE_BOOST = 6144     # 1.5x (Choice Band/Specs)
+MOD_ASSAULT_VEST = 6144     # 1.5x SpD
+MOD_RUIN = 3072             # 0.75x (Sword/Beads/Tablets/Vessel of Ruin)
+MOD_PARADOX_1_3 = 5325      # ~1.3x (Protosynthesis/Quark Drive non-speed)
+MOD_PARADOX_1_5 = 6144      # 1.5x (Protosynthesis/Quark Drive speed)
+MOD_EMBODY_ASPECT = 6144    # 1.5x (+1 stage equivalent)
+
 # New offensive ability modifiers
 MOD_GUTS = 6144             # 1.5x (Guts - Attack when statused)
 MOD_SAND_FORCE = 5325       # ~1.3x (Sand Force - Ground/Rock/Steel in sand)
@@ -666,47 +692,47 @@ def calculate_damage(
         if modifiers.is_critical and modifiers.attack_stage < 0:
             pass  # Don't apply negative attack stage on crit
         else:
-            attack_stat = int(attack_stat * modifiers.get_stat_stage_multiplier(modifiers.attack_stage))
+            attack_stat = apply_mod(attack_stat, STAT_STAGE_MODS.get(modifiers.attack_stage, 4096))
         # Crits ignore positive defense stages
         if not modifiers.is_critical or modifiers.defense_stage < 0:
-            defense_stat = int(defense_stat * modifiers.get_stat_stage_multiplier(modifiers.defense_stage))
+            defense_stat = apply_mod(defense_stat, STAT_STAGE_MODS.get(modifiers.defense_stage, 4096))
     else:
         # Crits ignore negative special attack stages
         if modifiers.is_critical and modifiers.special_attack_stage < 0:
             pass  # Don't apply negative SpA stage on crit
         else:
-            attack_stat = int(attack_stat * modifiers.get_stat_stage_multiplier(modifiers.special_attack_stage))
+            attack_stat = apply_mod(attack_stat, STAT_STAGE_MODS.get(modifiers.special_attack_stage, 4096))
         # Crits ignore positive special defense stages
         if not modifiers.is_critical or modifiers.special_defense_stage < 0:
-            defense_stat = int(defense_stat * modifiers.get_stat_stage_multiplier(modifiers.special_defense_stage))
+            defense_stat = apply_mod(defense_stat, STAT_STAGE_MODS.get(modifiers.special_defense_stage, 4096))
 
     # Apply Choice Band/Specs (to stat, not damage)
     if modifiers.attacker_item:
         item = normalize_item(modifiers.attacker_item)
         if item == "choice-band" and is_physical:
-            attack_stat = int(attack_stat * 1.5)
+            attack_stat = apply_mod(attack_stat, MOD_CHOICE_BOOST)
         elif item == "choice-specs" and not is_physical:
-            attack_stat = int(attack_stat * 1.5)
+            attack_stat = apply_mod(attack_stat, MOD_CHOICE_BOOST)
 
     # Apply stat-modifying abilities
     if modifiers.attacker_ability:
         ability = normalize_ability(modifiers.attacker_ability)
         # Huge Power / Pure Power double Attack stat
         if ability in ("huge-power", "pure-power") and is_physical:
-            attack_stat = int(attack_stat * 2)
+            attack_stat = apply_mod(attack_stat, MOD_STAT_DOUBLE)
         # Guts (1.5x Attack when statused) - Ursaluna, Conkeldurr, Heracross
         elif ability == "guts" and modifiers.attacker_statused and is_physical:
             attack_stat = apply_mod(attack_stat, MOD_GUTS)
         # Gorilla Tactics (1.5x Attack, locked into move) - Darmanitan-Galar
         elif ability == "gorilla-tactics" and is_physical:
-            attack_stat = int(attack_stat * 1.5)
+            attack_stat = apply_mod(attack_stat, MOD_CHOICE_BOOST)
         # Flare Boost (1.5x SpA when burned) - Drifloon/Drifblim
         elif ability == "flare-boost" and modifiers.attacker_burned and not is_physical:
-            attack_stat = int(attack_stat * 1.5)
+            attack_stat = apply_mod(attack_stat, MOD_CHOICE_BOOST)
         # Toxic Boost (1.5x Atk when poisoned) - Zangoose
         elif ability == "toxic-boost" and modifiers.attacker_statused and is_physical:
             # Note: Toxic Boost is specifically for poison, but we use attacker_statused for simplicity
-            attack_stat = int(attack_stat * 1.5)
+            attack_stat = apply_mod(attack_stat, MOD_CHOICE_BOOST)
         # Orichalcum Pulse (1.333x Attack in Sun) - Koraidon
         elif ability == "orichalcum-pulse" and modifiers.weather == "sun":
             if is_physical:
@@ -728,7 +754,7 @@ def calculate_damage(
             item = normalize_item(modifiers.attacker_item or "")
             if item == "hearthflame-mask" and is_physical:
                 # +1 Attack stage = 1.5x
-                attack_stat = int(attack_stat * 1.5)
+                attack_stat = apply_mod(attack_stat, MOD_EMBODY_ASPECT)
 
     if modifiers.defender_ability:
         def_ability = normalize_ability(modifiers.defender_ability)
@@ -736,10 +762,10 @@ def calculate_damage(
             def_item = normalize_item(modifiers.defender_item or "")
             if def_item == "wellspring-mask" and not is_physical:
                 # +1 Special Defense stage = 1.5x
-                defense_stat = int(defense_stat * 1.5)
+                defense_stat = apply_mod(defense_stat, MOD_EMBODY_ASPECT)
             elif def_item == "cornerstone-mask" and is_physical:
                 # +1 Defense stage = 1.5x
-                defense_stat = int(defense_stat * 1.5)
+                defense_stat = apply_mod(defense_stat, MOD_EMBODY_ASPECT)
 
     # Commander ability (Dondozo + Tatsugiri combo)
     # When Commander is active, Dondozo's Attack, Defense, SpA, SpD, and Speed are doubled
@@ -747,54 +773,54 @@ def calculate_damage(
     # For defensive calcs: doubles Dondozo's defensive stat (Defense or SpD)
     commander_boost_applied = False
     if modifiers.commander_active:
-        attack_stat = int(attack_stat * 2)
+        attack_stat = apply_mod(attack_stat, MOD_STAT_DOUBLE)
         commander_boost_applied = True
 
     # Defender has Commander active - doubles their defensive stat
     if modifiers.defender_commander_active:
-        defense_stat = int(defense_stat * 2)
+        defense_stat = apply_mod(defense_stat, MOD_STAT_DOUBLE)
 
     # Apply Ruin abilities
     # Sword of Ruin (Chien-Pao): Lowers foe Defense to 0.75x
     if modifiers.sword_of_ruin and is_physical:
-        defense_stat = int(defense_stat * 0.75)
+        defense_stat = apply_mod(defense_stat, MOD_RUIN)
 
     # Beads of Ruin (Chi-Yu): Lowers foe Special Defense to 0.75x
     if modifiers.beads_of_ruin and not is_physical:
-        defense_stat = int(defense_stat * 0.75)
+        defense_stat = apply_mod(defense_stat, MOD_RUIN)
 
     # Tablets of Ruin (Wo-Chien): Lowers foe Attack to 0.75x
     if modifiers.tablets_of_ruin and is_physical:
-        attack_stat = int(attack_stat * 0.75)
+        attack_stat = apply_mod(attack_stat, MOD_RUIN)
 
     # Vessel of Ruin (Ting-Lu): Lowers foe Special Attack to 0.75x
     if modifiers.vessel_of_ruin and not is_physical:
-        attack_stat = int(attack_stat * 0.75)
+        attack_stat = apply_mod(attack_stat, MOD_RUIN)
 
     # Apply Protosynthesis/Quark Drive boosts (1.3x, or 1.5x for Speed)
     # These boost the attacker's relevant stat if it matches the boosted stat
     for boost_stat in [modifiers.protosynthesis_boost, modifiers.quark_drive_boost]:
         if boost_stat:
-            boost_multiplier = 1.5 if boost_stat == "speed" else 1.3
+            boost_mod = MOD_PARADOX_1_5 if boost_stat == "speed" else MOD_PARADOX_1_3
             if boost_stat == "attack" and is_physical:
-                attack_stat = int(attack_stat * boost_multiplier)
+                attack_stat = apply_mod(attack_stat, boost_mod)
             elif boost_stat == "special_attack" and not is_physical:
-                attack_stat = int(attack_stat * boost_multiplier)
+                attack_stat = apply_mod(attack_stat, boost_mod)
 
     # Apply defender's Protosynthesis/Quark Drive boosts
     for boost_stat in [modifiers.defender_protosynthesis_boost, modifiers.defender_quark_drive_boost]:
         if boost_stat:
-            boost_multiplier = 1.5 if boost_stat == "speed" else 1.3
+            boost_mod = MOD_PARADOX_1_5 if boost_stat == "speed" else MOD_PARADOX_1_3
             if boost_stat == "defense" and is_physical:
-                defense_stat = int(defense_stat * boost_multiplier)
+                defense_stat = apply_mod(defense_stat, boost_mod)
             elif boost_stat == "special_defense" and not is_physical:
-                defense_stat = int(defense_stat * boost_multiplier)
+                defense_stat = apply_mod(defense_stat, boost_mod)
 
     # Apply Assault Vest (1.5x SpD for special moves)
     if modifiers.defender_item:
         def_item = normalize_item(modifiers.defender_item)
         if def_item == "assault-vest" and not is_physical:
-            defense_stat = int(defense_stat * 1.5)
+            defense_stat = apply_mod(defense_stat, MOD_ASSAULT_VEST)
 
     # Get base power (may be variable for special moves)
     power = move.power
@@ -818,9 +844,9 @@ def calculate_damage(
     if modifiers.attacker_ability:
         ability = normalize_ability(modifiers.attacker_ability)
         if ability == "technician" and power <= 60:
-            power = int(power * 1.5)
+            power = apply_mod(power, MOD_CHOICE_BOOST)  # 1.5x
         elif ability == "sheer-force" and move.effect_chance:
-            power = int(power * 1.3)
+            power = apply_mod(power, MOD_LIFE_ORB)  # 1.3x (~5324/4096)
         elif ability == "tough-claws" and move.makes_contact:
             power = apply_mod(power, MOD_TOUGH_CLAWS)
         elif ability == "iron-fist" and normalize_move(move.name) in PUNCH_MOVES:
