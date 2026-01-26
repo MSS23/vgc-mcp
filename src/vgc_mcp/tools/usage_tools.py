@@ -5,9 +5,6 @@ from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp_core.api.smogon import SmogonStatsClient
 
-# Note: MCP-UI is only available in vgc-mcp-lite, not the full server
-HAS_UI = False
-
 
 def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
     """Register Smogon usage data tools with the MCP server."""
@@ -42,19 +39,6 @@ def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
                     ]
                 }
 
-            # Add interactive UI (only in vgc-mcp-lite)
-            if HAS_UI:
-                ui_resource = create_usage_stats_resource(
-                    pokemon_name=usage.get("pokemon", pokemon_name),
-                    usage_percent=usage.get("usage_percent", 0),
-                    items=usage.get("items", []),
-                    abilities=usage.get("abilities", []),
-                    moves=usage.get("moves", []),
-                    spreads=usage.get("spreads", []),
-                    tera_types=usage.get("tera_types"),
-                    teammates=usage.get("teammates"),
-                )
-                return add_ui_metadata(usage, ui_resource)
             return usage
 
         except Exception as e:

@@ -65,20 +65,6 @@ In Claude Desktop, you'll see quick action buttons:
 
 Just click any button to get started!
 
-### Slash Commands (Power Users)
-
-For quick access without typing full sentences:
-
-| Command | What It Does |
-|---------|--------------|
-| `/help` | Show all available commands |
-| `/help damage` | Help with damage calculations |
-| `/help team` | Help with team building |
-| `/damage flutter-mane incineroar moonblast` | Quick damage calc |
-| `/speed landorus tornadus` | Compare two Pokemon's speed |
-| `/explain evs` | Explain a VGC term |
-| `/capabilities` | Show all tool categories |
-
 ---
 
 ## Example Conversations
@@ -234,7 +220,6 @@ VGC Regulation H (current format) by default. The tool uses:
 
 - Say "What can you do?" to see all capabilities
 - Say "help damage" for damage calculation help
-- Say "/help" to see all slash commands
 - Check the VGC glossary: "explain [term]"
 
 For bugs or feature requests: https://github.com/MSS23/vgc-mcp/issues
@@ -243,11 +228,11 @@ For bugs or feature requests: https://github.com/MSS23/vgc-mcp/issues
 
 ## Quick Reference
 
-| Task | Natural Language | Slash Command |
-|------|------------------|---------------|
-| Damage calc | "Does X OHKO Y?" | `/damage X Y move` |
-| Speed compare | "Is X faster than Y?" | `/speed X Y` |
-| Learn term | "What is STAB?" | `/explain stab` |
-| Show help | "What can you do?" | `/help` |
-| Build team | "Help me build a team" | (use natural language) |
-| Analyze team | "Analyze this team" + paste | (use natural language) |
+| Task | Just Say... |
+|------|-------------|
+| Damage calc | "Does X OHKO Y?" |
+| Speed compare | "Is X faster than Y?" |
+| Learn term | "What is STAB?" |
+| Show help | "What can you do?" |
+| Build team | "Help me build a team" |
+| Analyze team | "Analyze this team" + paste |

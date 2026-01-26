@@ -10,8 +10,6 @@ from vgc_mcp_core.calc.matchup import (
     analyze_defensive_matchup,
     COMMON_THREATS,
 )
-# Note: MCP-UI is only available in vgc-mcp-lite, not the full server
-HAS_UI = False
 
 
 def register_matchup_tools(mcp: FastMCP, team_manager: TeamManager):
@@ -62,20 +60,6 @@ def register_matchup_tools(mcp: FastMCP, team_manager: TeamManager):
                 "notes": analysis.notes
             }
 
-            # Add interactive UI (only in vgc-mcp-lite)
-            if HAS_UI:
-                ui_resource = create_threat_analysis_resource(
-                    threat_name=analysis.threat_name,
-                    threat_speed=analysis.threat_speed,
-                    ohko_by=analysis.ohko_by,
-                    twohko_by=analysis.twohko_by,
-                    checks=analysis.checks,
-                    counters=analysis.counters,
-                    threatened=analysis.threatened,
-                    survives=analysis.survives,
-                    notes=analysis.notes,
-                )
-                return add_ui_metadata(result, ui_resource)
             return result
 
         except Exception as e:

@@ -30,9 +30,6 @@ from vgc_mcp_core.calc.speed_control import (
 from vgc_mcp_core.models.pokemon import Nature
 from vgc_mcp_core.config import EV_BREAKPOINTS_LV50
 
-# Note: MCP-UI is only available in vgc-mcp-lite, not the full server
-HAS_UI = False
-
 
 def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_manager: TeamManager):
     """Register all speed analysis tools with the MCP server."""
@@ -423,9 +420,9 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
                         underspeeds.append(p["name"])
 
             if outspeeds:
-                lines.append(f"Your fastest outspeeds: {', '.join(set(outspeeds)[:5])}")
+                lines.append(f"Your fastest outspeeds: {', '.join(list(set(outspeeds))[:5])}")
             if underspeeds:
-                lines.append(f"Faster than your slowest: {', '.join(set(underspeeds)[:5])}")
+                lines.append(f"Faster than your slowest: {', '.join(list(set(underspeeds))[:5])}")
 
         result = {
             "visualization": "\n".join(lines),

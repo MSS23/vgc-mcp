@@ -54,7 +54,7 @@ from .tools.priority_tools import register_priority_tools
 from .tools.ability_tools import register_ability_tools
 from .tools.coverage_tools import register_coverage_tools
 from .tools.context_tools import register_context_tools
-from .tools.speed_probability_tools import register_speed_probability_tools, register_visualize_outspeed_tool
+from .tools.speed_probability_tools import register_speed_probability_tools
 from .tools.meta_threat_tools import register_meta_threat_tools
 from .tools.workflow_tools import register_workflow_tools
 from .tools.item_tools import register_item_tools
@@ -80,7 +80,6 @@ from .tools.build_checker_tools import register_build_checker_tools
 from .tools.wizard_tools import register_wizard_tools
 from .tools.type_tools import register_type_tools
 from .tools.onboarding_tools import register_onboarding_tools
-from .tools.command_tools import register_command_tools
 
 # Note: MCP-UI is only enabled in vgc-mcp-lite for smaller footprint
 # Full server focuses on tool completeness over visual components
@@ -213,7 +212,6 @@ register_coverage_tools(mcp, team_manager, pokeapi)
 # Phase 6 tools - Meta-aware speed probability and optimization
 register_context_tools(mcp, pokeapi, team_manager)
 register_speed_probability_tools(mcp, smogon, pokeapi, team_manager)
-register_visualize_outspeed_tool(mcp, smogon, pokeapi)  # Interactive UI for outspeed %
 register_meta_threat_tools(mcp, smogon, pokeapi, team_manager)
 
 # Phase 7 tools - User experience improvements (workflow coordinators)
@@ -259,7 +257,6 @@ register_type_tools(mcp, pokeapi)
 
 # Discoverability and onboarding tools (Part 0)
 register_onboarding_tools(mcp)
-register_command_tools(mcp)
 
 
 def main():

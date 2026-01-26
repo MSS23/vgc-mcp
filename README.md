@@ -74,32 +74,6 @@ Or if vgc-mcp.exe is on your PATH:
 }
 ```
 
-### Goose Configuration
-
-Add to your Goose config file:
-- **Windows**: `%APPDATA%\goose\config.yaml` or `~/.config/goose/config.yaml`
-- **macOS/Linux**: `~/.config/goose/config.yaml`
-
-```yaml
-extensions:
-  vgc-lite:
-    name: VGC Team Builder Lite
-    type: stdio
-    cmd: C:\Python313\python.exe
-    args:
-      - "-m"
-      - "vgc_mcp.server_lite"
-```
-
-Or using the entry point:
-```yaml
-extensions:
-  vgc-lite:
-    name: VGC Team Builder Lite
-    type: stdio
-    cmd: vgc-mcp-lite
-```
-
 ### Remote (SSE)
 
 For Claude.ai or remote access:

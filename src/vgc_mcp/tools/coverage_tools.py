@@ -13,8 +13,6 @@ from vgc_mcp_core.calc.coverage import (
     ALL_TYPES,
     COVERAGE_MOVES,
 )
-# Note: MCP-UI is only available in vgc-mcp-lite, not the full server
-HAS_UI = False
 
 
 def register_coverage_tools(mcp: FastMCP, team_manager, pokeapi):
@@ -89,43 +87,6 @@ def register_coverage_tools(mcp: FastMCP, team_manager, pokeapi):
                    if result.coverage_holes else "")
             )
         }
-
-        # Add MCP-UI resource for interactive coverage display
-        if HAS_UI:
-            try:
-                if team_data:
-                    # Build coverage dict for UI (type -> effectiveness)
-                    from vgc_mcp_core.calc.modifiers import get_type_effectiveness
-                    coverage_dict = {}
-                    for type_name in ALL_TYPES:
-                        # Find best coverage against this type from team's moves
-                        best_eff = 1.0
-                        for pokemon in team_data:
-                            for move_name in (pokemon.get("moves") or []):
-                                # Look up move type from COVERAGE_MOVES or assume normal
-                                move_type = "Normal"
-                                for mtype, moves in COVERAGE_MOVES.items():
-                                    if any(m.get("name", "").lower() == move_name.lower() for m in moves):
-                                        move_type = mtype
-                                        break
-                                eff = get_type_effectiveness(move_type, [type_name])
-                                if eff > best_eff:
-                                    best_eff = eff
-                        coverage_dict[type_name.lower()] = best_eff
-
-                    # Use first Pokemon for UI display
-                    first_pokemon = team_data[0]
-                    moves_for_ui = [{"name": m, "type": "normal", "power": "-"} for m in (first_pokemon.get("moves") or [])]
-
-                    ui_resource = create_coverage_resource(
-                        pokemon_name="Team",
-                        moves=moves_for_ui,
-                        coverage=coverage_dict,
-                    )
-                    output = add_ui_metadata(output, ui_resource)
-            except Exception:
-                # UI is optional
-                pass
 
         return output
 

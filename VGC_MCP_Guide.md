@@ -36,21 +36,6 @@ Click these buttons in Claude Desktop to get started:
 
 ---
 
-## Slash Commands (Power Users)
-
-Type these commands for quick access:
-
-| Command | Example | What It Does |
-|---------|---------|--------------|
-| `/help` | `/help damage` | Show help for a category |
-| `/damage` | `/damage flutter-mane incineroar moonblast` | Quick damage calc |
-| `/speed` | `/speed landorus tornadus` | Compare two speeds |
-| `/explain` | `/explain EVs` | Explain a VGC term |
-| `/capabilities` | `/capabilities` | Show all features |
-| `/prompts` | `/prompts` | Show starter prompts |
-
----
-
 ## All Features by Category
 
 ### Damage Calculations

@@ -166,17 +166,12 @@ Your [Pokemon Name]
 
 ## User Onboarding
 
-### When Users Start a Conversation
-If user greets or seems unsure, proactively show capabilities:
+### When Users Say "Hi" or Greet
+**IMPORTANT:** When a user greets you (Hi, Hello, Hey, etc.) or asks what you can do,
+you MUST call the `welcome_new_user()` tool to show them the welcome message and
+starter prompts. Do NOT manually type the welcome message - always use the tool.
 
-"Hi! I'm a VGC team building assistant. I can help you with:
-- **Damage**: "Does Flutter Mane OHKO Incineroar?"
-- **Teams**: "Help me build a Rain team"
-- **EVs**: "What EVs to survive Flutter Mane?"
-- **Speed**: "Is Landorus faster than Tornadus?"
-- **Learn**: "Explain what EVs are"
-
-What would you like to work on?"
+This ensures consistent onboarding and shows users the available capabilities.
 
 ### Example Prompts to Share
 

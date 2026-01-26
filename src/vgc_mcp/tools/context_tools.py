@@ -72,22 +72,22 @@ def register_context_tools(mcp: FastMCP, pokeapi, team_manager):
             }
 
         # Get Pokemon data from API
-        pokemon_data = await pokeapi.get_pokemon(pokemon_name)
-        if not pokemon_data:
+        try:
+            base_stats = await pokeapi.get_base_stats(pokemon_name)
+            types = await pokeapi.get_pokemon_types(pokemon_name)
+            abilities = await pokeapi.get_pokemon_abilities(pokemon_name)
+            pokemon_data = await pokeapi.get_pokemon(pokemon_name)
+        except Exception as e:
             return {
                 "success": False,
                 "error": f"Pokemon not found: {pokemon_name}"
             }
 
-        # Create the Pokemon build
-        base_stats = BaseStats(
-            hp=pokemon_data["base_stats"]["hp"],
-            attack=pokemon_data["base_stats"]["attack"],
-            defense=pokemon_data["base_stats"]["defense"],
-            special_attack=pokemon_data["base_stats"]["special_attack"],
-            special_defense=pokemon_data["base_stats"]["special_defense"],
-            speed=pokemon_data["base_stats"]["speed"]
-        )
+        if not pokemon_data:
+            return {
+                "success": False,
+                "error": f"Pokemon not found: {pokemon_name}"
+            }
 
         evs = EVSpread(
             hp=hp_evs,
@@ -101,10 +101,10 @@ def register_context_tools(mcp: FastMCP, pokeapi, team_manager):
         pokemon_build = PokemonBuild(
             name=pokemon_data["name"],
             base_stats=base_stats,
-            types=pokemon_data.get("types", []),
+            types=types,
             nature=nature_enum,
             evs=evs,
-            ability=ability or (pokemon_data["abilities"][0] if pokemon_data.get("abilities") else None),
+            ability=ability or (abilities[0] if abilities else None),
             item=item,
             tera_type=tera_type,
             level=50

@@ -8,29 +8,6 @@ from vgc_mcp_core.team.manager import TeamManager
 from vgc_mcp_core.team.analysis import TeamAnalyzer
 from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, IVSpread
 
-# Note: MCP-UI is only available in vgc-mcp-lite, not the full server
-HAS_UI = False
-
-
-def _pokemon_to_ui_dict(pokemon: PokemonBuild) -> dict:
-    """Convert a PokemonBuild to the format expected by the UI components."""
-    return {
-        "name": pokemon.name,
-        "item": pokemon.item or "None",
-        "ability": pokemon.ability or "Unknown",
-        "moves": [{"name": m, "type": "normal"} for m in (pokemon.moves or [])],
-        "evs": {
-            "hp": pokemon.evs.hp,
-            "attack": pokemon.evs.attack,
-            "defense": pokemon.evs.defense,
-            "special_attack": pokemon.evs.special_attack,
-            "special_defense": pokemon.evs.special_defense,
-            "speed": pokemon.evs.speed,
-        },
-        "types": pokemon.types or [],
-        "tera_type": pokemon.tera_type,
-    }
-
 
 def register_team_tools(
     mcp: FastMCP,
@@ -259,18 +236,6 @@ def register_team_tools(
         """
         try:
             result = team_manager.get_team_summary()
-
-            # Add MCP-UI resource for interactive team display (only in vgc-mcp-lite)
-            if HAS_UI:
-                try:
-                    if team_manager.size > 0:
-                        team_ui_data = [_pokemon_to_ui_dict(p) for p in team_manager.team]
-                        ui_resource = create_team_roster_resource(team=team_ui_data)
-                        result = add_ui_metadata(result, ui_resource)
-                except Exception:
-                    # UI is optional
-                    pass
-
             return result
         except Exception as e:
             return {"error": str(e)}

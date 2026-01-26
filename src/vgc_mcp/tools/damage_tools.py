@@ -13,9 +13,6 @@ from vgc_mcp_core.utils.errors import error_response, ErrorCodes, pokemon_not_fo
 from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name, suggest_nature
 from vgc_mcp_core.utils.synergies import get_synergy_ability
 
-# Note: MCP-UI is only available in vgc-mcp-lite, not the full server
-HAS_UI = False
-
 
 # Module-level Smogon client reference (set during registration)
 _smogon_client: Optional[SmogonStatsClient] = None
@@ -1036,72 +1033,6 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
 
             response["analysis"] = f"{attacker_spread_str}'s {move_name} vs {defender_spread_str}: {min_pct}-{max_pct}% ({hp_remain_min_pct}-{hp_remain_max_pct}% remaining). {result.ko_chance}."
 
-            # Add MCP-UI resource for interactive damage display with editable spreads
-            # (only available in vgc-mcp-lite)
-            if HAS_UI:
-                try:
-                    # Build EV dicts for the interactive UI
-                    attacker_evs_dict = {
-                        "hp": attacker_evs.hp,
-                        "attack": attacker_evs.attack,
-                        "defense": attacker_evs.defense,
-                        "special_attack": attacker_evs.special_attack,
-                        "special_defense": attacker_evs.special_defense,
-                        "speed": attacker_evs.speed,
-                    }
-                    defender_evs_dict = {
-                        "hp": defender_evs.hp,
-                        "attack": defender_evs.attack,
-                        "defense": defender_evs.defense,
-                        "special_attack": defender_evs.special_attack,
-                        "special_defense": defender_evs.special_defense,
-                        "speed": defender_evs.speed,
-                    }
-
-                    # Build base stats dicts
-                    attacker_base_stats_dict = {
-                        "hp": atk_base.hp,
-                        "attack": atk_base.attack,
-                        "defense": atk_base.defense,
-                        "special_attack": atk_base.special_attack,
-                        "special_defense": atk_base.special_defense,
-                        "speed": atk_base.speed,
-                    }
-                    defender_base_stats_dict = {
-                        "hp": def_base.hp,
-                        "attack": def_base.attack,
-                        "defense": def_base.defense,
-                        "special_attack": def_base.special_attack,
-                        "special_defense": def_base.special_defense,
-                        "speed": def_base.speed,
-                    }
-
-                    ui_resource = create_interactive_damage_calc_resource(
-                        attacker=attacker_name,
-                        defender=defender_name,
-                        move=move_name,
-                        damage_min=result.damage_range[0],
-                        damage_max=result.damage_range[1],
-                        ko_chance=result.ko_chance,
-                        type_effectiveness=result.details.get("type_effectiveness", 1.0),
-                        attacker_item=attacker_item,
-                        defender_item=None,
-                        move_type=move.type,
-                        notes=ability_notes if ability_notes else None,
-                        attacker_evs=attacker_evs_dict,
-                        defender_evs=defender_evs_dict,
-                        attacker_nature=str(atk_nature.value).title(),
-                        defender_nature=str(def_nature.value).title(),
-                        attacker_base_stats=attacker_base_stats_dict,
-                        defender_base_stats=defender_base_stats_dict,
-                        move_category=move.category,
-                        move_power=move.power,
-                    )
-                    response = add_ui_metadata(response, ui_resource)
-                except Exception:
-                    # UI is optional - continue without it if there's an issue
-                    pass
-
             return response
 
         except Exception as e:
@@ -1265,10 +1196,12 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         attacker_name: str,
         defender_name: str,
         move_name: str,
-        attacker_nature: str = "modest",
-        attacker_evs: int = 252,
+        attacker_nature: Optional[str] = None,
+        attacker_evs: Optional[int] = None,
+        attacker_item: Optional[str] = None,
         defender_nature: str = "calm",
-        target_survival_chance: float = 100.0
+        target_survival_chance: float = 100.0,
+        use_smogon_spreads: bool = True
     ) -> dict:
         """
         Find minimum HP/Def EVs needed to survive an attack.
@@ -1277,13 +1210,15 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             attacker_name: Attacking Pokemon
             defender_name: Defending Pokemon (your Pokemon)
             move_name: Move to survive
-            attacker_nature: Attacker's nature
-            attacker_evs: Attacker's offensive EVs
+            attacker_nature: Attacker's nature (auto-fetched from Smogon if not provided)
+            attacker_evs: Attacker's offensive EVs (auto-fetched from Smogon if not provided)
+            attacker_item: Attacker's item (auto-fetched from Smogon if not provided)
             defender_nature: Your nature
             target_survival_chance: Target survival % (100 = always survive)
+            use_smogon_spreads: Auto-fetch attacker spread from Smogon (default True)
 
         Returns:
-            Required HP/Def EVs and resulting calculation
+            Required HP/Def EVs and resulting calculation with full attacker spread info
         """
         try:
             # Fetch data
@@ -1293,33 +1228,101 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             def_types = await pokeapi.get_pokemon_types(defender_name)
             move = await pokeapi.get_move(move_name, user_name=attacker_name)
 
+            is_physical = move.category.value == "physical"
+
+            # Track attacker spread info for output
+            attacker_spread_info = {
+                "pokemon": attacker_name,
+                "source": "custom"
+            }
+            attacker_full_evs = {}
+            attacker_ability_name = None
+
+            # Auto-fetch Smogon spread if enabled and not fully specified
+            if use_smogon_spreads and (attacker_nature is None or attacker_evs is None or attacker_item is None):
+                atk_spread = await _get_common_spread(attacker_name)
+                if atk_spread:
+                    attacker_spread_info["source"] = "smogon"
+                    attacker_spread_info["usage_percent"] = atk_spread.get("usage", 0)
+
+                    if attacker_nature is None:
+                        attacker_nature = atk_spread["nature"]
+
+                    evs = atk_spread.get("evs", {})
+                    attacker_full_evs = evs
+                    if attacker_evs is None:
+                        # Use the relevant offensive stat EVs
+                        attacker_evs = evs.get("attack", 0) if is_physical else evs.get("special_attack", 0)
+
+                    if attacker_item is None and atk_spread.get("item"):
+                        attacker_item = _normalize_smogon_name(atk_spread["item"])
+                        attacker_spread_info["item_usage_percent"] = atk_spread.get("item_usage", 0)
+
+                    if atk_spread.get("ability"):
+                        attacker_ability_name = atk_spread["ability"]
+                        attacker_spread_info["ability_usage_percent"] = atk_spread.get("ability_usage", 0)
+
+            # Set defaults if still None
+            attacker_nature = attacker_nature or ("adamant" if is_physical else "modest")
+            attacker_evs = attacker_evs if attacker_evs is not None else 252
+
             # Auto-detect Ruinous abilities from attacker
             sword_of_ruin = False
             beads_of_ruin = False
             atk_abilities = await pokeapi.get_pokemon_abilities(attacker_name)
             if atk_abilities:
-                attacker_ability = atk_abilities[0].lower().replace(" ", "-")
-                if attacker_ability == "sword-of-ruin":
+                # Use Smogon ability if available, otherwise first ability
+                ability_to_check = attacker_ability_name or atk_abilities[0]
+                ability_normalized = ability_to_check.lower().replace(" ", "-")
+                if attacker_ability_name is None:
+                    attacker_ability_name = ability_to_check
+                if ability_normalized == "sword-of-ruin":
                     sword_of_ruin = True
-                elif attacker_ability == "beads-of-ruin":
+                elif ability_normalized == "beads-of-ruin":
                     beads_of_ruin = True
 
+            # Auto-fill signature items for Pokemon that require them
+            if attacker_item is None:
+                from vgc_mcp_core.calc.items import get_signature_item
+                sig_item = get_signature_item(attacker_name)
+                if sig_item:
+                    attacker_item = sig_item
+
             # Parse natures
-            atk_nature = Nature(attacker_nature.lower())
+            try:
+                atk_nature = Nature(attacker_nature.lower())
+            except ValueError:
+                suggestions = suggest_nature(attacker_nature)
+                return invalid_nature_error(attacker_nature, suggestions if suggestions else [n.value for n in Nature])
+
             def_nature = Nature(defender_nature.lower())
 
-            # Create builds
-            is_physical = move.category.value == "physical"
+            # Build full EV spread for attacker display
+            if not attacker_full_evs:
+                attacker_full_evs = {
+                    "hp": 0,
+                    "attack": attacker_evs if is_physical else 0,
+                    "defense": 0,
+                    "special_attack": 0 if is_physical else attacker_evs,
+                    "special_defense": 0,
+                    "speed": 0
+                }
 
+            # Create builds
             attacker = PokemonBuild(
                 name=attacker_name,
                 base_stats=atk_base,
                 types=atk_types,
                 nature=atk_nature,
                 evs=EVSpread(
-                    attack=attacker_evs if is_physical else 0,
-                    special_attack=0 if is_physical else attacker_evs
-                )
+                    hp=attacker_full_evs.get("hp", 0),
+                    attack=attacker_full_evs.get("attack", attacker_evs if is_physical else 0),
+                    defense=attacker_full_evs.get("defense", 0),
+                    special_attack=attacker_full_evs.get("special_attack", 0 if is_physical else attacker_evs),
+                    special_defense=attacker_full_evs.get("special_defense", 0),
+                    speed=attacker_full_evs.get("speed", 0)
+                ),
+                item=attacker_item
             )
 
             defender = PokemonBuild(
@@ -1330,11 +1333,12 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 evs=EVSpread()
             )
 
-            # Create modifiers with Ruinous abilities
+            # Create modifiers with Ruinous abilities and item
             modifiers = DamageModifiers(
                 is_doubles=True,
                 sword_of_ruin=sword_of_ruin,
-                beads_of_ruin=beads_of_ruin
+                beads_of_ruin=beads_of_ruin,
+                attacker_item=attacker_item
             )
 
             result = calculate_bulk_threshold(
@@ -1343,17 +1347,47 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 target_survival_chance=target_survival_chance
             )
 
+            # Build attacker spread display strings
+            ev_parts = []
+            for stat, abbrev in [("hp", "HP"), ("attack", "Atk"), ("defense", "Def"),
+                                  ("special_attack", "SpA"), ("special_defense", "SpD"), ("speed", "Spe")]:
+                ev_val = attacker_full_evs.get(stat, 0)
+                if ev_val > 0:
+                    ev_parts.append(f"{ev_val} {abbrev}")
+            ev_string = " / ".join(ev_parts) if ev_parts else "0 EVs"
+
+            attacker_spread_info["nature"] = attacker_nature.title()
+            attacker_spread_info["evs"] = attacker_full_evs
+            attacker_spread_info["ev_string"] = ev_string
+            attacker_spread_info["item"] = attacker_item.replace("-", " ").title() if attacker_item else None
+            attacker_spread_info["ability"] = attacker_ability_name.replace("-", " ").title() if attacker_ability_name else None
+
+            # Build short attacker spread string for display
+            stat_name = "Atk" if is_physical else "SpA"
+            atk_nature_mod = get_nature_modifier(atk_nature, "attack" if is_physical else "special_attack")
+            nature_boost = "+" if atk_nature_mod > 1.0 else ""
+            nature_penalty = "-" if atk_nature_mod < 1.0 else ""
+            nature_indicator = nature_boost or nature_penalty
+            attacker_spread_str = f"{attacker_nature.title()} {ev_string}"
+            if attacker_item:
+                attacker_spread_str += f" @ {attacker_item.replace('-', ' ').title()}"
+
             if result is None:
                 table_lines = [
                     "| Metric           | Value                                      |",
                     "|------------------|---------------------------------------------|",
-                    f"| Threat           | {attacker_name}'s {move_name}              |",
+                    f"| Attacker         | {attacker_name}                            |",
+                    f"| Attacker Nature  | {attacker_nature.title()}                  |",
+                    f"| Attacker Spread  | {ev_string}                                |",
+                    f"| Attacker Item    | {attacker_item.replace('-', ' ').title() if attacker_item else 'None'} |",
+                    f"| Move             | {move_name}                                |",
                     f"| Defender         | {defender_name}                            |",
                     f"| Target Survival  | {target_survival_chance}%                  |",
                     f"| Result           | Not achievable with max investment         |",
                 ]
                 return {
                     "attacker": attacker_name,
+                    "attacker_spread": attacker_spread_info,
                     "defender": defender_name,
                     "move": move_name,
                     "achievable": False,
@@ -1361,31 +1395,33 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     "summary_table": "\n".join(table_lines)
                 }
 
-            # Build attacker spread string
-            stat_name = "Atk" if is_physical else "SpA"
-            atk_nature_mod = get_nature_modifier(atk_nature, "attack" if is_physical else "special_attack")
-            nature_boost = "+" if atk_nature_mod > 1.0 else ""
-            nature_penalty = "-" if atk_nature_mod < 1.0 else ""
-            nature_indicator = nature_boost or nature_penalty
-            attacker_spread_str = f"{attacker_evs}{nature_indicator} {stat_name} {attacker_name}"
-
-            # Build summary table
+            # Build summary table with full attacker info
             total_evs = result["hp_evs"] + result["def_evs"]
             table_lines = [
                 "| Metric           | Value                                      |",
                 "|------------------|---------------------------------------------|",
-                f"| Threat           | {attacker_spread_str}'s {move_name}        |",
-                f"| Defender         | {defender_name}                            |",
-                f"| HP EVs           | {result['hp_evs']}                         |",
-                f"| {result['def_stat_name']} EVs      | {result['def_evs']}                         |",
+                f"| Attacker         | {attacker_name}                            |",
+                f"| Attacker Nature  | {attacker_nature.title()}                  |",
+                f"| Attacker Spread  | {ev_string}                                |",
+                f"| Attacker Item    | {attacker_item.replace('-', ' ').title() if attacker_item else 'None'} |",
+                f"| Attacker Ability | {attacker_ability_name.replace('-', ' ').title() if attacker_ability_name else 'Unknown'} |",
+                f"| Move             | {move_name}                                |",
+                f"| Your Pokemon     | {defender_name}                            |",
+                f"| HP EVs Needed    | {result['hp_evs']}                         |",
+                f"| {result['def_stat_name']} EVs Needed   | {result['def_evs']}                         |",
                 f"| Total EVs        | {total_evs}                                |",
                 f"| Damage Range     | {result['damage_range']}                   |",
                 f"| Survival Rate    | {result['survival_chance']:.2f}%           |",
             ]
 
+            # Add source info if from Smogon
+            if attacker_spread_info["source"] == "smogon":
+                usage = attacker_spread_info.get("usage_percent", 0)
+                table_lines.append(f"| Spread Source    | Smogon ({usage:.1f}% usage)                 |")
+
             return {
                 "attacker": attacker_name,
-                "attacker_spread": attacker_spread_str,
+                "attacker_spread": attacker_spread_info,
                 "defender": defender_name,
                 "move": move_name,
                 "achievable": True,
