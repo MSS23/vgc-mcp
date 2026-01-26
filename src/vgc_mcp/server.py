@@ -93,6 +93,95 @@ mcp = FastMCP(
     instructions="MCP server for VGC Pokemon team building with damage calc, usage stats, and team analysis"
 )
 
+
+# ============================================================================
+# MCP Prompts - Quick action buttons in Claude Desktop UI
+# ============================================================================
+
+@mcp.prompt()
+def check_damage() -> str:
+    """Check if a Pokemon can KO another"""
+    return """I want to calculate damage between two Pokemon. Please help me by asking:
+1. Which Pokemon is attacking? (e.g., Flutter Mane)
+2. Which Pokemon is defending? (e.g., Incineroar)
+3. What move are they using? (e.g., Moonblast)
+
+Then use the damage calculator to show me the result with full transparency -
+show both Pokemon's EVs, items, abilities, and the calculation breakdown."""
+
+
+@mcp.prompt()
+def build_team() -> str:
+    """Help me build a VGC team"""
+    return """I want to build a competitive VGC team. Please guide me through:
+1. First, ask what playstyle I prefer (offensive, balanced, trick room, weather)
+2. Help me pick a core Pokemon to build around
+3. Suggest teammates that complement it with good type coverage
+4. Show me recommended EV spreads for each Pokemon
+5. Identify any weaknesses in the team composition
+
+Let's start - what kind of team would I like to build?"""
+
+
+@mcp.prompt()
+def analyze_paste() -> str:
+    """Analyze a Showdown team paste"""
+    return """I have a team I want analyzed. I'll paste it in Pokemon Showdown format.
+
+Please check for:
+- Type weaknesses and defensive gaps
+- Speed tier analysis (what outspeeds what)
+- EV spread efficiency (are any EVs wasted?)
+- Missing coverage or redundant moves
+- Suggestions for improvement
+
+I'll paste my team now..."""
+
+
+@mcp.prompt()
+def learn_vgc() -> str:
+    """Learn VGC competitive basics"""
+    return """I'm new to VGC (Video Game Championships) competitive Pokemon. Please explain:
+
+1. What are EVs and how do they work?
+2. What are common team archetypes (hyper offense, balance, trick room)?
+3. What Pokemon are currently strong in the meta?
+4. How do damage calculations work?
+
+Start with the basics and I'll ask follow-up questions. Use the glossary and
+education tools to help explain terms clearly."""
+
+
+@mcp.prompt()
+def optimize_spread() -> str:
+    """Optimize a Pokemon's EV spread"""
+    return """I want to optimize a Pokemon's EV spread. Please ask me:
+
+1. Which Pokemon am I optimizing?
+2. What threats should it survive? (e.g., "Flutter Mane Moonblast")
+3. What speed tier should it hit? (e.g., "outspeed Landorus")
+4. Is there a specific role? (attacker, support, tank)
+
+Then calculate the most efficient spread that meets these benchmarks,
+and suggest if a different nature could save EVs (like Showdown does)."""
+
+
+@mcp.prompt()
+def compare_speeds() -> str:
+    """Compare speed tiers between Pokemon"""
+    return """I want to compare speeds between Pokemon. Please help me understand:
+
+1. Which Pokemon am I checking?
+2. Do I want to include speed modifiers? (Tailwind, Trick Room, Choice Scarf)
+
+Show me a speed tier chart with my Pokemon highlighted, and tell me what
+outspeeds what under different conditions."""
+
+
+# ============================================================================
+# Initialize shared state
+# ============================================================================
+
 # Initialize shared state
 cache = APICache()
 pokeapi = PokeAPIClient(cache)

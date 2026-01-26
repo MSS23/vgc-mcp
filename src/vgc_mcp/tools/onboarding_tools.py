@@ -213,3 +213,126 @@ def register_onboarding_tools(mcp: FastMCP):
         except Exception as e:
             logger.error(f"Error in show_capabilities: {e}", exc_info=True)
             return api_error(str(e))
+
+    @mcp.tool()
+    async def welcome_new_user() -> dict:
+        """
+        Show welcome message for first-time users.
+        Call this when a user says hello or seems new to the tool.
+
+        Returns:
+            Welcome message with quick start guide
+        """
+        try:
+            markdown_lines = [
+                "# Welcome to VGC Team Builder!",
+                "",
+                "I can help you build competitive Pokemon VGC teams.",
+                "",
+                "## Quick Start",
+                "",
+                "Try asking me:",
+                "- \"Does Flutter Mane OHKO Incineroar?\" - Damage calculations",
+                "- \"Help me build a Rain team\" - Team building",
+                "- \"What EVs to survive Flutter Mane?\" - EV optimization",
+                "- \"Explain what EVs are\" - Learn VGC basics",
+                "",
+                "## Slash Commands",
+                "",
+                "Type `/help` to see all available commands.",
+                "",
+                "## Paste Teams",
+                "",
+                "You can paste Pokemon Showdown teams and I'll analyze them!",
+                "",
+                "```",
+                "Flutter Mane @ Choice Specs",
+                "Ability: Protosynthesis",
+                "EVs: 252 SpA / 4 SpD / 252 Spe",
+                "Timid Nature",
+                "- Moonblast",
+                "...",
+                "```",
+                "",
+                "## What would you like to do?",
+                "",
+                "| Task | Just Ask... |",
+                "|------|-------------|",
+                "| Build a team | \"Help me build a team around X\" |",
+                "| Check damage | \"Does X OHKO Y?\" |",
+                "| Optimize EVs | \"What EVs to survive X?\" |",
+                "| Learn VGC | \"Explain [term]\" |",
+            ]
+
+            return {
+                "welcome": True,
+                "markdown_summary": "\n".join(markdown_lines),
+                "suggested_prompts": [
+                    "Does Flutter Mane OHKO Incineroar?",
+                    "Help me build a Rain team",
+                    "What EVs does Incineroar need to survive Flutter Mane?",
+                    "Explain what EVs are"
+                ]
+            }
+
+        except Exception as e:
+            logger.error(f"Error in welcome_new_user: {e}", exc_info=True)
+            return api_error(str(e))
+
+    @mcp.tool()
+    async def get_starter_prompts() -> dict:
+        """
+        Get a list of starter prompts for UI integration.
+        These can be shown as clickable buttons in chat interfaces.
+
+        Returns:
+            List of starter prompts with titles and icons
+        """
+        try:
+            prompts = [
+                {
+                    "title": "Build a Team",
+                    "prompt": "Help me build a competitive VGC team",
+                    "icon": "hammer",
+                    "description": "Start building a team from scratch"
+                },
+                {
+                    "title": "Check Damage",
+                    "prompt": "Does Flutter Mane OHKO Incineroar with Moonblast?",
+                    "icon": "zap",
+                    "description": "Calculate damage between Pokemon"
+                },
+                {
+                    "title": "Optimize EVs",
+                    "prompt": "What EVs does Incineroar need to survive Flutter Mane?",
+                    "icon": "bar-chart",
+                    "description": "Find optimal EV spreads"
+                },
+                {
+                    "title": "Analyze Team",
+                    "prompt": "Analyze my team's weaknesses (I'll paste it)",
+                    "icon": "search",
+                    "description": "Find weaknesses in your team"
+                },
+                {
+                    "title": "Learn VGC",
+                    "prompt": "I'm new to VGC. What should I know?",
+                    "icon": "book",
+                    "description": "Learn competitive Pokemon basics"
+                },
+                {
+                    "title": "What Can You Do?",
+                    "prompt": "Show me what you can help with",
+                    "icon": "help-circle",
+                    "description": "See all available features"
+                }
+            ]
+
+            return {
+                "prompts": prompts,
+                "count": len(prompts)
+            }
+
+        except Exception as e:
+            logger.error(f"Error in get_starter_prompts: {e}", exc_info=True)
+            return api_error(str(e))
