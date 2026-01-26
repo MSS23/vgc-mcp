@@ -1283,8 +1283,8 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         attacker_ability_name = atk_spread["ability"]
                         attacker_spread_info["ability_usage_percent"] = atk_spread.get("ability_usage", 0)
 
-            # Set defaults if still None
-            attacker_nature = attacker_nature or ("adamant" if is_physical else "modest")
+            # Set defaults if still None (use neutral nature to match "252 Atk" notation)
+            attacker_nature = attacker_nature or "serious"
             attacker_evs = attacker_evs if attacker_evs is not None else 252
 
             # Auto-detect Ruinous abilities from attacker
@@ -1605,8 +1605,8 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         if defender_spd_evs is None:
                             defender_spd_evs = evs.get("special_defense", 0)
 
-            # Set defaults
-            attacker_nature = attacker_nature or "adamant"
+            # Set defaults (use neutral nature to match "252 Atk" notation)
+            attacker_nature = attacker_nature or "serious"
             attacker_atk_evs = attacker_atk_evs if attacker_atk_evs is not None else 252
             attacker_spa_evs = attacker_spa_evs if attacker_spa_evs is not None else 0
             defender_nature = defender_nature or "serious"
