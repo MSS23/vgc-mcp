@@ -504,6 +504,9 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     if atk_spread:
                         attacker_spread_source = "smogon"
                         attacker_spread_info = atk_spread
+                        # Add regulation info
+                        if _smogon_client and _smogon_client.current_regulation_from_data:
+                            attacker_spread_info["regulation"] = f"Reg {_smogon_client.current_regulation_from_data}"
                         if attacker_nature is None:
                             attacker_nature = atk_spread["nature"]
                         evs = atk_spread.get("evs", {})
@@ -911,8 +914,12 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     "ability": attacker_ability,
                     "tera_type": attacker_tera_type,
                     "tera_active": attacker_tera_type is not None,
-                    "usage_percent": attacker_spread_info.get("usage", 0)
+                    "usage_percent": attacker_spread_info.get("usage", 0),
+                    "regulation": attacker_spread_info.get("regulation")
                 }
+                # Add regulation to top-level response for visibility
+                if attacker_spread_info.get("regulation"):
+                    response["data_from"] = attacker_spread_info.get("regulation")
 
             # Always show defender spread info (even for custom spreads)
             response["defender_spread"] = {
@@ -1244,6 +1251,9 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 if atk_spread:
                     attacker_spread_info["source"] = "smogon"
                     attacker_spread_info["usage_percent"] = atk_spread.get("usage", 0)
+                    # Add regulation info from Smogon data
+                    if _smogon_client and _smogon_client.current_regulation_from_data:
+                        attacker_spread_info["regulation"] = f"Reg {_smogon_client.current_regulation_from_data}"
 
                     if attacker_nature is None:
                         attacker_nature = atk_spread["nature"]
@@ -1417,9 +1427,11 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             # Add source info if from Smogon
             if attacker_spread_info["source"] == "smogon":
                 usage = attacker_spread_info.get("usage_percent", 0)
-                table_lines.append(f"| Spread Source    | Smogon ({usage:.1f}% usage)                 |")
+                reg = attacker_spread_info.get("regulation", "")
+                reg_str = f" [{reg}]" if reg else ""
+                table_lines.append(f"| Spread Source    | Smogon ({usage:.1f}% usage){reg_str}        |")
 
-            return {
+            response = {
                 "attacker": attacker_name,
                 "attacker_spread": attacker_spread_info,
                 "defender": defender_name,
@@ -1433,6 +1445,12 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "summary_table": "\n".join(table_lines),
                 "analysis": f"Need {result['hp_evs']} HP / {result['def_evs']} {result['def_stat_name']} EVs to survive {move_name} from {attacker_spread_str} — takes {result['damage_range']}"
             }
+
+            # Add regulation to top-level response for visibility
+            if attacker_spread_info.get("regulation"):
+                response["data_from"] = attacker_spread_info["regulation"]
+
+            return response
 
         except Exception as e:
             error_str = str(e).lower()
