@@ -7,7 +7,7 @@ from typing import Optional
 from ..models.team import Team
 from ..models.pokemon import PokemonBuild
 from .stats import calculate_all_stats
-from .speed import SPEED_BENCHMARKS
+from .speed import SPEED_BENCHMARKS, get_speed_benchmark
 
 
 # Speed modifiers from various sources
@@ -308,12 +308,16 @@ def analyze_paralysis(team: Team) -> SpeedControlAnalysis:
     # Key examples
     notes.append("Key paralyzed speeds:")
     if "flutter-mane" in SPEED_BENCHMARKS:
-        para = apply_speed_modifier(SPEED_BENCHMARKS["flutter-mane"]["max_positive"], 0.5)
-        notes.append(f"Max Flutter Mane paralyzed: {para}")
+        max_speed = get_speed_benchmark("flutter-mane", "max_positive")
+        if max_speed:
+            para = apply_speed_modifier(max_speed, 0.5)
+            notes.append(f"Max Flutter Mane paralyzed: {para}")
 
     if "dragapult" in SPEED_BENCHMARKS:
-        para = apply_speed_modifier(SPEED_BENCHMARKS["dragapult"]["max_positive"], 0.5)
-        notes.append(f"Max Dragapult paralyzed: {para}")
+        max_speed = get_speed_benchmark("dragapult", "max_positive")
+        if max_speed:
+            para = apply_speed_modifier(max_speed, 0.5)
+            notes.append(f"Max Dragapult paralyzed: {para}")
 
     return SpeedControlAnalysis(
         condition="Opponent Paralyzed (0.5x)",

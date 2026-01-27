@@ -56,48 +56,54 @@ META_SYNERGIES = {
 def _find_min_evs_for_stat(base: int, iv: int, target_stat: int, nature_mod: float, level: int = 50) -> int:
     """
     Find minimum EVs needed to reach target_stat with given nature modifier.
-    
+
+    IMPORTANT: This function now returns the OPTIMIZED EV value, removing any
+    wasted EVs that don't contribute to the final stat.
+
     Formula: target_stat = floor((floor((2*base + IV + EV/4) * level/100) + 5) * nature_mod)
     We need to reverse-engineer EV from target_stat.
-    
+
     Args:
         base: Base stat value
         iv: IV value (typically 31)
         target_stat: Target final stat value
         nature_mod: Nature modifier (0.9, 1.0, or 1.1)
         level: Pokemon level (default 50)
-        
+
     Returns:
-        Minimum EVs needed (0-252)
+        Minimum OPTIMIZED EVs needed (0-252), with waste removed
     """
-    # Reverse the formula: target_stat = floor((floor((2*base + IV + EV/4) * 0.5) + 5) * nature_mod)
-    # We need: floor((2*base + IV + EV/4) * 0.5) + 5 >= target_stat / nature_mod
-    
-    # Calculate what the inner value needs to be
-    # target_stat / nature_mod gives us the value before nature is applied
-    # But we need to account for flooring
-    required_inner_plus_5 = target_stat / nature_mod
-    
-    # The inner value (before +5) needs to be at least ceil(required_inner_plus_5 - 5)
-    # But actually, we need to account for flooring in the calculation
-    # Let's try a different approach: iterate through EV breakpoints
-    
+    from vgc_mcp_core.calc.stats import optimize_ev_efficiency
+
+    # Find the first EV breakpoint that reaches the target
     for ev in EV_BREAKPOINTS_LV50:
         calculated_stat = calculate_stat(base, iv, ev, level, nature_mod)
         if calculated_stat >= target_stat:
-            return ev
-    
-    # If we can't reach it even with 252 EVs, return 252
-    return 252
+            # Found the target - now optimize for efficiency
+            # This removes any wasted EVs (e.g., 152 → 148 if they give same stat)
+            return optimize_ev_efficiency(base, iv, ev, level, nature_mod, "normal")
+
+    # If we can't reach it even with 252 EVs, optimize 252
+    return optimize_ev_efficiency(base, iv, 252, level, nature_mod, "normal")
 
 
 def _find_min_evs_for_hp(base: int, iv: int, target_hp: int, level: int = 50) -> int:
-    """Find minimum EVs needed to reach target HP."""
+    """
+    Find minimum EVs needed to reach target HP.
+
+    IMPORTANT: This function now returns the OPTIMIZED EV value, removing any
+    wasted EVs that don't contribute to the final HP stat.
+    """
+    from vgc_mcp_core.calc.stats import optimize_ev_efficiency
+
     for ev in EV_BREAKPOINTS_LV50:
         calculated_hp = calculate_hp(base, iv, ev, level)
         if calculated_hp >= target_hp:
-            return ev
-    return 252
+            # Found the target - now optimize for efficiency
+            return optimize_ev_efficiency(base, iv, ev, level, 1.0, "hp")
+
+    # If we can't reach it even with 252 EVs, optimize 252
+    return optimize_ev_efficiency(base, iv, 252, level, 1.0, "hp")
 
 
 async def _get_common_spread(pokemon_name: str) -> Optional[dict]:
@@ -1231,25 +1237,40 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                             survive_pokemon_ability = "unseen-fist"
 
                     # Auto-detect Ruinous abilities from attacker
+                    from vgc_mcp_core.calc.abilities import normalize_ability_name
+
                     sword_of_ruin = False
                     beads_of_ruin = False
+                    tablets_of_ruin = False
+                    vessel_of_ruin = False
+
                     if survive_pokemon_ability:
-                        ability_lower = survive_pokemon_ability.lower().replace(" ", "-").replace("_", "-")
+                        ability_lower = normalize_ability_name(survive_pokemon_ability)
                         if ability_lower == "sword-of-ruin":
                             sword_of_ruin = True
                         elif ability_lower == "beads-of-ruin":
                             beads_of_ruin = True
+                        elif ability_lower == "tablets-of-ruin":
+                            tablets_of_ruin = True
+                        elif ability_lower == "vessel-of-ruin":
+                            vessel_of_ruin = True
                     else:
                         # Auto-detect from Pokemon
                         atk_abilities = await pokeapi.get_pokemon_abilities(survive_pokemon)
                         if atk_abilities:
-                            ability_lower = atk_abilities[0].lower().replace(" ", "-")
+                            ability_lower = normalize_ability_name(atk_abilities[0])
                             if ability_lower == "sword-of-ruin":
                                 sword_of_ruin = True
                                 survive_pokemon_ability = "sword-of-ruin"
                             elif ability_lower == "beads-of-ruin":
                                 beads_of_ruin = True
                                 survive_pokemon_ability = "beads-of-ruin"
+                            elif ability_lower == "tablets-of-ruin":
+                                tablets_of_ruin = True
+                                survive_pokemon_ability = "tablets-of-ruin"
+                            elif ability_lower == "vessel-of-ruin":
+                                vessel_of_ruin = True
+                                survive_pokemon_ability = "vessel-of-ruin"
 
                     # Create attacker build
                     attacker = PokemonBuild(
@@ -1323,7 +1344,9 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                                     defender_tera_active=defender_tera_type is not None,
                                     is_critical=move.always_crit,
                                     sword_of_ruin=sword_of_ruin,
-                                    beads_of_ruin=beads_of_ruin
+                                    beads_of_ruin=beads_of_ruin,
+                                    tablets_of_ruin=tablets_of_ruin,
+                                    vessel_of_ruin=vessel_of_ruin
                                 )
                                 result = calculate_damage(attacker, defender, move, modifiers)
 

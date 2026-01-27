@@ -501,11 +501,16 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
 
             # Auto-fetch Smogon spreads if enabled and values not provided
             if use_smogon_spreads:
-                # Check if attacker needs spread data
+                # Check if user manually specified ANY attacker EVs
+                user_specified_attacker_evs = (
+                    attacker_atk_evs is not None or
+                    attacker_spa_evs is not None
+                )
+
+                # Only fetch from Smogon if user didn't specify any EVs
                 attacker_needs_spread = (
-                    attacker_nature is None or
-                    attacker_atk_evs is None or
-                    attacker_spa_evs is None
+                    not user_specified_attacker_evs and
+                    (attacker_nature is None or attacker_atk_evs is None or attacker_spa_evs is None)
                 )
                 if attacker_needs_spread:
                     atk_spread = await _get_common_spread(attacker_name)
@@ -528,12 +533,18 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         if attacker_ability is None and atk_spread.get("ability"):
                             attacker_ability = _normalize_smogon_name(atk_spread["ability"])
 
-                # Check if defender needs spread data - fetch multiple spreads for comparison
+                # Check if user manually specified ANY defender EVs
+                user_specified_defender_evs = (
+                    defender_hp_evs is not None or
+                    defender_def_evs is not None or
+                    defender_spd_evs is not None
+                )
+
+                # Only fetch from Smogon if user didn't specify any EVs
                 defender_needs_spread = (
-                    defender_nature is None or
-                    defender_hp_evs is None or
-                    defender_def_evs is None or
-                    defender_spd_evs is None
+                    not user_specified_defender_evs and
+                    (defender_nature is None or defender_hp_evs is None or
+                     defender_def_evs is None or defender_spd_evs is None)
                 )
                 if defender_needs_spread:
                     defender_spreads_list = await _get_common_spreads(defender_name, limit=num_defender_spreads)
