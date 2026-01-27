@@ -14,6 +14,7 @@ from vgc_mcp_core.calc.bulk_optimization import (
     analyze_diminishing_returns
 )
 from vgc_mcp_core.models.pokemon import Nature, get_nature_modifier, PokemonBuild, BaseStats, EVSpread
+from vgc_mcp_core.formats.showdown import pokemon_build_to_showdown
 from vgc_mcp_core.models.move import Move, MoveCategory
 from vgc_mcp_core.config import EV_BREAKPOINTS_LV50, normalize_evs
 from vgc_mcp_core.utils.synergies import get_synergy_ability
@@ -230,6 +231,24 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             else:
                 analysis_str = f"{pokemon_name}'s spread uses {total}/508 EVs — {max(0, 508 - total)} remaining"
 
+            # Generate Showdown paste for the analyzed spread
+            types = await pokeapi.get_pokemon_types(pokemon_name)
+            analyzed_pokemon = PokemonBuild(
+                name=pokemon_name,
+                base_stats=base_stats,
+                types=types,
+                nature=parsed_nature,
+                evs=EVSpread(
+                    hp=hp_evs,
+                    attack=atk_evs,
+                    defense=def_evs,
+                    special_attack=spa_evs,
+                    special_defense=spd_evs,
+                    speed=spe_evs
+                )
+            )
+            showdown_paste = pokemon_build_to_showdown(analyzed_pokemon)
+
             return {
                 "pokemon": pokemon_name,
                 "nature": nature,
@@ -239,6 +258,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "issues": issues if issues else ["No issues found"],
                 "suggestions": suggestions if suggestions else ["Spread looks efficient!"],
                 "is_valid": total <= 508 and not any("wasted" in i for i in issues),
+                "showdown_paste": showdown_paste,
                 "summary_table": "\n".join(table_lines),
                 "analysis": analysis_str
             }
@@ -469,6 +489,43 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 spd_gain = calculate_stat(base_stats.special_defense, 31, best_evs['special_defense'] + ev_savings, 50, get_nature_modifier(best_nature, "special_defense")) - best_stats['special_defense']
                 markdown_lines.append(f"- Add {ev_savings} to SpD ({best_stats['special_defense']} → {best_stats['special_defense'] + spd_gain}) to survive special hits")
             
+            # Generate Showdown pastes for both current and optimized spreads
+            types = await pokeapi.get_pokemon_types(pokemon_name)
+
+            # Build current Pokemon
+            current_pokemon = PokemonBuild(
+                name=pokemon_name,
+                base_stats=base_stats,
+                types=types,
+                nature=current_nature_enum,
+                evs=EVSpread(
+                    hp=hp_evs,
+                    attack=atk_evs,
+                    defense=def_evs,
+                    special_attack=spa_evs,
+                    special_defense=spd_evs,
+                    speed=spe_evs
+                )
+            )
+            current_showdown = pokemon_build_to_showdown(current_pokemon)
+
+            # Build optimized Pokemon
+            optimized_pokemon = PokemonBuild(
+                name=pokemon_name,
+                base_stats=base_stats,
+                types=types,
+                nature=best_nature,
+                evs=EVSpread(
+                    hp=best_evs["hp"],
+                    attack=best_evs["attack"],
+                    defense=best_evs["defense"],
+                    special_attack=best_evs["special_attack"],
+                    special_defense=best_evs["special_defense"],
+                    speed=best_evs["speed"]
+                )
+            )
+            optimized_showdown = pokemon_build_to_showdown(optimized_pokemon)
+
             response = {
                 "pokemon": pokemon_name,
                 "current_nature": current_nature,
@@ -482,15 +539,17 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 },
                 "current_total_evs": current_total_evs,
                 "current_stats": current_stats,
+                "current_showdown_paste": current_showdown,
                 "suggested_nature": best_nature.value,
                 "suggested_evs": best_evs,
                 "suggested_total_evs": best_total_evs,
                 "suggested_stats": best_stats,
+                "optimized_showdown_paste": optimized_showdown,
                 "ev_savings": ev_savings,
                 "optimization_found": True,
                 "markdown_summary": "\n".join(markdown_lines)
             }
-            
+
             return response
             
         except Exception as e:
@@ -595,12 +654,33 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             else:
                 analysis_str = f"No optimal spread found for {pokemon_name}"
 
+            # Generate Showdown paste if spread found
+            showdown_paste = None
+            if best_spread:
+                types = await pokeapi.get_pokemon_types(pokemon_name)
+                optimized_pokemon = PokemonBuild(
+                    name=pokemon_name,
+                    base_stats=base_stats,
+                    types=types,
+                    nature=parsed_nature,
+                    evs=EVSpread(
+                        hp=best_spread["hp_evs"],
+                        attack=0,
+                        defense=best_spread["def_evs"],
+                        special_attack=0,
+                        special_defense=best_spread["spd_evs"],
+                        speed=0
+                    )
+                )
+                showdown_paste = pokemon_build_to_showdown(optimized_pokemon)
+
             return {
                 "pokemon": pokemon_name,
                 "nature": nature,
                 "total_bulk_evs": total_bulk_evs,
                 "defense_bias": defense_bias,
                 "optimal_spread": best_spread,
+                "showdown_paste": showdown_paste,
                 "summary_table": "\n".join(table_lines),
                 "analysis": analysis_str
             }
@@ -701,6 +781,26 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     spread["evs"]["hp"] = leftover
                     spread["description"] += f" (Speed creep to {speed_target})"
 
+            # Generate Showdown paste for suggested spread
+            types = await pokeapi.get_pokemon_types(pokemon_name)
+            nature_enum = Nature(spread["nature"].lower())
+
+            suggested_pokemon = PokemonBuild(
+                name=pokemon_name,
+                base_stats=base_stats,
+                types=types,
+                nature=nature_enum,
+                evs=EVSpread(
+                    hp=spread["evs"]["hp"],
+                    attack=spread["evs"]["attack"],
+                    defense=spread["evs"]["defense"],
+                    special_attack=spread["evs"]["special_attack"],
+                    special_defense=spread["evs"]["special_defense"],
+                    speed=spread["evs"]["speed"]
+                )
+            )
+            showdown_paste = pokemon_build_to_showdown(suggested_pokemon)
+
             return {
                 "pokemon": pokemon_name,
                 "role": role,
@@ -712,7 +812,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     "special_attack": base_stats.special_attack,
                     "special_defense": base_stats.special_defense,
                     "speed": base_stats.speed
-                }
+                },
+                "showdown_paste": showdown_paste
             }
 
         except Exception as e:
@@ -763,6 +864,24 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 defense_weight=defense_weight
             )
 
+            # Generate Showdown paste
+            types = await pokeapi.get_pokemon_types(pokemon_name)
+            optimized_pokemon = PokemonBuild(
+                name=pokemon_name,
+                base_stats=base_stats,
+                types=types,
+                nature=parsed_nature,
+                evs=EVSpread(
+                    hp=result.hp_evs,
+                    attack=0,
+                    defense=result.def_evs,
+                    special_attack=0,
+                    special_defense=result.spd_evs,
+                    speed=0
+                )
+            )
+            showdown_paste = pokemon_build_to_showdown(optimized_pokemon)
+
             return {
                 "pokemon": pokemon_name,
                 "nature": nature,
@@ -790,7 +909,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 },
                 "efficiency_score": result.efficiency_score,
                 "explanation": result.explanation,
-                "comparison_vs_naive": result.comparison
+                "comparison_vs_naive": result.comparison,
+                "showdown_paste": showdown_paste
             }
 
         except Exception as e:
@@ -929,6 +1049,17 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             Complete EV spread with final stats and survival calc
         """
         try:
+            # Auto-assign fixed Tera types (Ogerpon forms, Terapagos)
+            from vgc_mcp_core.calc.items import get_fixed_tera_type
+            if survive_pokemon_tera_type is not None:
+                fixed_tera = get_fixed_tera_type(survive_pokemon)
+                if fixed_tera and survive_pokemon_tera_type.lower() != fixed_tera.lower():
+                    survive_pokemon_tera_type = fixed_tera
+            if defender_tera_type is not None:
+                fixed_tera = get_fixed_tera_type(pokemon_name)
+                if fixed_tera and defender_tera_type.lower() != fixed_tera.lower():
+                    defender_tera_type = fixed_tera
+
             # Fetch our Pokemon's data
             my_base = await pokeapi.get_base_stats(pokemon_name)
             my_types = await pokeapi.get_pokemon_types(pokemon_name)
@@ -1402,6 +1533,24 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 f"{def_evs} Def / {spd_evs} SpD / {speed_evs_needed} Spe"
             )
 
+            # Create PokemonBuild with optimized spread for Showdown export
+            optimized_pokemon = PokemonBuild(
+                name=pokemon_name,
+                base_stats=my_base,
+                types=my_types,
+                nature=parsed_nature,
+                evs=EVSpread(
+                    hp=hp_evs,
+                    attack=atk_evs if is_physical else 0,
+                    defense=def_evs,
+                    special_attack=0 if is_physical else atk_evs,
+                    special_defense=spd_evs,
+                    speed=speed_evs_needed
+                ),
+                tera_type=defender_tera_type
+            )
+            results["showdown_paste"] = pokemon_build_to_showdown(optimized_pokemon)
+
             return results
 
         except Exception as e:
@@ -1532,6 +1681,21 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             Optimal spread with survival breakdown for each attack, or "IMPOSSIBLE" if no valid spread exists
         """
         try:
+            # Auto-assign fixed Tera types (Ogerpon forms, Terapagos)
+            from vgc_mcp_core.calc.items import get_fixed_tera_type
+            if survive_hit1_tera_type is not None:
+                fixed_tera = get_fixed_tera_type(survive_hit1_attacker)
+                if fixed_tera and survive_hit1_tera_type.lower() != fixed_tera.lower():
+                    survive_hit1_tera_type = fixed_tera
+            if survive_hit2_tera_type is not None:
+                fixed_tera = get_fixed_tera_type(survive_hit2_attacker)
+                if fixed_tera and survive_hit2_tera_type.lower() != fixed_tera.lower():
+                    survive_hit2_tera_type = fixed_tera
+            if defender_tera_type is not None:
+                fixed_tera = get_fixed_tera_type(pokemon_name)
+                if fixed_tera and defender_tera_type.lower() != fixed_tera.lower():
+                    defender_tera_type = fixed_tera
+
             # Fetch defender data
             my_base = await pokeapi.get_base_stats(pokemon_name)
             my_types = await pokeapi.get_pokemon_types(pokemon_name)
@@ -2056,6 +2220,24 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             else:
                 nature_reason = "User specified"
 
+            # Create PokemonBuild with optimized spread for Showdown export
+            chosen_nature_enum = Nature(chosen_nature.lower())
+            optimized_pokemon = PokemonBuild(
+                name=pokemon_name,
+                base_stats=my_base,
+                types=my_types,
+                nature=chosen_nature_enum,
+                evs=EVSpread(
+                    hp=best_spread["hp"],
+                    attack=0,  # This is a defensive spread
+                    defense=best_spread["def"],
+                    special_attack=offensive_evs,
+                    special_defense=final_spd_evs,
+                    speed=speed_evs_needed
+                ),
+                tera_type=defender_tera_type
+            )
+
             return {
                 "pokemon": pokemon_name,
                 "nature": chosen_nature,
@@ -2122,7 +2304,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     f"({atk1_spread_str}) ({best_results['survival_pct1']:.2f}% survival) and "
                     f"{r2.min_percent:.2f}-{r2.max_percent:.2f}% from {survive_hit2_move} "
                     f"({atk2_spread_str}) ({best_results['survival_pct2']:.2f}% survival)"
-                )
+                ),
+                "showdown_paste": pokemon_build_to_showdown(optimized_pokemon)
             }
 
         except Exception as e:
