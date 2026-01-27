@@ -19,7 +19,54 @@ A Model Context Protocol (MCP) server for Pokemon VGC (Video Game Championships)
 
 ## Quick Start
 
-### Installation
+### For End Users (FREE Claude Desktop!)
+
+**⚡ 5-Minute Setup - No Premium Required**
+
+This MCP server works on **FREE Claude Desktop** using local setup!
+
+#### Quick Links:
+- **[SETUP_GUIDE.md](SETUP_GUIDE.md)** - Choose between local (free) or remote (premium) setup
+- **[LOCAL_SETUP.md](LOCAL_SETUP.md)** - Detailed local installation guide
+
+#### TL;DR for Local Setup:
+
+1. Install Python 3.11+ from https://python.org
+2. Run: `pip install -e .`
+3. Add to Claude Desktop config (`%APPDATA%\Claude\claude_desktop_config.json` on Windows):
+   ```json
+   {
+     "mcpServers": {
+       "vgc": {
+         "command": "python",
+         "args": ["-m", "vgc_mcp"]
+       }
+     }
+   }
+   ```
+4. Restart Claude Desktop
+5. Say "What can you help me with?" - All 157 tools available!
+
+**Windows users:** Just double-click `setup.bat` for automatic setup!
+
+#### Verify It's Working:
+
+After setup, in Claude Desktop:
+1. Look for "vgc" MCP server indicator (should be green/connected)
+2. Say: "What can you help me with?" - Should list VGC tools
+3. Test: "Does Flutter Mane OHKO Incineroar?" - Should get damage calculations
+4. Check speed: Local = instant, Remote = network delay
+
+**How to tell if you're using local vs remote:**
+- Local config has `"command": "python"`
+- Remote config has `"url": "https://..."`
+- See [SETUP_GUIDE.md](SETUP_GUIDE.md) for full verification steps
+
+---
+
+### For Developers
+
+#### Installation
 
 ```bash
 # Install in development mode
@@ -32,7 +79,7 @@ pip install -e ".[remote]"
 pip install -e ".[dev]"
 ```
 
-### Running the Server
+#### Running the Server
 
 ```bash
 # Full server (157 tools) - for powerful models like Claude, GPT-4
@@ -46,37 +93,39 @@ vgc-mcp-http
 vgc-mcp-lite-http
 ```
 
-### Claude Desktop Configuration
+#### Claude Desktop Configuration
 
-Add to your Claude Desktop config file:
-- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-
+**Local Setup (FREE):**
 ```json
 {
   "mcpServers": {
     "vgc": {
-      "command": "C:\\Python313\\python.exe",
+      "command": "python",
       "args": ["-m", "vgc_mcp"]
     }
   }
 }
 ```
 
-Or if vgc-mcp.exe is on your PATH:
+**Remote Setup (Premium):**
 ```json
 {
   "mcpServers": {
     "vgc": {
-      "command": "vgc-mcp"
+      "url": "https://vgc-mcp.onrender.com/sse"
     }
   }
 }
 ```
 
-### Remote (SSE)
+Config file locations:
+- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Linux**: `~/.config/claude/claude_desktop_config.json`
 
-For Claude.ai or remote access:
+#### Remote Server Deployment
+
+For hosting your own remote server:
 - Endpoint: `https://your-server.com/sse`
 - Health check: `https://your-server.com/health`
 

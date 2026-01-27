@@ -1,7 +1,12 @@
 @echo off
-echo ============================================
-echo VGC MCP - One-Click Setup for Claude Desktop
-echo ============================================
+echo ====================================================
+echo VGC MCP - One-Click Setup for FREE Claude Desktop!
+echo ====================================================
+echo.
+echo This setup works with FREE Claude Desktop
+echo NO premium subscription required!
+echo.
+echo Installing 157+ VGC tools...
 echo.
 
 :: Check Python is installed
@@ -46,9 +51,12 @@ if errorlevel 1 (
 )
 
 echo.
-echo ============================================
+echo ====================================================
 echo [3/3] SETUP COMPLETE!
-echo ============================================
+echo ====================================================
+echo.
+echo SUCCESS! You now have 157+ VGC tools on FREE Claude Desktop!
+echo No premium subscription needed.
 echo.
 echo Next steps:
 echo   1. Close Claude Desktop completely (check system tray)
@@ -60,5 +68,7 @@ echo Try these commands:
 echo   - "Does Flutter Mane OHKO Incineroar?"
 echo   - "Help me build a Rain team"
 echo   - "What EVs to survive Urshifu?"
+echo.
+echo Need help? See LOCAL_SETUP.md or https://github.com/MSS23/vgc-mcp/issues
 echo.
 pause
