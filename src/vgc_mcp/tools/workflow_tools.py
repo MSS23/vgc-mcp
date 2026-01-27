@@ -1340,7 +1340,8 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                         "faster": get_faster(my_speed, opp_para, my_pokemon, opponent_pokemon)
                     }
                 elif scenario == "icy_wind":
-                    opp_icy = int(opp_speed * 0.67)
+                    from vgc_mcp_core.calc.speed_control import apply_stage_modifier
+                    opp_icy = apply_stage_modifier(opp_speed, -1)
                     scenario_results["after_icy_wind"] = {
                         "opponent_speed": opp_icy,
                         "faster": get_faster(my_speed, opp_icy, my_pokemon, opponent_pokemon)

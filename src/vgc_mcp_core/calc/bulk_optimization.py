@@ -21,6 +21,7 @@ import math
 
 from ..models.pokemon import Nature, NATURE_MODIFIERS
 from ..config import EV_BREAKPOINTS_LV50, normalize_evs
+from .stats import calculate_hp
 
 
 @dataclass
@@ -50,13 +51,6 @@ def get_nature_modifier(nature_name: str, stat: str) -> float:
             return mods.get(stat, 1.0)
 
     return 1.0
-
-
-def calculate_hp(base: int, ev: int, iv: int = 31, level: int = 50) -> int:
-    """Calculate HP stat at level 50."""
-    if base == 1:  # Shedinja
-        return 1
-    return math.floor((2 * base + iv + ev // 4) * level / 100 + level + 10)
 
 
 def calculate_defense_stat(
@@ -120,7 +114,7 @@ def find_optimal_hp_def_ratio(
         if def_evs < 0 or def_evs > 252:
             continue
 
-        hp = calculate_hp(base_hp, hp_evs)
+        hp = calculate_hp(base_hp, iv=31, ev=hp_evs)
         defense = calculate_defense_stat(base_def, def_evs, nature_mod_def)
         bulk = calculate_effective_bulk(hp, defense)
 
@@ -202,7 +196,7 @@ def calculate_optimal_bulk_distribution(
         actual_total = hp_evs + def_evs + spd_evs
 
         # Calculate stats
-        hp = calculate_hp(base_hp, hp_evs + existing_hp_evs)
+        hp = calculate_hp(base_hp, iv=31, ev=hp_evs + existing_hp_evs)
         defense = calculate_defense_stat(base_def, def_evs + existing_def_evs, nature_mod_def)
         sp_defense = calculate_defense_stat(base_spd, spd_evs + existing_spd_evs, nature_mod_spd)
 
@@ -236,7 +230,7 @@ def calculate_optimal_bulk_distribution(
             "hp_evs": hp_evs,
             "def_evs": def_evs,
             "spd_evs": spd_evs,
-            "final_hp": calculate_hp(base_hp, hp_evs),
+            "final_hp": calculate_hp(base_hp, iv=31, ev=hp_evs),
             "final_def": calculate_defense_stat(base_def, def_evs, nature_mod_def),
             "final_spd": calculate_defense_stat(base_spd, spd_evs, nature_mod_spd),
             "phys_bulk": 0,
@@ -246,12 +240,12 @@ def calculate_optimal_bulk_distribution(
         best_result["spec_bulk"] = best_result["final_hp"] * best_result["final_spd"]
 
     # Calculate comparison to naive distribution (all HP or all Def)
-    naive_hp = calculate_hp(base_hp, total_bulk_evs)
+    naive_hp = calculate_hp(base_hp, iv=31, ev=total_bulk_evs)
     naive_hp_def = calculate_defense_stat(base_def, 0, nature_mod_def)
     naive_hp_bulk = naive_hp * naive_hp_def
 
     naive_def = calculate_defense_stat(base_def, total_bulk_evs, nature_mod_def)
-    naive_def_hp = calculate_hp(base_hp, 0)
+    naive_def_hp = calculate_hp(base_hp, iv=31, ev=0)
     naive_def_bulk = naive_def_hp * naive_def
 
     optimal_bulk = best_result["phys_bulk"]
@@ -349,7 +343,7 @@ def optimize_for_survival(
         for def_evs in EV_BREAKPOINTS_LV50:
             if def_evs > min(252, total_evs - hp_evs):
                 break
-            hp = calculate_hp(base_hp, hp_evs)
+            hp = calculate_hp(base_hp, iv=31, ev=hp_evs)
             defense = calculate_defense_stat(base_defense, def_evs, nature_mod)
 
             # Rough survival check (actual formula is more complex)
@@ -403,8 +397,8 @@ def calculate_marginal_gain(
         The stat increase from adding 4 more EVs
     """
     if stat_type == "hp":
-        current = calculate_hp(base_stat, current_evs)
-        next_val = calculate_hp(base_stat, min(252, current_evs + 4))
+        current = calculate_hp(base_stat, iv=31, ev=current_evs)
+        next_val = calculate_hp(base_stat, iv=31, ev=min(252, current_evs + 4))
     else:
         current = calculate_defense_stat(base_stat, current_evs, nature_mod)
         next_val = calculate_defense_stat(base_stat, min(252, current_evs + 4), nature_mod)

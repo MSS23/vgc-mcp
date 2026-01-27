@@ -146,6 +146,28 @@ class TestHPCalculation:
         hp = calculate_hp(1, 31, 252, 50)
         assert hp == 1
 
+    def test_entei_hp_ev_efficiency(self):
+        """Verify HP EV recommendations are efficient (no wasteful breakpoints)."""
+        from vgc_mcp_core.config import normalize_evs
+
+        base_hp = 115  # Entei
+
+        # Test that 112 EVs is wasteful
+        hp_108 = calculate_hp(base_hp, iv=31, ev=108)
+        hp_112 = calculate_hp(base_hp, iv=31, ev=112)
+        hp_116 = calculate_hp(base_hp, iv=31, ev=116)
+
+        assert hp_108 == 204, "108 EVs should give 204 HP"
+        assert hp_112 == 204, "112 EVs gives same 204 HP (wasteful!)"
+        assert hp_116 == 205, "116 EVs should give 205 HP"
+
+        # Verify normalize_evs catches this:
+        assert normalize_evs(112) == 108, "112 should normalize to 108"
+
+        # Valid breakpoints around 112:
+        assert normalize_evs(108) == 108
+        assert normalize_evs(116) == 116
+
 
 class TestFullStatCalculation:
     """Test full Pokemon stat calculations."""

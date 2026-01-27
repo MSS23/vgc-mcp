@@ -83,6 +83,21 @@ class TestSpeedModifiers:
         result_plus6 = apply_stage_modifier(100, 6)
         assert result_plus7 == result_plus6
 
+    def test_icy_wind_exact_calculation(self):
+        """Verify -1 speed stage uses exact 2/3, not 0.67 approximation."""
+        # Critical case: Chien-Pao with 205 speed after Icy Wind
+        speed_205 = apply_stage_modifier(205, -1)
+        assert speed_205 == 136, f"205 * 2/3 should be 136, got {speed_205}"
+
+        # Verify 0.67 approximation would be wrong:
+        wrong_calc = int(205 * 0.67)
+        assert wrong_calc == 137, "0.67 approximation gives 137"
+        assert speed_205 != wrong_calc, "Must use exact 2/3, not 0.67"
+
+        # Additional test cases:
+        assert apply_stage_modifier(150, -1) == 100
+        assert apply_stage_modifier(99, -1) == 66
+
 
 class TestGetTeamSpeeds:
     """Test team speed tier extraction."""

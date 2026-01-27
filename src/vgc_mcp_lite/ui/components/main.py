@@ -13594,9 +13594,9 @@ def create_dual_survival_ui(
                 modifier *= 0.67;
             }}
 
-            // Intimidate (-1 Atk stage = ~0.67x)
+            // Intimidate (-1 Atk stage = 2/3 modifier to attack stat)
             if (isPhysical && mods.intimidate) {{
-                modifier *= 0.67;
+                modifier *= (2/3);
             }}
 
             // Friend Guard (0.75x)
