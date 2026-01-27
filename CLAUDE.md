@@ -164,6 +164,203 @@ Your [Pokemon Name]
 - Notable type resistances/immunities
 - Weather/terrain interactions
 
+## Showdown Paste Export
+
+All tools that return Pokemon spreads now include Showdown paste format for easy copy-paste into Pokemon Showdown.
+
+### Field Names
+
+Tools use consistent field naming for Showdown paste output:
+
+- **`showdown_paste`** - Single recommended spread
+- **`attacker_showdown_paste`** - Attacker's spread in damage calculations
+- **`defender_showdown_paste`** - Defender's spread in damage calculations
+- **`current_showdown_paste`** - Before optimization
+- **`optimized_showdown_paste`** - After optimization
+
+### Tools with Showdown Output
+
+**Spread Optimization Tools** (spread_tools.py):
+- `suggest_nature_optimization` - Returns `current_showdown_paste` and `optimized_showdown_paste`
+- `suggest_spread` - Returns `showdown_paste`
+- `optimize_bulk` - Returns `showdown_paste`
+- `optimize_bulk_math` - Returns `showdown_paste`
+- `check_spread_efficiency` - Returns `showdown_paste` for analyzed spread
+- `design_spread_with_benchmarks` - Returns `showdown_paste`
+- `optimize_dual_survival_spread` - Returns `showdown_paste`
+
+**Damage Calculation Tools** (damage_tools.py):
+- `calculate_damage_output` - Returns `attacker_showdown_paste` and `defender_showdown_paste`
+- `find_survival_evs` - Returns `defender_showdown_paste`
+- `find_ko_threshold` - Returns `attacker_showdown_paste`
+
+### Usage for LLM - CRITICAL INSTRUCTIONS
+
+**PRIMARY OUTPUT FORMAT**: When any tool returns a `*_showdown_paste` field, you MUST display it prominently in a code block as the main output. Showdown paste is not a secondary detail - it's what users came for.
+
+**Response Structure Template:**
+1. Brief context (1-2 sentences about what the spread does)
+2. **Showdown Paste in code block** ← THE MAIN EVENT
+3. Copy-paste instruction
+4. Optional: Technical details (stats, analysis) if relevant
+
+**Formatting Rules:**
+- ✅ ALWAYS put Showdown paste in triple-backtick code blocks
+- ✅ ALWAYS include the copy-paste instruction
+- ✅ Make Showdown paste the focal point - it should be immediately visible
+- ❌ DON'T bury Showdown paste after paragraphs of text
+- ❌ DON'T show raw EV dicts (like `{"hp": 252, "attack": 4, ...}`) when Showdown paste exists
+- ❌ DON'T make users dig through JSON to find the paste
+
+**Copy-Paste Instruction (use this exact phrasing):**
+> "Copy this and paste it directly into Pokemon Showdown's teambuilder."
+
+### Showdown Format Details
+
+The Showdown paste format includes:
+- **Species name** (with form if applicable, e.g., "Urshifu-Rapid-Strike")
+- **Item** after @ symbol (omitted if none)
+- **Ability** line (omitted if none)
+- **Level** (defaults to 50 for VGC, only shown if different)
+- **EVs** line showing non-zero values only (e.g., "EVs: 252 HP / 4 Def / 252 Spe")
+- **Nature** line (e.g., "Adamant Nature")
+- **IVs** line only if non-31 values exist (e.g., "IVs: 0 Atk" for special attackers)
+- **Moves** with - prefix (omitted if none)
+- **Tera Type** line (omitted if none)
+
+Missing data is handled gracefully - tools will include whatever information is available. If a spread doesn't have an ability, item, or moves specified, those lines are simply omitted from the paste.
+
+### Response Templates by Tool Type
+
+#### Template 1: Single Spread Recommendation (suggest_spread, optimize_bulk, etc.)
+
+User: "What's a good offensive spread for Landorus?"
+
+**Response Format:**
+```
+Here's a max Attack & Speed offensive Landorus spread:
+
+```
+Landorus
+EVs: 4 HP / 252 Atk / 252 Spe
+Jolly Nature
+```
+
+Copy this and paste it directly into Pokemon Showdown's teambuilder.
+
+**Why this spread:**
+- Maximizes Attack and Speed for sweeping
+- Jolly nature outspeeds most threats
+- 4 HP EVs for slight bulk
+- Final stats: 166 HP / 197 Atk / 110 Def / 115 SpD / 169 Spe
+```
+
+#### Template 2: Nature Optimization (suggest_nature_optimization)
+
+User: "Can I use a different nature to save EVs?"
+
+**Response Format:**
+```
+Yes! You can save 8 EVs by switching to Jolly nature.
+
+**Current Spread:**
+```
+Landorus
+EVs: 4 HP / 252 Atk / 252 Spe
+Serious Nature
+```
+
+**Optimized Spread (saves 8 EVs):**
+```
+Landorus
+EVs: 4 HP / 244 Atk / 252 Spe
+Jolly Nature
+```
+
+Copy the optimized spread above and paste it into Pokemon Showdown's teambuilder.
+
+**What changed:**
+- Jolly's +Spe boost lets you reach the same Speed with fewer EVs
+- Same final stats, but you save 8 EVs to invest elsewhere
+- Could add those 8 EVs to Def or SpD for extra bulk
+```
+
+#### Template 3: Damage Calculations (calculate_damage_output, find_survival_evs)
+
+User: "Does Urshifu OHKO Ogerpon?"
+
+**Response Format:**
+```
+No, Urshifu does NOT OHKO Ogerpon.
+
+**Attacker:**
+```
+Urshifu-Rapid-Strike @ Choice Scarf
+Ability: Unseen Fist
+EVs: 4 HP / 252 Atk / 252 Spe
+Adamant Nature
+```
+
+**Defender:**
+```
+Ogerpon-Hearthflame @ Hearthflame Mask
+EVs: 252 HP / 4 Def / 252 Spe
+Jolly Nature
+```
+
+**Damage:** Surging Strikes deals 67.4-78.6% (126-147 damage to 187 HP)
+**Result:** Ogerpon survives with 21-33% HP remaining
+
+Copy either spread above to paste into Pokemon Showdown's teambuilder.
+```
+
+#### Template 4: Survival Spread (find_survival_evs)
+
+User: "What EVs does Ogerpon need to survive Urshifu?"
+
+**Response Format:**
+```
+Ogerpon needs **252 HP / 4 Def** to survive Adamant Choice Scarf Urshifu's Surging Strikes.
+
+**Recommended Spread:**
+```
+Ogerpon-Hearthflame @ Hearthflame Mask
+EVs: 252 HP / 4 Def / 252 Spe
+Jolly Nature
+```
+
+Copy this and paste it directly into Pokemon Showdown's teambuilder.
+
+**Matchup Details:**
+- **Attacker:** Adamant 4/252/0/0/0/252 Urshifu-Rapid-Strike @ Choice Scarf
+- **Damage:** 67.4-78.6% (126-147 to 187 HP)
+- **Survival:** You live with 21-33% HP remaining
+```
+
+#### Template 5: Offensive Threshold (find_ko_threshold)
+
+User: "How much Attack do I need to OHKO Rillaboom?"
+
+**Response Format:**
+```
+You need **196 SpA EVs** to guarantee OHKO Rillaboom with Moonblast.
+
+**Recommended Spread:**
+```
+Flutter Mane
+Ability: Protosynthesis
+EVs: 196 SpA / 60 Def / 252 Spe
+Timid Nature
+```
+
+Copy this and paste it directly into Pokemon Showdown's teambuilder.
+
+**Matchup:**
+- Target: Adamant 252/116/4/0/60/76 Rillaboom @ Assault Vest
+- Damage: 101.2-119.8% (guaranteed OHKO)
+- You have 56 EVs left over to invest in bulk or other stats
+```
+
 ## Tool Selection Guide
 
 ### For Survival Questions ("Can X survive Y?", "What EVs to survive?")
@@ -185,12 +382,57 @@ Use the RIGHT tool for survival calculations:
    - Use when: "Design a spread that outspeeds X AND survives Y"
    - Handles Tera, Tailwind, Booster Energy, speed stages
 
+### Survival Rate Interpretation
+
+When users ask about survival, interpret their intent correctly:
+
+**Default (no qualifier specified):**
+- "Can X survive Y?" → 93.75% survival (survive max roll only)
+- "What EVs to survive Z?" → 93.75% survival (minimal EV investment)
+- This is OPTIMAL - leaves more EVs for offense, speed, or other stats
+
+**User Specifies Guaranteed Survival:**
+- "Guarantee survival" → 100% (all 16 rolls)
+- "Always survive" → 100%
+- "Never die to X" → 100%
+- "100% survival" → 100%
+
+**User Specifies Partial Survival:**
+- "Survive sometimes" → 75% (12/16 rolls)
+- "Survive most of the time" → 87.5% (14/16 rolls)
+- "Live through it usually" → 87.5%
+- "50/50 chance" → 50% (8/16 rolls)
+
+**User Specifies Exact Percentage:**
+- "37.5% of the time" → 37.5%
+- "At least 80%" → 81.25% (next valid tier: 13/16 rolls)
+
+**Understanding Survival Percentages:**
+
+Pokemon damage has **16 possible rolls** based on RNG (85% to 100% of base damage):
+
+| Survival % | Rolls Survived | Meaning |
+|------------|----------------|---------|
+| **93.75%** | 15/16 | Survive max roll only - **DEFAULT & RECOMMENDED** |
+| 87.5% | 14/16 | Can die to 2 highest rolls |
+| 81.25% | 13/16 | Can die to 3 highest rolls |
+| 75% | 12/16 | Can die to 4 highest rolls |
+| 100% | 16/16 | Guaranteed survival (wastes EVs) |
+
+**When calling `find_survival_evs`:**
+- Use the `target_survival_chance` parameter with the appropriate value
+- Default 93.75% is optimal for competitive play
+- Only use 100% when user explicitly requests guaranteed survival
+
 ### Common Mistakes to Avoid
 
 - **DON'T give offensive spreads when asked about survival** - If user asks "what spread survives X?", return defensive EVs (HP/Def), not offensive (Atk/Spe)
 - **ALWAYS show the FULL attacker spread with EVs** - Don't just say "Adamant Choice Scarf Urshifu", say "Adamant 4 HP / 252 Atk / 252 Spe Choice Scarf Urshifu"
 - **Understand damage calc notation**: "252 Atk" = neutral nature, "252+ Atk" = boosting nature (Adamant)
 - **Don't hallucinate numbers** - If the tool returns 81.8-96.2%, don't say 81.2-98.7%
+- **DON'T hide Showdown paste** - If a tool returns `showdown_paste` or `*_showdown_paste` fields, display them prominently. Don't just mention "the spread is X EVs" - SHOW the paste.
+- **DON'T show raw EV dictionaries** - Users don't want `{"hp": 252, "attack": 4, ...}`. They want the Showdown format they can copy.
+- **DON'T make users ask twice** - If they ask for a spread, give them the Showdown paste immediately, not just stats.
 
 ### CRITICAL: Always Show Full Spreads for BOTH Pokemon
 

@@ -8,6 +8,7 @@ from vgc_mcp_core.api.smogon import SmogonStatsClient
 from vgc_mcp_core.calc.damage import calculate_damage, calculate_ko_threshold, calculate_bulk_threshold
 from vgc_mcp_core.calc.modifiers import DamageModifiers
 from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, IVSpread, get_nature_modifier
+from vgc_mcp_core.formats.showdown import pokemon_build_to_showdown
 from vgc_mcp_core.calc.stats import calculate_stat, calculate_hp
 from vgc_mcp_core.utils.errors import error_response, ErrorCodes, pokemon_not_found_error, invalid_nature_error, api_error
 from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name, suggest_nature
@@ -1074,6 +1075,13 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
 
             response["analysis"] = f"{attacker_spread_str}'s {move_name} vs {defender_spread_str}: {min_pct}-{max_pct}% ({hp_remain_min_pct}-{hp_remain_max_pct}% remaining). {result.ko_chance}."
 
+            # Add Showdown paste format for both Pokemon
+            attacker.ability = attacker_ability
+            defender.ability = defender_ability
+            defender.item = defender_item
+            response["attacker_showdown_paste"] = pokemon_build_to_showdown(attacker)
+            response["defender_showdown_paste"] = pokemon_build_to_showdown(defender)
+
             return response
 
         except Exception as e:
@@ -1208,6 +1216,37 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 f"| KO Chance        | {result['ko_chance']:.2f}%                 |",
             ]
 
+            # Generate Showdown paste for attacker with required EVs
+            attacker_evs_dict = {
+                "hp": 0,
+                "attack": result["evs_needed"] if result["stat_name"] == "Atk" else 0,
+                "defense": 0,
+                "special_attack": result["evs_needed"] if result["stat_name"] == "SpA" else 0,
+                "special_defense": 0,
+                "speed": 0
+            }
+
+            # Fetch attacker ability for Showdown paste
+            attacker_abilities = await pokeapi.get_pokemon_abilities(attacker_name)
+            attacker_ability = attacker_abilities[0] if attacker_abilities else None
+
+            attacker_pokemon = PokemonBuild(
+                name=attacker_name,
+                base_stats=atk_base,
+                types=atk_types,
+                nature=atk_nature,
+                evs=EVSpread(
+                    hp=attacker_evs_dict["hp"],
+                    attack=attacker_evs_dict["attack"],
+                    defense=attacker_evs_dict["defense"],
+                    special_attack=attacker_evs_dict["special_attack"],
+                    special_defense=attacker_evs_dict["special_defense"],
+                    speed=attacker_evs_dict["speed"]
+                ),
+                ability=attacker_ability
+            )
+            attacker_showdown = pokemon_build_to_showdown(attacker_pokemon)
+
             return {
                 "attacker": attacker_name,
                 "defender": defender_name,
@@ -1218,6 +1257,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "stat": result["stat_name"],
                 "ko_chance": f"{result['ko_chance']:.2f}%",
                 "damage_range": result["damage_range"],
+                "attacker_showdown_paste": attacker_showdown,
                 "summary_table": "\n".join(table_lines),
                 "analysis": f"Need {result['evs_needed']} {result['stat_name']} EVs to {result['ko_chance']:.0f}% OHKO {defender_spread_str} with {move_name}"
             }
@@ -1241,11 +1281,17 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         attacker_evs: Optional[int] = None,
         attacker_item: Optional[str] = None,
         defender_nature: str = "calm",
-        target_survival_chance: float = 100.0,
+        target_survival_chance: float = 93.75,
         use_smogon_spreads: bool = True
     ) -> dict:
         """
         Find minimum HP/Defense EVs needed to SURVIVE a specific attack.
+
+        Default behavior (93.75% survival):
+        - Survives the MAXIMUM damage roll (100% damage)
+        - Does NOT survive the absolute minimum roll (85% damage)
+        - Optimal for competitive play - minimal EV investment
+        - Leaves more EVs for offense, speed, or other stats
 
         USE THIS TOOL when user asks:
         - "What EVs to survive X?"
@@ -1265,7 +1311,10 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             attacker_evs: Attacker's offensive EVs (auto-fetched from Smogon if not provided)
             attacker_item: Attacker's item (auto-fetched from Smogon if not provided)
             defender_nature: Your Pokemon's nature (default: Calm for SpD, use Impish for Def)
-            target_survival_chance: Target survival % (100 = always survive max roll)
+            target_survival_chance: Survival % (default 93.75% = 15/16 rolls = survive max damage only).
+                - 93.75% (15/16 rolls) = survive max damage only [RECOMMENDED - minimal EVs]
+                - 87.5% (14/16 rolls) = can die to 2 highest rolls
+                - 100% (16/16 rolls) = guaranteed survival (wastes EVs)
             use_smogon_spreads: Auto-fetch attacker spread from Smogon (default True)
 
         Returns:
@@ -1523,6 +1572,24 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             item_str = f" with {attacker_item.replace('-', ' ').title()}" if attacker_item else ""
             defender_ev_str = f"{result['hp_evs']} HP / {result['def_evs']} {result['def_stat_name']}"
 
+            # Create defender PokemonBuild with recommended EVs for Showdown export
+            defender_evs_dict = {
+                "hp": result["hp_evs"],
+                "defense": result["def_evs"] if result["def_stat_name"] == "Def" else 0,
+                "special_defense": result["def_evs"] if result["def_stat_name"] == "SpD" else 0,
+            }
+            recommended_defender = PokemonBuild(
+                name=defender_name,
+                base_stats=def_base,
+                types=def_types,
+                nature=def_nature,
+                evs=EVSpread(**defender_evs_dict),
+                ability=defender.ability,
+                item=defender.item,
+                tera_type=defender.tera_type
+            )
+            defender_showdown_paste = pokemon_build_to_showdown(recommended_defender)
+
             response = {
                 "attacker": attacker_name,
                 # Top-level attacker info for LLM visibility
@@ -1535,6 +1602,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 # Top-level defender info for LLM visibility
                 "defender_nature": defender_nature.title(),
                 "defender_recommended_spread": defender_ev_str,
+                "defender_showdown_paste": defender_showdown_paste,
                 "move": move_name,
                 "achievable": True,
                 "hp_evs_needed": result["hp_evs"],
@@ -1543,7 +1611,12 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "survival_chance": f"{result['survival_chance']:.2f}%",
                 "damage_range": result["damage_range"],
                 "summary_table": "\n".join(table_lines),
-                "analysis": f"{defender_name} needs {defender_ev_str} EVs ({defender_nature.title()}) to survive {move_name} from {attacker_nature.title()} {ev_string}{item_str} {attacker_name} — takes {result['damage_range']}"
+                "analysis": (
+                    f"{defender_name} needs {defender_ev_str} EVs ({defender_nature.title()}) to survive {move_name} from "
+                    f"{attacker_nature.title()} {ev_string}{item_str} {attacker_name} — takes {result['damage_range']} "
+                    f"({result['survival_chance']:.1f}% survival = {int(result['survival_chance'] * 16 / 100)}/16 rolls). "
+                    f"{'This is the MINIMUM EVs to survive max damage roll.' if result['survival_chance'] < 95 else 'Guaranteed survival against all damage rolls.'}"
+                )
             }
 
             # Add regulation to top-level response for visibility
