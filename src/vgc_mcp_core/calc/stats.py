@@ -226,6 +226,211 @@ def get_min_speed(
     return calculate_speed(base_speed, iv, 0, level, nature)
 
 
+def optimize_ev_efficiency(
+    base_stat: int,
+    iv: int,
+    evs: int,
+    level: int = 50,
+    nature_mod: float = 1.0,
+    stat_type: str = "normal"
+) -> int:
+    """
+    Optimize EV allocation by removing wasted EVs.
+
+    At level 50, due to floor operations in the stat formula, sometimes
+    adding 4 more EVs doesn't increase the final stat. This function
+    detects and removes such wasted EVs.
+
+    Example: For Urshifu-RS (130 Attack base, 31 IV, Jolly nature):
+    - 148 Attack EVs → 169 Attack stat
+    - 152 Attack EVs → 169 Attack stat (same!)
+    This function would return 148, saving 4 wasted EVs.
+
+    Args:
+        base_stat: Base stat value
+        iv: IV value
+        evs: Current EV allocation
+        level: Pokemon level (default 50)
+        nature_mod: Nature modifier (0.9, 1.0, or 1.1)
+        stat_type: "hp" or "normal"
+
+    Returns:
+        Optimized EV value (may be 4-12 lower than input if waste detected)
+    """
+    if evs <= 0:
+        return 0
+
+    # Calculate current stat
+    if stat_type == "hp":
+        current_stat = calculate_hp(base_stat, iv, evs, level)
+    else:
+        current_stat = calculate_stat(base_stat, iv, evs, level, nature_mod)
+
+    # Check if we can reduce EVs by 4, 8, or 12 and get the same stat
+    for reduction in [4, 8, 12]:
+        if evs - reduction < 0:
+            break
+
+        reduced_evs = evs - reduction
+
+        if stat_type == "hp":
+            reduced_stat = calculate_hp(base_stat, iv, reduced_evs, level)
+        else:
+            reduced_stat = calculate_stat(base_stat, iv, reduced_evs, level, nature_mod)
+
+        # If same stat with fewer EVs, continue checking larger reductions
+        if reduced_stat == current_stat:
+            continue
+        else:
+            # Found the breakpoint - return EVs before this reduction
+            return evs - (reduction - 4) if reduction > 4 else evs
+
+    # If we reduced by 12 and still have the same stat, return the lowest
+    if stat_type == "hp":
+        final_stat = calculate_hp(base_stat, iv, evs - 12, level)
+    else:
+        final_stat = calculate_stat(base_stat, iv, evs - 12, level, nature_mod)
+
+    if final_stat == current_stat:
+        return evs - 12
+
+    return evs
+
+
+def optimize_spread_efficiency(
+    pokemon: "PokemonBuild",
+    current_evs: dict[str, int]
+) -> tuple[dict[str, int], int]:
+    """
+    Optimize an entire EV spread to remove all wasted EVs.
+
+    Args:
+        pokemon: Pokemon build with base stats, nature, and IVs
+        current_evs: Dict with keys: hp, attack, defense, special_attack, special_defense, speed
+
+    Returns:
+        Tuple of (optimized_evs dict, total_evs_saved)
+
+    Example:
+        Input:  {"hp": 156, "attack": 152, "defense": 0, "special_attack": 0, "special_defense": 108, "speed": 92}
+        Output: ({"hp": 156, "attack": 148, "defense": 0, "special_attack": 0, "special_defense": 108, "speed": 92}, 4)
+                ^^ Attack optimized from 152 to 148, saving 4 EVs
+    """
+    from ..models.pokemon import get_nature_modifier as pokemon_get_nature_modifier
+
+    optimized = {}
+    total_saved = 0
+
+    # Get nature modifiers
+    nature = pokemon.nature
+    atk_mod = pokemon_get_nature_modifier(nature, "attack")
+    def_mod = pokemon_get_nature_modifier(nature, "defense")
+    spa_mod = pokemon_get_nature_modifier(nature, "special_attack")
+    spd_mod = pokemon_get_nature_modifier(nature, "special_defense")
+    spe_mod = pokemon_get_nature_modifier(nature, "speed")
+
+    # Optimize each stat
+    optimized["hp"] = optimize_ev_efficiency(
+        pokemon.base_stats.hp, pokemon.ivs.hp, current_evs.get("hp", 0), 50, 1.0, "hp"
+    )
+    total_saved += current_evs.get("hp", 0) - optimized["hp"]
+
+    optimized["attack"] = optimize_ev_efficiency(
+        pokemon.base_stats.attack, pokemon.ivs.attack, current_evs.get("attack", 0), 50, atk_mod, "normal"
+    )
+    total_saved += current_evs.get("attack", 0) - optimized["attack"]
+
+    optimized["defense"] = optimize_ev_efficiency(
+        pokemon.base_stats.defense, pokemon.ivs.defense, current_evs.get("defense", 0), 50, def_mod, "normal"
+    )
+    total_saved += current_evs.get("defense", 0) - optimized["defense"]
+
+    optimized["special_attack"] = optimize_ev_efficiency(
+        pokemon.base_stats.special_attack, pokemon.ivs.special_attack,
+        current_evs.get("special_attack", 0), 50, spa_mod, "normal"
+    )
+    total_saved += current_evs.get("special_attack", 0) - optimized["special_attack"]
+
+    optimized["special_defense"] = optimize_ev_efficiency(
+        pokemon.base_stats.special_defense, pokemon.ivs.special_defense,
+        current_evs.get("special_defense", 0), 50, spd_mod, "normal"
+    )
+    total_saved += current_evs.get("special_defense", 0) - optimized["special_defense"]
+
+    optimized["speed"] = optimize_ev_efficiency(
+        pokemon.base_stats.speed, pokemon.ivs.speed, current_evs.get("speed", 0), 50, spe_mod, "normal"
+    )
+    total_saved += current_evs.get("speed", 0) - optimized["speed"]
+
+    return optimized, total_saved
+
+
+def validate_ev_efficiency(
+    pokemon: "PokemonBuild",
+    evs: dict[str, int]
+) -> dict:
+    """
+    Validate that an EV spread has no wasted EVs.
+
+    Args:
+        pokemon: Pokemon build with base stats, nature, and IVs
+        evs: Dict with keys: hp, attack, defense, special_attack, special_defense, speed
+
+    Returns:
+        Dict with keys:
+        - is_efficient: bool (True if no EVs are wasted)
+        - wasted_evs: dict mapping stat name -> number of wasted EVs
+        - total_wasted: int (total wasted EVs across all stats)
+        - suggestions: list of strings describing optimizations
+
+    Example:
+        Input: pokemon with 152 Attack EVs (when 148 gives same stat)
+        Output: {
+            "is_efficient": False,
+            "wasted_evs": {"attack": 4},
+            "total_wasted": 4,
+            "suggestions": ["Reduce attack EVs from 152 to 148 (saves 4 EVs with no stat loss)"]
+        }
+    """
+    from ..models.pokemon import get_nature_modifier as pokemon_get_nature_modifier
+
+    wasted = {}
+    suggestions = []
+
+    # Check each stat
+    for stat_name in ["hp", "attack", "defense", "special_attack", "special_defense", "speed"]:
+        current_evs = evs.get(stat_name, 0)
+        if current_evs == 0:
+            continue
+
+        # Get base stat and nature modifier
+        base_stat = getattr(pokemon.base_stats, stat_name)
+        iv = getattr(pokemon.ivs, stat_name)
+
+        if stat_name == "hp":
+            nature_mod = 1.0
+            stat_type = "hp"
+        else:
+            nature_mod = pokemon_get_nature_modifier(pokemon.nature, stat_name)
+            stat_type = "normal"
+
+        optimized_evs = optimize_ev_efficiency(base_stat, iv, current_evs, 50, nature_mod, stat_type)
+
+        if optimized_evs < current_evs:
+            wasted[stat_name] = current_evs - optimized_evs
+            suggestions.append(
+                f"Reduce {stat_name} EVs from {current_evs} to {optimized_evs} "
+                f"(saves {current_evs - optimized_evs} EVs with no stat loss)"
+            )
+
+    return {
+        "is_efficient": len(wasted) == 0,
+        "wasted_evs": wasted,
+        "total_wasted": sum(wasted.values()),
+        "suggestions": suggestions
+    }
+
+
 # Quick validation of benchmarks
 def _validate_benchmarks():
     """Validate stat calculations against known benchmarks."""

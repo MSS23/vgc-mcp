@@ -6,7 +6,7 @@ from mcp.server.fastmcp import FastMCP
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
 from vgc_mcp_core.calc.stats import calculate_speed, find_speed_evs
-from vgc_mcp_core.calc.speed import SPEED_BENCHMARKS, calculate_speed_tier
+from vgc_mcp_core.calc.speed import SPEED_BENCHMARKS, calculate_speed_tier, get_competitive_speed_benchmarks
 from vgc_mcp_core.models.pokemon import Nature
 
 # MCP-UI support (enabled in vgc-mcp-lite)
@@ -408,7 +408,8 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
     async def analyze_speed_spread(
         pokemon_name: str,
         nature: str = "serious",
-        speed_evs: int = 0
+        speed_evs: int = 0,
+        use_competitive_data: bool = False
     ) -> dict:
         """
         Analyze what a specific speed spread outspeeds and underspeeds.
@@ -417,6 +418,8 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
             pokemon_name: Pokemon name
             nature: Nature
             speed_evs: Speed EVs
+            use_competitive_data: Use Smogon competitive spreads (default False for lite version).
+                                 If True, fetches real usage data (requires Smogon API).
 
         Returns:
             Analysis of what this spread outspeeds/underspeeds
@@ -429,12 +432,25 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
             except ValueError:
                 return {"error": f"Invalid nature: {nature}"}
 
+            # Fetch competitive benchmarks if requested and smogon client available
+            competitive_benchmarks = None
+            if use_competitive_data and smogon:
+                try:
+                    competitive_benchmarks = await get_competitive_speed_benchmarks(
+                        smogon,
+                        top_n_pokemon=20,
+                        top_n_speeds=2
+                    )
+                except Exception:
+                    competitive_benchmarks = None
+
             tier_info = calculate_speed_tier(
                 base_stats.speed,
                 parsed_nature,
                 speed_evs,
                 31,
-                50
+                50,
+                competitive_benchmarks=competitive_benchmarks
             )
 
             return {
@@ -444,7 +460,8 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
                 "final_speed": tier_info["speed"],
                 "outspeeds": tier_info["outspeeds"],
                 "ties_with": tier_info["ties_with"],
-                "underspeeds": tier_info["underspeeds"]
+                "underspeeds": tier_info["underspeeds"],
+                "data_source": "Smogon competitive usage" if competitive_benchmarks else "Theoretical max speeds"
             }
 
         except Exception as e:

@@ -1499,6 +1499,54 @@ class TestAutoFillFromBuild:
         ratio = result_full.max_damage / result_empty.max_damage
         assert 1.60 <= ratio <= 1.75, f"Expected ~1.69x ratio, got {ratio}"
 
+    def test_always_crit_does_not_mutate_modifiers(self):
+        """Verify that always-crit moves don't mutate original modifiers (Bug #1 fix)."""
+        # Create modifiers with is_critical=False
+        modifiers = DamageModifiers(is_critical=False)
+        original_crit_status = modifiers.is_critical
+
+        # Create Urshifu and Ogerpon builds
+        urshifu = PokemonBuild(
+            name="urshifu-rapid-strike",
+            base_stats=BaseStats(
+                hp=100, attack=130, defense=100,
+                special_attack=63, special_defense=60, speed=97
+            ),
+            nature=Nature.JOLLY,
+            evs=EVSpread(attack=252),
+            types=["Fighting", "Water"],
+            ability="unseen-fist"
+        )
+
+        ogerpon = PokemonBuild(
+            name="ogerpon",
+            base_stats=BaseStats(
+                hp=80, attack=120, defense=84,
+                special_attack=60, special_defense=96, speed=110
+            ),
+            nature=Nature.JOLLY,
+            evs=EVSpread(hp=252),
+            types=["Grass"]
+        )
+
+        # Surging Strikes always crits
+        surging_strikes = Move(
+            name="surging-strikes",
+            type="Water",
+            category=MoveCategory.PHYSICAL,
+            power=25,
+            accuracy=100,
+            pp=5
+        )
+
+        # Calculate damage - this triggers the always_crit logic
+        result = calculate_damage(urshifu, ogerpon, surging_strikes, modifiers)
+
+        # Original modifiers should be unchanged (not mutated)
+        assert modifiers.is_critical == original_crit_status, (
+            "Modifiers were mutated! always_crit should create new modifiers, not mutate original"
+        )
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

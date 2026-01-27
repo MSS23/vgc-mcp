@@ -107,7 +107,16 @@ def find_optimal_hp_def_ratio(
     for hp_evs in EV_BREAKPOINTS_LV50:
         if hp_evs > min(252, total_evs):
             break
-        def_evs = normalize_evs(total_evs - hp_evs)
+
+        # Calculate remaining EVs and normalize to valid breakpoint
+        remaining_evs = total_evs - hp_evs
+        def_evs = normalize_evs(remaining_evs)
+
+        # Optimize to remove any wasted EVs (e.g., 152→148 if same stat)
+        # Assuming 31 IVs for competitive play (standard assumption)
+        from .stats import optimize_ev_efficiency
+        def_evs = optimize_ev_efficiency(base_def, 31, def_evs, 50, nature_mod_def, "normal")
+
         if def_evs < 0 or def_evs > 252:
             continue
 

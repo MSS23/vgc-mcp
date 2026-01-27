@@ -751,33 +751,52 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                             survive_pokemon_ability = "unseen-fist"
 
                     # Auto-detect Ruinous abilities from attacker
+                    from vgc_mcp_core.calc.abilities import normalize_ability_name
+
                     # First: Direct detection from Pokemon name (most reliable)
                     sword_of_ruin = normalized_attacker == "chien-pao"
                     beads_of_ruin = normalized_attacker == "chi-yu"
+                    tablets_of_ruin = normalized_attacker == "wo-chien"
+                    vessel_of_ruin = normalized_attacker == "ting-lu"
+
                     if sword_of_ruin and not survive_pokemon_ability:
                         survive_pokemon_ability = "sword-of-ruin"
                     if beads_of_ruin and not survive_pokemon_ability:
                         survive_pokemon_ability = "beads-of-ruin"
+                    if tablets_of_ruin and not survive_pokemon_ability:
+                        survive_pokemon_ability = "tablets-of-ruin"
+                    if vessel_of_ruin and not survive_pokemon_ability:
+                        survive_pokemon_ability = "vessel-of-ruin"
 
                     # Second: Check from ability string if set
-                    if not sword_of_ruin and not beads_of_ruin and survive_pokemon_ability:
-                        ability_lower = survive_pokemon_ability.lower().replace(" ", "-").replace("_", "-")
+                    if not any([sword_of_ruin, beads_of_ruin, tablets_of_ruin, vessel_of_ruin]) and survive_pokemon_ability:
+                        ability_lower = normalize_ability_name(survive_pokemon_ability)
                         if ability_lower == "sword-of-ruin":
                             sword_of_ruin = True
                         elif ability_lower == "beads-of-ruin":
                             beads_of_ruin = True
+                        elif ability_lower == "tablets-of-ruin":
+                            tablets_of_ruin = True
+                        elif ability_lower == "vessel-of-ruin":
+                            vessel_of_ruin = True
 
                     # Third: Fallback to PokeAPI
-                    if not sword_of_ruin and not beads_of_ruin and not survive_pokemon_ability:
+                    if not any([sword_of_ruin, beads_of_ruin, tablets_of_ruin, vessel_of_ruin]) and not survive_pokemon_ability:
                         atk_abilities = await pokeapi.get_pokemon_abilities(survive_pokemon)
                         if atk_abilities:
-                            ability_lower = atk_abilities[0].lower().replace(" ", "-")
+                            ability_lower = normalize_ability_name(atk_abilities[0])
                             if ability_lower == "sword-of-ruin":
                                 sword_of_ruin = True
                                 survive_pokemon_ability = "sword-of-ruin"
                             elif ability_lower == "beads-of-ruin":
                                 beads_of_ruin = True
                                 survive_pokemon_ability = "beads-of-ruin"
+                            elif ability_lower == "tablets-of-ruin":
+                                tablets_of_ruin = True
+                                survive_pokemon_ability = "tablets-of-ruin"
+                            elif ability_lower == "vessel-of-ruin":
+                                vessel_of_ruin = True
+                                survive_pokemon_ability = "vessel-of-ruin"
 
                     # Create attacker build
                     attacker = PokemonBuild(
@@ -851,7 +870,9 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                                     defender_tera_active=defender_tera_type is not None,
                                     is_critical=move.always_crit,
                                     sword_of_ruin=sword_of_ruin,
-                                    beads_of_ruin=beads_of_ruin
+                                    beads_of_ruin=beads_of_ruin,
+                                    tablets_of_ruin=tablets_of_ruin,
+                                    vessel_of_ruin=vessel_of_ruin
                                 )
                                 result = calculate_damage(attacker, defender, move, modifiers)
 
@@ -1229,62 +1250,96 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     survive_hit2_ability = "unseen-fist"
 
             # Auto-detect Ruinous abilities for attacker 1
+            from vgc_mcp_core.calc.abilities import normalize_ability_name
+
             # First: Direct detection from Pokemon name (most reliable)
             sword_of_ruin1 = atk1_key == "chien-pao"
             beads_of_ruin1 = atk1_key == "chi-yu"
+            tablets_of_ruin1 = atk1_key == "wo-chien"
+            vessel_of_ruin1 = atk1_key == "ting-lu"
             if sword_of_ruin1 and not survive_hit1_ability:
                 survive_hit1_ability = "sword-of-ruin"
             if beads_of_ruin1 and not survive_hit1_ability:
                 survive_hit1_ability = "beads-of-ruin"
+            if tablets_of_ruin1 and not survive_hit1_ability:
+                survive_hit1_ability = "tablets-of-ruin"
+            if vessel_of_ruin1 and not survive_hit1_ability:
+                survive_hit1_ability = "vessel-of-ruin"
 
             # Second: Check from ability string if set
-            if not sword_of_ruin1 and not beads_of_ruin1 and survive_hit1_ability:
-                ability_lower = survive_hit1_ability.lower().replace(" ", "-").replace("_", "-")
+            if not any([sword_of_ruin1, beads_of_ruin1, tablets_of_ruin1, vessel_of_ruin1]) and survive_hit1_ability:
+                ability_lower = normalize_ability_name(survive_hit1_ability)
                 if ability_lower == "sword-of-ruin":
                     sword_of_ruin1 = True
                 elif ability_lower == "beads-of-ruin":
                     beads_of_ruin1 = True
+                elif ability_lower == "tablets-of-ruin":
+                    tablets_of_ruin1 = True
+                elif ability_lower == "vessel-of-ruin":
+                    vessel_of_ruin1 = True
 
             # Third: Fallback to PokeAPI
-            if not sword_of_ruin1 and not beads_of_ruin1 and not survive_hit1_ability:
+            if not any([sword_of_ruin1, beads_of_ruin1, tablets_of_ruin1, vessel_of_ruin1]) and not survive_hit1_ability:
                 atk1_abilities = await pokeapi.get_pokemon_abilities(survive_hit1_attacker)
                 if atk1_abilities:
-                    ability_lower = atk1_abilities[0].lower().replace(" ", "-")
+                    ability_lower = normalize_ability_name(atk1_abilities[0])
                     if ability_lower == "sword-of-ruin":
                         sword_of_ruin1 = True
                         survive_hit1_ability = "sword-of-ruin"
                     elif ability_lower == "beads-of-ruin":
                         beads_of_ruin1 = True
                         survive_hit1_ability = "beads-of-ruin"
+                    elif ability_lower == "tablets-of-ruin":
+                        tablets_of_ruin1 = True
+                        survive_hit1_ability = "tablets-of-ruin"
+                    elif ability_lower == "vessel-of-ruin":
+                        vessel_of_ruin1 = True
+                        survive_hit1_ability = "vessel-of-ruin"
 
             # Auto-detect Ruinous abilities for attacker 2
             # First: Direct detection from Pokemon name (most reliable)
             sword_of_ruin2 = atk2_key == "chien-pao"
             beads_of_ruin2 = atk2_key == "chi-yu"
+            tablets_of_ruin2 = atk2_key == "wo-chien"
+            vessel_of_ruin2 = atk2_key == "ting-lu"
             if sword_of_ruin2 and not survive_hit2_ability:
                 survive_hit2_ability = "sword-of-ruin"
             if beads_of_ruin2 and not survive_hit2_ability:
                 survive_hit2_ability = "beads-of-ruin"
+            if tablets_of_ruin2 and not survive_hit2_ability:
+                survive_hit2_ability = "tablets-of-ruin"
+            if vessel_of_ruin2 and not survive_hit2_ability:
+                survive_hit2_ability = "vessel-of-ruin"
 
             # Second: Check from ability string if set
-            if not sword_of_ruin2 and not beads_of_ruin2 and survive_hit2_ability:
-                ability_lower = survive_hit2_ability.lower().replace(" ", "-").replace("_", "-")
+            if not any([sword_of_ruin2, beads_of_ruin2, tablets_of_ruin2, vessel_of_ruin2]) and survive_hit2_ability:
+                ability_lower = normalize_ability_name(survive_hit2_ability)
                 if ability_lower == "sword-of-ruin":
                     sword_of_ruin2 = True
                 elif ability_lower == "beads-of-ruin":
                     beads_of_ruin2 = True
+                elif ability_lower == "tablets-of-ruin":
+                    tablets_of_ruin2 = True
+                elif ability_lower == "vessel-of-ruin":
+                    vessel_of_ruin2 = True
 
             # Third: Fallback to PokeAPI
-            if not sword_of_ruin2 and not beads_of_ruin2 and not survive_hit2_ability:
+            if not any([sword_of_ruin2, beads_of_ruin2, tablets_of_ruin2, vessel_of_ruin2]) and not survive_hit2_ability:
                 atk2_abilities = await pokeapi.get_pokemon_abilities(survive_hit2_attacker)
                 if atk2_abilities:
-                    ability_lower = atk2_abilities[0].lower().replace(" ", "-")
+                    ability_lower = normalize_ability_name(atk2_abilities[0])
                     if ability_lower == "sword-of-ruin":
                         sword_of_ruin2 = True
                         survive_hit2_ability = "sword-of-ruin"
                     elif ability_lower == "beads-of-ruin":
                         beads_of_ruin2 = True
                         survive_hit2_ability = "beads-of-ruin"
+                    elif ability_lower == "tablets-of-ruin":
+                        tablets_of_ruin2 = True
+                        survive_hit2_ability = "tablets-of-ruin"
+                    elif ability_lower == "vessel-of-ruin":
+                        vessel_of_ruin2 = True
+                        survive_hit2_ability = "vessel-of-ruin"
 
             # Calculate speed EVs needed
             speed_evs_needed = 0
@@ -1399,7 +1454,9 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     defender_tera_active=defender_tera_type is not None,
                     is_critical=move1.always_crit,
                     sword_of_ruin=sword_of_ruin1,
-                    beads_of_ruin=beads_of_ruin1
+                    beads_of_ruin=beads_of_ruin1,
+                    tablets_of_ruin=tablets_of_ruin1,
+                    vessel_of_ruin=vessel_of_ruin1
                 )
                 result1 = calculate_damage(attacker1, defender, move1, modifiers1)
                 modifiers2 = DamageModifiers(
@@ -1410,7 +1467,9 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     defender_tera_active=defender_tera_type is not None,
                     is_critical=move2.always_crit,
                     sword_of_ruin=sword_of_ruin2,
-                    beads_of_ruin=beads_of_ruin2
+                    beads_of_ruin=beads_of_ruin2,
+                    tablets_of_ruin=tablets_of_ruin2,
+                    vessel_of_ruin=vessel_of_ruin2
                 )
                 result2 = calculate_damage(attacker2, defender, move2, modifiers2)
                 survive_rolls1 = sum(1 for r in result1.rolls if r < result1.defender_hp)

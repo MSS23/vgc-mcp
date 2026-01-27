@@ -72,7 +72,27 @@
       "Bash(start \"\" \"c:\\\\Users\\\\msidh\\\\Documents\\\\ChatGPT App\\\\mcp vgc\\\\test_smogon_speed_histogram.html\")",
       "Bash(start \"\" \"c:\\\\Users\\\\msidh\\\\Documents\\\\ChatGPT App\\\\mcp vgc\\\\test_calc_history_preview.html\")",
       "Bash(start \"\" \"c:\\\\Users\\\\msidh\\\\Documents\\\\ChatGPT App\\\\mcp vgc\\\\test_speed_tier_interactive.html\")",
-      "Bash(timeout 60 C:/Python313/python.exe:*)"
+      "Bash(timeout 60 C:/Python313/python.exe:*)",
+      "Bash(timeout 5 curl:*)",
+      "Bash(timeout 3 curl:*)",
+      "Bash(timeout 5 C:/Python313/python.exe:*)",
+      "Bash(timeout 30 C:/Python313/python.exe -c:*)",
+      "Bash(timeout 120 C:/Python313/python.exe:*)",
+      "Bash(timeout 10 C:/Python313/python.exe:*)",
+      "Bash(timeout 15 C:/Python313/python.exe:*)",
+      "Bash(start \"\" \"c:\\\\Users\\\\msidh\\\\Documents\\\\ChatGPT App\\\\mcp vgc\\\\test_all_components.html\")",
+      "Bash(Tie: Y%)",
+      "Bash(Outsped by: Z%\"\n- Sort speed tier breakdown by speed value\n- Use \"faster/tie/slower\" labels instead of checkmarks\n- Reference \"Speed\" stat instead of \"Spe\" in headers\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(echo:*)",
+      "Bash(del \"c:\\\\Users\\\\msidh\\\\Documents\\\\ChatGPT App\\\\mcp vgc\\\\test_bulk_analysis.py\")",
+      "Bash(C:Python313python.exe -m vgc_mcp)",
+      "Bash(/c/Python313/python.exe -c \"from vgc_mcp.server import main; print\\(''Import successful!''\\)\")",
+      "WebFetch(domain:www.smogon.com)",
+      "Bash(from Jolly 252 Atk / 4 SpD / 252 Spe with Mystic Water Urshifu...\"\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:bulbapedia.bulbagarden.net)",
+      "Bash(git blame:*)",
+      "WebFetch(domain:github.com)"
     ]
   }
 }

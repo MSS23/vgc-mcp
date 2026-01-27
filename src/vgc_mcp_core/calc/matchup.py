@@ -113,6 +113,51 @@ COMMON_THREATS = {
             "snarl": {"power": 55, "type": "Dark", "category": "special", "spread": True},
         }
     },
+    "chien-pao": {
+        "base_stats": BaseStats(hp=80, attack=120, defense=80, special_attack=90, special_defense=65, speed=135),
+        "types": ["Dark", "Ice"],
+        "nature": Nature.JOLLY,
+        "evs": EVSpread(attack=252, speed=252, hp=4),
+        "ability": "sword-of-ruin",
+        "item": "focus-sash",
+        "moves": ["icicle-crash", "sucker-punch", "sacred-sword", "ice-shard"],
+        "move_data": {
+            "icicle-crash": {"power": 85, "type": "Ice", "category": "physical"},
+            "sucker-punch": {"power": 70, "type": "Dark", "category": "physical"},
+            "sacred-sword": {"power": 90, "type": "Fighting", "category": "physical"},
+            "ice-shard": {"power": 40, "type": "Ice", "category": "physical"},
+        }
+    },
+    "ting-lu": {
+        "base_stats": BaseStats(hp=155, attack=110, defense=125, special_attack=55, special_defense=80, speed=45),
+        "types": ["Dark", "Ground"],
+        "nature": Nature.CAREFUL,
+        "evs": EVSpread(hp=252, special_defense=252, defense=4),
+        "ability": "vessel-of-ruin",
+        "item": "sitrus-berry",
+        "moves": ["earthquake", "stomping-tantrum", "rock-slide", "protect"],
+        "move_data": {
+            "earthquake": {"power": 100, "type": "Ground", "category": "physical", "spread": True},
+            "stomping-tantrum": {"power": 75, "type": "Ground", "category": "physical"},
+            "rock-slide": {"power": 75, "type": "Rock", "category": "physical", "spread": True},
+            "protect": {"power": 0, "type": "Normal", "category": "status"},
+        }
+    },
+    "wo-chien": {
+        "base_stats": BaseStats(hp=85, attack=85, defense=100, special_attack=95, special_defense=135, speed=70),
+        "types": ["Dark", "Grass"],
+        "nature": Nature.CALM,
+        "evs": EVSpread(hp=252, special_defense=252, defense=4),
+        "ability": "tablets-of-ruin",
+        "item": "leftovers",
+        "moves": ["giga-drain", "leech-seed", "pollen-puff", "protect"],
+        "move_data": {
+            "giga-drain": {"power": 75, "type": "Grass", "category": "special"},
+            "leech-seed": {"power": 0, "type": "Grass", "category": "status"},
+            "pollen-puff": {"power": 90, "type": "Bug", "category": "special"},
+            "protect": {"power": 0, "type": "Normal", "category": "status"},
+        }
+    },
     "iron-hands": {
         "base_stats": BaseStats(hp=154, attack=140, defense=108, special_attack=50, special_defense=68, speed=50),
         "types": ["Fighting", "Electric"],
@@ -302,6 +347,14 @@ def analyze_single_matchup(
     if modifiers is None:
         modifiers = DamageModifiers(is_doubles=True)
 
+    # Apply Ruinous abilities from both Pokemon
+    from .abilities import apply_ruin_abilities
+    apply_ruin_abilities(
+        attacker_ability=attacker.ability,
+        defender_ability=defender.ability,
+        modifiers=modifiers
+    )
+
     attacker_stats = calculate_all_stats(attacker)
     defender_stats = calculate_all_stats(defender)
 
@@ -453,7 +506,16 @@ def analyze_threat_matchup(
             if not move.is_damaging:
                 continue
 
-            result = calculate_damage(threat, pokemon, move, modifiers)
+            # Create fresh modifiers for threat attacking team member
+            threat_modifiers = DamageModifiers(is_doubles=True)
+            from .abilities import apply_ruin_abilities
+            apply_ruin_abilities(
+                attacker_ability=threat.ability,
+                defender_ability=pokemon.ability,
+                modifiers=threat_modifiers
+            )
+
+            result = calculate_damage(threat, pokemon, move, threat_modifiers)
             if result.is_possible_ohko:
                 member_survives = False
                 threatened.append(pokemon.name)

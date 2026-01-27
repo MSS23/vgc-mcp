@@ -161,6 +161,24 @@ PARTNER_ABILITIES: dict[str, str] = {
 }
 
 # ============================================================================
+# RUINOUS ABILITIES (Treasures of Ruin)
+# ============================================================================
+
+RUIN_ABILITIES: dict[str, str] = {
+    "sword-of-ruin": "defense",      # Chien-Pao: Lowers foe Def to 0.75x
+    "beads-of-ruin": "special_defense",  # Chi-Yu: Lowers foe SpD to 0.75x
+    "tablets-of-ruin": "attack",     # Wo-Chien: Lowers foe Atk to 0.75x
+    "vessel-of-ruin": "special_attack",  # Ting-Lu: Lowers foe SpA to 0.75x
+}
+
+RUIN_POKEMON: list[str] = [
+    "chien-pao",  # Sword of Ruin
+    "chi-yu",     # Beads of Ruin
+    "wo-chien",   # Tablets of Ruin
+    "ting-lu",    # Vessel of Ruin
+]
+
+# ============================================================================
 # SUPPORT DATACLASSES
 # ============================================================================
 
@@ -531,6 +549,42 @@ def get_speed_ability_effect(
         return ability_data.get("multiplier", 1.0)
 
     return None
+
+
+def apply_ruin_abilities(
+    attacker_ability: Optional[str],
+    defender_ability: Optional[str],
+    modifiers
+) -> None:
+    """
+    Apply Ruinous abilities to DamageModifiers in-place.
+
+    Ruinous abilities affect the opposing Pokemon:
+    - Sword of Ruin: Attacker has it → Defender's Def lowered
+    - Beads of Ruin: Attacker has it → Defender's SpD lowered
+    - Tablets of Ruin: Defender has it → Attacker's Atk lowered
+    - Vessel of Ruin: Defender has it → Attacker's SpA lowered
+
+    Args:
+        attacker_ability: Attacker's ability name
+        defender_ability: Defender's ability name
+        modifiers: DamageModifiers object to update
+    """
+    # Normalize abilities
+    atk_norm = normalize_ability_name(attacker_ability) if attacker_ability else None
+    def_norm = normalize_ability_name(defender_ability) if defender_ability else None
+
+    # Attacker's Ruinous abilities affect defender's stats
+    if atk_norm == "sword-of-ruin":
+        modifiers.sword_of_ruin = True
+    elif atk_norm == "beads-of-ruin":
+        modifiers.beads_of_ruin = True
+
+    # Defender's Ruinous abilities affect attacker's stats
+    if def_norm == "tablets-of-ruin":
+        modifiers.tablets_of_ruin = True
+    elif def_norm == "vessel-of-ruin":
+        modifiers.vessel_of_ruin = True
 
 
 def suggest_ability_additions(

@@ -10,12 +10,14 @@ from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
+from vgc_mcp_core.api.smogon import SmogonStatsClient
 from vgc_mcp_core.team.manager import TeamManager
 from vgc_mcp_core.calc.stats import calculate_speed, find_speed_evs
 from vgc_mcp_core.calc.speed import (
     SPEED_BENCHMARKS,
     META_SPEED_TIERS,
     calculate_speed_tier,
+    get_competitive_speed_benchmarks,
 )
 from vgc_mcp_core.calc.speed_control import (
     analyze_trick_room,
@@ -31,7 +33,7 @@ from vgc_mcp_core.models.pokemon import Nature
 from vgc_mcp_core.config import EV_BREAKPOINTS_LV50
 
 
-def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_manager: TeamManager):
+def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_manager: TeamManager, smogon_client: SmogonStatsClient):
     """Register all speed analysis tools with the MCP server."""
 
     # ========== Basic Speed Calculations ==========
@@ -276,7 +278,8 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
     async def analyze_speed_spread(
         pokemon_name: str,
         nature: str = "serious",
-        speed_evs: int = 0
+        speed_evs: int = 0,
+        use_competitive_data: bool = True
     ) -> dict:
         """
         Analyze what a specific speed spread outspeeds and underspeeds.
@@ -285,9 +288,12 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
             pokemon_name: Pokemon name
             nature: Nature
             speed_evs: Speed EVs
+            use_competitive_data: Use Smogon competitive spreads (default True).
+                                 If False, uses theoretical max speeds.
 
         Returns:
-            Analysis of what this spread outspeeds/underspeeds
+            Analysis of what this spread outspeeds/underspeeds based on real
+            competitive usage data or theoretical benchmarks
         """
         try:
             base_stats = await pokeapi.get_base_stats(pokemon_name)
@@ -297,12 +303,26 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
             except ValueError:
                 return {"error": f"Invalid nature: {nature}"}
 
+            # Fetch competitive benchmarks from Smogon if requested
+            competitive_benchmarks = None
+            if use_competitive_data:
+                try:
+                    competitive_benchmarks = await get_competitive_speed_benchmarks(
+                        smogon_client,
+                        top_n_pokemon=30,
+                        top_n_speeds=3
+                    )
+                except Exception:
+                    # Fallback to theoretical benchmarks if Smogon fetch fails
+                    competitive_benchmarks = None
+
             tier_info = calculate_speed_tier(
                 base_stats.speed,
                 parsed_nature,
                 speed_evs,
                 31,
-                50
+                50,
+                competitive_benchmarks=competitive_benchmarks
             )
 
             return {
@@ -312,7 +332,8 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
                 "final_speed": tier_info["speed"],
                 "outspeeds": tier_info["outspeeds"],
                 "ties_with": tier_info["ties_with"],
-                "underspeeds": tier_info["underspeeds"]
+                "underspeeds": tier_info["underspeeds"],
+                "data_source": "Smogon competitive usage" if competitive_benchmarks else "Theoretical max speeds"
             }
 
         except Exception as e:
@@ -439,7 +460,8 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
     @mcp.tool()
     async def get_meta_speed_tiers(
         format_type: str = "general",
-        tier: Optional[str] = None
+        tier: Optional[str] = None,
+        use_competitive_data: bool = True
     ) -> dict:
         """
         Get common speed tiers in the current VGC metagame.
@@ -447,42 +469,97 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
         Args:
             format_type: "general", "trick_room", or "tailwind"
             tier: Optional filter - "fast", "medium", "slow"
+            use_competitive_data: Use Smogon competitive spreads (default True).
+                                 If False, uses theoretical speeds from META_SPEED_TIERS.
 
         Returns:
-            Speed tier information for meta Pokemon
+            Speed tier information for meta Pokemon based on real competitive usage
         """
         result = []
-        from vgc_mcp_core.calc.speed import get_meta_speed_tier
 
-        for mon in META_SPEED_TIERS.keys():
-            data = get_meta_speed_tier(mon)
-            if not data:
-                continue
-            base = data["base"]
-            speeds = data.get("common_speeds", [])
+        if use_competitive_data:
+            # Fetch competitive speed benchmarks from Smogon
+            try:
+                competitive_benchmarks = await get_competitive_speed_benchmarks(
+                    smogon_client,
+                    top_n_pokemon=30,
+                    top_n_speeds=3
+                )
 
-            entry = {
-                "pokemon": mon,
-                "base_speed": base,
-                "common_speeds": speeds,
-                "max_speed_positive": calculate_speed(base, 31, 252, 50, Nature.JOLLY),
-                "max_speed_neutral": calculate_speed(base, 31, 252, 50, Nature.HARDY),
-                "min_speed": calculate_speed(base, 0, 0, 50, Nature.BRAVE),
-            }
+                for mon_name, speeds in competitive_benchmarks.items():
+                    if not speeds:
+                        continue
 
-            # Categorize
-            if base >= 120:
-                entry["tier"] = "fast"
-            elif base >= 80:
-                entry["tier"] = "medium"
-            else:
-                entry["tier"] = "slow"
+                    # Get base speed for categorization
+                    base = SPEED_BENCHMARKS.get(mon_name, {}).get("base", 0)
+                    if base == 0:
+                        # Try to fetch from PokeAPI if not in benchmarks
+                        try:
+                            base_stats = await pokeapi.get_base_stats(mon_name)
+                            base = base_stats.speed
+                        except Exception:
+                            continue
 
-            # Filter by tier if specified
-            if tier and entry["tier"] != tier.lower():
-                continue
+                    entry = {
+                        "pokemon": mon_name,
+                        "base_speed": base,
+                        "competitive_speeds": speeds,  # List of dicts with speed, nature, evs, usage
+                        "max_speed_positive": calculate_speed(base, 31, 252, 50, Nature.JOLLY),
+                        "max_speed_neutral": calculate_speed(base, 31, 252, 50, Nature.HARDY),
+                        "min_speed": calculate_speed(base, 0, 0, 50, Nature.BRAVE),
+                    }
 
-            result.append(entry)
+                    # Categorize
+                    if base >= 120:
+                        entry["tier"] = "fast"
+                    elif base >= 80:
+                        entry["tier"] = "medium"
+                    else:
+                        entry["tier"] = "slow"
+
+                    # Filter by tier if specified
+                    if tier and entry["tier"] != tier.lower():
+                        continue
+
+                    result.append(entry)
+
+            except Exception:
+                # Fallback to META_SPEED_TIERS if Smogon fetch fails
+                use_competitive_data = False
+
+        if not use_competitive_data:
+            # Fallback to theoretical speeds from META_SPEED_TIERS
+            from vgc_mcp_core.calc.speed import get_meta_speed_tier
+
+            for mon in META_SPEED_TIERS.keys():
+                data = get_meta_speed_tier(mon)
+                if not data:
+                    continue
+                base = data["base"]
+                speeds = data.get("common_speeds", [])
+
+                entry = {
+                    "pokemon": mon,
+                    "base_speed": base,
+                    "common_speeds": speeds,
+                    "max_speed_positive": calculate_speed(base, 31, 252, 50, Nature.JOLLY),
+                    "max_speed_neutral": calculate_speed(base, 31, 252, 50, Nature.HARDY),
+                    "min_speed": calculate_speed(base, 0, 0, 50, Nature.BRAVE),
+                }
+
+                # Categorize
+                if base >= 120:
+                    entry["tier"] = "fast"
+                elif base >= 80:
+                    entry["tier"] = "medium"
+                else:
+                    entry["tier"] = "slow"
+
+                # Filter by tier if specified
+                if tier and entry["tier"] != tier.lower():
+                    continue
+
+                result.append(entry)
 
         # Sort by base speed
         result.sort(key=lambda x: -x["base_speed"])

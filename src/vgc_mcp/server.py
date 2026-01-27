@@ -231,7 +231,7 @@ build_manager = BuildStateManager()
 # Register all tools
 register_stats_tools(mcp, pokeapi)
 register_damage_tools(mcp, pokeapi, smogon)  # Pass smogon for auto-fetching common spreads
-register_speed_analysis_tools(mcp, pokeapi, team_manager)  # Combined speed + speed control tools
+register_speed_analysis_tools(mcp, pokeapi, team_manager, smogon)  # Combined speed + speed control tools
 register_team_tools(mcp, pokeapi, team_manager, analyzer)
 register_usage_tools(mcp, smogon)
 register_spread_tools(mcp, pokeapi, smogon)  # Pass smogon for auto-fetching attacker spreads

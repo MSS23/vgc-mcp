@@ -1,11 +1,14 @@
 """Speed comparison and tier utilities."""
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from ..models.pokemon import Nature, PokemonBuild
 from .stats import calculate_speed, calculate_all_stats, find_speed_evs
 from ..config import EV_BREAKPOINTS_LV50
+
+if TYPE_CHECKING:
+    from ..api.smogon import SmogonStatsClient
 
 
 @dataclass
@@ -858,15 +861,157 @@ def get_meta_speed_tier(pokemon_name: str) -> Optional[dict]:
     return data
 
 
+async def get_competitive_speed_benchmarks(
+    smogon_client: "SmogonStatsClient",
+    format_name: Optional[str] = None,
+    rating: int = 0,
+    top_n_pokemon: int = 30,
+    top_n_speeds: int = 3
+) -> dict[str, list[dict]]:
+    """
+    Get competitive speed benchmarks from Smogon usage data.
+
+    Fetches real competitive spreads from Smogon chaos stats and calculates
+    the actual speeds used in competitive play, not theoretical max speeds.
+
+    Args:
+        smogon_client: SmogonStatsClient instance for fetching usage data
+        format_name: Format name (auto-detects if None)
+        rating: Rating cutoff (default 0 for 1500+ ELO)
+        top_n_pokemon: Number of top Pokemon to fetch (default 30)
+        top_n_speeds: Number of top speeds per Pokemon to include (default 3)
+
+    Returns:
+        Dict mapping pokemon_name -> list of speed entries:
+        {
+            "rillaboom": [
+                {"speed": 137, "nature": "Adamant", "evs": 252, "usage": 45.2,
+                 "spread_desc": "Adamant 252 Spe"},
+                {"speed": 150, "nature": "Jolly", "evs": 252, "usage": 18.3,
+                 "spread_desc": "Jolly 252 Spe"},
+                ...
+            ],
+            ...
+        }
+    """
+    from ..api.pokeapi import PokeAPIClient
+
+    # Get top Pokemon by usage
+    usage_stats = await smogon_client.get_usage_stats(format_name, rating)
+    if not usage_stats or "data" not in usage_stats:
+        return {}
+
+    # Extract top N Pokemon by usage
+    pokemon_usage = usage_stats.get("data", {})
+    top_pokemon = sorted(
+        pokemon_usage.items(),
+        key=lambda x: x[1].get("usage", 0) if isinstance(x[1], dict) else 0,
+        reverse=True
+    )[:top_n_pokemon]
+
+    benchmarks: dict[str, list[dict]] = {}
+    pokeapi = PokeAPIClient()
+
+    for pokemon_name, _ in top_pokemon:
+        # Normalize name for API calls
+        normalized_name = pokemon_name.lower().replace(" ", "-")
+
+        try:
+            # Get base speed from PokeAPI
+            base_stats = await pokeapi.get_base_stats(normalized_name)
+            base_speed = base_stats.speed
+
+            # Get speed distribution from Smogon
+            speed_dist = await smogon_client.get_speed_distribution(
+                normalized_name,
+                base_speed,
+                format_name,
+                rating
+            )
+
+            if not speed_dist or not speed_dist.get("distribution"):
+                continue
+
+            # Extract top N speeds with spread details
+            speeds = []
+            for entry in speed_dist["distribution"][:top_n_speeds]:
+                speed_value = entry["speed"]
+                usage_pct = entry["usage"]
+
+                # Get the spread info from the original usage data
+                pokemon_data = await smogon_client.get_pokemon_usage(
+                    normalized_name, format_name, rating
+                )
+
+                if pokemon_data and "spreads" in pokemon_data:
+                    # Find the spread(s) that produce this speed
+                    matching_spreads = [
+                        s for s in pokemon_data["spreads"]
+                        if calculate_speed(
+                            base_speed,
+                            31,
+                            s.get("evs", {}).get("speed", 0),
+                            50,
+                            Nature[s.get("nature", "SERIOUS").upper()]
+                        ) == speed_value
+                    ]
+
+                    if matching_spreads:
+                        # Use the first matching spread (highest usage among matches)
+                        spread = matching_spreads[0]
+                        nature = spread.get("nature", "Serious")
+                        speed_evs = spread.get("evs", {}).get("speed", 0)
+
+                        # Create spread description
+                        spread_desc = f"{nature} {speed_evs} Spe"
+
+                        speeds.append({
+                            "speed": speed_value,
+                            "nature": nature,
+                            "evs": speed_evs,
+                            "usage": usage_pct,
+                            "spread_desc": spread_desc
+                        })
+                    else:
+                        # Fallback: use the speed value without detailed spread info
+                        speeds.append({
+                            "speed": speed_value,
+                            "nature": "Unknown",
+                            "evs": 0,
+                            "usage": usage_pct,
+                            "spread_desc": f"{speed_value} speed"
+                        })
+
+            if speeds:
+                benchmarks[normalized_name] = speeds
+
+        except Exception:
+            # Skip Pokemon that cause errors (invalid names, API issues, etc.)
+            continue
+
+    await pokeapi.close()
+    return benchmarks
+
+
 def calculate_speed_tier(
     base_speed: int,
     nature: Nature,
     evs: int,
     iv: int = 31,
-    level: int = 50
+    level: int = 50,
+    competitive_benchmarks: Optional[dict] = None
 ) -> dict:
     """
     Calculate speed tier information for a specific spread.
+
+    Args:
+        base_speed: Base speed stat
+        nature: Pokemon nature
+        evs: Speed EVs
+        iv: Speed IV (default 31)
+        level: Pokemon level (default 50)
+        competitive_benchmarks: Optional dict of real competitive spreads from Smogon.
+                               If provided, uses actual usage data instead of theoretical benchmarks.
 
     Returns dict with speed stat and what it outspeeds/underspeeds.
     """
@@ -876,30 +1021,59 @@ def calculate_speed_tier(
     ties_with = []
     underspeeds = []
 
-    for mon, data in SPEED_BENCHMARKS.items():
-        base = data["base"]
-        max_positive = get_speed_benchmark(mon, "max_positive")
-        max_neutral = get_speed_benchmark(mon, "max_neutral")
-        neutral_0ev = get_speed_benchmark(mon, "neutral_0ev")
-        
-        if max_positive:
-            if speed > max_positive:
-                outspeeds.append(f"Max Speed {mon.replace('-', ' ').title()}")
-            elif speed == max_positive:
-                ties_with.append(f"Max Speed {mon.replace('-', ' ').title()}")
+    if competitive_benchmarks:
+        # Use real Smogon competitive spreads
+        for mon_name, speeds in competitive_benchmarks.items():
+            display_name = mon_name.replace('-', ' ').title()
 
-        if max_neutral:
-            if speed > max_neutral:
-                if speed <= (max_positive or 999):
-                    outspeeds.append(f"Neutral Speed {mon.replace('-', ' ').title()}")
+            for entry in speeds:
+                entry_speed = entry["speed"]
+                spread_desc = entry.get("spread_desc", f"{entry_speed} speed")
+                usage_pct = entry.get("usage", 0)
 
-        if neutral_0ev:
-            if speed < neutral_0ev:
-                underspeeds.append(f"Base {mon.replace('-', ' ').title()}")
+                # Format: "Adamant 252 Spe Rillaboom (137 speed, 45.2% usage)"
+                label = f"{spread_desc} {display_name} ({entry_speed} speed"
+                if usage_pct > 0:
+                    label += f", {usage_pct}% usage"
+                label += ")"
+
+                if speed > entry_speed:
+                    outspeeds.append(label)
+                elif speed == entry_speed:
+                    ties_with.append(label)
+                elif speed < entry_speed:
+                    underspeeds.append(label)
+
+        # Sort by speed (descending for outspeeds, ascending for underspeeds)
+        outspeeds.sort(key=lambda x: int(x.split("(")[1].split(" ")[0]), reverse=True)
+        underspeeds.sort(key=lambda x: int(x.split("(")[1].split(" ")[0]))
+
+    else:
+        # Fallback to theoretical benchmarks
+        for mon, data in SPEED_BENCHMARKS.items():
+            base = data["base"]
+            max_positive = get_speed_benchmark(mon, "max_positive")
+            max_neutral = get_speed_benchmark(mon, "max_neutral")
+            neutral_0ev = get_speed_benchmark(mon, "neutral_0ev")
+
+            if max_positive:
+                if speed > max_positive:
+                    outspeeds.append(f"Max Speed {mon.replace('-', ' ').title()}")
+                elif speed == max_positive:
+                    ties_with.append(f"Max Speed {mon.replace('-', ' ').title()}")
+
+            if max_neutral:
+                if speed > max_neutral:
+                    if speed <= (max_positive or 999):
+                        outspeeds.append(f"Neutral Speed {mon.replace('-', ' ').title()}")
+
+            if neutral_0ev:
+                if speed < neutral_0ev:
+                    underspeeds.append(f"Base {mon.replace('-', ' ').title()}")
 
     return {
         "speed": speed,
-        "outspeeds": outspeeds[:5],  # Limit for readability
+        "outspeeds": outspeeds[:15],  # Show more results with competitive data
         "ties_with": ties_with,
-        "underspeeds": underspeeds[:5],
+        "underspeeds": underspeeds[:15],
     }

@@ -29,6 +29,7 @@ class KOProbability:
     guaranteed_ko: Optional[int]  # 1=OHKO, 2=2HKO, etc. None if >4HKO
     rolls_that_ohko: int
     verdict: str  # e.g., "87.5% chance to 2HKO"
+    total_combinations: int = 16  # 16 for single-hit, 16^n for multi-hit
 
 
 def calculate_ko_probability(
@@ -113,6 +114,64 @@ def calculate_ko_probability(
         guaranteed_ko=guaranteed_ko,
         rolls_that_ohko=ohko_count,
         verdict=verdict
+    )
+
+
+def calculate_multi_hit_ko_probability(
+    damages_per_hit: list[int],
+    hit_count: int,
+    defender_hp: int
+) -> KOProbability:
+    """
+    Calculate exact KO probability for multi-hit moves.
+
+    Each hit has independent random roll, so we must check all
+    16^hit_count combinations.
+
+    Args:
+        damages_per_hit: 16 possible damage values per hit (one per random factor)
+        hit_count: Number of hits
+        defender_hp: Defender's HP
+
+    Returns:
+        KOProbability with exact percentages
+    """
+    from itertools import product
+
+    combos_that_ko = 0
+    total_combos = len(damages_per_hit) ** hit_count
+
+    # Generate all possible damage combinations
+    for combo in product(damages_per_hit, repeat=hit_count):
+        total_damage = sum(combo)
+        if total_damage >= defender_hp:
+            combos_that_ko += 1
+
+    ohko_chance = (combos_that_ko / total_combos) * 100
+
+    # Determine if it's a guaranteed KO
+    guaranteed_ko = 1 if combos_that_ko == total_combos else None
+
+    # Generate verdict
+    if guaranteed_ko == 1:
+        verdict = "Guaranteed OHKO"
+    elif ohko_chance >= 99.9:
+        verdict = "Guaranteed OHKO"
+    elif ohko_chance > 0:
+        verdict = f"{ohko_chance:.2f}% chance to OHKO"
+    else:
+        verdict = "Does not KO"
+
+    # For multi-hit moves, 2HKO/3HKO don't apply (it's all-or-nothing)
+    return KOProbability(
+        ohko_chance=round(ohko_chance, 2),
+        twohko_chance=0.0,
+        threehko_chance=0.0,
+        fourhko_chance=0.0,
+        guaranteed_ko=guaranteed_ko,
+        rolls_that_ohko=combos_that_ko,
+        verdict=verdict,
+        total_combinations=total_combos
     )
 
 

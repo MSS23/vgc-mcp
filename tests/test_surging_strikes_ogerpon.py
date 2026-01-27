@@ -87,19 +87,24 @@ class TestSurgingStrikesVsOgerpon:
         print(f"Damage: {result.min_damage}-{result.max_damage}")
         print(f"Percent: {result.min_percent:.1f}%-{result.max_percent:.1f}%")
         print(f"KO Chance: {result.ko_chance}")
-        print(f"Rolls that OHKO: {result.ko_probability.rolls_that_ohko}/16")
-        print(f"\nExpected from Showdown: 168-204 (93.8%-113.9%), 85.77% OHKO (~14/16 rolls)")
-        print(f"Our calculation: {result.min_damage}-{result.max_damage} ({result.min_percent:.1f}%-{result.max_percent:.1f}%), {result.ko_probability.ohko_chance:.2f}% OHKO ({result.ko_probability.rolls_that_ohko}/16 rolls)")
+        print(f"Rolls that OHKO: {result.ko_probability.rolls_that_ohko}/{result.ko_probability.total_combinations}")
+        print(f"\nExpected from Showdown: 168-204 (93.8%-113.9%), 85.77% OHKO (3513/4096 combinations)")
+        print(f"Our calculation: {result.min_damage}-{result.max_damage} ({result.min_percent:.1f}%-{result.max_percent:.1f}%), {result.ko_probability.ohko_chance:.2f}% OHKO ({result.ko_probability.rolls_that_ohko}/{result.ko_probability.total_combinations} combinations)")
 
         # Verify damage range matches Showdown: 168-204
         assert result.min_damage == 168, f"Min damage should be 168, got {result.min_damage}"
         assert result.max_damage == 204, f"Max damage should be 204, got {result.max_damage}"
 
-        # Verify KO chance: 85.77% OHKO means 13-14 out of 16 rolls kill
+        # Verify total combinations for 3-hit move (16^3 = 4096)
+        assert result.ko_probability.total_combinations == 4096, (
+            f"Expected 4096 combinations for 3-hit move, got {result.ko_probability.total_combinations}"
+        )
+
+        # Verify KO chance: 85.77% OHKO means ~3513 out of 4096 combinations
         # With 179 HP, we need 180+ damage to OHKO
-        # Expected: most rolls KO, but not all (around 13-14/16)
-        assert 12 <= result.ko_probability.rolls_that_ohko <= 15, (
-            f"Expected 12-15 rolls to OHKO (around 85%), got {result.ko_probability.rolls_that_ohko}/16"
+        # Allow some tolerance for calculation differences
+        assert 85.5 <= result.ko_probability.ohko_chance <= 86.0, (
+            f"Expected 85.77% OHKO chance, got {result.ko_probability.ohko_chance}%"
         )
 
     def test_surging_strikes_damage_range_variance(self):

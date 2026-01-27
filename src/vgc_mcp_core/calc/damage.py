@@ -20,7 +20,7 @@ Reference: https://bulbapedia.bulbagarden.net/wiki/Damage
 """
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Optional
 
 from ..models.pokemon import PokemonBuild
@@ -32,7 +32,7 @@ from .modifiers import (
     get_type_effectiveness,
     is_super_effective,
 )
-from ..utils.damage_verdicts import calculate_ko_probability, KOProbability
+from ..utils.damage_verdicts import calculate_ko_probability, calculate_multi_hit_ko_probability, KOProbability
 from ..utils.normalize import normalize_ability, normalize_move, normalize_item
 
 
@@ -440,6 +440,42 @@ def _calculate_variable_bp(
     return base_power
 
 
+def _calculate_multi_hit_rolls(
+    damages_per_hit: list[int],
+    hit_count: int
+) -> list[int]:
+    """
+    Calculate representative damage rolls for multi-hit moves.
+
+    For multi-hit moves, each hit gets an independent random roll (85-100%).
+    This means there are 16^hit_count possible combinations.
+
+    For display purposes, we return 16 representative rolls spanning the
+    min-max range. For KO probability, all combinations must be considered.
+
+    Args:
+        damages_per_hit: List of 16 damage values (one per random roll)
+        hit_count: Number of hits
+
+    Returns:
+        List of 16 representative total damage values
+    """
+    min_per_hit = min(damages_per_hit)
+    max_per_hit = max(damages_per_hit)
+
+    min_total = min_per_hit * hit_count
+    max_total = max_per_hit * hit_count
+
+    # Generate 16 representative rolls evenly distributed
+    rolls = []
+    for i in range(16):
+        # Interpolate between min and max
+        total = min_total + int((max_total - min_total) * i / 15)
+        rolls.append(total)
+
+    return rolls
+
+
 @dataclass
 class DamageResult:
     """Result of damage calculation."""
@@ -512,7 +548,7 @@ def calculate_damage(
 
     # Apply always-crit for moves like Surging Strikes, Wicked Blow, Frost Breath
     if always_crit:
-        modifiers.is_critical = True
+        modifiers = replace(modifiers, is_critical=True)
 
     # Non-damaging moves
     if not move.is_damaging:
@@ -1138,43 +1174,80 @@ def calculate_damage(
 
     # Calculate 16 damage rolls (random factor 85-100)
     rolls = []
-    for i in range(16):
-        # 4. Random factor: floor(damage * random / 100)
-        # Uses floor, NOT pokeRound (per Showdown implementation)
-        random_factor = 85 + i
-        damage = math.floor(base_damage * random_factor / 100)
+    damages_per_hit = []  # For multi-hit KO probability calculation
 
-        # 5. STAB (6144/4096 = 1.5x, 8192/4096 = 2.0x)
-        if stab_mod_4096 != MOD_NEUTRAL:
-            damage = apply_mod(damage, stab_mod_4096)
+    if hit_count == 1:
+        # Single-hit move: standard calculation
+        for i in range(16):
+            # 4. Random factor: floor(damage * random / 100)
+            # Uses floor, NOT pokeRound (per Showdown implementation)
+            random_factor = 85 + i
+            damage = math.floor(base_damage * random_factor / 100)
 
-        # 6. Type effectiveness (integer multiplier, applied directly)
-        # Immunities deal 0 damage (no further modifiers apply)
-        if type_eff == 0:
-            rolls.append(0)
-            continue
+            # 5. STAB (6144/4096 = 1.5x, 8192/4096 = 2.0x)
+            if stab_mod_4096 != MOD_NEUTRAL:
+                damage = apply_mod(damage, stab_mod_4096)
 
-        if type_eff != 1.0:
-            # Type effectiveness uses floor, not pokeRound
-            damage = int(damage * type_eff)
+            # 6. Type effectiveness (integer multiplier, applied directly)
+            # Immunities deal 0 damage (no further modifiers apply)
+            if type_eff == 0:
+                rolls.append(0)
+                continue
 
-        # Collision Course / Electro Drift: 1.33x damage on super effective hits
-        if move_name_normalized in ("collision-course", "electro-drift") and type_eff > 1.0:
-            # 5461/4096 = 1.333x
-            damage = apply_mod(damage, 5461)
+            if type_eff != 1.0:
+                # Type effectiveness uses floor, not pokeRound
+                damage = int(damage * type_eff)
 
-        # 7-10. Apply chained final modifiers (burn, screens, items, etc.)
-        if final_mod_4096 != MOD_NEUTRAL:
-            damage = apply_mod(damage, final_mod_4096)
+            # Collision Course / Electro Drift: 1.33x damage on super effective hits
+            if move_name_normalized in ("collision-course", "electro-drift") and type_eff > 1.0:
+                # 5461/4096 = 1.333x
+                damage = apply_mod(damage, 5461)
 
-        # Minimum 1 damage per hit
-        damage = max(1, damage)
+            # 7-10. Apply chained final modifiers (burn, screens, items, etc.)
+            if final_mod_4096 != MOD_NEUTRAL:
+                damage = apply_mod(damage, final_mod_4096)
 
-        # Apply multi-hit multiplier (damage per hit * number of hits)
-        if hit_count > 1:
-            damage = damage * hit_count
+            # Minimum 1 damage per hit
+            damage = max(1, damage)
 
-        rolls.append(damage)
+            rolls.append(damage)
+    else:
+        # Multi-hit move: each hit gets independent random roll
+        for i in range(16):
+            # 4. Random factor: floor(damage * random / 100)
+            random_factor = 85 + i
+            damage_this_roll = math.floor(base_damage * random_factor / 100)
+
+            # 5. STAB (6144/4096 = 1.5x, 8192/4096 = 2.0x)
+            if stab_mod_4096 != MOD_NEUTRAL:
+                damage_this_roll = apply_mod(damage_this_roll, stab_mod_4096)
+
+            # 6. Type effectiveness (integer multiplier, applied directly)
+            # Immunities deal 0 damage (no further modifiers apply)
+            if type_eff == 0:
+                damages_per_hit.append(0)
+                continue
+
+            if type_eff != 1.0:
+                # Type effectiveness uses floor, not pokeRound
+                damage_this_roll = int(damage_this_roll * type_eff)
+
+            # Collision Course / Electro Drift: 1.33x damage on super effective hits
+            if move_name_normalized in ("collision-course", "electro-drift") and type_eff > 1.0:
+                # 5461/4096 = 1.333x
+                damage_this_roll = apply_mod(damage_this_roll, 5461)
+
+            # 7-10. Apply chained final modifiers (burn, screens, items, etc.)
+            if final_mod_4096 != MOD_NEUTRAL:
+                damage_this_roll = apply_mod(damage_this_roll, final_mod_4096)
+
+            # Minimum 1 damage per hit
+            damage_this_roll = max(1, damage_this_roll)
+
+            damages_per_hit.append(damage_this_roll)
+
+        # Generate representative rolls for display
+        rolls = _calculate_multi_hit_rolls(damages_per_hit, hit_count)
 
     # Calculate results
     min_damage = min(rolls)
@@ -1192,7 +1265,14 @@ def calculate_damage(
     is_possible_ohko = kos > 0
 
     # Calculate detailed KO probabilities
-    ko_probs = calculate_ko_probability(rolls, defender_hp)
+    if hit_count > 1 and type_eff != 0:
+        # Use exact probability calculation for multi-hit moves
+        ko_probs = calculate_multi_hit_ko_probability(
+            damages_per_hit, hit_count, defender_hp
+        )
+    else:
+        # Use standard probability calculation for single-hit moves
+        ko_probs = calculate_ko_probability(rolls, defender_hp)
 
     # Check for immunity (all rolls are 0)
     is_immune = max_damage == 0
@@ -1212,7 +1292,7 @@ def calculate_damage(
             applied_mods.append("STAB (1.5x)")
 
     # Add type effectiveness to mods
-    type_eff = get_type_effectiveness(move.type, defender_types)
+    type_eff = get_type_effectiveness(effective_move_type, defender_types)
     if type_eff == 0:
         applied_mods.append("Immune (0x)")
     elif type_eff == 0.25:
