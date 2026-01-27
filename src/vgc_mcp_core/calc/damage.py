@@ -1621,17 +1621,25 @@ def calculate_bulk_threshold(
         target_survival_chance: Target survival % (100 = guaranteed survive)
 
     Returns:
-        Dict with required HP/Def EVs and resulting calc
+        Dict with required HP/Def EVs and resulting calc (minimum total EVs)
     """
     from ..models.pokemon import EVSpread
 
     is_physical = move.category == MoveCategory.PHYSICAL
     def_stat_name = "defense" if is_physical else "special_defense"
 
-    # Try HP investment first, then defensive stat (level 50 breakpoints)
+    best_result = None
+    best_total_evs = float('inf')
+
+    # Test all valid EV combinations to find minimum total investment
     for hp_ev in EV_BREAKPOINTS_LV50:
         for def_ev in EV_BREAKPOINTS_LV50:
-            if hp_ev + def_ev > 508:
+            total = hp_ev + def_ev
+            if total > 508:
+                continue
+
+            # Skip if we can't improve on best found
+            if total > best_total_evs:
                 continue
 
             test_evs = EVSpread(hp=hp_ev)
@@ -1650,13 +1658,17 @@ def calculate_bulk_threshold(
             survival_pct = (survives / 16) * 100
 
             if survival_pct >= target_survival_chance:
-                return {
-                    "hp_evs": hp_ev,
-                    "def_evs": def_ev,
-                    "def_stat_name": def_stat_name,
-                    "survival_chance": survival_pct,
-                    "damage_range": result.damage_range,
-                    "result": result
-                }
+                # Found a valid solution - check if it's better
+                # Prefer lower total EVs, or higher HP when totals are equal
+                if total < best_total_evs or (total == best_total_evs and hp_ev > best_result["hp_evs"]):
+                    best_total_evs = total
+                    best_result = {
+                        "hp_evs": hp_ev,
+                        "def_evs": def_ev,
+                        "def_stat_name": def_stat_name,
+                        "survival_chance": survival_pct,
+                        "damage_range": result.damage_range,
+                        "result": result
+                    }
 
-    return None  # Cannot achieve target survival
+    return best_result  # None if no combination achieves survival
