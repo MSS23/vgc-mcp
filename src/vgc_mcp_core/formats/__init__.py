@@ -5,6 +5,7 @@ from .showdown import (
     parse_showdown_team,
     export_pokemon_to_showdown,
     export_team_to_showdown,
+    pokemon_build_to_showdown,
     ShowdownParseError,
 )
 
@@ -13,5 +14,6 @@ __all__ = [
     "parse_showdown_team",
     "export_pokemon_to_showdown",
     "export_team_to_showdown",
+    "pokemon_build_to_showdown",
     "ShowdownParseError",
 ]
