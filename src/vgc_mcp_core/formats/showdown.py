@@ -33,7 +33,7 @@ import re
 from typing import Optional
 from dataclasses import dataclass, field
 
-from ..models.pokemon import Nature, EVSpread, IVSpread
+from ..models.pokemon import Nature, EVSpread, IVSpread, PokemonBuild
 
 
 class ShowdownParseError(Exception):
@@ -427,3 +427,66 @@ def parsed_to_nature(parsed: ParsedPokemon) -> Nature:
         return Nature(parsed.nature.lower())
     except ValueError:
         return Nature.SERIOUS
+
+
+def pokemon_build_to_showdown(pokemon: PokemonBuild) -> str:
+    """
+    Convert a PokemonBuild model to Showdown paste format.
+    
+    Args:
+        pokemon: PokemonBuild instance
+        
+    Returns:
+        Showdown paste format string
+    """
+    # Convert PokemonBuild to dict format for export_pokemon_to_showdown
+    species = pokemon.name.replace("-", " ").title()
+    
+    # Convert EVSpread to dict
+    evs_dict = {
+        "hp": pokemon.evs.hp,
+        "atk": pokemon.evs.attack,
+        "def": pokemon.evs.defense,
+        "spa": pokemon.evs.special_attack,
+        "spd": pokemon.evs.special_defense,
+        "spe": pokemon.evs.speed,
+    }
+    
+    # Convert IVSpread to dict (only include non-31 values)
+    ivs_dict = {}
+    if pokemon.ivs.hp != 31:
+        ivs_dict["hp"] = pokemon.ivs.hp
+    if pokemon.ivs.attack != 31:
+        ivs_dict["atk"] = pokemon.ivs.attack
+    if pokemon.ivs.defense != 31:
+        ivs_dict["def"] = pokemon.ivs.defense
+    if pokemon.ivs.special_attack != 31:
+        ivs_dict["spa"] = pokemon.ivs.special_attack
+    if pokemon.ivs.special_defense != 31:
+        ivs_dict["spd"] = pokemon.ivs.special_defense
+    if pokemon.ivs.speed != 31:
+        ivs_dict["spe"] = pokemon.ivs.speed
+    
+    # Convert item name (hyphenated to spaced title case)
+    item = pokemon.item.replace("-", " ").title() if pokemon.item else None
+    
+    # Convert ability name
+    ability = pokemon.ability.replace("-", " ").title() if pokemon.ability else None
+    
+    # Convert tera type
+    tera_type = pokemon.tera_type.replace("-", " ").title() if pokemon.tera_type else None
+    
+    # Convert nature
+    nature = pokemon.nature.value.title()
+    
+    return export_pokemon_to_showdown(
+        species=species,
+        item=item,
+        ability=ability,
+        level=pokemon.level,
+        tera_type=tera_type,
+        evs=evs_dict,
+        ivs=ivs_dict if ivs_dict else None,
+        nature=nature,
+        moves=pokemon.moves if pokemon.moves else None,
+    )
