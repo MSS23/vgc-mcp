@@ -246,7 +246,7 @@ Calculate probability of outspeeding a Pokemon based on Smogon usage data.
   "your_speed": 189,
   "opponent": "Tornadus",
   "outspeed_probability": 67.5,
-  "analysis": "Outspeeds 67.5% of Tornadus sets (based on Smogon 1760 ELO data)",
+  "analysis": "Outspeeds 67.5% of Tornadus sets (based on Smogon 0 ELO data - all competitive players)",
   "common_opponent_spreads": [
     {"spread": "Timid 252 Spe", "speed": 196, "usage": 45.2%, "result": "lose"},
     {"spread": "Timid 180 Spe", "speed": 182, "usage": 32.1%, "result": "win"}
@@ -442,15 +442,15 @@ Import a team from Pokemon Showdown paste format.
 Get Pokemon usage percentages from Smogon Stats.
 
 **Parameters:**
-- `format` (string, default: "gen9vgc2024regh")
-- `rating` (integer, default: 1760): ELO rating cutoff
+- `format` (string, default: "gen9vgc2026regfbo3")
+- `rating` (integer, default: 0): ELO rating cutoff (0 = all competitive players)
 - `top_n` (integer, default: 20): Number of Pokemon to return
 
 **Returns:**
 ```json
 {
-  "format": "gen9vgc2024regh",
-  "rating": 1760,
+  "format": "gen9vgc2026regfbo3",
+  "rating": 0,
   "month": "2026-01",
   "top_pokemon": [
     {"rank": 1, "pokemon": "flutter-mane", "usage": 45.2},

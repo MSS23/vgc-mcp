@@ -128,7 +128,7 @@ def make_pokemon(name, types, base_hp=80, ...):
 
 Usage stats are pulled from Smogon's chaos JSON files:
 - **URL**: `https://www.smogon.com/stats/{YYYY-MM}/chaos/{format}-{rating}.json`
-- **Rating**: 1760 (highest available ELO cutoff)
+- **Rating**: 0 (all competitive players - broadest dataset)
 - **Available ratings**: 0, 1500, 1630, 1760
 - **Auto-detection**: Finds latest available month automatically
 

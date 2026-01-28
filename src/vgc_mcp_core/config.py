@@ -53,8 +53,8 @@ class Settings:
 
     # VGC defaults
     DEFAULT_LEVEL: int = 50
-    DEFAULT_FORMAT: str = "gen9vgc2026regf"
-    DEFAULT_RATING: int = 0  # 0 = 1500+ tier (broadest competitive data)
+    DEFAULT_FORMAT: str = "gen9vgc2026regfbo3"
+    DEFAULT_RATING: int = 0  # 0 = all competitive data (broadest dataset)
 
     # Team settings
     MAX_TEAM_SIZE: int = 6

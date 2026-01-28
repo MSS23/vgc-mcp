@@ -12,7 +12,7 @@ A Model Context Protocol (MCP) server providing 157+ tools for competitive Pokem
 
 - **157+ specialized tools** for competitive VGC team building
 - **Full Gen 9 damage formula** with all modifiers verified against Pokemon Showdown
-- **Auto-fetch spreads** from Smogon Stats (1760 ELO)
+- **Auto-fetch spreads** from Smogon Stats (0 ELO - all competitive players)
 - **Multi-threat optimization** - survive 3-6 attacks simultaneously
 - **Complete Tera mechanics** including Stellar type
 - **Showdown paste export** for all spreads

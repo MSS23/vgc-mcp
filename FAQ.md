@@ -181,16 +181,16 @@ If you get different results than Showdown, check:
 
 ### Where does the usage data come from?
 
-**Smogon Stats** at 1760 ELO rating cutoff.
+**Smogon Stats** at 0 ELO rating (all competitive players).
 
 - **Source**: https://www.smogon.com/stats/
-- **Format**: `{YYYY-MM}/chaos/gen9vgc2024regh-1760.json`
-- **Rating**: 1760 (highest available, most competitive)
+- **Format**: `{YYYY-MM}/chaos/gen9vgc2026regfbo3-0.json`
+- **Rating**: 0 (all competitive players, broadest dataset)
 - **Available ratings**: 0, 1500, 1630, 1760
 - **Update frequency**: Monthly
 - **Auto-detection**: Automatically finds latest available month
 
-This data represents the top ~10-15% of competitive players.
+This data represents all competitive players across all skill levels.
 
 ---
 
