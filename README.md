@@ -58,6 +58,7 @@ Claude: "Your Timid 252 SpA Flutter Mane with Moonblast deals 96.5-113.6%
 to standard Adamant 252 HP / 60 SpD Incineroar @ Assault Vest.
 
 Result: 75% chance to OHKO (12 out of 16 damage rolls will KO)
+Note: Neutral matchup (Fairy is resisted by Fire 0.5x but super effective vs Dark 2x = 1.0x)
 
 Here's the Showdown paste for your Flutter Mane:
 ```

@@ -55,8 +55,16 @@ Claude calls tools:
   3. calculate_damage_output(...) → 85-100 damage (96.5%-113.6%)
 
 Claude: "Your Flutter Mane with Moonblast deals 96.5-113.6% to a standard
-Adamant 252 HP Incineroar, giving you a 75% chance to OHKO."
+Adamant 252 HP Incineroar, giving you a 75% chance to OHKO.
+(Neutral matchup: Fairy is resisted by Fire but super effective vs Dark)"
 ```
+
+**Note on Dual-Type Effectiveness**: Incineroar is Fire/Dark, so Fairy-type damage is calculated as:
+- Fairy vs Fire = 0.5x (resisted)
+- Fairy vs Dark = 2.0x (super effective)
+- **Final = 0.5 × 2.0 = 1.0x (neutral)**
+
+This demonstrates how the server handles complex type matchup calculations automatically.
 
 MCP is the **protocol** (set of rules) that makes this communication possible.
 
