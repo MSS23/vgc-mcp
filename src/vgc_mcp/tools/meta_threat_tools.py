@@ -10,6 +10,7 @@ from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp_core.calc.stats import calculate_all_stats
 from vgc_mcp_core.calc.speed_probability import calculate_speed_stat
+from vgc_mcp_core.calc.damage import format_percent
 from vgc_mcp_core.calc.meta_threats import (
     analyze_single_threat,
     generate_spread_suggestions,
@@ -750,7 +751,7 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
             "move_type": move_data.type,
             "move_category": move_data.category.value,
             "damage_range": f"{damage['min_damage']}-{damage['max_damage']}",
-            "damage_percent": f"{damage['min_percent']:.1f}%-{damage['max_percent']:.1f}%",
+            "damage_percent": f"{format_percent(damage['min_percent'])}-{format_percent(damage['max_percent'])}%",
             # HP remaining after taking the hit (clearer than damage percent for survival discussions)
             "hp_remaining_range": f"{hp_remaining_min}-{hp_remaining_max}",
             "hp_remaining_percent": f"{hp_remaining_min_pct}-{hp_remaining_max_pct}%",
@@ -774,7 +775,7 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
             f"| Pokemon              | {pokemon_name:<40} |",
             f"| HP                   | {your_hp:<40} |",
             f"| Threat               | {threat_pokemon}'s {threat_move:<20} |",
-            f"| Damage Taken         | {damage['min_percent']:.1f}-{damage['max_percent']:.1f}%{' ':<30} |",
+            f"| Damage Taken         | {format_percent(damage['min_percent'])}-{format_percent(damage['max_percent'])}%{' ':<30} |",
             f"| HP Remaining         | {hp_remaining_min_pct}-{hp_remaining_max_pct}%{' ':<30} |",
             f"| Survival Probability | {survival_percent:.1f}% ({survival_count}/16 rolls){' ':<20} |",
             f"| Survival Status      | {survival_status:<40} |",

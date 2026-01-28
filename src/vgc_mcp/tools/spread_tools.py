@@ -10,7 +10,7 @@ from vgc_mcp_core.config import logger
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
 from vgc_mcp_core.calc.stats import calculate_speed, calculate_stat, calculate_hp, find_speed_evs
-from vgc_mcp_core.calc.damage import calculate_damage, DamageResult
+from vgc_mcp_core.calc.damage import calculate_damage, DamageResult, format_percent
 from vgc_mcp_core.calc.modifiers import DamageModifiers
 from vgc_mcp_core.calc.bulk_optimization import (
     calculate_optimal_bulk_distribution,
@@ -1829,7 +1829,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     defender_spread_str = f"{best_spread['hp']} HP / {relevant_def_evs} {def_stat_name} {pokemon_name}"
 
                     # Build analysis string
-                    analysis_str = f"{attacker_spread_str}'s {survive_move} vs {defender_spread_str}: {best_result.min_percent:.1f}-{best_result.max_percent:.1f}%"
+                    analysis_str = f"{attacker_spread_str}'s {survive_move} vs {defender_spread_str}: {format_percent(best_result.min_percent)}-{format_percent(best_result.max_percent)}%"
 
                     results["benchmarks"]["survival"] = {
                         "attacker": survive_pokemon,
@@ -1848,7 +1848,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         "smogon_spread_used": smogon_used,
                         "defender_tera": defender_tera_type,
                         "damage_range": best_result.damage_range,
-                        "damage_percent": f"{best_result.min_percent:.1f}-{best_result.max_percent:.1f}%",
+                        "damage_percent": f"{format_percent(best_result.min_percent)}-{format_percent(best_result.max_percent)}%",
                         "survives": best_result.max_percent < 100,
                         "hp_remaining": f"{100 - best_result.max_percent:.1f}%",
                         "analysis": analysis_str,
@@ -3222,7 +3222,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         "ability": threat.ability,
                         "tera_type": threat.tera_type,
                         "damage_range": result.damage_range,
-                        "damage_percent": f"{result.min_percent:.1f}-{result.max_percent:.1f}%",
+                        "damage_percent": f"{format_percent(result.min_percent)}-{format_percent(result.max_percent)}%",
                         "survival_rate": f"{survival_pct:.2f}%",
                         "survives": survives
                     })

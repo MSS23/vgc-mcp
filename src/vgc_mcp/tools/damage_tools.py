@@ -5,7 +5,7 @@ from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
-from vgc_mcp_core.calc.damage import calculate_damage, calculate_ko_threshold, calculate_bulk_threshold
+from vgc_mcp_core.calc.damage import calculate_damage, calculate_ko_threshold, calculate_bulk_threshold, format_percent
 from vgc_mcp_core.calc.modifiers import DamageModifiers
 from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, IVSpread, get_nature_modifier
 from vgc_mcp_core.formats.showdown import pokemon_build_to_showdown
@@ -335,7 +335,7 @@ def format_transparent_output(
         verdict = f"{damage_result.ko_chance}"
     
     lines.append(f"| {damage_result.min_damage} | {damage_result.max_damage} | "
-                f"{damage_result.min_percent:.1f}-{damage_result.max_percent:.1f}% | "
+                f"{format_percent(damage_result.min_percent)}-{format_percent(damage_result.max_percent)}% | "
                 f"{hp_after_min}-{hp_after_max} | {verdict} |")
     lines.append("")
     
@@ -1855,8 +1855,8 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 f"| Attacker         | {attacker_name}                            |",
                 f"| Defender         | {defender_name}                            |",
                 f"| Move             | {move_name} x{num_hits}                    |",
-                f"| Per Hit          | {min_per_hit}-{max_per_hit} ({min_percent_per_hit:.1f}-{max_percent_per_hit:.1f}%) |",
-                f"| Total Damage     | {total_min}-{total_max} ({total_min_percent:.1f}-{total_max_percent:.1f}%) |",
+                f"| Per Hit          | {min_per_hit}-{max_per_hit} ({format_percent(min_percent_per_hit)}-{format_percent(max_percent_per_hit)}%) |",
+                f"| Total Damage     | {total_min}-{total_max} ({format_percent(total_min_percent)}-{format_percent(total_max_percent)}%) |",
                 f"| HP Remaining     | {hp_remaining_min}-{hp_remaining_max} ({hp_remain_min_pct}-{hp_remain_max_pct}%) |",
                 f"| Survival Chance  | {survival_chance:.2f}%                     |",
                 f"| Verdict          | {verdict_str}                              |",
@@ -1895,14 +1895,14 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "per_hit": {
                     "min_damage": min_per_hit,
                     "max_damage": max_per_hit,
-                    "min_percent": f"{min_percent_per_hit:.1f}%",
-                    "max_percent": f"{max_percent_per_hit:.1f}%"
+                    "min_percent": f"{format_percent(min_percent_per_hit)}%",
+                    "max_percent": f"{format_percent(max_percent_per_hit)}%"
                 },
                 "total_damage": {
                     "min": total_min,
                     "max": total_max,
-                    "min_percent": f"{total_min_percent:.1f}%",
-                    "max_percent": f"{total_max_percent:.1f}%"
+                    "min_percent": f"{format_percent(total_min_percent)}%",
+                    "max_percent": f"{format_percent(total_max_percent)}%"
                 },
                 "hp_remaining": {
                     "min": hp_remaining_min,

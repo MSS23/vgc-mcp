@@ -11,6 +11,7 @@ from vgc_mcp_core.formats.showdown import parse_showdown_team, ShowdownParseErro
 from vgc_mcp_core.rules.regulation_loader import get_regulation_config
 from vgc_mcp_core.utils.errors import error_response, success_response, ErrorCodes
 from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name
+from vgc_mcp_core.calc.damage import format_percent
 
 
 def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyzer):
@@ -1211,7 +1212,7 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                 move_type=move_data.type,
                 base_power=move_data.power,
                 damage_range=result.damage_range,
-                percent_range=f"{result.min_percent:.1f}% - {result.max_percent:.1f}%",
+                percent_range=f"{format_percent(result.min_percent)}% - {format_percent(result.max_percent)}%",
                 survives=result.max_percent < 100,
                 ko_chance=ko_chance,
                 defender_hp=result.defender_hp,
@@ -2043,7 +2044,7 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                     "nature": spread_nature_str,
                     "evs": f"{spread_evs.get('hp', 0)} HP / {spread_evs.get('attack', 0)} Atk / {spread_evs.get('defense', 0)} Def / {spread_evs.get('special_attack', 0)} SpA / {spread_evs.get('special_defense', 0)} SpD / {spread_evs.get('speed', 0)} Spe",
                     "damage_range": result.damage_range,
-                    "percent_range": f"{result.min_percent:.1f}% - {result.max_percent:.1f}%",
+                    "percent_range": f"{format_percent(result.min_percent)}% - {format_percent(result.max_percent)}%",
                 }
 
                 if direction == "from":
@@ -2588,7 +2589,7 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                                     "spread": atk_spread["description"],
                                     "usage": atk_spread["usage"],
                                     "damage_range": f"{result.min_damage}-{result.max_damage}",
-                                    "percent_range": f"{result.min_percent:.1f}%-{result.max_percent:.1f}%",
+                                    "percent_range": f"{format_percent(result.min_percent)}-{format_percent(result.max_percent)}%",
                                     "survives": result.max_percent < 100,
                                     "ko_chance": result.ko_chance
                                 })

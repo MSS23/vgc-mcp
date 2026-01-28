@@ -476,6 +476,19 @@ def _calculate_multi_hit_rolls(
     return rolls
 
 
+def format_percent(value: float) -> str:
+    """
+    Format percentage to match Pokemon Showdown's display.
+    - Strips trailing .0 (e.g., 101.0% → 101%)
+    - Keeps one decimal place otherwise (e.g., 117.3%)
+    """
+    formatted = f"{value:.1f}"
+    # Strip trailing .0
+    if formatted.endswith('.0'):
+        return formatted[:-2]
+    return formatted
+
+
 @dataclass
 class DamageResult:
     """Result of damage calculation."""
@@ -494,7 +507,9 @@ class DamageResult:
     @property
     def damage_range(self) -> str:
         """Formatted damage range string."""
-        return f"{self.min_damage}-{self.max_damage} ({self.min_percent:.1f}%-{self.max_percent:.1f}%)"
+        min_pct = format_percent(self.min_percent)
+        max_pct = format_percent(self.max_percent)
+        return f"{self.min_damage}-{self.max_damage} ({min_pct}%-{max_pct}%)"
 
 
 def calculate_damage(
