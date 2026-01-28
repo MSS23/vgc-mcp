@@ -1,231 +1,158 @@
 # VGC MCP Server
 
-A Model Context Protocol (MCP) server for Pokemon VGC (Video Game Championships) team building and competitive analysis.
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![MCP](https://img.shields.io/badge/MCP-Compatible-green.svg)](https://modelcontextprotocol.io/)
+
+A Model Context Protocol (MCP) server providing 157+ tools for competitive Pokemon VGC (Video Game Championships) team building.
+
+**New to MCP?** Read the [Technical Guide](TECHNICAL_GUIDE.md) for a beginner-friendly explanation.
 
 ## Features
 
-- **157+ tools** for competitive Pokemon team building
-- Full Gen 9 damage formula with all modifiers (weather, terrain, items, abilities)
-- Complete Tera mechanics including Stellar type and Tera Blast
-- New Gen 9 abilities (Embody Aspect, Mind's Eye) and moves (Psyblade, Ivy Cudgel)
-- Smogon usage statistics integration with auto-fetching spreads
-- Speed tier analysis and optimization
-- EV/IV optimization with bulk calculations
-- Team import/export (Showdown paste format)
-- Legality checking for VGC formats (Reg F/G/H)
-- Coverage analysis and threat identification
-- Salt Cure and other chip damage calculations
-- MCP-UI support for interactive displays
+- **157+ specialized tools** for competitive VGC team building
+- **Full Gen 9 damage formula** with all modifiers verified against Pokemon Showdown
+- **Auto-fetch spreads** from Smogon Stats (1760 ELO)
+- **Multi-threat optimization** - survive 3-6 attacks simultaneously
+- **Complete Tera mechanics** including Stellar type
+- **Showdown paste export** for all spreads
+- **Works on FREE Claude Desktop** - no premium required!
 
 ## Quick Start
 
-### For End Users (FREE Claude Desktop!)
-
-**⚡ 5-Minute Setup - No Premium Required**
-
-This MCP server works on **FREE Claude Desktop** using local setup!
-
-#### Quick Links:
-- **[SETUP_GUIDE.md](SETUP_GUIDE.md)** - Choose between local (free) or remote (premium) setup
-- **[LOCAL_SETUP.md](LOCAL_SETUP.md)** - Detailed local installation guide
-
-#### TL;DR for Local Setup:
+**5-Minute Setup for FREE Claude Desktop:**
 
 1. Install Python 3.11+ from https://python.org
-2. Run: `pip install -e .`
-3. Add to Claude Desktop config (`%APPDATA%\Claude\claude_desktop_config.json` on Windows):
-   ```json
-   {
-     "mcpServers": {
-       "vgc": {
-         "command": "python",
-         "args": ["-m", "vgc_mcp"]
-       }
-     }
-   }
-   ```
+2. Install package: `pip install -e .`
+3. Add to Claude Desktop config (see [Setup Guide](SETUP_GUIDE.md))
 4. Restart Claude Desktop
-5. Say "What can you help me with?" - All 157 tools available!
+5. Ask: "Does Flutter Mane OHKO Incineroar?" 🚀
 
-**Windows users:** Just double-click `setup.bat` for automatic setup!
+**Windows users:** Double-click `setup.bat` for automatic setup!
 
-#### Verify It's Working:
+**Detailed Instructions:**
+- [SETUP_GUIDE.md](SETUP_GUIDE.md) - Choose local (free) or remote (premium) setup
+- [LOCAL_SETUP.md](LOCAL_SETUP.md) - Step-by-step local installation
+- [USER_GUIDE.md](USER_GUIDE.md) - How to use the tools
 
-After setup, in Claude Desktop:
-1. Look for "vgc" MCP server indicator (should be green/connected)
-2. Say: "What can you help me with?" - Should list VGC tools
-3. Test: "Does Flutter Mane OHKO Incineroar?" - Should get damage calculations
-4. Check speed: Local = instant, Remote = network delay
+## Documentation
 
-**How to tell if you're using local vs remote:**
-- Local config has `"command": "python"`
-- Remote config has `"url": "https://..."`
-- See [SETUP_GUIDE.md](SETUP_GUIDE.md) for full verification steps
-
----
+### For Users
+- **[Setup Guide](SETUP_GUIDE.md)** - Get started with FREE Claude Desktop
+- **[User Guide](USER_GUIDE.md)** - How to use VGC tools effectively
+- **[FAQ](FAQ.md)** - Common questions and troubleshooting
+- **[API Reference](API_REFERENCE.md)** - Complete tool catalog
 
 ### For Developers
+- **[Technical Guide](TECHNICAL_GUIDE.md)** - MCP architecture explained (beginner-friendly!)
+- **[Development Guide](DEVELOPMENT.md)** - Contributing code
+- **[Deployment Guide](DEPLOYMENT.md)** - Self-hosting options
+- **[Contributing](CONTRIBUTING.md)** - How to contribute
 
-#### Installation
-
-```bash
-# Install in development mode
-pip install -e .
-
-# With remote server support
-pip install -e ".[remote]"
-
-# With development tools
-pip install -e ".[dev]"
-```
-
-#### Running the Server
-
-```bash
-# Full server (157 tools) - for powerful models like Claude, GPT-4
-vgc-mcp
-
-# Lite server (49 tools) - for smaller models like Llama 3.3 70B
-vgc-mcp-lite
-
-# HTTP/SSE for remote access
-vgc-mcp-http
-vgc-mcp-lite-http
-```
-
-#### Claude Desktop Configuration
-
-**Local Setup (FREE):**
-```json
-{
-  "mcpServers": {
-    "vgc": {
-      "command": "python",
-      "args": ["-m", "vgc_mcp"]
-    }
-  }
-}
-```
-
-**Remote Setup (Premium):**
-```json
-{
-  "mcpServers": {
-    "vgc": {
-      "url": "https://vgc-mcp.onrender.com/sse"
-    }
-  }
-}
-```
-
-Config file locations:
-- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Linux**: `~/.config/claude/claude_desktop_config.json`
-
-#### Remote Server Deployment
-
-For hosting your own remote server:
-- Endpoint: `https://your-server.com/sse`
-- Health check: `https://your-server.com/health`
-
-```bash
-# Start remote server
-vgc-mcp-http  # Full version, port 8000
-vgc-mcp-lite-http  # Lite version, port 8000
-```
-
-## Project Structure
+## Example Usage
 
 ```
-vgc-mcp/
-├── src/vgc_mcp/          # Main package
-│   ├── api/              # External API clients (PokeAPI, Smogon)
-│   ├── calc/             # Pure calculation functions
-│   ├── models/           # Pydantic data models
-│   ├── tools/            # MCP tool definitions (22 modules)
-│   ├── rules/            # VGC format rules and legality
-│   ├── team/             # Team management
-│   ├── formats/          # Import/export formats
-│   ├── ui/               # MCP-UI templates
-│   ├── utils/            # Error handling, fuzzy matching
-│   └── validation/       # Input validation
-├── tests/                # Test suite (337 tests)
-├── data/                 # Cache and static data
-└── pyproject.toml        # Package configuration
+You: "Does my Flutter Mane OHKO Incineroar with Moonblast?"
+
+Claude: "Your Timid 252 SpA Flutter Mane with Moonblast deals 96.5-113.6%
+to standard Adamant 252 HP / 60 SpD Incineroar @ Assault Vest.
+
+Result: 75% chance to OHKO (12 out of 16 damage rolls will KO)
+
+Here's the Showdown paste for your Flutter Mane:
+```
+Flutter Mane
+Ability: Protosynthesis
+EVs: 4 HP / 252 SpA / 252 Spe
+Timid Nature
+IVs: 0 Atk
+```
+"
 ```
 
 ## Server Variants
 
 | Server | Tools | Best For |
 |--------|-------|----------|
-| `vgc-mcp` | 157 | Claude, GPT-4, powerful models |
-| `vgc-mcp-lite` | 49 | Llama 3.3 70B, smaller models |
+| `vgc-mcp` | 157 | Claude, GPT-4 (full feature set) |
+| `vgc-mcp-lite` | 49 | Smaller models, essential tools only |
+| `vgc-mcp-micro` | 15 | Minimal deployment, core features |
 
-The lite version includes essential tools for:
-- Team management
-- Damage calculations (with auto Smogon spreads)
-- Speed analysis
-- Coverage analysis
-- Import/export
+## Deployment Options
 
-## Key Tools
+| Option | Setup Time | Cost | Best For |
+|--------|------------|------|----------|
+| **Local** | 5 min | Free | Individual use (recommended) |
+| **Docker** | 10 min | Hosting | Reproducible deployments |
+| **Fly.io** | 15 min | $5-20/mo | Production, auto-scaling |
+| **Render** | 10 min | Free tier | Quick prototyping |
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed instructions.
+
+## Key Capabilities
 
 ### Damage Calculations
-- `calculate_damage_output` - Full damage calc with Smogon spread auto-fetch
-- `find_ko_evs` - Find EVs needed to KO a target
-- `find_bulk_evs` - Find EVs needed to survive an attack
+- Full Gen 9 damage formula (100% accurate vs Showdown)
+- Auto-fetch common spreads from Smogon
+- Multi-hit moves (Surging Strikes, Population Bomb)
+- Tera mechanics, weather, terrain, abilities
 
-### Team Building
-- `add_to_team` / `remove_from_team` - Manage team roster
-- `import_showdown_team` - Import from Showdown paste
-- `analyze_team` - Full team analysis
+### EV Optimization
+- Find minimum EVs to survive specific attacks
+- Optimize for 3-6 threats simultaneously
+- Nature optimization to save EVs
+- Bulk calculations with diminishing returns
 
 ### Speed Analysis
-- `compare_speed` - Compare two Pokemon's speed
-- `visualize_speed_tiers` - Visual speed tier chart
-- `get_speed_probability` - Probability of outspeeding based on usage data
+- Compare speeds with Tailwind/Trick Room
+- Speed tier visualization
+- Probability of outspeeding (based on usage data)
 
-### Usage Data
-- `get_usage_stats` - Smogon usage percentages
-- `get_common_sets` - Popular builds for a Pokemon
-- `suggest_teammates` - Teammate recommendations
-
-## Gen 9 Mechanics Support
-
-### Tera Types
-- Full type chart including Stellar type
-- Tera Blast type/category changes when Terastallized
-- Stellar type's 2x boost vs Terastallized Pokemon
-
-### Abilities
-- **Embody Aspect**: Ogerpon mask-specific stat boosts
-- **Mind's Eye/Scrappy**: Normal/Fighting hit Ghost types
-- **Protosynthesis/Quark Drive**: Paradox stat boosts
-
-### Moves
-- **Ivy Cudgel**: Form-dependent type (Hearthflame=Fire, Wellspring=Water, Cornerstone=Rock)
-- **Psyblade**: 1.5x boost in Psychic Terrain
-- **Collision Course/Electro Drift**: 1.33x boost when super effective
-- **Salt Cure**: Chip damage (12.5%, doubled for Water/Steel)
+### Team Building
+- Import/export Showdown paste format
+- Team analysis (coverage, weaknesses, threats)
+- Teammate recommendations
+- VGC legality checking (Reg F/G/H)
 
 ## Development
 
 ```bash
+# Install for development
+pip install -e ".[dev]"
+
 # Run tests
 python -m pytest tests/ -v
 
-# Run specific test file
-python -m pytest tests/test_damage.py -v
-
-# Linting
+# Code quality
 ruff check src/
 ruff format src/
-
-# Type checking
 mypy src/vgc_mcp
 ```
 
+See [DEVELOPMENT.md](DEVELOPMENT.md) for detailed development guide.
+
+## Contributing
+
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for:
+- Development setup
+- Code style guidelines
+- Testing requirements
+- Pull request process
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for version history and recent updates.
+
 ## License
 
-MIT
+MIT License - see [LICENSE](LICENSE) file for details.
+
+## Support
+
+- **Questions?** See [FAQ.md](FAQ.md)
+- **Bug reports:** [Open an issue](https://github.com/MSS23/vgc-mcp/issues)
+- **Discussions:** [GitHub Discussions](https://github.com/MSS23/vgc-mcp/discussions)
+
+---
+
+**Built with MCP** | Learn more at [modelcontextprotocol.io](https://modelcontextprotocol.io/)

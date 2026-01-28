@@ -2,12 +2,15 @@
 
 from typing import Optional
 from mcp.server.fastmcp import FastMCP
+from dataclasses import dataclass
+import itertools
+import time
 
 from vgc_mcp_core.config import logger
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
 from vgc_mcp_core.calc.stats import calculate_speed, calculate_stat, calculate_hp, find_speed_evs
-from vgc_mcp_core.calc.damage import calculate_damage
+from vgc_mcp_core.calc.damage import calculate_damage, DamageResult
 from vgc_mcp_core.calc.modifiers import DamageModifiers
 from vgc_mcp_core.calc.bulk_optimization import (
     calculate_optimal_bulk_distribution,
@@ -135,6 +138,432 @@ async def _get_common_spread(pokemon_name: str) -> Optional[dict]:
     except Exception as e:
         logger.warning(f"Failed to fetch Smogon spread for {pokemon_name}: {e}")
     return None
+
+
+def _get_nature_boost_stat(nature_name: str) -> str:
+    """Get the stat that a nature boosts (returns '+Atk', '+Def', etc.)."""
+    nature_boosts = {
+        "adamant": "+Atk",
+        "brave": "+Atk",
+        "lonely": "+Atk",
+        "naughty": "+Atk",
+        "bold": "+Def",
+        "impish": "+Def",
+        "lax": "+Def",
+        "relaxed": "+Def",
+        "modest": "+SpA",
+        "mild": "+SpA",
+        "quiet": "+SpA",
+        "rash": "+SpA",
+        "calm": "+SpD",
+        "careful": "+SpD",
+        "gentle": "+SpD",
+        "sassy": "+SpD",
+        "jolly": "+Spe",
+        "hasty": "+Spe",
+        "naive": "+Spe",
+        "timid": "+Spe",
+        "serious": "neutral",
+        "bashful": "neutral",
+        "docile": "neutral",
+        "hardy": "neutral",
+        "quirky": "neutral"
+    }
+    return nature_boosts.get(nature_name.lower(), "neutral")
+
+
+def _generate_nature_explanation(optimal: dict, alternative: dict) -> str:
+    """Generate explanation comparing alternative nature to optimal."""
+    opt_nature = optimal["nature"]
+    alt_nature = alternative["nature"]
+
+    opt_boost = _get_nature_boost_stat(opt_nature)
+    alt_boost = _get_nature_boost_stat(alt_nature)
+
+    ev_diff = alternative["total_evs"] - optimal["total_evs"]
+    speed_diff = alternative["speed_evs"] - optimal["speed_evs"]
+
+    # Build explanation based on stat differences
+    if speed_diff > 0:
+        return f"{alt_nature.title()}'s {alt_boost} nature requires {speed_diff} more Speed EVs to hit the same speed tier. Uses {ev_diff} more EVs total than {opt_nature.title()} ({opt_boost})."
+    elif speed_diff < 0:
+        # Less speed EVs needed, but more total EVs (must be compensating with bulk)
+        bulk_diff = ev_diff - speed_diff  # Additional EVs beyond the speed savings
+        return f"{alt_nature.title()}'s {alt_boost} nature saves {abs(speed_diff)} Speed EVs but requires {bulk_diff} more EVs in bulk stats. Uses {ev_diff} more EVs total than {opt_nature.title()} ({opt_boost})."
+    else:
+        # Same speed EVs, different bulk distribution
+        return f"{alt_nature.title()}'s {alt_boost} nature hits the same speed tier but distributes bulk EVs differently. Uses {ev_diff} more EVs total than {opt_nature.title()} ({opt_boost})."
+
+
+# Multi-threat optimization helper classes
+
+@dataclass
+class ThreatSpec:
+    """Specification for a single threat in multi-survival optimization."""
+    attacker_name: str
+    attacker_build: PokemonBuild
+    move: Move
+    is_physical: bool
+    modifiers: DamageModifiers
+    # Original user inputs for display
+    nature: str
+    evs: int
+    item: Optional[str]
+    ability: Optional[str]
+    tera_type: Optional[str]
+
+
+class DamageCache:
+    """Cache damage calculations to avoid redundant computations."""
+
+    def __init__(self, threats: list[ThreatSpec], defender_name: str, defender_base: BaseStats, defender_types: list[str]):
+        self.threats = threats
+        self.defender_name = defender_name
+        self.defender_base = defender_base
+        self.defender_types = defender_types
+        self.cache: dict = {}  # Key: (threat_idx, hp_ev, def_ev, spd_ev, nature_name, tera_type)
+
+    def get_damage(
+        self,
+        threat_idx: int,
+        hp_ev: int,
+        def_ev: int,
+        spd_ev: int,
+        nature: Nature,
+        defender_tera_type: Optional[str] = None
+    ) -> DamageResult:
+        """Get cached damage result or calculate and cache it."""
+        tera_key = defender_tera_type or "none"
+        key = (threat_idx, hp_ev, def_ev, spd_ev, nature.value, tera_key)
+
+        if key not in self.cache:
+            # Build defender with these EVs
+            defender = PokemonBuild(
+                name=self.defender_name,
+                base_stats=self.defender_base,
+                types=self.defender_types,
+                nature=nature,
+                evs=EVSpread(hp=hp_ev, defense=def_ev, special_defense=spd_ev),
+                tera_type=defender_tera_type
+            )
+
+            threat = self.threats[threat_idx]
+
+            # Update modifiers with defender Tera if specified
+            modifiers = DamageModifiers(
+                is_doubles=threat.modifiers.is_doubles,
+                attacker_item=threat.modifiers.attacker_item,
+                attacker_ability=threat.modifiers.attacker_ability,
+                tera_type=threat.modifiers.tera_type,
+                tera_active=threat.modifiers.tera_active,
+                defender_tera_type=defender_tera_type,
+                defender_tera_active=defender_tera_type is not None,
+                is_critical=threat.modifiers.is_critical,
+                sword_of_ruin=threat.modifiers.sword_of_ruin,
+                beads_of_ruin=threat.modifiers.beads_of_ruin,
+                vessel_of_ruin=threat.modifiers.vessel_of_ruin,
+                tablets_of_ruin=threat.modifiers.tablets_of_ruin
+            )
+
+            # Calculate damage
+            result = calculate_damage(threat.attacker_build, defender, threat.move, modifiers)
+            self.cache[key] = result
+
+        return self.cache[key]
+
+    def test_spread_all_threats(
+        self,
+        hp_ev: int,
+        def_ev: int,
+        spd_ev: int,
+        nature: Nature,
+        target_survival: float,
+        defender_tera_type: Optional[str] = None
+    ) -> tuple[bool, list[tuple[bool, DamageResult]]]:
+        """Test if spread survives ALL threats at the target survival rate.
+
+        Returns:
+            (all_survive: bool, results: list[(survives, DamageResult)])
+        """
+        results = []
+
+        for i in range(len(self.threats)):
+            result = self.get_damage(i, hp_ev, def_ev, spd_ev, nature, defender_tera_type)
+
+            # Calculate survival percentage (count rolls that don't KO)
+            survive_rolls = sum(1 for roll in result.rolls if roll < result.defender_hp)
+            survival_pct = (survive_rolls / 16) * 100
+
+            survives = survival_pct >= target_survival
+            results.append((survives, result))
+
+        all_survive = all(r[0] for r in results)
+        return all_survive, results
+
+    def get_stats(self) -> dict:
+        """Get cache statistics."""
+        return {
+            "total_cached": len(self.cache),
+            "cache_hits": sum(1 for _ in self.cache.values())  # Placeholder - would need tracking
+        }
+
+
+async def _prepare_threats(
+    threats: list[dict],
+    pokeapi: PokeAPIClient
+) -> list[ThreatSpec]:
+    """Prepare and validate threat specifications.
+
+    Args:
+        threats: List of threat dicts with attacker, move, and optional nature/evs/item/ability/tera
+        pokeapi: PokeAPI client for fetching data
+
+    Returns:
+        List of prepared ThreatSpec objects with auto-fetched data
+    """
+    prepared = []
+
+    for threat_dict in threats:
+        attacker_name = threat_dict["attacker"]
+        move_name = threat_dict["move"]
+
+        # Fetch attacker data
+        atk_base = await pokeapi.get_base_stats(attacker_name)
+        atk_types = await pokeapi.get_pokemon_types(attacker_name)
+        move = await pokeapi.get_move(move_name, user_name=attacker_name)
+
+        is_physical = move.category == MoveCategory.PHYSICAL
+
+        # Auto-fetch Smogon spread if not specified
+        smogon_data = await _get_common_spread(attacker_name)
+
+        nature_str = threat_dict.get("nature")
+        if nature_str is None and smogon_data:
+            nature_str = smogon_data.get("nature", "adamant" if is_physical else "modest")
+        elif nature_str is None:
+            nature_str = "adamant" if is_physical else "modest"
+
+        nature = Nature(nature_str.lower())
+
+        evs = threat_dict.get("evs")
+        if evs is None and smogon_data:
+            evs_dict = smogon_data.get("evs", {})
+            evs = evs_dict.get("attack" if is_physical else "special_attack", 252)
+        elif evs is None:
+            evs = 252
+
+        item = threat_dict.get("item")
+        if item is None and smogon_data:
+            item = smogon_data.get("item")
+        if item is None:
+            # Fallback to meta synergies
+            atk_key = attacker_name.lower().replace(" ", "-")
+            if atk_key in META_SYNERGIES:
+                item, _ = META_SYNERGIES[atk_key]
+
+        ability = threat_dict.get("ability")
+        if ability is None and smogon_data:
+            ability = smogon_data.get("ability")
+        if ability is None:
+            # Fallback to meta synergies
+            atk_key = attacker_name.lower().replace(" ", "-")
+            if atk_key in META_SYNERGIES:
+                _, ability = META_SYNERGIES[atk_key]
+
+        # Auto-detect Ruinous abilities
+        atk_key = attacker_name.lower().replace(" ", "-")
+        sword_of_ruin = False
+        beads_of_ruin = False
+        vessel_of_ruin = False
+        tablets_of_ruin = False
+
+        if atk_key == "chien-pao":
+            sword_of_ruin = True
+            if not ability:
+                ability = "sword-of-ruin"
+        elif atk_key == "chi-yu":
+            beads_of_ruin = True
+            if not ability:
+                ability = "beads-of-ruin"
+        elif atk_key == "ting-lu":
+            vessel_of_ruin = True
+            if not ability:
+                ability = "vessel-of-ruin"
+        elif atk_key == "wo-chien":
+            tablets_of_ruin = True
+            if not ability:
+                ability = "tablets-of-ruin"
+        elif ability:
+            ability_lower = ability.lower().replace(" ", "-").replace("_", "-")
+            if ability_lower == "sword-of-ruin":
+                sword_of_ruin = True
+            elif ability_lower == "beads-of-ruin":
+                beads_of_ruin = True
+            elif ability_lower == "vessel-of-ruin":
+                vessel_of_ruin = True
+            elif ability_lower == "tablets-of-ruin":
+                tablets_of_ruin = True
+
+        # Auto-detect Unseen Fist for Urshifu
+        if atk_key in ("urshifu", "urshifu-single-strike", "urshifu-rapid-strike"):
+            if not ability:
+                ability = "unseen-fist"
+
+        tera_type = threat_dict.get("tera_type")
+
+        # Auto-assign fixed Tera types (Ogerpon forms, Terapagos)
+        from vgc_mcp_core.calc.items import get_fixed_tera_type
+        if tera_type is not None:
+            fixed_tera = get_fixed_tera_type(attacker_name)
+            if fixed_tera and tera_type.lower() != fixed_tera.lower():
+                tera_type = fixed_tera
+
+        # Create attacker build
+        attacker_build = PokemonBuild(
+            name=attacker_name,
+            base_stats=atk_base,
+            types=atk_types,
+            nature=nature,
+            evs=EVSpread(
+                attack=evs if is_physical else 0,
+                special_attack=0 if is_physical else evs
+            ),
+            item=item,
+            ability=ability,
+            tera_type=tera_type
+        )
+
+        # Create damage modifiers
+        modifiers = DamageModifiers(
+            is_doubles=True,
+            attacker_item=item,
+            attacker_ability=ability,
+            tera_type=tera_type,
+            tera_active=tera_type is not None,
+            is_critical=move.always_crit,
+            sword_of_ruin=sword_of_ruin,
+            beads_of_ruin=beads_of_ruin,
+            vessel_of_ruin=vessel_of_ruin,
+            tablets_of_ruin=tablets_of_ruin
+        )
+
+        prepared.append(ThreatSpec(
+            attacker_name=attacker_name,
+            attacker_build=attacker_build,
+            move=move,
+            is_physical=is_physical,
+            modifiers=modifiers,
+            nature=nature_str,
+            evs=evs,
+            item=item,
+            ability=ability,
+            tera_type=tera_type
+        ))
+
+    return prepared
+
+
+def _find_min_bulk_for_threat(
+    cache: DamageCache,
+    threat_idx: int,
+    hp_ev: int,
+    nature: Nature,
+    target_survival: float,
+    stat_type: str,  # "defense" or "special_defense"
+    defender_tera_type: Optional[str] = None
+) -> int:
+    """Binary search for minimum Def or SpD EVs to survive a threat at given HP.
+
+    Args:
+        cache: Damage cache
+        threat_idx: Index of threat in cache.threats
+        hp_ev: HP EVs to test at
+        nature: Nature being tested
+        target_survival: Minimum survival percentage required
+        stat_type: "defense" or "special_defense"
+        defender_tera_type: Defender's Tera type if active
+
+    Returns:
+        Minimum EVs needed, or -1 if impossible even at 252
+    """
+    for test_ev in EV_BREAKPOINTS_LV50:
+        def_ev = test_ev if stat_type == "defense" else 0
+        spd_ev = test_ev if stat_type == "special_defense" else 0
+
+        result = cache.get_damage(threat_idx, hp_ev, def_ev, spd_ev, nature, defender_tera_type)
+
+        # Calculate survival percentage
+        survive_rolls = sum(1 for roll in result.rolls if roll < result.defender_hp)
+        survival_pct = (survive_rolls / 16) * 100
+
+        if survival_pct >= target_survival:
+            return test_ev
+
+    return -1  # Impossible even at 252 EVs
+
+
+def _quick_feasibility_check(
+    cache: DamageCache,
+    remaining_evs: int,
+    nature: Nature,
+    target_survival: float,
+    defender_tera_type: Optional[str] = None
+) -> Optional[dict]:
+    """Quick feasibility check by sampling 5 HP values.
+
+    Args:
+        cache: Damage cache with all threats
+        remaining_evs: EVs available for bulk (after speed)
+        nature: Nature to test
+        target_survival: Minimum survival percentage
+        defender_tera_type: Defender's Tera type if active
+
+    Returns:
+        Feasible spread dict if found, else None
+    """
+    hp_samples = [0, 60, 120, 180, 252]
+
+    # Categorize threats
+    physical_threats = [i for i, t in enumerate(cache.threats) if t.is_physical]
+    special_threats = [i for i, t in enumerate(cache.threats) if not t.is_physical]
+
+    for hp_ev in hp_samples:
+        if hp_ev > remaining_evs:
+            continue
+
+        # Find maximum Defense needed across all physical threats
+        max_def_needed = 0
+        if physical_threats:
+            for threat_idx in physical_threats:
+                min_def = _find_min_bulk_for_threat(
+                    cache, threat_idx, hp_ev, nature, target_survival, "defense", defender_tera_type
+                )
+                if min_def < 0:
+                    max_def_needed = 999  # Impossible
+                    break
+                max_def_needed = max(max_def_needed, min_def)
+
+        # Find maximum SpD needed across all special threats
+        max_spd_needed = 0
+        if special_threats:
+            for threat_idx in special_threats:
+                min_spd = _find_min_bulk_for_threat(
+                    cache, threat_idx, hp_ev, nature, target_survival, "special_defense", defender_tera_type
+                )
+                if min_spd < 0:
+                    max_spd_needed = 999  # Impossible
+                    break
+                max_spd_needed = max(max_spd_needed, min_spd)
+
+        # Check if this HP value works
+        if hp_ev + max_def_needed + max_spd_needed <= remaining_evs:
+            return {
+                "hp": hp_ev,
+                "def": max_def_needed,
+                "spd": max_spd_needed
+            }
+
+    return None  # No feasible spread found
 
 
 def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[SmogonStatsClient] = None):
@@ -1590,6 +2019,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         ("careful", {"speed": 1.0, "attack": 1.0, "defense": 1.0, "special_attack": 0.9, "special_defense": 1.1}),
         ("bold", {"speed": 1.0, "attack": 0.9, "defense": 1.1, "special_attack": 1.0, "special_defense": 1.0}),
         ("calm", {"speed": 1.0, "attack": 0.9, "defense": 1.0, "special_attack": 1.0, "special_defense": 1.1}),
+        # Offensive natures (can save EVs for speed benchmarks)
+        ("adamant", {"speed": 1.0, "attack": 1.1, "defense": 1.0, "special_attack": 0.9, "special_defense": 1.0}),
         # +Speed natures - Jolly first (doesn't hurt Atk)
         ("jolly", {"speed": 1.1, "attack": 1.0, "defense": 1.0, "special_attack": 0.9, "special_defense": 1.0}),
         ("timid", {"speed": 1.1, "attack": 0.9, "defense": 1.0, "special_attack": 1.0, "special_defense": 1.0}),
@@ -1606,6 +2037,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         ("calm", {"speed": 1.0, "attack": 0.9, "defense": 1.0, "special_attack": 1.0, "special_defense": 1.1}),
         ("impish", {"speed": 1.0, "attack": 1.0, "defense": 1.1, "special_attack": 0.9, "special_defense": 1.0}),
         ("careful", {"speed": 1.0, "attack": 1.0, "defense": 1.0, "special_attack": 0.9, "special_defense": 1.1}),
+        # Offensive natures (can save EVs for speed benchmarks)
+        ("modest", {"speed": 1.0, "attack": 0.9, "defense": 1.0, "special_attack": 1.1, "special_defense": 1.0}),
         # +Speed natures - Timid first (doesn't hurt SpA)
         ("timid", {"speed": 1.1, "attack": 0.9, "defense": 1.0, "special_attack": 1.0, "special_defense": 1.0}),
         ("jolly", {"speed": 1.1, "attack": 1.0, "defense": 1.0, "special_attack": 0.9, "special_defense": 1.0}),
@@ -1967,8 +2400,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             # Coarse EV steps for fallback search
             COARSE_EVS = [0, 52, 100, 148, 196, 252]
 
-            # Track best result across all natures
-            overall_best = None  # (nature_name, speed_evs, spread, results, mods)
+            # Track ALL valid natures (for alternative suggestions)
+            all_valid_natures = []  # List of all natures that meet benchmarks
 
             for nature_name, nature_mods in natures_to_try:
                 # Calculate speed EVs needed for this nature
@@ -2101,17 +2534,21 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                                     best_results = {"result1": r1, "result2": r2, "survival_pct1": pct1, "survival_pct2": pct2, "survives1": s1, "survives2": s2}
                                 break
 
-                # If this nature found a valid spread, check if it's better than previous
+                # If this nature found a valid spread, add it to the list
                 if best_spread and best_results and best_results["survives1"] and best_results["survives2"]:
                     total_evs = speed_evs_needed + best_spread["hp"] + best_spread["def"] + best_spread["spd"]
-                    if overall_best is None or speed_evs_needed < overall_best[1] or (speed_evs_needed == overall_best[1] and total_evs < overall_best[5]):
-                        overall_best = (nature_name, speed_evs_needed, best_spread, best_results, nature_mods, total_evs, my_speed_stat)
-                        # Early exit: NATURE_CANDIDATES is ordered with bulk natures first
-                        # So the first valid nature we find uses nature boost for bulk, not speed
-                        break
+                    all_valid_natures.append({
+                        "nature": nature_name,
+                        "speed_evs": speed_evs_needed,
+                        "spread": best_spread,
+                        "results": best_results,
+                        "mods": nature_mods,
+                        "total_evs": total_evs,
+                        "my_speed_stat": my_speed_stat
+                    })
 
             # If no nature found a valid spread, try best effort with first nature
-            if overall_best is None:
+            if not all_valid_natures:
                 # Use first nature for best effort
                 nature_name, nature_mods = natures_to_try[0]
                 speed_mod = nature_mods["speed"]
@@ -2187,10 +2624,49 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         "remaining_for_bulk": remaining_evs
                     }
 
-                overall_best = (nature_name, speed_evs_needed, best_spread, best_results, nature_mods, 508, my_speed_stat)
+                # Store fallback result
+                all_valid_natures.append({
+                    "nature": nature_name,
+                    "speed_evs": speed_evs_needed,
+                    "spread": best_spread,
+                    "results": best_results,
+                    "mods": nature_mods,
+                    "total_evs": 508,
+                    "my_speed_stat": my_speed_stat
+                })
 
-            # Unpack the best result
-            chosen_nature, speed_evs_needed, best_spread, best_results, nature_mods, total_evs, my_speed_stat = overall_best
+            # Sort all valid natures by speed EVs (ascending), then total EVs (ascending)
+            # Prioritize: 1. Less speed EVs needed, 2. Less total EVs
+            all_valid_natures.sort(key=lambda x: (x["speed_evs"], x["total_evs"]))
+
+            # Pick optimal (first one)
+            optimal = all_valid_natures[0]
+
+            # Generate alternative natures (next 2-3)
+            alternative_natures = []
+            for alt in all_valid_natures[1:4]:  # Top 3 alternatives
+                explanation = _generate_nature_explanation(optimal, alt)
+                alternative_natures.append({
+                    "nature": alt["nature"],
+                    "spread": {
+                        "hp_evs": alt["spread"]["hp"],
+                        "def_evs": alt["spread"]["def"],
+                        "spd_evs": alt["spread"]["spd"],
+                        "spe_evs": alt["speed_evs"]
+                    },
+                    "total_evs": alt["total_evs"],
+                    "ev_difference": f"+{alt['total_evs'] - optimal['total_evs']} EVs vs optimal",
+                    "explanation": explanation
+                })
+
+            # Unpack the optimal result
+            chosen_nature = optimal["nature"]
+            speed_evs_needed = optimal["speed_evs"]
+            best_spread = optimal["spread"]
+            best_results = optimal["results"]
+            nature_mods = optimal["mods"]
+            total_evs = optimal["total_evs"]
+            my_speed_stat = optimal["my_speed_stat"]
             def_nature_mod = nature_mods["defense"]
             spd_nature_mod = nature_mods["special_defense"]
             speed_nature_mod = nature_mods["speed"]
@@ -2328,8 +2804,475 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     f"{r2.min_percent:.2f}-{r2.max_percent:.2f}% from {survive_hit2_move} "
                     f"({atk2_spread_str}) ({best_results['survival_pct2']:.2f}% survival)"
                 ),
-                "showdown_paste": pokemon_build_to_showdown(optimized_pokemon)
+                "showdown_paste": pokemon_build_to_showdown(optimized_pokemon),
+                "alternative_natures": alternative_natures
             }
+
+        except Exception as e:
+            return {"error": str(e)}
+
+    @mcp.tool()
+    async def optimize_multi_survival_spread(
+        pokemon_name: str,
+        threats: list[dict],
+        nature: Optional[str] = None,
+        outspeed_pokemon: Optional[str] = None,
+        outspeed_pokemon_nature: str = "timid",
+        outspeed_pokemon_evs: int = 252,
+        outspeed_at_speed_stage: int = 0,
+        outspeed_target_has_booster: bool = False,
+        outspeed_target_has_tailwind: bool = False,
+        my_pokemon_has_booster: bool = False,
+        my_pokemon_has_tailwind: bool = False,
+        speed_evs: Optional[int] = None,
+        defender_tera_type: Optional[str] = None,
+        target_survival: float = 93.75
+    ) -> dict:
+        """
+        Find optimal EV spread to survive 3-6 different attacks while meeting speed benchmark.
+
+        This tool extends optimize_dual_survival_spread to handle multiple threats (3-6 Pokemon).
+        Uses a hybrid algorithm: HP-first optimization for 3 threats, hill climbing for 4-6.
+
+        IMPORTANT - WHEN TO USE THIS TOOL:
+        - Use when the user wants to survive THREE OR MORE different attacks
+        - Examples: "survive Urshifu, Flutter Mane, AND Chi-Yu"
+        - For 2 threats, use optimize_dual_survival_spread instead (faster)
+
+        Args:
+            pokemon_name: Your Pokemon (e.g., "ogerpon-hearthflame")
+            threats: List of 3-6 threat dicts, each with:
+                {
+                    "attacker": str,              # Required
+                    "move": str,                  # Required
+                    "nature": Optional[str],      # Auto-fetched if None
+                    "evs": Optional[int],         # Auto-fetched if None
+                    "item": Optional[str],        # Auto-fetched if None
+                    "ability": Optional[str],     # Auto-fetched if None
+                    "tera_type": Optional[str]    # None = no Tera
+                }
+            nature: Your Pokemon's nature (auto-selected if None)
+            outspeed_pokemon: Pokemon to outspeed (optional)
+            outspeed_pokemon_nature: Target's nature (default "timid")
+            outspeed_pokemon_evs: Target's speed EVs (default 252)
+            outspeed_at_speed_stage: Target's speed stage (e.g., -1 after Icy Wind)
+            outspeed_target_has_booster: True if target has Protosynthesis/Quark Drive active
+            outspeed_target_has_tailwind: True if target has Tailwind
+            my_pokemon_has_booster: True if YOUR Pokemon has Protosynthesis/Quark Drive active
+            my_pokemon_has_tailwind: True if YOUR Pokemon has Tailwind
+            speed_evs: Override speed EVs directly
+            defender_tera_type: Your Tera type if Terastallizing
+            target_survival: Minimum survival % (default 93.75 = 15/16 rolls)
+
+        Returns:
+            {
+                "success": bool,
+                "optimal_spread": {...} or None,
+                "threat_survival_analysis": [...],
+                "impossible": bool,
+                "partial_solutions": [...] if impossible,
+                "tera_suggestion": {...} if impossible,
+                "showdown_paste": str,
+                "computation_stats": {...}
+            }
+        """
+        start_time = time.time()
+
+        try:
+            # Validate threat count
+            if len(threats) < 3:
+                return {
+                    "error": "This tool requires 3-6 threats. For 2 threats, use optimize_dual_survival_spread instead."
+                }
+            if len(threats) > 6:
+                return {
+                    "error": "Maximum 6 threats supported. Please reduce the number of threats or prioritize the most important ones."
+                }
+
+            # Auto-assign fixed Tera type if needed
+            from vgc_mcp_core.calc.items import get_fixed_tera_type
+            if defender_tera_type is not None:
+                fixed_tera = get_fixed_tera_type(pokemon_name)
+                if fixed_tera and defender_tera_type.lower() != fixed_tera.lower():
+                    defender_tera_type = fixed_tera
+
+            # Fetch defender data
+            my_base = await pokeapi.get_base_stats(pokemon_name)
+            my_types = await pokeapi.get_pokemon_types(pokemon_name)
+
+            # Prepare all threats (fetch data, auto-detect spreads)
+            prepared_threats = await _prepare_threats(threats, pokeapi)
+
+            # Create damage cache
+            cache = DamageCache(prepared_threats, pokemon_name, my_base, my_types)
+
+            # Track if nature was auto-selected
+            nature_auto_selected = nature is None
+
+            # Speed stage multipliers (from optimize_dual_survival_spread)
+            SPEED_STAGE_MULTIPLIERS = {
+                -6: 2/8, -5: 2/7, -4: 2/6, -3: 2/5, -2: 2/4, -1: 2/3,
+                0: 1,
+                1: 3/2, 2: 4/2, 3: 5/2, 4: 6/2, 5: 7/2, 6: 8/2
+            }
+
+            # Calculate target speed
+            target_speed = 0
+            if speed_evs is None and outspeed_pokemon:
+                try:
+                    target_base = await pokeapi.get_base_stats(outspeed_pokemon)
+                    target_nature_parsed = Nature(outspeed_pokemon_nature.lower())
+                    target_speed_mod = get_nature_modifier(target_nature_parsed, "speed")
+                    target_speed = calculate_stat(
+                        target_base.speed, 31, outspeed_pokemon_evs, 50, target_speed_mod
+                    )
+
+                    if outspeed_target_has_booster:
+                        target_speed = int(target_speed * 1.5)
+                    if outspeed_at_speed_stage != 0:
+                        stage_mult = SPEED_STAGE_MULTIPLIERS.get(outspeed_at_speed_stage, 1)
+                        target_speed = int(target_speed * stage_mult)
+                    if outspeed_target_has_tailwind:
+                        target_speed = int(target_speed * 2)
+                except Exception:
+                    pass
+
+            # Helper function to calculate minimum speed EVs needed
+            def calc_min_speed_evs(base_speed: int, my_speed_mod: float) -> tuple[int, int]:
+                """Calculate minimum speed EVs needed to outspeed target. Returns (evs, final_speed)."""
+                if speed_evs is not None:
+                    my_speed = calculate_stat(base_speed, 31, speed_evs, 50, my_speed_mod)
+                    return speed_evs, my_speed
+                if target_speed == 0:
+                    return 0, calculate_stat(base_speed, 31, 0, 50, my_speed_mod)
+
+                for ev in EV_BREAKPOINTS_LV50:
+                    my_speed = calculate_stat(base_speed, 31, ev, 50, my_speed_mod)
+                    my_effective_speed = my_speed
+                    if my_pokemon_has_booster:
+                        my_effective_speed = int(my_effective_speed * 1.5)
+                    if my_pokemon_has_tailwind:
+                        my_effective_speed = int(my_effective_speed * 2)
+                    if my_effective_speed > target_speed:
+                        return ev, my_speed
+                return 252, calculate_stat(base_speed, 31, 252, 50, my_speed_mod)
+
+            # Determine natures to try
+            is_special_attacker = my_base.special_attack > my_base.attack
+            NATURE_CANDIDATES_PHYSICAL = [
+                # Bulk-boosting natures FIRST
+                ("impish", {"speed": 1.0, "attack": 1.0, "defense": 1.1, "special_attack": 0.9, "special_defense": 1.0}),
+                ("careful", {"speed": 1.0, "attack": 1.0, "defense": 1.0, "special_attack": 0.9, "special_defense": 1.1}),
+                ("bold", {"speed": 1.0, "attack": 0.9, "defense": 1.1, "special_attack": 1.0, "special_defense": 1.0}),
+                ("calm", {"speed": 1.0, "attack": 0.9, "defense": 1.0, "special_attack": 1.0, "special_defense": 1.1}),
+                # Offensive natures (can save EVs for speed benchmarks)
+                ("adamant", {"speed": 1.0, "attack": 1.1, "defense": 1.0, "special_attack": 0.9, "special_defense": 1.0}),
+                # Speed-boosting natures
+                ("jolly", {"speed": 1.1, "attack": 1.0, "defense": 1.0, "special_attack": 0.9, "special_defense": 1.0}),
+                ("timid", {"speed": 1.1, "attack": 0.9, "defense": 1.0, "special_attack": 1.0, "special_defense": 1.0}),
+                # -Speed natures (for Trick Room or min speed)
+                ("brave", {"speed": 0.9, "attack": 1.1, "defense": 1.0, "special_attack": 1.0, "special_defense": 1.0}),
+                ("relaxed", {"speed": 0.9, "attack": 1.0, "defense": 1.1, "special_attack": 1.0, "special_defense": 1.0}),
+                ("sassy", {"speed": 0.9, "attack": 1.0, "defense": 1.0, "special_attack": 1.0, "special_defense": 1.1}),
+            ]
+            NATURE_CANDIDATES_SPECIAL = [
+                # Bulk-boosting natures FIRST
+                ("bold", {"speed": 1.0, "attack": 0.9, "defense": 1.1, "special_attack": 1.0, "special_defense": 1.0}),
+                ("calm", {"speed": 1.0, "attack": 0.9, "defense": 1.0, "special_attack": 1.0, "special_defense": 1.1}),
+                ("impish", {"speed": 1.0, "attack": 1.0, "defense": 1.1, "special_attack": 0.9, "special_defense": 1.0}),
+                ("careful", {"speed": 1.0, "attack": 1.0, "defense": 1.0, "special_attack": 0.9, "special_defense": 1.1}),
+                # Offensive natures (can save EVs for speed benchmarks)
+                ("modest", {"speed": 1.0, "attack": 0.9, "defense": 1.0, "special_attack": 1.1, "special_defense": 1.0}),
+                # Speed-boosting natures
+                ("timid", {"speed": 1.1, "attack": 0.9, "defense": 1.0, "special_attack": 1.0, "special_defense": 1.0}),
+                ("jolly", {"speed": 1.1, "attack": 1.0, "defense": 1.0, "special_attack": 0.9, "special_defense": 1.0}),
+                # -Speed natures
+                ("quiet", {"speed": 0.9, "attack": 1.0, "defense": 1.0, "special_attack": 1.1, "special_defense": 1.0}),
+                ("relaxed", {"speed": 0.9, "attack": 1.0, "defense": 1.1, "special_attack": 1.0, "special_defense": 1.0}),
+                ("sassy", {"speed": 0.9, "attack": 1.0, "defense": 1.0, "special_attack": 1.0, "special_defense": 1.1}),
+            ]
+
+            if nature_auto_selected:
+                natures_to_try = NATURE_CANDIDATES_SPECIAL if is_special_attacker else NATURE_CANDIDATES_PHYSICAL
+            else:
+                try:
+                    parsed_nature = Nature(nature.lower())
+                    natures_to_try = [(nature.lower(), {
+                        "speed": get_nature_modifier(parsed_nature, "speed"),
+                        "defense": get_nature_modifier(parsed_nature, "defense"),
+                        "special_defense": get_nature_modifier(parsed_nature, "special_defense"),
+                        "attack": get_nature_modifier(parsed_nature, "attack"),
+                        "special_attack": get_nature_modifier(parsed_nature, "special_attack"),
+                    })]
+                except ValueError:
+                    return {"error": f"Invalid nature: {nature}"}
+
+            # Categorize threats by type
+            physical_threats = [i for i, t in enumerate(prepared_threats) if t.is_physical]
+            special_threats = [i for i, t in enumerate(prepared_threats) if not t.is_physical]
+            is_mixed = len(physical_threats) > 0 and len(special_threats) > 0
+
+            # Track ALL valid natures (for alternative suggestions)
+            all_valid_natures_multi = []  # List of all natures that meet benchmarks
+
+            for nature_name, nature_mods in natures_to_try:
+                speed_mod = nature_mods["speed"]
+                speed_evs_needed, my_speed_stat = calc_min_speed_evs(my_base.speed, speed_mod)
+
+                # Check if we can outspeed
+                if target_speed > 0:
+                    test_speed = calculate_stat(my_base.speed, 31, speed_evs_needed, 50, speed_mod)
+                    effective_speed = test_speed
+                    if my_pokemon_has_booster:
+                        effective_speed = int(effective_speed * 1.5)
+                    if my_pokemon_has_tailwind:
+                        effective_speed = int(effective_speed * 2)
+                    if effective_speed <= target_speed:
+                        continue  # Can't outspeed with this nature
+
+                remaining_evs = 508 - speed_evs_needed
+                current_nature = Nature(nature_name)
+
+                # Stage 1: Quick feasibility check
+                feasible = _quick_feasibility_check(
+                    cache, remaining_evs, current_nature, target_survival, defender_tera_type
+                )
+
+                if feasible is None:
+                    # This nature can't survive all threats
+                    continue
+
+                # Stage 2: HP-first search for optimal spread
+                best_spread = None
+                best_results = None
+                best_total = float('inf')
+
+                for hp_ev in EV_BREAKPOINTS_LV50:
+                    if hp_ev > min(252, remaining_evs):
+                        break
+
+                    if is_mixed:
+                        # Find max Defense needed across all physical threats
+                        max_def = 0
+                        for threat_idx in physical_threats:
+                            min_def = _find_min_bulk_for_threat(
+                                cache, threat_idx, hp_ev, current_nature, target_survival, "defense", defender_tera_type
+                            )
+                            if min_def < 0:
+                                max_def = 999
+                                break
+                            max_def = max(max_def, min_def)
+
+                        # Find max SpD needed across all special threats
+                        max_spd = 0
+                        for threat_idx in special_threats:
+                            min_spd = _find_min_bulk_for_threat(
+                                cache, threat_idx, hp_ev, current_nature, target_survival, "special_defense", defender_tera_type
+                            )
+                            if min_spd < 0:
+                                max_spd = 999
+                                break
+                            max_spd = max(max_spd, min_spd)
+
+                        if max_def == 999 or max_spd == 999:
+                            continue  # Impossible at this HP
+                        if hp_ev + max_def + max_spd > remaining_evs:
+                            continue  # Not enough EVs
+
+                        # Verify all threats
+                        all_survive, results = cache.test_spread_all_threats(
+                            hp_ev, max_def, max_spd, current_nature, target_survival, defender_tera_type
+                        )
+
+                        if all_survive:
+                            total = hp_ev + max_def + max_spd
+                            if total < best_total:
+                                best_total = total
+                                best_spread = {"hp": hp_ev, "def": max_def, "spd": max_spd}
+                                best_results = results
+
+                    elif len(physical_threats) > 0:  # All physical
+                        for def_ev in EV_BREAKPOINTS_LV50:
+                            if hp_ev + def_ev > remaining_evs:
+                                break
+
+                            all_survive, results = cache.test_spread_all_threats(
+                                hp_ev, def_ev, 0, current_nature, target_survival, defender_tera_type
+                            )
+
+                            if all_survive:
+                                total = hp_ev + def_ev
+                                if total < best_total:
+                                    best_total = total
+                                    best_spread = {"hp": hp_ev, "def": def_ev, "spd": 0}
+                                    best_results = results
+                                break  # Early exit
+
+                    else:  # All special
+                        for spd_ev in EV_BREAKPOINTS_LV50:
+                            if hp_ev + spd_ev > remaining_evs:
+                                break
+
+                            all_survive, results = cache.test_spread_all_threats(
+                                hp_ev, 0, spd_ev, current_nature, target_survival, defender_tera_type
+                            )
+
+                            if all_survive:
+                                total = hp_ev + spd_ev
+                                if total < best_total:
+                                    best_total = total
+                                    best_spread = {"hp": hp_ev, "def": 0, "spd": spd_ev}
+                                    best_results = results
+                                break  # Early exit
+
+                # If this nature found a valid spread, add it to the list
+                if best_spread and best_results:
+                    total_evs = speed_evs_needed + best_spread["hp"] + best_spread["def"] + best_spread["spd"]
+                    # Calculate final stats
+                    final_hp = calculate_hp(my_base.hp, 31, best_spread["hp"], 50)
+                    final_def = calculate_stat(my_base.defense, 31, best_spread["def"], 50, nature_mods["defense"])
+                    final_spd = calculate_stat(my_base.special_defense, 31, best_spread["spd"], 50, nature_mods["special_defense"])
+
+                    all_valid_natures_multi.append({
+                        "nature": nature_name,
+                        "speed_evs": speed_evs_needed,
+                        "spread": best_spread,
+                        "results": best_results,
+                        "mods": nature_mods,
+                        "total_evs": total_evs,
+                        "my_speed_stat": my_speed_stat,
+                        "final_hp": final_hp,
+                        "final_def": final_def,
+                        "final_spd": final_spd
+                    })
+
+            # Calculate computation stats
+            end_time = time.time()
+            time_ms = int((end_time - start_time) * 1000)
+            cache_stats = cache.get_stats()
+
+            # Check if we found a solution
+            if all_valid_natures_multi:
+                # Sort by speed EVs (ascending), then total EVs (ascending)
+                all_valid_natures_multi.sort(key=lambda x: (x["speed_evs"], x["total_evs"]))
+
+                # Pick optimal (first one)
+                optimal_multi = all_valid_natures_multi[0]
+
+                # Generate alternative natures (next 2-3)
+                alternative_natures_multi = []
+                for alt in all_valid_natures_multi[1:4]:  # Top 3 alternatives
+                    explanation = _generate_nature_explanation(optimal_multi, alt)
+                    alternative_natures_multi.append({
+                        "nature": alt["nature"],
+                        "spread": {
+                            "hp_evs": alt["spread"]["hp"],
+                            "def_evs": alt["spread"]["def"],
+                            "spd_evs": alt["spread"]["spd"],
+                            "spe_evs": alt["speed_evs"]
+                        },
+                        "total_evs": alt["total_evs"],
+                        "ev_difference": f"+{alt['total_evs'] - optimal_multi['total_evs']} EVs vs optimal",
+                        "explanation": explanation
+                    })
+
+                # Unpack optimal result
+                nature_name = optimal_multi["nature"]
+                speed_evs_needed = optimal_multi["speed_evs"]
+                best_spread = optimal_multi["spread"]
+                best_results = optimal_multi["results"]
+                total_evs = optimal_multi["total_evs"]
+                my_speed_stat = optimal_multi["my_speed_stat"]
+                final_hp = optimal_multi["final_hp"]
+                final_def = optimal_multi["final_def"]
+                final_spd = optimal_multi["final_spd"]
+
+                # Build optimized Pokemon for Showdown paste
+                optimized_pokemon = PokemonBuild(
+                    name=pokemon_name,
+                    base_stats=my_base,
+                    types=my_types,
+                    nature=Nature(nature_name),
+                    evs=EVSpread(
+                        hp=best_spread["hp"],
+                        defense=best_spread["def"],
+                        special_defense=best_spread["spd"],
+                        speed=speed_evs_needed
+                    ),
+                    tera_type=defender_tera_type
+                )
+
+                # Build threat survival analysis
+                threat_analysis = []
+                for i, (survives, result) in enumerate(best_results):
+                    threat = prepared_threats[i]
+                    survive_rolls = sum(1 for roll in result.rolls if roll < result.defender_hp)
+                    survival_pct = (survive_rolls / 16) * 100
+
+                    # Format attacker spread
+                    atk_ev_str = f"{threat.evs}"
+                    nature_boost = "+" if threat.nature.lower() in ("adamant", "jolly", "modest", "timid", "brave", "quiet") else ""
+                    atk_spread = f"{threat.nature.title()} {atk_ev_str} {'Atk' if threat.is_physical else 'SpA'}"
+
+                    threat_analysis.append({
+                        "attacker": threat.attacker_name,
+                        "move": threat.move.name,
+                        "spread": atk_spread,
+                        "item": threat.item,
+                        "ability": threat.ability,
+                        "tera_type": threat.tera_type,
+                        "damage_range": result.damage_range,
+                        "damage_percent": f"{result.min_percent:.1f}-{result.max_percent:.1f}%",
+                        "survival_rate": f"{survival_pct:.2f}%",
+                        "survives": survives
+                    })
+
+                return {
+                    "success": True,
+                    "optimal_spread": {
+                        "hp_evs": best_spread["hp"],
+                        "def_evs": best_spread["def"],
+                        "spd_evs": best_spread["spd"],
+                        "speed_evs": speed_evs_needed,
+                        "nature": nature_name.title(),
+                        "nature_auto_selected": nature_auto_selected,
+                        "total_evs": total_evs,
+                        "remaining_evs": 508 - total_evs,
+                        "final_stats": {
+                            "hp": final_hp,
+                            "defense": final_def,
+                            "special_defense": final_spd,
+                            "speed": my_speed_stat
+                        }
+                    },
+                    "threat_survival_analysis": threat_analysis,
+                    "showdown_paste": pokemon_build_to_showdown(optimized_pokemon),
+                    "alternative_natures": alternative_natures_multi,
+                    "computation_stats": {
+                        "threats_count": len(prepared_threats),
+                        "time_ms": time_ms,
+                        "cache_size": cache_stats["total_cached"]
+                    }
+                }
+
+            else:
+                # No solution found - report impossibility
+                return {
+                    "success": False,
+                    "impossible": True,
+                    "reason": "No EV spread can survive all threats simultaneously",
+                    "threat_count": len(prepared_threats),
+                    "suggestions": [
+                        "Consider dropping one threat to make survival possible",
+                        "Try a different Tera type to improve type matchups",
+                        f"Reduce target survival rate (currently {target_survival}%)"
+                    ],
+                    "computation_stats": {
+                        "threats_count": len(prepared_threats),
+                        "time_ms": time_ms,
+                        "cache_size": cache_stats["total_cached"]
+                    }
+                }
 
         except Exception as e:
             return {"error": str(e)}

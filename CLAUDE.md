@@ -382,6 +382,112 @@ Use the RIGHT tool for survival calculations:
    - Use when: "Design a spread that outspeeds X AND survives Y"
    - Handles Tera, Tailwind, Booster Energy, speed stages
 
+4. **optimize_multi_survival_spread** - Optimize spread to survive 3-6 different threats
+   - Use when: "Design a spread that survives Urshifu, Flutter Mane, AND Chi-Yu"
+   - Handles multiple attackers simultaneously (3-6 Pokemon)
+   - Auto-fetches Smogon spreads for all attackers
+   - Reports impossibility with suggestions if no spread can survive all threats
+   - **Performance:** 3 threats ~5s, 6 threats ~20s
+   - **For 2 threats only**, use `optimize_dual_survival_spread` instead (faster)
+
+### Multi-Threat Survival Optimization
+
+The `optimize_multi_survival_spread` tool extends dual survival optimization to handle 3-6 threats.
+
+**When to Use:**
+- User wants to survive THREE OR MORE different attacks
+- Examples: "survive Urshifu, Flutter Mane, AND Chi-Yu", "live through the top 4 meta threats"
+- For only 2 threats, use `optimize_dual_survival_spread` instead
+
+**Threat List Format:**
+```python
+threats = [
+    {
+        "attacker": "urshifu-rapid-strike",
+        "move": "surging-strikes",
+        # Optional overrides (auto-fetched if not specified):
+        "nature": "adamant",
+        "evs": 252,
+        "item": "choice-scarf",
+        "ability": "unseen-fist",
+        "tera_type": "dark"  # If Tera active
+    },
+    {
+        "attacker": "flutter-mane",
+        "move": "moonblast"
+        # Auto-fetches Smogon spread, item, ability
+    },
+    {
+        "attacker": "chi-yu",
+        "move": "heat-wave",
+        "tera_type": "fire"
+    }
+]
+```
+
+**Example Usage:**
+```
+User: "Design a spread for Ogerpon-Hearthflame that survives Urshifu, Flutter Mane, and Chi-Yu"
+
+LLM Response:
+```python
+result = await optimize_multi_survival_spread(
+    pokemon_name="ogerpon-hearthflame",
+    defender_tera_type="fire",
+    threats=[
+        {"attacker": "urshifu-rapid-strike", "move": "surging-strikes"},
+        {"attacker": "flutter-mane", "move": "moonblast"},
+        {"attacker": "chi-yu", "move": "heat-wave", "tera_type": "fire"}
+    ],
+    outspeed_pokemon="tornadus",  # Optional speed benchmark
+    target_survival=93.75  # Default: survive max roll only
+)
+```
+
+**Output Format (Success):**
+```
+Here's an optimized spread that survives all 3 threats:
+
+```
+Ogerpon-Hearthflame @ Hearthflame Mask
+EVs: 180 HP / 116 Def / 60 SpD / 152 Spe
+Impish Nature
+```
+
+Copy this and paste it directly into Pokemon Showdown's teambuilder.
+
+**Threat Survival Breakdown:**
+| Threat | Spread | Damage | Survival |
+|--------|--------|--------|----------|
+| Urshifu Surging Strikes | Adamant 252 Atk Choice Scarf | 67-79% | 100% |
+| Flutter Mane Moonblast | Timid 252 SpA Choice Specs | 81-96% | 93.75% |
+| Chi-Yu Heat Wave (Tera Fire) | Timid 252 SpA Choice Specs | 72-85% | 100% |
+
+**Final Stats:** 186 HP / 142 Def / 110 SpD / 143 Spe
+```
+
+**Output Format (Impossible):**
+```
+Unfortunately, no EV spread can survive all 4 threats simultaneously.
+
+**Individual Requirements:**
+- Urshifu Surging Strikes: 280 EVs (HP+Def) minimum
+- Flutter Mane Moonblast: 224 EVs (HP+SpD) minimum
+- Chi-Yu Heat Wave: 312 EVs (HP+SpD) minimum
+- Tornadus Bleakwind Storm: 196 EVs (HP+SpD) minimum
+
+**Suggestions:**
+1. Drop Chi-Yu (hardest single threat - requires 312 EVs alone)
+2. Use Tera Fairy to resist Dark/Fighting and survive all 4
+3. Best 3-threat combo: Urshifu + Flutter Mane + Tornadus (140 EVs spare)
+```
+
+**Performance Notes:**
+- 3 threats: 3-8 seconds typical
+- 4 threats: 8-15 seconds typical
+- 5-6 threats: 15-30 seconds typical
+- Uses damage caching for efficiency (7x speedup)
+
 ### Survival Rate Interpretation
 
 When users ask about survival, interpret their intent correctly:
