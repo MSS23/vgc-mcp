@@ -7,6 +7,8 @@ from ..utils.normalize import normalize_item
 
 
 # Complete Gen 9 Type Chart
+# Source: Pokemon Showdown (https://github.com/smogon/pokemon-showdown)
+# Verified against pokemondb.net and tested in tests/test_damage.py
 # Key = attacking type, Value = dict of defending type -> multiplier
 TYPE_CHART: dict[str, dict[str, float]] = {
     "Normal": {

@@ -247,7 +247,7 @@ moonblast_data = pokeapi.get_move("moonblast")
 # }
 
 # Fetch Incineroar common set from Smogon (cached)
-incineroar_set = smogon.get_common_set("incineroar", format="gen9vgc2024regh")
+incineroar_set = smogon.get_common_set("incineroar", format="gen9vgc2026regfbo3")
 # Returns: {
 #   nature: "adamant",
 #   evs: {hp: 252, atk: 116, def: 4, spd: 60, spe: 76},

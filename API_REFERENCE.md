@@ -211,7 +211,7 @@ Compare speeds between two Pokemon at specific spreads.
 Get visual speed tier chart showing Pokemon at various speed benchmarks.
 
 **Parameters:**
-- `format` (string, default: "gen9vgc2024regh"): VGC format
+- `format` (string, default: "gen9vgc2026regfbo3"): VGC format
 - `tailwind` (boolean, default: false): Show Tailwind speeds
 - `trick_room` (boolean, default: false): Show Trick Room order
 
@@ -237,7 +237,7 @@ Calculate probability of outspeeding a Pokemon based on Smogon usage data.
 - `nature` (string, required): Your Pokemon's nature
 - `speed_evs` (integer, required): Your Speed EVs
 - `opponent_name` (string, required): Opponent Pokemon
-- `format` (string, default: "gen9vgc2024regh")
+- `format` (string, default: "gen9vgc2026regfbo3")
 
 **Returns:**
 ```json
@@ -468,7 +468,7 @@ Get the most common EV spread, item, and moves for a Pokemon.
 
 **Parameters:**
 - `pokemon_name` (string, required)
-- `format` (string, default: "gen9vgc2024regh")
+- `format` (string, default: "gen9vgc2026regfbo3")
 
 **Returns:**
 ```json
