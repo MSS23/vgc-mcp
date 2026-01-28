@@ -52,10 +52,10 @@ With MCP:
 Claude calls tools:
   1. get_pokemon_stats("flutter-mane") → Stats, types, abilities
   2. get_common_sets("incineroar") → Smogon spread (EVs, nature, item)
-  3. calculate_damage_output(...) → 85-100 damage (96.5%-113.6%)
+  3. calculate_damage_output(...) → 85-102 damage (42.1%-50.5%)
 
-Claude: "Your Flutter Mane with Moonblast deals 96.5-113.6% to a standard
-Adamant 252 HP Incineroar, giving you a 75% chance to OHKO.
+Claude: "Your Flutter Mane with Moonblast deals 42.1-50.5% to a standard
+Adamant 252 HP Incineroar. Does NOT KO - Incineroar survives with ~50% HP.
 (Neutral matchup: Fairy is resisted by Fire but super effective vs Dark)"
 ```
 
@@ -143,8 +143,8 @@ MCP is the **protocol** (set of rules) that makes this communication possible.
                        ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                         User                                │
-│  "Your Flutter Mane with Moonblast deals 96.5-113.6%       │
-│   to standard Incineroar, giving you a 75% OHKO chance."   │
+│  "Your Flutter Mane with Moonblast deals 42.1-50.5%        │
+│   to standard Incineroar. Incin survives with ~50% HP."    │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -297,11 +297,12 @@ result = calculate_damage(
 
 # Result: {
 #   damage_min: 85,
-#   damage_max: 100,
-#   damage_percent_min: 96.5,
-#   damage_percent_max: 113.6,
-#   ohko_chance: 75.0,  # 12 out of 16 damage rolls OHKO
-#   ko_type: "75% OHKO"
+#   damage_max: 102,
+#   damage_percent_min: 42.1,
+#   damage_percent_max: 50.5,
+#   ko_chance: "1.17% chance to 2HKO",
+#   is_guaranteed_ohko: False,
+#   is_possible_ohko: False
 # }
 ```
 
@@ -326,11 +327,11 @@ The server sends back a JSON-RPC response:
     "base_power": 95,
     "damage": {
       "min": 85,
-      "max": 100,
-      "range": "85-100"
+      "max": 102,
+      "range": "85-102"
     },
-    "defender_hp": 181,
-    "ko_chance": 75.0,
+    "defender_hp": 202,
+    "ko_chance": "1.17% chance to 2HKO",
     "type_effectiveness": 1.0,
     "condensed_summary": {
       "attacker_line": "Flutter Mane (Timid 4/0/0/252/0/252) @ Choice Specs [Protosynthesis]",
@@ -345,9 +346,9 @@ The server sends back a JSON-RPC response:
 
 Claude Desktop receives the JSON data and Claude AI formats it naturally:
 
-> "Your **Timid 252 SpA Flutter Mane** with **Moonblast** deals **96.5-113.6%** to a standard **Adamant 252 HP / 60 SpD Incineroar @ Assault Vest**.
+> "Your **Timid 252 SpA Flutter Mane** with **Moonblast** deals **42.1-50.5%** to a standard **Adamant 252 HP / 60 SpD Incineroar @ Assault Vest**.
 >
-> **Result**: **75% chance to OHKO** (12 out of 16 damage rolls will KO)
+> **Result**: Not a KO - Incineroar survives with ~50-58% HP remaining (1.17% chance to 2HKO after chip damage)
 >
 > Notes:
 > - STAB boost applied (Moonblast is Fairy-type, Flutter Mane is Fairy-type)
