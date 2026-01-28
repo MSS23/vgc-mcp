@@ -314,23 +314,29 @@ The server sends back a JSON-RPC response:
   "jsonrpc": "2.0",
   "id": 1,
   "result": {
-    "attacker_name": "Flutter Mane",
-    "defender_name": "Incineroar",
-    "move_name": "Moonblast",
-    "damage_min": 85,
-    "damage_max": 100,
-    "damage_percent_min": 96.5,
-    "damage_percent_max": 113.6,
-    "ohko_chance": 75.0,
-    "ko_type": "75% OHKO",
-    "attacker_spread": "Timid 4 HP / 0 Atk / 0 Def / 252 SpA / 0 SpD / 252 Spe",
-    "defender_spread": "Adamant 252 HP / 116 Atk / 4 Def / 0 SpA / 60 SpD / 76 Spe",
-    "defender_item": "Assault Vest",
-    "notes": [
-      "STAB (Same Type Attack Bonus) applied: 1.5x",
-      "Super effective: 1.0x (neutral damage)",
-      "Assault Vest boosts Special Defense by 1.5x"
-    ]
+    "attacker": "flutter-mane",
+    "attacker_nature": "Timid",
+    "attacker_ability": "protosynthesis",
+    "attacker_item": "choice-specs",
+    "defender": "incineroar",
+    "defender_ability": "intimidate",
+    "defender_item": "assault-vest",
+    "move": "moonblast",
+    "move_type": "fairy",
+    "base_power": 95,
+    "damage": {
+      "min": 85,
+      "max": 100,
+      "range": "85-100"
+    },
+    "defender_hp": 181,
+    "ko_chance": 75.0,
+    "type_effectiveness": 1.0,
+    "condensed_summary": {
+      "attacker_line": "Flutter Mane (Timid 4/0/0/252/0/252) @ Choice Specs [Protosynthesis]",
+      "defender_line": "Incineroar (Adamant 252/116/4/0/60/76) @ Assault Vest [Intimidate]",
+      "move_line": "Moonblast (95 BP, Fairy, Special)"
+    }
   }
 }
 ```
@@ -345,6 +351,7 @@ Claude Desktop receives the JSON data and Claude AI formats it naturally:
 >
 > Notes:
 > - STAB boost applied (Moonblast is Fairy-type, Flutter Mane is Fairy-type)
+> - Choice Specs boosts Flutter Mane's Special Attack by 1.5x
 > - Assault Vest boosts Incineroar's Special Defense by 1.5x
 > - Neutral type matchup (Fairy vs Fire/Dark)"
 
