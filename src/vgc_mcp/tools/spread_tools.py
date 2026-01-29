@@ -1146,12 +1146,39 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
 
             # Determine if physical or special attacker
             is_physical = base_stats.attack > base_stats.special_attack
+            is_special = base_stats.special_attack > base_stats.attack
             offensive_stat = "Attack" if is_physical else "Sp. Atk"
+
+            # Use intelligent nature selection for offensive role
+            nature_name = "Jolly" if is_physical else "Timid"  # Default fallback
+            nature_reasoning = None
+            
+            if role == "offensive":
+                from vgc_mcp_core.calc.nature_optimization import find_optimal_nature_for_benchmarks
+                
+                benchmarks = {
+                    "speed_target": speed_target,
+                    "prioritize": "offense",
+                    "offensive_evs": 252,
+                    "speed_evs": 252
+                }
+                
+                nature_result = find_optimal_nature_for_benchmarks(
+                    base_stats=base_stats,
+                    benchmarks=benchmarks,
+                    is_physical=is_physical,
+                    is_special=is_special,
+                    role="offensive"
+                )
+                
+                if nature_result:
+                    nature_name = nature_result.best_nature.value.title()
+                    nature_reasoning = nature_result.reasoning
 
             spreads = {
                 "offensive": {
                     "description": f"Max {offensive_stat} and Speed for maximum damage output",
-                    "nature": "Jolly" if is_physical else "Timid",
+                    "nature": nature_name,
                     "evs": {
                         "hp": 0,
                         "attack": 252 if is_physical else 0,
@@ -1236,7 +1263,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             )
             showdown_paste = pokemon_build_to_showdown(suggested_pokemon)
 
-            return {
+            result = {
                 "pokemon": pokemon_name,
                 "role": role,
                 "suggestion": spread,
@@ -1250,6 +1277,11 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 },
                 "showdown_paste": showdown_paste
             }
+            
+            if nature_reasoning:
+                result["nature_selection_reasoning"] = nature_reasoning
+            
+            return result
 
         except Exception as e:
             return {"error": str(e)}
@@ -1417,7 +1449,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
     @mcp.tool()
     async def design_spread_with_benchmarks(
         pokemon_name: str,
-        nature: str,
+        nature: Optional[str] = None,
         outspeed_pokemon: Optional[str] = None,
         outspeed_pokemon_nature: str = "jolly",
         outspeed_pokemon_evs: int = 252,
@@ -1460,7 +1492,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
 
         Args:
             pokemon_name: Your Pokemon
-            nature: Your Pokemon's nature (e.g., "jolly", "adamant")
+            nature: Your Pokemon's nature (optional - auto-selects optimal if not provided)
             outspeed_pokemon: Pokemon to outspeed
             outspeed_pokemon_nature: Target's nature (default: jolly)
             outspeed_pokemon_evs: Target's speed EVs (default: 252)
@@ -1498,6 +1530,61 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             # Fetch our Pokemon's data
             my_base = await pokeapi.get_base_stats(pokemon_name)
             my_types = await pokeapi.get_pokemon_types(pokemon_name)
+            
+            # Auto-select nature if not provided
+            nature_reasoning = None
+            if nature is None:
+                from vgc_mcp_core.calc.nature_optimization import find_optimal_nature_for_benchmarks
+                
+                # Determine attack type and role
+                is_physical = offensive_evs > 0 and my_base.attack > my_base.special_attack
+                is_special = offensive_evs > 0 and my_base.special_attack > my_base.attack
+                role = "offensive" if prioritize == "offense" else "bulk"
+                
+                # Calculate speed target first (needed for benchmarks)
+                target_speed = 0
+                if outspeed_pokemon:
+                    try:
+                        target_base = await pokeapi.get_base_stats(outspeed_pokemon)
+                        target_nature = Nature(outspeed_pokemon_nature.lower())
+                        target_speed_mod = get_nature_modifier(target_nature, "speed")
+                        target_speed = calculate_stat(
+                            target_base.speed, 31, outspeed_pokemon_evs, 50, target_speed_mod
+                        )
+                        if outspeed_target_has_booster:
+                            target_speed = int(target_speed * 1.5)
+                        if outspeed_at_speed_stage != 0:
+                            stage_mult = SPEED_STAGE_MULTIPLIERS.get(outspeed_at_speed_stage, 1)
+                            target_speed = int(target_speed * stage_mult)
+                        if outspeed_target_has_tailwind:
+                            target_speed = int(target_speed * 2)
+                    except Exception:
+                        pass
+                
+                # Build benchmarks dict
+                benchmarks = {
+                    "speed_target": target_speed if outspeed_pokemon else None,
+                    "prioritize": prioritize,
+                    "offensive_evs": offensive_evs if prioritize == "offense" else None,
+                }
+                
+                # Find optimal nature
+                nature_result = find_optimal_nature_for_benchmarks(
+                    base_stats=my_base,
+                    benchmarks=benchmarks,
+                    is_physical=is_physical,
+                    is_special=is_special,
+                    role=role
+                )
+                
+                if nature_result:
+                    nature = nature_result.best_nature.value
+                    nature_reasoning = nature_result.reasoning
+                else:
+                    # Fallback to neutral if optimization fails
+                    nature = "serious"
+                    nature_reasoning = "Could not optimize nature, using neutral nature"
+            
             parsed_nature = Nature(nature.lower())
 
             results = {
@@ -1505,6 +1592,9 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "nature": nature,
                 "benchmarks": {}
             }
+            
+            if nature_reasoning:
+                results["nature_selection_reasoning"] = nature_reasoning
 
             # 1. Calculate speed benchmark
             speed_evs_needed = 0

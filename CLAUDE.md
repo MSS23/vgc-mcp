@@ -488,6 +488,65 @@ Unfortunately, no EV spread can survive all 4 threats simultaneously.
 - 5-6 threats: 15-30 seconds typical
 - Uses damage caching for efficiency (7x speedup)
 
+## Intelligent Nature Selection
+
+### Automatic Nature Optimization
+
+When calling spread tools with benchmark requirements, you can omit the `nature`
+parameter to enable intelligent auto-selection:
+
+```python
+# Auto-selects optimal nature (Adamant for this case)
+result = await design_spread_with_benchmarks(
+    pokemon_name="entei",
+    outspeed_pokemon="chien-pao",
+    prioritize="offense",
+    offensive_evs=252
+)
+# Result: Adamant nature, 132 Speed EVs, 132 Attack EVs → 167 Attack
+```
+
+The optimizer tests all relevant natures and chooses the one that:
+
+1. **Meets all benchmarks** (speed targets, survival requirements)
+2. **Maximizes total stats** in key areas (Attack/SpA + Speed + HP)
+3. **Minimizes wasted EVs** from nature penalties
+
+**Example - Entei Optimization:**
+
+**Goal:** 137 Speed (outspeed -1 Chien-Pao), maximize Attack
+
+**Bad (Timid nature):**
+- Timid (+Spe/-Atk): 36 Speed EVs, 228 Attack EVs → 147 Attack
+- Suffers -10% Attack penalty, wastes 20 stat points
+
+**Optimal (Adamant nature):**
+- Adamant (+Atk/-SpA): 132 Speed EVs, 132 Attack EVs → 167 Attack
+- Gains +10% Attack boost, maximizes Attack while hitting speed benchmark
+
+**Result:** 20 stat points saved by choosing the right nature!
+
+### When to Specify Nature Explicitly
+
+Specify `nature` parameter when:
+
+- **User has strong preference** for a specific nature
+- **Building for specific format rules** (e.g., Nature Clause in some formats)
+- **Testing "what-if" scenarios** with different natures
+- **Trick Room teams** (user wants minimum speed, not maximum)
+
+### Tools with Auto-Selection
+
+These tools support intelligent nature selection when `nature=None`:
+
+1. **design_spread_with_benchmarks** - Speed + survival benchmarks
+2. **suggest_spread** - Role-based spread suggestions (offensive role)
+3. **optimize_dual_survival_spread** - Dual survival optimization
+4. **optimize_multi_survival_spread** - Multi-threat survival (3-6 threats)
+
+All tools return `nature_selection_reasoning` field when nature is auto-selected,
+explaining why the chosen nature is optimal.
+
 ### Survival Rate Interpretation
 
 When users ask about survival, interpret their intent correctly:
