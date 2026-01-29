@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pydantic import BaseModel
 
 from ..models.pokemon import Nature, BaseStats, get_nature_modifier
-from ..calc.stats import calculate_stat, calculate_speed, find_speed_evs
+from .stats import calculate_stat, calculate_speed, find_speed_evs
 from ..config import EV_BREAKPOINTS_LV50
 
 
@@ -291,7 +291,7 @@ def find_optimal_nature_for_benchmarks(
     Returns:
         NatureOptimizationResult with best nature, EVs, and reasoning, or None if impossible
     """
-    from ..calc.stats import calculate_all_stats
+    from .stats import calculate_all_stats
     from ..models.pokemon import PokemonBuild, EVSpread
 
     # Get relevant natures to test
