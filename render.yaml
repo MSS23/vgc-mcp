@@ -4,11 +4,11 @@
 services:
   - type: web
     name: vgc-mcp
-    runtime: docker
+    runtime: python
     plan: free
-    dockerfilePath: ./Dockerfile
-    dockerContext: .
+    buildCommand: pip install -e ".[remote]"
+    startCommand: vgc-mcp-http
     healthCheckPath: /health
     envVars:
-      - key: PORT
-        value: "8000"
+      - key: PYTHON_VERSION
+        value: "3.12"
