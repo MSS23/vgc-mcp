@@ -59,6 +59,8 @@ from .tools.meta_threat_tools import register_meta_threat_tools
 from .tools.workflow_tools import register_workflow_tools
 from .tools.item_tools import register_item_tools
 from .tools.chip_damage_tools import register_chip_damage_tools
+from .tools.item_optimization_tools import register_item_optimization_tools
+from .tools.multicalc_tools import register_multicalc_tools
 from .tools.preset_tools import register_preset_tools
 from .tools.sample_team_tools import register_sample_team_tools
 from .tools.pokepaste_tools import register_pokepaste_tools
@@ -259,6 +261,10 @@ register_workflow_tools(mcp, pokeapi, smogon, team_manager, analyzer)
 # Phase 9 tools - Advanced battle mechanics
 register_item_tools(mcp, pokeapi)
 register_chip_damage_tools(mcp, pokeapi)
+
+# Life Orb Optimization & Multicalc tools
+register_item_optimization_tools(mcp, pokeapi, smogon)
+register_multicalc_tools(mcp, pokeapi, smogon)
 
 # Phase 10 tools - Quality of life improvements
 register_preset_tools(mcp, smogon)
