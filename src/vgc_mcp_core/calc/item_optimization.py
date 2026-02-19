@@ -90,7 +90,14 @@ def compare_items_damage(
         recoil = 0
         recoil_percent = 0.0
         if item == "life-orb":
-            max_hp = attacker.base_stats.hp  # Simplified - should use calculated HP
+            from ..calc.stats import calculate_hp
+            # Use calculated HP, not base HP
+            max_hp = calculate_hp(
+                attacker.base_stats.hp,
+                attacker.ivs.hp,
+                attacker.evs.hp,
+                attacker.level
+            )
             life_orb_data = calculate_life_orb_effect(damage_result.max_damage, max_hp)
             recoil = life_orb_data["recoil"]
             recoil_percent = life_orb_data["recoil_percent"]
@@ -102,7 +109,13 @@ def compare_items_damage(
 
         # Calculate sustainability (how many attacks before fainting)
         if recoil > 0:
-            max_hp_calc = attacker.base_stats.hp  # Should use calculated HP
+            from ..calc.stats import calculate_hp
+            max_hp_calc = calculate_hp(
+                attacker.base_stats.hp,
+                attacker.ivs.hp,
+                attacker.evs.hp,
+                attacker.level
+            )
             turns_sustainable = (max_hp_calc // recoil) if recoil > 0 else 999
         else:
             turns_sustainable = 999
@@ -287,8 +300,9 @@ def calculate_ev_tradeoff(
             final_stats.get("hp", 0) // 2
         )
 
-        # Generate Showdown paste (simplified)
-        showdown_paste = f"{pokemon.name}\n@{item}\nEVs: {evs['attack']} Atk / {evs['speed']} Spe"
+        # Generate Showdown paste using proper formatter
+        from ..formats.showdown import pokemon_build_to_showdown
+        showdown_paste = pokemon_build_to_showdown(test_pokemon)
 
         results.append(EVTradeoffResult(
             item=item,

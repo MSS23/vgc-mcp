@@ -129,6 +129,7 @@ def register_multicalc_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
             )
 
             # Calculate damage against each defender
+            # Note: Could parallelize with asyncio.gather for better performance with many defenders
             matchups = []
             guaranteed_ohkos = 0
             possible_ohkos = 0

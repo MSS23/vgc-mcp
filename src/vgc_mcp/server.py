@@ -82,6 +82,7 @@ from .tools.build_checker_tools import register_build_checker_tools
 from .tools.wizard_tools import register_wizard_tools
 from .tools.type_tools import register_type_tools
 from .tools.onboarding_tools import register_onboarding_tools
+from .tools.game_plan_tools import register_game_plan_tools
 
 # Note: MCP-UI is only enabled in vgc-mcp-lite for smaller footprint
 # Full server focuses on tool completeness over visual components
@@ -302,6 +303,9 @@ register_type_tools(mcp, pokeapi)
 
 # Discoverability and onboarding tools (Part 0)
 register_onboarding_tools(mcp)
+
+# Game plan tools - opponent-aware strategy generation
+register_game_plan_tools(mcp, pokeapi, team_manager, smogon)
 
 
 def main():

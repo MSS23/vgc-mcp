@@ -177,6 +177,52 @@ class TestEnteiBenchmark:
         assert result.evs["attack"] > 0, "Should invest in Attack EVs"
         assert result.final_stats["attack"] >= 167, "Should achieve high Attack"
 
+    def test_entei_exact_ev_comparison(self):
+        """
+        Critical: Verify Adamant saves 20 stat points vs Timid.
+
+        Original feedback example:
+        - BAD: Timid 36 Spe / 228 Atk = 147 Attack (wastes 96 Atk EVs)
+        - GOOD: Adamant 132 Spe / 132 Atk = 167 Attack (saves 96 EVs)
+        """
+        from vgc_mcp_core.calc.stats import calculate_stat, calculate_speed
+        from vgc_mcp_core.models.pokemon import Nature
+        
+        entei_base = BaseStats(hp=115, attack=115, defense=85,
+                               special_attack=90, special_defense=75, speed=100)
+
+        # Test 1: Verify Timid gives lower Attack despite more Atk EVs
+        timid_attack = calculate_stat(
+            base=115, ev=228, iv=31, level=50,
+            nature_mod=0.9  # Timid penalty
+        )
+        assert timid_attack == 147, f"Timid with 228 Atk EVs should give 147 Attack, got {timid_attack}"
+
+        # Test 2: Verify Adamant gives higher Attack with FEWER Atk EVs
+        adamant_attack = calculate_stat(
+            base=115, ev=132, iv=31, level=50,
+            nature_mod=1.1  # Adamant boost
+        )
+        assert adamant_attack == 167, f"Adamant with 132 Atk EVs should give 167 Attack, got {adamant_attack}"
+
+        # Test 3: Verify 20 stat point difference
+        assert adamant_attack - timid_attack == 20, "Should save 20 stat points"
+
+        # Test 4: Verify both hit 137 Speed
+        timid_speed = calculate_speed(base_speed=100, ev=36, iv=31, level=50, nature=Nature.TIMID)
+        adamant_speed = calculate_speed(base_speed=100, ev=132, iv=31, level=50, nature=Nature.ADAMANT)
+        assert timid_speed >= 137 and adamant_speed >= 137, "Both should hit 137 Speed"
+
+        # Test 5: Verify optimizer chooses Adamant
+        result = find_optimal_nature_for_benchmarks(
+            base_stats=entei_base,
+            benchmarks={"speed_target": 137, "prioritize": "offense", "offensive_evs": 252},
+            is_physical=True, is_special=False, role="offensive"
+        )
+        assert result.best_nature == Nature.ADAMANT
+        assert result.final_stats["attack"] >= 167
+        assert result.evs["speed"] >= 132  # Should use ~132 Speed EVs with Adamant
+
 
 class TestHighBaseSpeed:
     """Test Pokemon with high base Speed prefer Attack boost."""

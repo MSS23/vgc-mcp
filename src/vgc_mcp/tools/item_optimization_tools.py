@@ -126,9 +126,22 @@ def register_item_optimization_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogo
             # Check for Sheer Force synergy
             attacker_key = pokemon_name.lower().replace(" ", "-")
             has_sheer_force = False
+            attacker_ability = None
+            
+            # Get ability from Smogon spread if available
+            if attacker_spread:
+                attacker_ability = attacker_spread.get("ability")
+            
+            # Check META_SYNERGIES as fallback
             if attacker_key in META_SYNERGIES:
-                _, ability = META_SYNERGIES[attacker_key]
-                if ability.lower() == "sheer-force":
+                _, meta_ability = META_SYNERGIES[attacker_key]
+                if not attacker_ability:
+                    attacker_ability = meta_ability
+            
+            # Normalize ability name for comparison
+            if attacker_ability:
+                ability_normalized = attacker_ability.lower().replace(" ", "-").replace("_", "-")
+                if ability_normalized == "sheer-force":
                     has_sheer_force = True
 
             attacker = PokemonBuild(
@@ -143,7 +156,8 @@ def register_item_optimization_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogo
                     special_attack=attacker_evs_dict.get("special_attack", 0),
                     special_defense=attacker_evs_dict.get("special_defense", 0),
                     speed=attacker_evs_dict.get("speed", 0)
-                )
+                ),
+                ability=attacker_ability
             )
 
             # Build defender
@@ -412,10 +426,18 @@ def register_item_optimization_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogo
                     "evs": result.evs,
                     "evs_saved": result.evs_saved,
                     "total_useful_stats": result.total_useful_stats,
-                    "rank": result.rank
+                    "rank": result.rank,
+                    "showdown_paste": result.showdown_paste,
+                    "final_stats": result.final_stats
                 })
 
             # Get best item
+            if not tradeoff_results:
+                return {
+                    "error": "No valid tradeoff results generated",
+                    "pokemon": pokemon_name
+                }
+            
             best_result = tradeoff_results[0]
 
             return {
@@ -425,7 +447,8 @@ def register_item_optimization_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogo
                 "recommendation": {
                     "best_item": best_result.item,
                     "evs_saved": best_result.evs_saved,
-                    "showdown_paste": best_result.showdown_paste
+                    "showdown_paste": best_result.showdown_paste,
+                    "final_stats": best_result.final_stats
                 }
             }
 

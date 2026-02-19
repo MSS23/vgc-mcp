@@ -125,6 +125,35 @@ class TestLifeOrbSustainability:
         # Recovery should increase sustainability
         assert analysis_with_recovery.attacks_before_faint >= analysis_no_recovery.attacks_before_faint
 
+    def test_grassy_terrain_recovery(self):
+        """Test Grassy Terrain recovery affects Life Orb sustainability."""
+        pokemon = PokemonBuild(
+            name="rillaboom",
+            base_stats=BaseStats(hp=100, attack=125, defense=90,
+                             special_attack=60, special_defense=70, speed=85),
+            nature=Nature.ADAMANT,
+            evs=EVSpread()
+        )
+
+        # Without Grassy Terrain
+        no_terrain = analyze_life_orb_sustainability(
+            pokemon, hp_evs=0, recovery_sources=[], moves_per_game=4
+        )
+
+        # With Grassy Terrain (1/16 max HP per turn)
+        with_terrain = analyze_life_orb_sustainability(
+            pokemon, hp_evs=0, recovery_sources=["grassy-terrain"], moves_per_game=4
+        )
+
+        # Grassy Terrain heals 1/16 (6.25%), Life Orb recoil is 1/10 (10%)
+        # Net loss: 3.75% per attack instead of 10%
+        # Should significantly increase sustainability
+        assert with_terrain.attacks_before_faint > no_terrain.attacks_before_faint
+        # Check HP after 4 attacks
+        hp_after_4_no_terrain = no_terrain.net_hp_after_attacks.get(4, 0)
+        hp_after_4_with_terrain = with_terrain.net_hp_after_attacks.get(4, 0)
+        assert hp_after_4_with_terrain > hp_after_4_no_terrain
+
 
 class TestEVTradeoff:
     """Test EV-item trade-off analysis."""
@@ -146,6 +175,50 @@ class TestEVTradeoff:
         assert len(results) == 2
         # Results should be sorted by total useful stats
         assert results[0].total_useful_stats >= results[1].total_useful_stats
+
+    def test_landorus_sheer_force_life_orb_best(self):
+        """
+        Verify Landorus + Sheer Force makes Life Orb the best item.
+        Sheer Force negates recoil, giving 1.3x boost with zero downside.
+        """
+        attacker = PokemonBuild(
+            name="landorus-therian",
+            base_stats=BaseStats(hp=89, attack=145, defense=90,
+                             special_attack=105, special_defense=80, speed=91),
+            nature=Nature.ADAMANT,
+            evs=EVSpread(attack=252, speed=252),
+            ability="sheer-force"
+        )
+
+        defender = PokemonBuild(
+            name="rillaboom",
+            base_stats=BaseStats(hp=100, attack=125, defense=90,
+                             special_attack=60, special_defense=70, speed=85),
+            nature=Nature.ADAMANT,
+            evs=EVSpread()
+        )
+
+        move = Move(
+            name="earth-power",  # Has secondary effect, triggers Sheer Force
+            base_power=90,
+            category=MoveCategory.SPECIAL,
+            type="ground"
+        )
+
+        items = ["life-orb", "choice-band", "expert-belt"]
+        results = compare_items_damage(
+            attacker, defender, move, items,
+            modifiers=DamageModifiers(is_doubles=True),
+            has_sheer_force=True
+        )
+
+        life_orb_result = next(r for r in results if r.item == "life-orb")
+
+        # Verify Life Orb has no recoil with Sheer Force
+        assert life_orb_result.recoil_per_attack == 0
+        assert "Sheer Force" in life_orb_result.recommendation
+        # Life Orb should be ranked #1 (best recommendation)
+        assert "BEST" in life_orb_result.recommendation or "best" in life_orb_result.recommendation.lower()
 
 
 if __name__ == "__main__":
