@@ -361,6 +361,70 @@ Copy this and paste it directly into Pokemon Showdown's teambuilder.
 - You have 56 EVs left over to invest in bulk or other stats
 ```
 
+## Bulk Offensive Damage Calculations
+
+### When to Use `calculate_bulk_offensive_calcs`
+
+Use this tool when the user wants damage calcs for **one attacker vs multiple defenders with multiple moves and/or scenarios**. This replaces running dozens of individual `calculate_damage_output` calls.
+
+**Examples:**
+- "Show me Urshifu's damage against the top 20 meta threats"
+- "Calculate all 4 moves against these defenders in rain and sun"
+- "How does my Flutter Mane do against the meta with and without Tera?"
+
+**Parameters:**
+```python
+await calculate_bulk_offensive_calcs(
+    attacker_name="urshifu-rapid-strike",
+    move_names=["surging-strikes", "close-combat", "aqua-jet", "u-turn"],
+    defender_names=["incineroar", "rillaboom", "flutter-mane", ...],
+    scenarios=["normal", "rain", "rain_tera", "intimidate", "helping_hand"],
+    attacker_item="choice-scarf",         # Optional, auto-fetched
+    attacker_nature="adamant",            # Optional, auto-fetched
+    attacker_evs="4/252/0/0/0/252",       # HP/Atk/Def/SpA/SpD/Spe
+    attacker_tera_type="water",           # Required for tera scenarios
+)
+```
+
+**Available Scenarios:**
+- `"normal"` — No modifiers (default)
+- `"tera"` — Attacker Terastallized
+- `"rain"` / `"sun"` — Weather active
+- `"rain_tera"` / `"sun_tera"` — Weather + Tera combined
+- `"intimidate"` — Attacker at -1 Atk (skipped for always-crit moves)
+- `"helping_hand"` — Helping Hand boost active
+
+**Output:** Returns markdown tables per scenario, Showdown-style calc strings, OHKO/2HKO counts, and structured results grouped by defender.
+
+### Exporting Results: `export_damage_report`
+
+Generates a color-coded Excel (.xlsx) or PDF file from bulk damage calcs.
+
+```python
+await export_damage_report(
+    attacker_name="urshifu-rapid-strike",
+    move_names=["surging-strikes", "close-combat"],
+    defender_names=["incineroar", "rillaboom", "flutter-mane"],
+    format="excel",  # or "pdf"
+    scenarios=["normal", "rain", "intimidate"],
+)
+```
+
+**Color coding:** Green = OHKO, Yellow = 2HKO, Orange = 3HKO, Red = 4HKO+
+
+### CRITICAL: Always Offer Export After Bulk Calcs
+
+**After completing bulk damage calculations, ALWAYS offer the user:**
+
+> "Would you like me to export these results as an Excel spreadsheet or PDF?"
+
+This applies whenever you:
+- Run `calculate_bulk_offensive_calcs`
+- Run multiple individual damage calcs that form a bulk analysis
+- Complete a comprehensive offensive coverage review
+
+The export tool generates professional color-coded reports the user can share or reference later.
+
 ## Tool Selection Guide
 
 ### For Survival Questions ("Can X survive Y?", "What EVs to survive?")
