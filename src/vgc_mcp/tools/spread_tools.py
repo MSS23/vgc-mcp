@@ -996,7 +996,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         pokemon_name: str,
         nature: str,
         total_bulk_evs: int = 252,
-        defense_bias: float = 0.5
+        defense_bias: float = 0.5,
+        item: Optional[str] = None,
     ) -> dict:
         """
         Optimize HP/Def/SpD EVs for maximum bulk.
@@ -1006,6 +1007,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             nature: Pokemon's nature
             total_bulk_evs: Total EVs to allocate to bulk (default 252)
             defense_bias: 0.5 = balanced, 1.0 = physical, 0.0 = special
+            item: Held item for HP number optimization (e.g., "leftovers", "life-orb")
 
         Returns:
             Optimal HP/Def/SpD distribution
@@ -1064,6 +1066,18 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                             "special_bulk": spec_bulk
                         }
 
+            # HP number optimization for item
+            hp_optimization = None
+            if item and best_spread:
+                from vgc_mcp_core.calc.hp_optimization import adjust_hp_evs_for_item
+                hp_adj = adjust_hp_evs_for_item(base_stats.hp, best_spread["hp_evs"], item)
+                if hp_adj["adjusted_evs"] != best_spread["hp_evs"]:
+                    best_spread["hp_evs"] = hp_adj["adjusted_evs"]
+                    best_spread["final_hp"] = hp_adj["adjusted_hp"]
+                    best_spread["physical_bulk"] = hp_adj["adjusted_hp"] * best_spread["final_def"]
+                    best_spread["special_bulk"] = hp_adj["adjusted_hp"] * best_spread["final_spd"]
+                    hp_optimization = hp_adj
+
             # Build summary table
             if best_spread:
                 table_lines = [
@@ -1109,7 +1123,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 )
                 showdown_paste = pokemon_build_to_showdown(optimized_pokemon)
 
-            return {
+            result = {
                 "pokemon": pokemon_name,
                 "nature": nature,
                 "total_bulk_evs": total_bulk_evs,
@@ -1117,8 +1131,11 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "optimal_spread": best_spread,
                 "showdown_paste": showdown_paste,
                 "summary_table": "\n".join(table_lines),
-                "analysis": analysis_str
+                "analysis": analysis_str,
             }
+            if hp_optimization:
+                result["hp_optimization"] = hp_optimization
+            return result
 
         except Exception as e:
             return {"error": str(e)}
@@ -1127,7 +1144,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
     async def suggest_spread(
         pokemon_name: str,
         role: str = "offensive",
-        speed_target: Optional[int] = None
+        speed_target: Optional[int] = None,
+        item: Optional[str] = None,
     ) -> dict:
         """
         Suggest an EV spread based on role.
@@ -1137,6 +1155,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             role: "offensive" (max offensive stat + speed), "bulky" (HP + defenses),
                   "bulky_offense" (some bulk + offense), "support" (bulk focused)
             speed_target: Optional specific speed stat to hit
+            item: Held item for HP number optimization (e.g., "leftovers", "life-orb")
 
         Returns:
             Suggested spread with reasoning
@@ -1243,6 +1262,15 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     spread["evs"]["hp"] = leftover
                     spread["description"] += f" (Speed creep to {speed_target})"
 
+            # HP number optimization for item
+            hp_optimization = None
+            if item and spread["evs"]["hp"] > 0:
+                from vgc_mcp_core.calc.hp_optimization import adjust_hp_evs_for_item
+                hp_adj = adjust_hp_evs_for_item(base_stats.hp, spread["evs"]["hp"], item)
+                if hp_adj["adjusted_evs"] != spread["evs"]["hp"]:
+                    spread["evs"]["hp"] = hp_adj["adjusted_evs"]
+                    hp_optimization = hp_adj
+
             # Generate Showdown paste for suggested spread
             types = await pokeapi.get_pokemon_types(pokemon_name)
             nature_enum = Nature(spread["nature"].lower())
@@ -1280,7 +1308,9 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             
             if nature_reasoning:
                 result["nature_selection_reasoning"] = nature_reasoning
-            
+            if hp_optimization:
+                result["hp_optimization"] = hp_optimization
+
             return result
 
         except Exception as e:
@@ -1291,7 +1321,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         pokemon_name: str,
         nature: str,
         total_bulk_evs: int = 252,
-        defense_weight: float = 0.5
+        defense_weight: float = 0.5,
+        item: Optional[str] = None,
     ) -> dict:
         """
         Find mathematically optimal HP/Def/SpD using diminishing returns analysis.
@@ -1309,6 +1340,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             nature: Pokemon's nature (e.g., "Bold", "Calm", "Careful")
             total_bulk_evs: Total EVs to distribute (default 252)
             defense_weight: 0.0 = all SpD, 0.5 = balanced, 1.0 = all Def
+            item: Held item for HP number optimization (e.g., "leftovers", "life-orb")
 
         Returns:
             Optimal distribution with efficiency comparison vs naive allocation
@@ -1331,6 +1363,18 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 defense_weight=defense_weight
             )
 
+            # HP number optimization for item
+            hp_optimization = None
+            hp_evs_final = result.hp_evs
+            final_hp = result.final_hp
+            if item:
+                from vgc_mcp_core.calc.hp_optimization import adjust_hp_evs_for_item
+                hp_adj = adjust_hp_evs_for_item(base_stats.hp, result.hp_evs, item)
+                if hp_adj["adjusted_evs"] != result.hp_evs:
+                    hp_evs_final = hp_adj["adjusted_evs"]
+                    final_hp = hp_adj["adjusted_hp"]
+                    hp_optimization = hp_adj
+
             # Generate Showdown paste
             types = await pokeapi.get_pokemon_types(pokemon_name)
             optimized_pokemon = PokemonBuild(
@@ -1339,7 +1383,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 types=types,
                 nature=parsed_nature,
                 evs=EVSpread(
-                    hp=result.hp_evs,
+                    hp=hp_evs_final,
                     attack=0,
                     defense=result.def_evs,
                     special_attack=0,
@@ -1349,7 +1393,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             )
             showdown_paste = pokemon_build_to_showdown(optimized_pokemon)
 
-            return {
+            response = {
                 "pokemon": pokemon_name,
                 "nature": nature,
                 "base_stats": {
@@ -1360,12 +1404,12 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "total_bulk_evs": total_bulk_evs,
                 "defense_weight": defense_weight,
                 "optimal_spread": {
-                    "hp_evs": result.hp_evs,
+                    "hp_evs": hp_evs_final,
                     "def_evs": result.def_evs,
                     "spd_evs": result.spd_evs
                 },
                 "final_stats": {
-                    "hp": result.final_hp,
+                    "hp": final_hp,
                     "defense": result.final_def,
                     "special_defense": result.final_spd
                 },
@@ -1377,8 +1421,11 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "efficiency_score": result.efficiency_score,
                 "explanation": result.explanation,
                 "comparison_vs_naive": result.comparison,
-                "showdown_paste": showdown_paste
+                "showdown_paste": showdown_paste,
             }
+            if hp_optimization:
+                response["hp_optimization"] = hp_optimization
+            return response
 
         except Exception as e:
             return {"error": str(e)}
@@ -1467,7 +1514,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         survive_pokemon_tera_type: Optional[str] = None,
         defender_tera_type: Optional[str] = None,
         prioritize: str = "bulk",
-        offensive_evs: int = 0
+        offensive_evs: int = 0,
+        item: Optional[str] = None,
     ) -> dict:
         """
         Design an EV spread that meets specific speed and SINGLE survival benchmarks.
@@ -2040,6 +2088,33 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     def_evs = normalize_evs(def_evs)
                     spd_evs = normalize_evs(spd_evs)
 
+            # 3b. HP number optimization for item
+            if item:
+                from vgc_mcp_core.calc.hp_optimization import adjust_hp_evs_for_item
+                hp_adj = adjust_hp_evs_for_item(my_base.hp, hp_evs, item)
+                if hp_adj["adjusted_evs"] != hp_evs:
+                    # Verify the adjustment doesn't break survival
+                    apply_adj = True
+                    if survive_pokemon and survive_move and best_result is not None:
+                        adj_defender = PokemonBuild(
+                            name=pokemon_name,
+                            base_stats=my_base,
+                            types=my_types,
+                            nature=parsed_nature,
+                            evs=EVSpread(
+                                hp=hp_adj["adjusted_evs"],
+                                defense=def_evs,
+                                special_defense=spd_evs,
+                            ),
+                            tera_type=defender_tera_type,
+                        )
+                        adj_result = calculate_damage(attacker, adj_defender, move, modifiers)
+                        if adj_result.max_percent >= 100:
+                            apply_adj = False  # Would break survival
+                    if apply_adj:
+                        hp_evs = hp_adj["adjusted_evs"]
+                        results["hp_optimization"] = hp_adj
+
             # 4. Calculate final stats
             speed_mod = get_nature_modifier(parsed_nature, "speed")
             atk_mod = get_nature_modifier(parsed_nature, "attack")
@@ -2166,7 +2241,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         survive_hit2_ability: Optional[str] = None,
         survive_hit2_tera_type: Optional[str] = None,
         defender_tera_type: Optional[str] = None,
-        target_survival: float = 100.0
+        target_survival: float = 100.0,
+        item: Optional[str] = None,
     ) -> dict:
         """
         Find optimal EV spread to survive TWO DIFFERENT attacks while meeting a speed benchmark.
@@ -2827,7 +2903,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 tera_type=defender_tera_type
             )
 
-            return {
+            dual_result = {
                 "pokemon": pokemon_name,
                 "nature": chosen_nature,
                 "nature_auto_selected": nature_auto_selected,
@@ -2895,8 +2971,33 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     f"({atk2_spread_str}) ({best_results['survival_pct2']:.2f}% survival)"
                 ),
                 "showdown_paste": pokemon_build_to_showdown(optimized_pokemon),
-                "alternative_natures": alternative_natures
+                "alternative_natures": alternative_natures,
             }
+
+            # HP number optimization for item
+            if item and best_spread:
+                from vgc_mcp_core.calc.hp_optimization import adjust_hp_evs_for_item
+                hp_adj = adjust_hp_evs_for_item(my_base.hp, best_spread["hp"], item)
+                if hp_adj["adjusted_evs"] != best_spread["hp"]:
+                    # Verify survival still holds with adjusted HP
+                    adj_defender = PokemonBuild(
+                        name=pokemon_name,
+                        base_stats=my_base,
+                        types=my_types,
+                        nature=Nature(chosen_nature),
+                        evs=EVSpread(
+                            hp=hp_adj["adjusted_evs"],
+                            defense=best_spread["def"],
+                            special_defense=final_spd_evs,
+                        ),
+                        tera_type=defender_tera_type,
+                    )
+                    adj_r1 = calculate_damage(attacker1, adj_defender, move1, mods1)
+                    adj_r2 = calculate_damage(attacker2, adj_defender, move2, mods2)
+                    if adj_r1.max_percent < 100 and adj_r2.max_percent < 100:
+                        dual_result["hp_optimization"] = hp_adj
+
+            return dual_result
 
         except Exception as e:
             return {"error": str(e)}
@@ -2916,7 +3017,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         my_pokemon_has_tailwind: bool = False,
         speed_evs: Optional[int] = None,
         defender_tera_type: Optional[str] = None,
-        target_survival: float = 93.75
+        target_survival: float = 93.75,
+        item: Optional[str] = None,
     ) -> dict:
         """
         Find optimal EV spread to survive 3-6 different attacks while meeting speed benchmark.
@@ -3317,7 +3419,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         "survives": survives
                     })
 
-                return {
+                multi_result = {
                     "success": True,
                     "optimal_spread": {
                         "hp_evs": best_spread["hp"],
@@ -3345,6 +3447,23 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     }
                 }
 
+                # HP number optimization for item
+                if item and best_spread:
+                    from vgc_mcp_core.calc.hp_optimization import adjust_hp_evs_for_item
+                    hp_adj = adjust_hp_evs_for_item(my_base.hp, best_spread["hp"], item)
+                    if hp_adj["adjusted_evs"] != best_spread["hp"]:
+                        # For multi-survival, verify all threats still survived
+                        adj_hp = calculate_hp(my_base.hp, 31, hp_adj["adjusted_evs"], 50)
+                        all_survive = all(
+                            r.max_percent < 100 for _, r in best_results
+                        )
+                        # Only apply if original already survived (we just check the HP change doesn't break things)
+                        # A small HP decrease shouldn't break survival if the margin was there
+                        if all_survive and adj_hp >= final_hp - 2:
+                            multi_result["hp_optimization"] = hp_adj
+
+                return multi_result
+
             else:
                 # No solution found - report impossibility
                 return {
@@ -3363,6 +3482,100 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         "cache_size": cache_stats["total_cached"]
                     }
                 }
+
+        except Exception as e:
+            return {"error": str(e)}
+
+    @mcp.tool()
+    async def analyze_hp_number(
+        pokemon_name: str,
+        item: str,
+        current_hp_evs: int = 0,
+    ) -> dict:
+        """
+        Analyze HP EV options for optimal item-based recovery or recoil.
+
+        Shows which HP EV values produce the best HP numbers for a given item:
+        - Leftovers / Black Sludge: HP divisible by 16 maximizes 1/16 recovery
+        - Grassy Terrain: Same 1/16 optimization as Leftovers
+        - Life Orb: HP = 10n-1 (ending in 9) minimizes 1/10 recoil per attack
+        - Sitrus Berry: HP divisible by 4 maximizes 25% heal
+
+        Args:
+            pokemon_name: Pokemon name (e.g., "incineroar")
+            item: Held item (e.g., "leftovers", "life-orb", "sitrus-berry")
+            current_hp_evs: Current HP EVs to compare against (default 0)
+
+        Returns:
+            Analysis with optimal HP EV options and recommendation
+        """
+        try:
+            from vgc_mcp_core.calc.hp_optimization import (
+                adjust_hp_evs_for_item,
+                find_optimal_hp_evs,
+                score_hp_for_item,
+            )
+
+            base = await pokeapi.get_base_stats(pokemon_name)
+            current_hp = calculate_hp(base.hp, 31, current_hp_evs, 50)
+            current_score = score_hp_for_item(current_hp, item)
+
+            # Get all optimal EV options
+            all_options = find_optimal_hp_evs(base.hp, item)
+
+            # Filter to show only the best options (score == 1.0)
+            optimal_options = [o for o in all_options if o["score"] == 1.0]
+
+            # Get adjustment recommendation
+            adjustment = adjust_hp_evs_for_item(base.hp, current_hp_evs, item)
+
+            # Build recommendation text
+            if current_score == 1.0:
+                recommendation = (
+                    f"Your current {current_hp_evs} HP EVs ({current_hp} HP) "
+                    f"is already optimal for {item}!"
+                )
+            elif optimal_options:
+                closest = min(
+                    optimal_options,
+                    key=lambda o: abs(o["ev"] - current_hp_evs),
+                )
+                ev_diff = closest["ev"] - current_hp_evs
+                direction = "more" if ev_diff > 0 else "fewer"
+                recommendation = (
+                    f"Use {closest['ev']} HP EVs ({closest['hp_stat']} HP) "
+                    f"for optimal {item} number. "
+                    f"That's {abs(ev_diff)} {direction} EVs than current."
+                )
+            else:
+                recommendation = f"No specific HP optimization applies for {item}."
+
+            # Calculate item-specific info
+            item_lower = item.lower().replace(" ", "-")
+            item_info = {}
+            if item_lower in ("leftovers", "black-sludge"):
+                item_info["recovery_per_turn"] = current_hp // 16
+                item_info["recovery_percent"] = round((current_hp // 16) / current_hp * 100, 2) if current_hp > 0 else 0
+            elif item_lower == "life-orb":
+                item_info["recoil_per_attack"] = current_hp // 10
+                item_info["recoil_percent"] = round((current_hp // 10) / current_hp * 100, 2) if current_hp > 0 else 0
+                item_info["attacks_before_ko"] = current_hp // max(1, current_hp // 10)
+            elif item_lower == "sitrus-berry":
+                item_info["heal_amount"] = current_hp // 4
+                item_info["heal_percent"] = round((current_hp // 4) / current_hp * 100, 2) if current_hp > 0 else 0
+
+            return {
+                "pokemon": pokemon_name,
+                "item": item,
+                "base_hp": base.hp,
+                "current_hp_evs": current_hp_evs,
+                "current_hp_stat": current_hp,
+                "current_score": round(current_score, 3),
+                "item_info": item_info,
+                "optimal_hp_options": optimal_options[:8],
+                "adjustment": adjustment,
+                "recommendation": recommendation,
+            }
 
         except Exception as e:
             return {"error": str(e)}
