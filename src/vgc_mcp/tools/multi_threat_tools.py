@@ -88,7 +88,7 @@ def register_multi_threat_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                     move = await pokeapi.get_move(threat["move"])
                     
                     # Use custom spread if provided, otherwise use defaults
-                    spread = threat.get("spread", {})
+                    spread = threat.get("spread") or {}
                     threat_nature = Nature(spread.get("nature", "serious").lower())
                     threat_evs = spread.get("evs", {})
                     threat_item = spread.get("item")

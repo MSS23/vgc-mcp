@@ -991,8 +991,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         try:
                             move_check = await pokeapi.get_move(survive_move)
                             optimize_physical = move_check.category == MoveCategory.PHYSICAL
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.warning("Could not determine move category for '%s': %s", survive_move, e)
 
                     # Calculate current final stats to determine optimal distribution
                     current_hp = calculate_hp(my_base.hp, 31, hp_evs, 50)
@@ -1388,8 +1388,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     else:
                         speed_evs_needed = 252
                         my_speed_stat = calculate_stat(my_base.speed, 31, 252, 50, my_speed_mod)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("Failed to calculate speed EVs for outspeed target: %s", e)
 
             # Calculate remaining EVs for bulk
             remaining_evs = 508 - speed_evs_needed

@@ -1,14 +1,17 @@
 """Disk-based caching layer for API responses."""
 
 import hashlib
+import logging
 from pathlib import Path
 from typing import Any, Optional
 
 import diskcache
 
+logger = logging.getLogger(__name__)
+
 
 class APICache:
-    """Disk-based cache with 7-day expiration."""
+    """Disk-based cache with 7-day expiration and hit/miss tracking."""
 
     DEFAULT_EXPIRE = 7 * 24 * 60 * 60  # 7 days in seconds
 
@@ -22,6 +25,8 @@ class APICache:
 
         cache_dir.mkdir(parents=True, exist_ok=True)
         self.cache = diskcache.Cache(str(cache_dir))
+        self._hits = 0
+        self._misses = 0
 
     def _make_key(self, prefix: str, *args: str) -> str:
         """Create a cache key from prefix and arguments."""
@@ -29,9 +34,14 @@ class APICache:
         return hashlib.sha256(key_data.encode()).hexdigest()[:32]
 
     def get(self, prefix: str, *args: str) -> Optional[Any]:
-        """Retrieve from cache if not expired."""
+        """Retrieve from cache if not expired. Tracks hit/miss stats."""
         key = self._make_key(prefix, *args)
-        return self.cache.get(key)
+        result = self.cache.get(key)
+        if result is not None:
+            self._hits += 1
+        else:
+            self._misses += 1
+        return result
 
     def set(
         self,
@@ -53,8 +63,30 @@ class APICache:
         """Clear entire cache."""
         self.cache.clear()
 
+    @property
+    def stats(self) -> dict:
+        """Return cache hit/miss statistics."""
+        total = self._hits + self._misses
+        return {
+            "hits": self._hits,
+            "misses": self._misses,
+            "total": total,
+            "hit_rate": f"{(self._hits / total * 100):.1f}%" if total > 0 else "0.0%",
+        }
+
+    def reset_stats(self) -> None:
+        """Reset hit/miss counters."""
+        self._hits = 0
+        self._misses = 0
+
     def close(self) -> None:
-        """Close the cache."""
+        """Close the cache. Logs final stats if any lookups occurred."""
+        total = self._hits + self._misses
+        if total > 0:
+            logger.debug(
+                "Cache closing — hits: %d, misses: %d, hit rate: %s",
+                self._hits, self._misses, self.stats["hit_rate"]
+            )
         self.cache.close()
 
     def __enter__(self) -> "APICache":

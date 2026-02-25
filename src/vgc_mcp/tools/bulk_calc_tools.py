@@ -1,8 +1,11 @@
 """MCP tools for bulk offensive damage calculations and export."""
 
+import logging
 from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
+
+logger = logging.getLogger(__name__)
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
@@ -63,7 +66,8 @@ async def _get_top_meta_pokemon(
             if len(result) >= count:
                 break
         return result
-    except Exception:
+    except Exception as e:
+        logger.warning("Failed to fetch top meta Pokemon: %s", e)
         return []
 
 
@@ -360,8 +364,8 @@ def register_bulk_calc_tools(
                 try:
                     defender = await _build_pokemon_from_smogon(defender_name, pokeapi)
                     defenders.append(defender)
-                except Exception:
-                    pass  # Skip failed defenders silently for export
+                except Exception as e:
+                    logger.warning("Failed to build defender %s for export: %s", defender_name, e)
 
             if not defenders:
                 return {"error": "Could not build any defenders."}

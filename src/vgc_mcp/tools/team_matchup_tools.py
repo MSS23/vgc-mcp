@@ -48,7 +48,7 @@ def register_team_matchup_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Op
                 
                 for threat_name in top_threats:
                     # Build a temporary team for analysis
-                    from vgc_mcp_core.models.team import Team
+                    from vgc_mcp_core.models.team import Team, TeamSlot
                     from vgc_mcp_core.models.pokemon import PokemonBuild, BaseStats, EVSpread, Nature
                     
                     team_slots = []
@@ -69,7 +69,7 @@ def register_team_matchup_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Op
                     if len(team_slots) < 6:
                         return {"error": f"Failed to fetch data for some Pokemon: {team_pokemon}"}
                     
-                    temp_team = Team(slots=[type('Slot', (), {'pokemon': p})() for p in team_slots])
+                    temp_team = Team(slots=[TeamSlot(pokemon=p, slot_index=i) for i, p in enumerate(team_slots)])
                     
                     try:
                         analysis = analyze_threat_matchup(temp_team, threat_name)

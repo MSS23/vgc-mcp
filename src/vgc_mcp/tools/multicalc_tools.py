@@ -6,8 +6,13 @@ Tools for batch damage calculations:
 - Team coverage matrix (team of 6 vs meta threats)
 """
 
+import asyncio
+import logging
+import time
 from typing import Optional
 from mcp.server.fastmcp import FastMCP
+
+logger = logging.getLogger(__name__)
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
@@ -128,17 +133,28 @@ def register_multicalc_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
                 attacker_name, pokeapi, attacker_nature, attacker_evs, attacker_item, attacker_ability
             )
 
+            # Build all defenders in parallel
+            start_time = time.monotonic()
+            defender_tasks = [
+                _build_pokemon_from_smogon(name, pokeapi) for name in defender_names
+            ]
+            defender_results = await asyncio.gather(*defender_tasks, return_exceptions=True)
+            logger.debug(
+                "Built %d defenders in %.1fms",
+                len(defender_names), (time.monotonic() - start_time) * 1000
+            )
+
             # Calculate damage against each defender
-            # Note: Could parallelize with asyncio.gather for better performance with many defenders
             matchups = []
             guaranteed_ohkos = 0
             possible_ohkos = 0
             twohkos = 0
 
-            for defender_name in defender_names:
+            for defender_name, defender_or_err in zip(defender_names, defender_results):
                 try:
-                    # Build defender from Smogon
-                    defender = await _build_pokemon_from_smogon(defender_name, pokeapi)
+                    if isinstance(defender_or_err, Exception):
+                        raise defender_or_err
+                    defender = defender_or_err
 
                     # Create modifiers
                     modifiers = DamageModifiers(
@@ -262,30 +278,42 @@ def register_multicalc_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
             )
             defender.tera_type = defender_tera_type
 
+            # Build all attackers and fetch moves in parallel
+            valid_configs = [c for c in attacker_configs if c.get("name") and c.get("move")]
+
+            async def _build_attacker_with_move(config):
+                attacker = await _build_pokemon_from_smogon(
+                    config["name"], pokeapi,
+                    config.get("nature"), config.get("evs"),
+                    config.get("item"), config.get("ability")
+                )
+                attacker.tera_type = config.get("tera_type")
+                move = await pokeapi.get_move(config["move"], user_name=config["name"])
+                return attacker, move
+
+            start_time = time.monotonic()
+            build_results = await asyncio.gather(
+                *[_build_attacker_with_move(c) for c in valid_configs],
+                return_exceptions=True
+            )
+            logger.debug(
+                "Built %d attackers in %.1fms",
+                len(valid_configs), (time.monotonic() - start_time) * 1000
+            )
+
             # Calculate damage from each attacker
             threats = []
             guaranteed_ohkos = 0
             survivable = 0
 
-            for config in attacker_configs:
-                attacker_name = config.get("name")
-                move_name = config.get("move")
-                
-                if not attacker_name or not move_name:
-                    continue
+            for config, build_result in zip(valid_configs, build_results):
+                attacker_name = config["name"]
+                move_name = config["move"]
 
                 try:
-                    # Build attacker
-                    attacker = await _build_pokemon_from_smogon(
-                        attacker_name, pokeapi,
-                        config.get("nature"),
-                        config.get("evs"),
-                        config.get("item"),
-                        config.get("ability")
-                    )
-                    attacker.tera_type = config.get("tera_type")
-
-                    move = await pokeapi.get_move(move_name, user_name=attacker_name)
+                    if isinstance(build_result, Exception):
+                        raise build_result
+                    attacker, move = build_result
 
                     # Create modifiers
                     modifiers = DamageModifiers(
@@ -388,45 +416,50 @@ def register_multicalc_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
             if len(meta_threats) > 15:
                 meta_threats = meta_threats[:15]  # Limit to 15 threats
 
-            # Build team members
+            # Build team members in parallel
+            valid_members = [c for c in team_pokemon if c.get("name") and c.get("move")]
+
+            async def _build_member(config):
+                pokemon = await _build_pokemon_from_smogon(
+                    config["name"], pokeapi,
+                    config.get("nature"), config.get("evs"),
+                    config.get("item"), config.get("ability")
+                )
+                move = await pokeapi.get_move(config["move"], user_name=config["name"])
+                return {"name": config["name"], "pokemon": pokemon, "move": move, "move_name": config["move"]}
+
+            start_time = time.monotonic()
+            member_results = await asyncio.gather(
+                *[_build_member(c) for c in valid_members],
+                return_exceptions=True
+            )
+
             team_members = []
-            for member_config in team_pokemon:
-                pokemon_name = member_config.get("name")
-                move_name = member_config.get("move")
-                
-                if not pokemon_name or not move_name:
-                    continue
+            for config, result in zip(valid_members, member_results):
+                if isinstance(result, Exception):
+                    team_members.append({"name": config["name"], "error": str(result)})
+                else:
+                    team_members.append(result)
 
-                try:
-                    pokemon = await _build_pokemon_from_smogon(
-                        pokemon_name, pokeapi,
-                        member_config.get("nature"),
-                        member_config.get("evs"),
-                        member_config.get("item"),
-                        member_config.get("ability")
-                    )
-                    move = await pokeapi.get_move(move_name, user_name=pokemon_name)
-
-                    team_members.append({
-                        "name": pokemon_name,
-                        "pokemon": pokemon,
-                        "move": move,
-                        "move_name": move_name
-                    })
-                except Exception as e:
-                    team_members.append({
-                        "name": pokemon_name,
-                        "error": str(e)
-                    })
+            # Build all threats in parallel
+            threat_tasks = [_build_pokemon_from_smogon(t, pokeapi) for t in meta_threats]
+            threat_results = await asyncio.gather(*threat_tasks, return_exceptions=True)
+            logger.debug(
+                "Built %d members + %d threats in %.1fms",
+                len(valid_members), len(meta_threats),
+                (time.monotonic() - start_time) * 1000
+            )
 
             # Calculate coverage matrix
             coverage_matrix = []
             best_answers = {}
             coverage_gaps = []
 
-            for threat_name in meta_threats:
+            for threat_name, threat_or_err in zip(meta_threats, threat_results):
                 try:
-                    threat = await _build_pokemon_from_smogon(threat_name, pokeapi)
+                    if isinstance(threat_or_err, Exception):
+                        raise threat_or_err
+                    threat = threat_or_err
                     
                     threat_row = []
                     threat_ohkos = []

@@ -1,7 +1,10 @@
 """MCP tools for move-based coverage analysis."""
 
+import logging
 from typing import Optional
 from mcp.server.fastmcp import FastMCP
+
+logger = logging.getLogger(__name__)
 
 from vgc_mcp_core.calc.coverage import (
     analyze_move_coverage,
@@ -224,10 +227,11 @@ def register_coverage_tools(mcp: FastMCP, team_manager, pokeapi):
         try:
             target_data = await pokeapi.get_pokemon(target_pokemon)
             target_types = target_data.get("types", [])
-        except Exception:
+        except Exception as e:
+            logger.warning("Failed to fetch Pokemon '%s': %s", target_pokemon, e)
             return {
                 "error": f"Could not find Pokemon: {target_pokemon}",
-                "message": "Please check the Pokemon name"
+                "message": "Please check the Pokemon name and spelling"
             }
 
         if not target_types:

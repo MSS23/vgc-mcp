@@ -5,14 +5,14 @@ from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp_core.calc.abilities import (
     analyze_intimidate_matchup,
-    analyze_weather_synergy,
-    analyze_terrain_synergy,
+    analyze_weather_synergy as _analyze_weather_synergy,
+    analyze_terrain_synergy as _analyze_terrain_synergy,
     find_redirect_abilities,
     find_partner_abilities,
-    find_ability_conflicts,
+    find_ability_conflicts as _find_ability_conflicts,
     analyze_full_ability_synergy,
     get_speed_ability_effect,
-    suggest_ability_additions,
+    suggest_ability_additions as _suggest_ability_additions,
     INTIMIDATE_POKEMON,
     INTIMIDATE_BLOCKERS,
     INTIMIDATE_PUNISHERS,
@@ -156,7 +156,7 @@ def register_ability_tools(mcp: FastMCP, team_manager):
             }
 
         abilities = [slot.pokemon.ability for slot in team.slots if slot.pokemon.ability]
-        result = analyze_weather_synergy(abilities)
+        result = _analyze_weather_synergy(abilities)
 
         return {
             "has_setter": result.has_setter,
@@ -194,7 +194,7 @@ def register_ability_tools(mcp: FastMCP, team_manager):
             }
 
         abilities = [slot.pokemon.ability for slot in team.slots if slot.pokemon.ability]
-        result = analyze_terrain_synergy(abilities)
+        result = _analyze_terrain_synergy(abilities)
 
         terrain_benefits = {
             "grassy": [
@@ -254,7 +254,7 @@ def register_ability_tools(mcp: FastMCP, team_manager):
             }
 
         abilities = [slot.pokemon.ability for slot in team.slots if slot.pokemon.ability]
-        conflicts = find_ability_conflicts(abilities)
+        conflicts = _find_ability_conflicts(abilities)
 
         return {
             "conflicts": conflicts,
@@ -288,7 +288,7 @@ def register_ability_tools(mcp: FastMCP, team_manager):
             }
 
         abilities = [slot.pokemon.ability for slot in team.slots if slot.pokemon.ability]
-        suggestions = suggest_ability_additions(abilities, team_style)
+        suggestions = _suggest_ability_additions(abilities, team_style)
 
         return {
             "team_style": team_style or "general",

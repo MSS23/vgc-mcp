@@ -1,7 +1,10 @@
 """MCP tools for damage calculations."""
 
+import logging
 from typing import Optional
 from mcp.server.fastmcp import FastMCP
+
+logger = logging.getLogger(__name__)
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
@@ -161,8 +164,8 @@ async def _get_common_spreads(pokemon_name: str, limit: int = 3) -> list[dict]:
                     "ability_usage": top_ability_usage,
                 })
             return result
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Failed to fetch Smogon spreads for %s: %s", pokemon_name, e)
     return []
 
 

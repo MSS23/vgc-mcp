@@ -1,7 +1,10 @@
 """Core VGC tools - minimal set for rate-limited environments."""
 
+import logging
 from typing import Optional
 from mcp.server.fastmcp import FastMCP
+
+logger = logging.getLogger(__name__)
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
@@ -48,8 +51,8 @@ async def _get_common_spread(pokemon_name: str) -> Optional[dict]:
                 "item": stats.items[0].name if stats.items else None,
                 "ability": stats.abilities[0].name if stats.abilities else None,
             }
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Failed to parse Smogon stats for %s: %s", pokemon_name, e)
     return None
 
 

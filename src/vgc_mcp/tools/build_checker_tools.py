@@ -60,7 +60,8 @@ def register_build_checker_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                         physical_moves += 1
                     elif move.category == MoveCategory.SPECIAL:
                         special_moves += 1
-                except Exception:
+                except Exception as e:
+                    logger.warning("Failed to load move '%s': %s", move_name, e)
                     continue
             
             issues = []

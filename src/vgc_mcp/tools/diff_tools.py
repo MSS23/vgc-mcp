@@ -96,28 +96,35 @@ def register_diff_tools(mcp: FastMCP):
         # Generate diff
         diff = generate_team_diff(team1, team2, display_v1, display_v2)
 
+        # Categorize diffs by change type
+        from vgc_mcp_core.diff.models import ChangeType
+
+        added = [d for d in diff.pokemon_diffs if d.change_type == ChangeType.ADDED]
+        removed = [d for d in diff.pokemon_diffs if d.change_type == ChangeType.REMOVED]
+        modified = [d for d in diff.pokemon_diffs if d.change_type == ChangeType.MODIFIED]
+
         return {
             "success": True,
             "summary": diff.summary,
             "version1_name": display_v1,
             "version2_name": display_v2,
-            "added_pokemon": [p.species for p in diff.added],
-            "removed_pokemon": [p.species for p in diff.removed],
+            "added_pokemon": [p.species for p in added],
+            "removed_pokemon": [p.species for p in removed],
             "changed_pokemon": [
                 {
                     "species": c.species,
                     "changes": [
                         {
-                            "field": change.field,
+                            "field": change.field.value if hasattr(change.field, 'value') else change.field,
                             "before": change.before,
                             "after": change.after,
-                            "explanation": change.explanation,
+                            "explanation": change.reason,
                         }
                         for change in c.changes
                     ]
                 }
-                for c in diff.changed
+                for c in modified
             ],
-            "unchanged_pokemon": [p.species for p in diff.unchanged],
+            "unchanged_pokemon": diff.unchanged,
             "diff": diff.to_dict(),
         }

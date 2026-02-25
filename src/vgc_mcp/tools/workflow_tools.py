@@ -515,7 +515,8 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                     "Focus Sash", "Assault Vest", "Leftovers", "Sitrus Berry",
                     "Safety Goggles", "Covert Cloak", "Clear Amulet"
                 ]
-                unused_items = [i for i in common_items if i.lower() not in [x.lower() for x in items]]
+                items_lower = {x.lower() for x in items}
+                unused_items = [i for i in common_items if i.lower() not in items_lower]
 
                 fixes.append({
                     "for_issue": "duplicate_items",
@@ -3423,11 +3424,12 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                     "Steel": ["Incineroar", "Arcanine-Hisui", "Chi-Yu"]
                 }
 
+                pokemon_list_lower = {p.lower() for p in pokemon_list}
                 for gap_type in partner_types_needed[:3]:
                     if gap_type in partner_suggestions:
                         for suggestion in partner_suggestions[gap_type]:
                             # Don't suggest Pokemon already in core
-                            if suggestion.lower() not in [p.lower() for p in pokemon_list]:
+                            if suggestion.lower() not in pokemon_list_lower:
                                 suggested_partners.append({
                                     "pokemon": suggestion,
                                     "reason": f"Helps cover {gap_type} weakness"

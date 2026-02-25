@@ -4,8 +4,12 @@ Runs N moves × M defenders × K scenarios in a single call,
 returning structured results grouped by defender → move → scenario.
 """
 
+import logging
+import time
 from dataclasses import dataclass, field
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from ..models.move import Move
 from ..models.pokemon import PokemonBuild
@@ -287,6 +291,7 @@ def run_bulk_calcs(
     Returns:
         BulkCalcSummary with all results grouped and counted
     """
+    start_time = time.monotonic()
     results: list[BulkCalcResult] = []
     ohko_counts: dict[str, int] = {s.name: 0 for s in scenarios}
     twohko_counts: dict[str, int] = {s.name: 0 for s in scenarios}
@@ -348,6 +353,12 @@ def run_bulk_calcs(
                     ohko_counts[scenario.name] += 1
                 elif result.ko_chance in ("2HKO", "possible 2HKO"):
                     twohko_counts[scenario.name] += 1
+
+    elapsed_ms = (time.monotonic() - start_time) * 1000
+    logger.debug(
+        "Bulk calc: %d moves × %d defenders × %d scenarios = %d calcs in %.1fms",
+        len(moves), len(defenders), len(scenarios), len(results), elapsed_ms
+    )
 
     return BulkCalcSummary(
         attacker_name=attacker.name,

@@ -1,7 +1,10 @@
 """MCP tools for speed comparisons, calculations, and tier visualization."""
 
+import logging
 from typing import Optional
 from mcp.server.fastmcp import FastMCP
+
+logger = logging.getLogger(__name__)
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
@@ -200,8 +203,8 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
                         display_type="inline",
                         name="Speed Comparison"
                     )
-                except Exception:
-                    pass  # UI is optional
+                except Exception as e:
+                    logger.debug("Speed comparison UI rendering skipped: %s", e)
 
             return result_dict
 
@@ -287,8 +290,8 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
                             display_type="inline",
                             name="Speed EVs"
                         )
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug("Speed EV UI rendering skipped: %s", e)
 
                 return result_dict
 
@@ -339,8 +342,8 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
                         display_type="inline",
                         name="Speed EVs"
                     )
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("Speed EV UI rendering skipped: %s", e)
 
             return result_dict
 
@@ -441,7 +444,8 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
                         top_n_pokemon=20,
                         top_n_speeds=2
                     )
-                except Exception:
+                except Exception as e:
+                    logger.debug("Competitive speed benchmarks fetch failed: %s", e)
                     competitive_benchmarks = None
 
             tier_info = calculate_speed_tier(
@@ -550,12 +554,11 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
                                         })
 
                                     meta_pokemon_added.add(mon_name.lower())
-                            except Exception:
-                                # Skip Pokemon that fail to load
+                            except Exception as e:
+                                logger.debug("Failed to load speed data for %s: %s", mon_name, e)
                                 continue
-                except Exception:
-                    # Smogon fetch failed, use fallback
-                    pass
+                except Exception as e:
+                    logger.debug("Smogon speed data fetch failed, using fallback: %s", e)
 
             # Fallback to hardcoded data if Smogon didn't provide enough Pokemon
             if len(meta_pokemon_added) < 10:
@@ -668,9 +671,8 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
                         display_type="inline",
                         name="Speed Tiers"
                     )
-            except Exception:
-                # UI is optional
-                pass
+            except Exception as e:
+                logger.debug("Speed tier UI rendering skipped: %s", e)
 
         return result
 
@@ -881,8 +883,8 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
                         target_base_speed = speed_dist["base_speed"]
                         target_stats = speed_dist.get("stats", {})
                         data_source = "smogon"
-                except Exception:
-                    pass  # Fall through to fallbacks
+                except Exception as e:
+                    logger.debug("Smogon speed distribution fetch failed for %s, using fallback: %s", target_pokemon, e)
 
             # Fallback 1: META_SPEED_TIERS (hardcoded)
             if not target_spreads:
@@ -1041,8 +1043,8 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
                         display_type="inline",
                         name="Outspeed Chart"
                     )
-                except Exception:
-                    pass  # UI is optional
+                except Exception as e:
+                    logger.debug("Outspeed chart UI rendering skipped: %s", e)
 
             return result_dict
 
@@ -1107,7 +1109,8 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
                             target_list = [name for name, _ in sorted_pokemon]
                         else:
                             target_list = list(META_SPEED_TIERS.keys())[:30]
-                    except Exception:
+                    except Exception as e:
+                        logger.debug("Smogon usage fetch failed for target list, using fallback: %s", e)
                         target_list = list(META_SPEED_TIERS.keys())[:30]
                 else:
                     target_list = list(META_SPEED_TIERS.keys())[:30]
@@ -1179,8 +1182,9 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
                         }
                         all_pokemon_names.append(target)
 
-                except Exception:
-                    continue  # Skip Pokemon that fail
+                except Exception as e:
+                    logger.debug("Failed to load speed distribution for %s: %s", target, e)
+                    continue
 
             if not all_targets_data:
                 return "Error: Could not load speed distributions for any targets"
@@ -1192,8 +1196,8 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
                     usage_data = await smogon.get_usage_stats()
                     if usage_data and "data" in usage_data:
                         all_pokemon_names = list(usage_data["data"].keys())
-                except Exception:
-                    pass  # Use the list we already have
+                except Exception as e:
+                    logger.debug("Smogon usage data fetch failed for dropdown: %s", e)
 
             # Determine initial target (first in list)
             initial_target = list(all_targets_data.keys())[0]

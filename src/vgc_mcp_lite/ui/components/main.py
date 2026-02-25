@@ -10287,7 +10287,7 @@ def create_build_report_ui(
         try:
             low, high = damage_range.replace("%", "").split("-")
             avg_pct = (float(low) + float(high)) / 2
-        except:
+        except (ValueError, AttributeError, IndexError):
             avg_pct = 50
 
         bar_color = "#ef4444" if avg_pct >= 100 else "#f59e0b" if avg_pct >= 50 else "#10b981"

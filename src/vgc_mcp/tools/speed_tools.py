@@ -152,8 +152,7 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
                     # Calculate speeds dynamically from spreads if available
                     common_speeds = target_data.get("common_speeds", [])
                     if not common_speeds and "spreads" in target_data:
-                        # Calculate from spreads
-                        from vgc_mcp_core.calc.stats import calculate_speed
+                        # Calculate from spreads (use module-level calculate_speed)
                         NATURE_MAP = {
                             "adamant": Nature.ADAMANT, "bashful": Nature.BASHFUL, "bold": Nature.BOLD,
                             "brave": Nature.BRAVE, "calm": Nature.CALM, "careful": Nature.CAREFUL,
