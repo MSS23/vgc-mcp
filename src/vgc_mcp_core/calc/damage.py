@@ -546,6 +546,22 @@ def calculate_damage(
     if modifiers.defender_ability is None and defender.ability:
         modifiers = replace(modifiers, defender_ability=defender.ability)
 
+    # Auto-detect Ruin abilities from attacker/defender ability names.
+    # Ruin abilities are field effects (not stat stages), so they always apply
+    # even on critical hits. Only auto-detect if the flags aren't already set.
+    if modifiers.attacker_ability:
+        atk_ab = normalize_ability(modifiers.attacker_ability)
+        if atk_ab == "sword-of-ruin" and not modifiers.sword_of_ruin:
+            modifiers = replace(modifiers, sword_of_ruin=True)
+        elif atk_ab == "beads-of-ruin" and not modifiers.beads_of_ruin:
+            modifiers = replace(modifiers, beads_of_ruin=True)
+    if modifiers.defender_ability:
+        def_ab = normalize_ability(modifiers.defender_ability)
+        if def_ab == "tablets-of-ruin" and not modifiers.tablets_of_ruin:
+            modifiers = replace(modifiers, tablets_of_ruin=True)
+        elif def_ab == "vessel-of-ruin" and not modifiers.vessel_of_ruin:
+            modifiers = replace(modifiers, vessel_of_ruin=True)
+
     # Check for multi-hit move mechanics
     multi_hit_info = get_multi_hit_info(move.name)
     hit_count = 1
@@ -831,7 +847,9 @@ def calculate_damage(
     if modifiers.defender_commander_active:
         defense_stat = apply_mod(defense_stat, MOD_STAT_DOUBLE)
 
-    # Apply Ruin abilities
+    # Apply Ruin abilities (field effects, NOT stat stages).
+    # These always apply even on critical hits because crits only ignore
+    # stat stage changes, not ability-based multipliers.
     # Sword of Ruin (Chien-Pao): Lowers foe Defense to 0.75x
     if modifiers.sword_of_ruin and is_physical:
         defense_stat = apply_mod(defense_stat, MOD_RUIN)

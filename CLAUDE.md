@@ -99,6 +99,17 @@ Located in `calc/modifiers.py`. Key mechanics:
 - 508 max total EVs, 252 per stat
 - Doubles format (spread moves get 0.75x multiplier)
 
+### Critical Hits and Ruin Abilities
+
+**IMPORTANT**: Ruin abilities (Sword of Ruin, Beads of Ruin, Tablets of Ruin, Vessel of Ruin) are **ability-based field effects**, NOT stat stage changes. They **always apply**, even on critical hits.
+
+- **Critical hits ignore stat stage changes** (e.g., Intimidate's -1 Atk, Calm Mind's +1 SpD)
+- **Critical hits do NOT ignore Ruin abilities** — Sword of Ruin's 0.75x Defense reduction still applies on crits
+- This means moves like Surging Strikes (always crits) still benefit from Chien-Pao's Sword of Ruin
+- The damage calc auto-detects Ruin abilities from attacker/defender ability names
+
+**Do NOT tell users that Ruin abilities are bypassed by critical hits. This is incorrect.**
+
 ## Testing
 
 Tests use pytest with `asyncio_mode = "auto"`. Common fixtures in `tests/conftest.py`:
@@ -391,7 +402,7 @@ await calculate_bulk_offensive_calcs(
 - `"tera"` — Attacker Terastallized
 - `"rain"` / `"sun"` — Weather active
 - `"rain_tera"` / `"sun_tera"` — Weather + Tera combined
-- `"intimidate"` — Attacker at -1 Atk (skipped for always-crit moves)
+- `"intimidate"` — Attacker at -1 Atk (stat stage ignored for always-crit moves, but Ruin abilities still apply)
 - `"helping_hand"` — Helping Hand boost active
 
 **Output:** Returns markdown tables per scenario, Showdown-style calc strings, OHKO/2HKO counts, and structured results grouped by defender.
