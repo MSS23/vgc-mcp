@@ -661,6 +661,97 @@ class TestDefenderTera:
 
 
 # =============================================================================
+# Tests: Sword of Ruin auto-detection in bulk calcs
+# =============================================================================
+
+CHIEN_PAO_STATS = BaseStats(
+    hp=80, attack=120, defense=80,
+    special_attack=90, special_defense=65, speed=135,
+)
+
+
+class TestSwordOfRuinBulkCalcs:
+    """Ruin abilities are field effects (not stat stages) and must always apply,
+    including on critical hits. They should be auto-detected from ability names."""
+
+    @pytest.fixture
+    def chien_pao(self):
+        return _make_build(
+            "chien-pao",
+            ["dark", "ice"],
+            CHIEN_PAO_STATS,
+            nature=Nature.ADAMANT,
+            evs={"attack": 252, "speed": 252, "hp": 4},
+            item="focus-sash",
+            ability="sword-of-ruin",
+        )
+
+    @pytest.fixture
+    def icicle_crash(self):
+        return _make_move("icicle-crash", "ice", power=85)
+
+    def test_sword_of_ruin_auto_detected_in_bulk_calcs(
+        self, chien_pao, incineroar, icicle_crash
+    ):
+        """Chien-Pao's Sword of Ruin should be auto-detected and increase damage."""
+        # Chien-Pao with Sword of Ruin ability
+        summary_ruin = run_bulk_calcs(
+            chien_pao, [icicle_crash], [incineroar],
+            [DEFAULT_SCENARIOS["normal"]],
+        )
+
+        # Same Pokemon but without the Ruin ability
+        chien_pao_no_ruin = _make_build(
+            "chien-pao",
+            ["dark", "ice"],
+            CHIEN_PAO_STATS,
+            nature=Nature.ADAMANT,
+            evs={"attack": 252, "speed": 252, "hp": 4},
+            item="focus-sash",
+            ability="inner-focus",  # Non-Ruin ability
+        )
+        summary_no_ruin = run_bulk_calcs(
+            chien_pao_no_ruin, [icicle_crash], [incineroar],
+            [DEFAULT_SCENARIOS["normal"]],
+        )
+
+        assert summary_ruin.results[0].max_pct > summary_no_ruin.results[0].max_pct, (
+            "Sword of Ruin should increase damage in bulk calcs via auto-detection"
+        )
+
+    def test_sword_of_ruin_applies_on_always_crit_in_bulk_calcs(
+        self, chien_pao, incineroar
+    ):
+        """Sword of Ruin must apply even when move always crits (Flower Trick)."""
+        flower_trick = _make_move(
+            "flower-trick", "grass", power=70, always_crit=True,
+        )
+
+        summary_ruin = run_bulk_calcs(
+            chien_pao, [flower_trick], [incineroar],
+            [DEFAULT_SCENARIOS["normal"]],
+        )
+
+        chien_pao_no_ruin = _make_build(
+            "chien-pao",
+            ["dark", "ice"],
+            CHIEN_PAO_STATS,
+            nature=Nature.ADAMANT,
+            evs={"attack": 252, "speed": 252, "hp": 4},
+            item="focus-sash",
+            ability="inner-focus",
+        )
+        summary_no_ruin = run_bulk_calcs(
+            chien_pao_no_ruin, [flower_trick], [incineroar],
+            [DEFAULT_SCENARIOS["normal"]],
+        )
+
+        assert summary_ruin.results[0].max_pct > summary_no_ruin.results[0].max_pct, (
+            "Sword of Ruin must increase damage even on always-crit moves"
+        )
+
+
+# =============================================================================
 # Tests: Export generation
 # =============================================================================
 

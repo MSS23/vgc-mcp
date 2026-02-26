@@ -1548,5 +1548,163 @@ class TestAutoFillFromBuild:
         )
 
 
+class TestSwordOfRuinWithCrits:
+    """Sword of Ruin is a field effect, NOT a stat stage.
+    It must always apply even on critical hits."""
+
+    def _make_urshifu(self):
+        return PokemonBuild(
+            name="urshifu-rapid-strike",
+            base_stats=BaseStats(
+                hp=100, attack=130, defense=100,
+                special_attack=63, special_defense=60, speed=97
+            ),
+            nature=Nature.ADAMANT,
+            evs=EVSpread(attack=252, speed=252, hp=4),
+            types=["Fighting", "Water"],
+            ability="unseen-fist"
+        )
+
+    def _make_ogerpon(self):
+        return PokemonBuild(
+            name="ogerpon-hearthflame",
+            base_stats=BaseStats(
+                hp=80, attack=120, defense=84,
+                special_attack=60, special_defense=96, speed=110
+            ),
+            nature=Nature.JOLLY,
+            evs=EVSpread(hp=252, speed=252, defense=4),
+            types=["Grass", "Fire"]
+        )
+
+    def _make_surging_strikes(self):
+        return Move(
+            name="surging-strikes",
+            type="Water",
+            category=MoveCategory.PHYSICAL,
+            power=25,
+            accuracy=100,
+            pp=5,
+        )
+
+    def test_sword_of_ruin_applies_on_always_crit_moves(self):
+        """Sword of Ruin defense reduction must apply even when move always crits."""
+        urshifu = self._make_urshifu()
+        ogerpon = self._make_ogerpon()
+        surging_strikes = self._make_surging_strikes()
+
+        result_no_ruin = calculate_damage(
+            urshifu, ogerpon, surging_strikes,
+            DamageModifiers(is_doubles=True, sword_of_ruin=False)
+        )
+        result_with_ruin = calculate_damage(
+            urshifu, ogerpon, surging_strikes,
+            DamageModifiers(is_doubles=True, sword_of_ruin=True)
+        )
+
+        # Sword of Ruin should increase damage (0.75x defense = ~1.33x damage)
+        assert result_with_ruin.max_damage > result_no_ruin.max_damage, (
+            "Sword of Ruin must increase damage even on always-crit moves like Surging Strikes"
+        )
+
+    def test_sword_of_ruin_auto_detected_from_attacker_ability(self):
+        """Sword of Ruin should be auto-detected from the attacker's ability name."""
+        chien_pao = PokemonBuild(
+            name="chien-pao",
+            base_stats=BaseStats(
+                hp=80, attack=120, defense=80,
+                special_attack=90, special_defense=65, speed=135
+            ),
+            nature=Nature.ADAMANT,
+            evs=EVSpread(attack=252, speed=252, hp=4),
+            types=["Dark", "Ice"],
+            ability="sword-of-ruin"
+        )
+        ogerpon = self._make_ogerpon()
+        icicle_crash = Move(
+            name="icicle-crash", type="Ice",
+            category=MoveCategory.PHYSICAL, power=85, accuracy=90, pp=10
+        )
+
+        # No explicit flag — should auto-detect from ability
+        result_auto = calculate_damage(
+            chien_pao, ogerpon, icicle_crash,
+            DamageModifiers(is_doubles=True)
+        )
+        result_explicit = calculate_damage(
+            chien_pao, ogerpon, icicle_crash,
+            DamageModifiers(is_doubles=True, sword_of_ruin=True)
+        )
+
+        assert result_auto.max_damage == result_explicit.max_damage, (
+            "Auto-detected Sword of Ruin should match explicitly set flag"
+        )
+
+    def test_beads_of_ruin_auto_detected_from_attacker_ability(self):
+        """Beads of Ruin should be auto-detected from the attacker's ability name."""
+        chi_yu = PokemonBuild(
+            name="chi-yu",
+            base_stats=BaseStats(
+                hp=55, attack=80, defense=80,
+                special_attack=135, special_defense=120, speed=100
+            ),
+            nature=Nature.MODEST,
+            evs=EVSpread(special_attack=252, speed=252, hp=4),
+            types=["Dark", "Fire"],
+            ability="beads-of-ruin"
+        )
+        ogerpon = self._make_ogerpon()
+        heat_wave = Move(
+            name="heat-wave", type="Fire",
+            category=MoveCategory.SPECIAL, power=95, accuracy=90, pp=10,
+            target="all-other-pokemon"
+        )
+
+        result_auto = calculate_damage(
+            chi_yu, ogerpon, heat_wave,
+            DamageModifiers(is_doubles=True)
+        )
+        result_explicit = calculate_damage(
+            chi_yu, ogerpon, heat_wave,
+            DamageModifiers(is_doubles=True, beads_of_ruin=True)
+        )
+
+        assert result_auto.max_damage == result_explicit.max_damage, (
+            "Auto-detected Beads of Ruin should match explicitly set flag"
+        )
+
+    def test_tablets_of_ruin_auto_detected_from_defender_ability(self):
+        """Tablets of Ruin should be auto-detected from the defender's ability name."""
+        urshifu = self._make_urshifu()
+        wo_chien = PokemonBuild(
+            name="wo-chien",
+            base_stats=BaseStats(
+                hp=85, attack=85, defense=100,
+                special_attack=95, special_defense=135, speed=70
+            ),
+            nature=Nature.BOLD,
+            evs=EVSpread(hp=252, defense=252, special_defense=4),
+            types=["Dark", "Grass"],
+            ability="tablets-of-ruin"
+        )
+        close_combat = Move(
+            name="close-combat", type="Fighting",
+            category=MoveCategory.PHYSICAL, power=120, accuracy=100, pp=5
+        )
+
+        result_auto = calculate_damage(
+            urshifu, wo_chien, close_combat,
+            DamageModifiers(is_doubles=True)
+        )
+        result_explicit = calculate_damage(
+            urshifu, wo_chien, close_combat,
+            DamageModifiers(is_doubles=True, tablets_of_ruin=True)
+        )
+
+        assert result_auto.max_damage == result_explicit.max_damage, (
+            "Auto-detected Tablets of Ruin should match explicitly set flag"
+        )
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

@@ -92,11 +92,17 @@ def build_scenario_modifiers(
 
     Special case: if the move always crits (e.g. Surging Strikes),
     Intimidate's -1 Atk stage is ignored because critical hits
-    bypass negative attack stages.
+    bypass negative attack stat stages.
+
+    Note: Ruin abilities (Sword of Ruin, Beads of Ruin, etc.) are NOT
+    stat stages — they are ability-based field effects that always apply,
+    even on critical hits. They are auto-detected by calculate_damage()
+    from the attacker/defender ability names.
     """
     attack_stage = scenario.attack_stage
 
-    # Critical hits ignore negative attack stat stages
+    # Critical hits ignore negative attack stat stages (e.g. Intimidate).
+    # This does NOT apply to Ruin abilities, which are field effects.
     if move.always_crit and attack_stage < 0:
         attack_stage = 0
 
