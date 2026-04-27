@@ -37,7 +37,7 @@ Comprehensive guide for deploying the VGC MCP Server on various platforms.
 
 ## Local Deployment (stdio)
 
-**For end users** - See [LOCAL_SETUP.md](LOCAL_SETUP.md) for detailed instructions.
+**For end users** - See [LOCAL_SETUP.md](local-setup.md) for detailed instructions.
 
 **Quick Setup:**
 
@@ -719,4 +719,4 @@ engine = create_async_engine("postgresql+asyncpg://user:pass@localhost/vgc")
 
 ---
 
-**Questions?** See [FAQ.md](FAQ.md) or open an issue on GitHub!
+**Questions?** See [FAQ.md](faq.md) or open an issue on GitHub!

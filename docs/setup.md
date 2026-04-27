@@ -409,5 +409,5 @@ Copy and paste into your terminal/run dialog:
 ## Need Help?
 
 - Ask Claude: "What can you help me with?"
-- Detailed local setup guide: [LOCAL_SETUP.md](LOCAL_SETUP.md)
+- Detailed local setup guide: [LOCAL_SETUP.md](local-setup.md)
 - Report issues: https://github.com/MSS23/vgc-mcp/issues

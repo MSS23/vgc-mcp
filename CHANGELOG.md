@@ -9,11 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Comprehensive production documentation:
-  - `TECHNICAL_GUIDE.md` - MCP architecture explained for beginners
-  - `DEVELOPMENT.md` - Developer workflow and contribution guide
-  - `DEPLOYMENT.md` - Deployment options (Docker, Fly.io, Render, self-hosted)
-  - `API_REFERENCE.md` - Complete tool catalog with examples
-  - `FAQ.md` - Frequently asked questions and troubleshooting
+  - `docs/technical-guide.md` - MCP architecture explained for beginners
+  - `docs/development.md` - Developer workflow and contribution guide
+  - `docs/deploy.md` - Deployment options (Docker, Fly.io, Render, self-hosted)
+  - `docs/api-reference.md` - Complete tool catalog with examples
+  - `docs/faq.md` - Frequently asked questions and troubleshooting
   - `CONTRIBUTING.md` - Contribution guidelines and code of conduct
   - `LICENSE` - MIT License
 - Beginner-friendly MCP protocol explanations with analogies

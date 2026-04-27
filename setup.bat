@@ -69,6 +69,6 @@ echo   - "Does Flutter Mane OHKO Incineroar?"
 echo   - "Help me build a Rain team"
 echo   - "What EVs to survive Urshifu?"
 echo.
-echo Need help? See LOCAL_SETUP.md or https://github.com/MSS23/vgc-mcp/issues
+echo Need help? See docs/local-setup.md or https://github.com/MSS23/vgc-mcp/issues
 echo.
 pause

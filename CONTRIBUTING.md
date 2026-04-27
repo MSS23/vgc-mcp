@@ -46,7 +46,7 @@ Looking to contribute for the first time? Look for issues tagged with:
 
 ## Development Setup
 
-See [DEVELOPMENT.md](DEVELOPMENT.md) for detailed development setup instructions.
+See [DEVELOPMENT.md](docs/development.md) for detailed development setup instructions.
 
 **Quick Start:**
 
@@ -353,9 +353,9 @@ Examples, mockups, related features
 
 ## Development Resources
 
-- **DEVELOPMENT.md** - Detailed development guide
-- **TECHNICAL_GUIDE.md** - MCP architecture and internals
-- **API_REFERENCE.md** - Complete tool reference
+- **docs/development.md** - Detailed development guide
+- **docs/technical-guide.md** - MCP architecture and internals
+- **docs/api-reference.md** - Complete tool reference
 - **CLAUDE.md** - Claude Code integration guidelines
 
 ## Questions?

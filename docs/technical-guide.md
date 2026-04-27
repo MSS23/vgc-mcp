@@ -1017,9 +1017,9 @@ DEBUG:mcp: ← Sending: {"jsonrpc": "2.0", "id": 1, "result": {...}}
 - Test everything with pytest
 
 **Next Steps:**
-- Read [DEVELOPMENT.md](DEVELOPMENT.md) to start contributing
-- Read [API_REFERENCE.md](API_REFERENCE.md) for complete tool catalog
-- Read [DEPLOYMENT.md](DEPLOYMENT.md) to self-host
+- Read [DEVELOPMENT.md](development.md) to start contributing
+- Read [API_REFERENCE.md](api-reference.md) for complete tool catalog
+- Read [DEPLOYMENT.md](deploy.md) to self-host
 
 ---
 
@@ -1032,4 +1032,4 @@ DEBUG:mcp: ← Sending: {"jsonrpc": "2.0", "id": 1, "result": {...}}
 
 ---
 
-**Questions?** Open an issue on GitHub or see [FAQ.md](FAQ.md)!
+**Questions?** Open an issue on GitHub or see [FAQ.md](faq.md)!

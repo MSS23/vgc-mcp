@@ -4,9 +4,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-Compatible-green.svg)](https://modelcontextprotocol.io/)
 
-A Model Context Protocol (MCP) server providing 157+ tools for competitive Pokemon VGC (Video Game Championships) team building.
+A Model Context Protocol (MCP) server providing 195+ tools for competitive Pokemon VGC (Video Game Championships) team building.
 
-**New to MCP?** Read the [Technical Guide](TECHNICAL_GUIDE.md) for a beginner-friendly explanation.
+**New to MCP?** Read the [Technical Guide](docs/technical-guide.md) for a beginner-friendly explanation.
 
 ## Features
 
@@ -24,29 +24,31 @@ A Model Context Protocol (MCP) server providing 157+ tools for competitive Pokem
 
 1. Install Python 3.11+ from https://python.org
 2. Install package: `pip install -e .`
-3. Add to Claude Desktop config (see [Setup Guide](SETUP_GUIDE.md))
+3. Add to Claude Desktop config (see [Setup Guide](docs/setup.md))
 4. Restart Claude Desktop
 5. Ask: "Does Flutter Mane OHKO Incineroar?" 🚀
 
 **Windows users:** Double-click `setup.bat` for automatic setup!
 
 **Detailed Instructions:**
-- [SETUP_GUIDE.md](SETUP_GUIDE.md) - Choose local (free) or remote (premium) setup
-- [LOCAL_SETUP.md](LOCAL_SETUP.md) - Step-by-step local installation
-- [USER_GUIDE.md](USER_GUIDE.md) - How to use the tools
+- [docs/setup.md](docs/setup.md) - Choose local (free) or remote (premium) setup
+- [docs/local-setup.md](docs/local-setup.md) - Step-by-step local installation
+- [docs/user-guide.md](docs/user-guide.md) - How to use the tools
 
 ## Documentation
 
+All docs live in [`docs/`](docs/) — see [`docs/README.md`](docs/README.md) for the index.
+
 ### For Users
-- **[Setup Guide](SETUP_GUIDE.md)** - Get started with FREE Claude Desktop
-- **[User Guide](USER_GUIDE.md)** - How to use VGC tools effectively
-- **[FAQ](FAQ.md)** - Common questions and troubleshooting
-- **[API Reference](API_REFERENCE.md)** - Complete tool catalog
+- **[Setup Guide](docs/setup.md)** - Get started with FREE Claude Desktop
+- **[User Guide](docs/user-guide.md)** - How to use VGC tools effectively
+- **[FAQ](docs/faq.md)** - Common questions and troubleshooting
+- **[API Reference](docs/api-reference.md)** - Complete tool catalog
 
 ### For Developers
-- **[Technical Guide](TECHNICAL_GUIDE.md)** - MCP architecture explained (beginner-friendly!)
-- **[Development Guide](DEVELOPMENT.md)** - Contributing code
-- **[Deployment Guide](DEPLOYMENT.md)** - Self-hosting options
+- **[Technical Guide](docs/technical-guide.md)** - MCP architecture explained (beginner-friendly!)
+- **[Development Guide](docs/development.md)** - Contributing code
+- **[Deployment Guide](docs/deploy.md)** - Self-hosting options
 - **[Contributing](CONTRIBUTING.md)** - How to contribute
 
 ## Example Usage
@@ -75,9 +77,9 @@ IVs: 0 Atk
 
 | Server | Tools | Best For |
 |--------|-------|----------|
-| `vgc-mcp` | 157 | Claude, GPT-4 (full feature set) |
-| `vgc-mcp-lite` | 49 | Smaller models, essential tools only |
-| `vgc-mcp-micro` | 15 | Minimal deployment, core features |
+| `vgc-mcp` | 195 | Claude, GPT-4 (full feature set) |
+| `vgc-mcp-lite` | ~57 | Smaller models, essential tools only |
+| `vgc-mcp-micro` | 12 | Minimal deployment, core features |
 
 ## Deployment Options
 
@@ -88,7 +90,7 @@ IVs: 0 Atk
 | **Fly.io** | 15 min | $5-20/mo | Production, auto-scaling |
 | **Render** | 10 min | Free tier | Quick prototyping |
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed instructions.
+See [docs/deploy.md](docs/deploy.md) for detailed instructions.
 
 ## Key Capabilities
 
@@ -130,7 +132,7 @@ ruff format src/
 mypy src/vgc_mcp
 ```
 
-See [DEVELOPMENT.md](DEVELOPMENT.md) for detailed development guide.
+See [docs/development.md](docs/development.md) for detailed development guide.
 
 ## Contributing
 
@@ -150,7 +152,7 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ## Support
 
-- **Questions?** See [FAQ.md](FAQ.md)
+- **Questions?** See [docs/faq.md](docs/faq.md)
 - **Bug reports:** [Open an issue](https://github.com/MSS23/vgc-mcp/issues)
 - **Discussions:** [GitHub Discussions](https://github.com/MSS23/vgc-mcp/discussions)
 

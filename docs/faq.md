@@ -21,7 +21,7 @@ Common questions and troubleshooting for the VGC MCP Server.
 - **Local setup** (recommended): FREE ✅
 - **Remote setup**: Requires Claude Desktop Premium 💎
 
-See [LOCAL_SETUP.md](LOCAL_SETUP.md) for installation instructions.
+See [LOCAL_SETUP.md](local-setup.md) for installation instructions.
 
 ---
 
@@ -444,7 +444,7 @@ Updates happen automatically on the server.
 
 ### Can I run this on a server?
 
-**Yes!** See [DEPLOYMENT.md](DEPLOYMENT.md) for:
+**Yes!** See [DEPLOYMENT.md](deploy.md) for:
 
 - Docker deployment
 - Fly.io deployment (production)
@@ -534,7 +534,7 @@ Send JSON-RPC messages to `/sse`:
 }
 ```
 
-See [TECHNICAL_GUIDE.md](TECHNICAL_GUIDE.md) for protocol details.
+See [TECHNICAL_GUIDE.md](technical-guide.md) for protocol details.
 
 ---
 
@@ -587,10 +587,10 @@ rm -rf data/cache/
 
 ## Still Have Questions?
 
-- **Technical details**: [TECHNICAL_GUIDE.md](TECHNICAL_GUIDE.md)
-- **Development**: [DEVELOPMENT.md](DEVELOPMENT.md)
-- **Deployment**: [DEPLOYMENT.md](DEPLOYMENT.md)
-- **API reference**: [API_REFERENCE.md](API_REFERENCE.md)
+- **Technical details**: [TECHNICAL_GUIDE.md](technical-guide.md)
+- **Development**: [DEVELOPMENT.md](development.md)
+- **Deployment**: [DEPLOYMENT.md](deploy.md)
+- **API reference**: [API_REFERENCE.md](api-reference.md)
 - **Report issues**: https://github.com/MSS23/vgc-mcp/issues
 - **Discussions**: https://github.com/MSS23/vgc-mcp/discussions
 

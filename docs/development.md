@@ -562,7 +562,7 @@ async def test_find_best_nature_special():
 
 **Step 4: Document**
 
-Add to [API_REFERENCE.md](API_REFERENCE.md):
+Add to [API_REFERENCE.md](api-reference.md):
 
 ```markdown
 ### find_best_nature
@@ -785,9 +785,9 @@ twine upload dist/*
 ## Additional Resources
 
 - **Contributing Guide**: [CONTRIBUTING.md](CONTRIBUTING.md)
-- **Technical Architecture**: [TECHNICAL_GUIDE.md](TECHNICAL_GUIDE.md)
-- **API Reference**: [API_REFERENCE.md](API_REFERENCE.md)
-- **Deployment**: [DEPLOYMENT.md](DEPLOYMENT.md)
+- **Technical Architecture**: [TECHNICAL_GUIDE.md](technical-guide.md)
+- **API Reference**: [API_REFERENCE.md](api-reference.md)
+- **Deployment**: [DEPLOYMENT.md](deploy.md)
 
 ---
 

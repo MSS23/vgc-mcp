@@ -594,8 +594,8 @@ For a complete list of all 157+ tools, run in Claude Desktop:
 
 > "List all your VGC tools"
 
-Or see the [VGC_MCP_Guide.md](VGC_MCP_Guide.md) for categorized examples.
+Or see the [VGC_MCP_Guide.md](vgc-guide.md) for categorized examples.
 
 ---
 
-**Need Help?** See [FAQ.md](FAQ.md) or [USER_GUIDE.md](USER_GUIDE.md)!
+**Need Help?** See [FAQ.md](faq.md) or [USER_GUIDE.md](user-guide.md)!
