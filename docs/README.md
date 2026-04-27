@@ -23,6 +23,7 @@ files most package managers / tools expect (`README.md`, `CHANGELOG.md`,
 - [`development.md`](development.md) — dev workflow and conventions.
 - [`technical-guide.md`](technical-guide.md) — deep-dive on internals.
 - [`api-reference.md`](api-reference.md) — tool catalog with parameter docs.
+- [`tools-catalog.md`](tools-catalog.md) — auto-generated tool index by module.
 - [`project-overview.md`](project-overview.md) — high-level architecture.
 
 ## For Claude Code / Anthropic clients

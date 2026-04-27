@@ -789,7 +789,7 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
         return result
 
     @mcp.tool()
-    async def find_survival_evs(
+    async def find_survival_evs_meta(
         pokemon_name: str,
         nature: str,
         threat_pokemon: str,
@@ -798,7 +798,12 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
         survival_threshold: float = 100.0
     ) -> dict:
         """
-        Find minimum bulk EVs needed to survive a specific attack.
+        Find minimum bulk EVs needed to survive a specific attack (meta-threat variant).
+
+        This is the meta-threat-aware version. The canonical survival EV finder
+        is `find_survival_evs` in damage_tools.py — prefer that for general use.
+        Use this one when you specifically want the meta-threat module's
+        Smogon-spread defaults and survival_threshold semantics.
 
         Args:
             pokemon_name: Your Pokemon
