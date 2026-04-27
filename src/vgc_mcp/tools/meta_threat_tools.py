@@ -538,27 +538,28 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
         threat_move: str,
         survival_threshold: float = 100.0
     ) -> dict:
-        """
-        Check if a spread survives a specific attack from a threat.
+        """⚠️ NARROW USE ONLY. Prefer `calculate_damage_output` for general damage/survival.
 
-        Useful for verifying defensive benchmarks like "survives Koraidon
-        Flare Blitz" or "survives Flutter Mane Moonblast".
+        USE THIS WHEN: you have an EXACT EV spread and want a binary
+        "does it clear the threshold?" verdict. This tool does NOT handle
+        Tera, Life Orb chip damage, screens, or many items / abilities.
+
+        FOR EVERYTHING ELSE — Tera, Life Orb chip, screens, weather, items,
+        abilities, partial info — use `calculate_damage_output` (the primary
+        damage tool).
 
         Args:
             pokemon_name: Your Pokemon
             nature: Your nature
-            hp_evs: HP EVs
-            def_evs: Defense EVs
-            spd_evs: Special Defense EVs
+            hp_evs / def_evs / spd_evs: exact EV breakdown
             threat_pokemon: Attacking Pokemon
             threat_move: Move name
-            survival_threshold: Required survival percentage (0-100).
-                - 100 = must survive all rolls (default, "always survives")
-                - 75 = survive 75% of rolls ("most of the time")
-                - 50 = survive 50% of rolls ("sometimes")
+            survival_threshold: Required survival % (default 100). 93.75 is
+                the standard "survive max roll only" benchmark.
 
         Returns:
-            Survival analysis with damage range and survival percentage
+            Pass/fail vs threshold with damage range. For nuanced calcs,
+            use `calculate_damage_output` instead.
         """
         # Validate nature first
         try:

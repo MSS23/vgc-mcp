@@ -259,10 +259,38 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         defender_defense_stage: int = 0,
         defender_special_defense_stage: int = 0,
         aurora_veil: bool = False,
-        friend_guard: bool = False
+        friend_guard: bool = False,
+        defender_starting_hp_percent: float = 100.0,
+        attacker_starting_hp_percent: float = 100.0,
     ) -> dict:
-        """
-        Calculate damage from one Pokemon to another.
+        """⭐ PRIMARY DAMAGE TOOL — use this for ANY damage / KO / survival question.
+
+        USE THIS WHEN the user asks ANY of:
+            - "Does X OHKO/2HKO/KO Y?"
+            - "Can X survive Y?"
+            - "Does this spread live Y after Tera/chip/screens/whatever?"
+            - "What's the damage of X's move vs Y?"
+            - "How much HP does Y have left after X's attack?"
+
+        FULLY HANDLES: Tera (both sides), every item (Life Orb, Choice items,
+        Assault Vest, Booster Energy, Sitrus Berry, Hearthflame Mask, etc.),
+        every ability (Sheer Force, Intimidate, Multiscale, Ruin abilities,
+        Adaptability, etc.), weather, terrain, screens (Reflect, Light Screen,
+        Aurora Veil), Helping Hand, Friend Guard, stat stages, multi-hit moves,
+        always-crit moves, spread-move 0.75x, and prior chip damage.
+
+        DO NOT USE the simpler tools (`check_survival_benchmark`,
+        `survive_multiple_hits`, `find_bulk_to_survive_hits`) unless the user
+        is specifically asking about *finding spreads*, not computing damage.
+
+        EXAMPLE — "Does Tera Normal Entei live Sheer Force LO Earth Power
+        after 1 chip of LO damage?":
+            calculate_damage_output(
+                attacker_name="landorus", defender_name="entei",
+                move_name="earth-power", attacker_item="life-orb",
+                attacker_ability="sheer-force", defender_tera_type="normal",
+                defender_starting_hp_percent=90.0,  # 1 chip = 10% lost
+            )
 
         By default, uses the most common Smogon VGC spreads for both Pokemon when
         nature/EVs are not specified. Calculates against the top 3 defender spreads
@@ -307,11 +335,23 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             defender_special_defense_stage: Defender's Sp. Def stage (-6 to +6).
             aurora_veil: True if Aurora Veil is active (halves both physical and special damage)
             friend_guard: True if ally has Friend Guard ability (reduces damage to 0.75x)
+            defender_starting_hp_percent: Defender's HP at the moment of the hit
+                (0.1-100). Use this to model prior chip damage — e.g. 90.0 if
+                defender has taken one Life Orb chip (10%), 75.0 if it lost a
+                Sitrus to a previous hit, etc. Affects KO computation only;
+                damage rolls themselves are unchanged.
+            attacker_starting_hp_percent: Attacker's HP %, used only for
+                Multiscale / Shadow Shield activation checks (these abilities
+                halve damage at full HP). Default 100.0 (full HP).
 
         Returns:
             Damage calculations against top defender spreads with KO probabilities and items.
             IMPORTANT: The response includes 'attacker_spread' showing the exact spread used.
             Always show this to the user so they know what nature/EVs/item were assumed.
+
+            When `defender_starting_hp_percent` < 100, the response also includes
+            `survival_after_chip` describing whether the defender survives given
+            the prior damage.
 
         Note:
             Uses Smogon VGC spreads by default. If damage seems wrong, check the
@@ -955,6 +995,39 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             defender_spread_str = f"{defender_nature.title()} {defender_hp_evs} HP / {relevant_def_evs} {def_stat_name} {defender_name}"
 
             response["analysis"] = f"{attacker_spread_str}'s {move_name} vs {defender_spread_str}: {min_pct}-{max_pct}% ({hp_remain_min_pct}-{hp_remain_max_pct}% remaining). {result.ko_chance}."
+
+            # Chip-aware survival check: if defender_starting_hp_percent < 100,
+            # compute survival against the reduced HP pool. Damage rolls don't
+            # change — we just count how many rolls KO the chip-reduced HP.
+            if 0 < defender_starting_hp_percent < 100:
+                effective_hp = max(1, int(round(result.defender_hp * defender_starting_hp_percent / 100)))
+                rolls = result.rolls or [result.min_damage] * 8 + [result.max_damage] * 8
+                kos = sum(1 for r in rolls if r >= effective_hp)
+                survives_n = len(rolls) - kos
+                survival_pct = round(survives_n / len(rolls) * 100, 2) if rolls else 0.0
+
+                if kos == 0:
+                    chip_verdict = (f"Survives every roll ({survival_pct}%) — defender at "
+                                    f"{defender_starting_hp_percent}% HP has {effective_hp} HP "
+                                    f"vs max {result.max_damage} damage.")
+                elif kos == len(rolls):
+                    chip_verdict = (f"Guaranteed KO at {defender_starting_hp_percent}% starting HP — "
+                                    f"every roll ({result.min_damage}+) clears the {effective_hp} HP pool.")
+                else:
+                    chip_verdict = (f"{survival_pct}% survival at {defender_starting_hp_percent}% "
+                                    f"starting HP ({survives_n}/{len(rolls)} rolls). "
+                                    f"Effective HP: {effective_hp}, damage range: "
+                                    f"{result.min_damage}-{result.max_damage}.")
+
+                response["survival_after_chip"] = {
+                    "starting_hp_percent": defender_starting_hp_percent,
+                    "effective_hp": effective_hp,
+                    "survives_rolls": survives_n,
+                    "ko_rolls": kos,
+                    "total_rolls": len(rolls),
+                    "survival_percent": survival_pct,
+                    "verdict": chip_verdict,
+                }
 
             # Add Showdown paste format for both Pokemon
             attacker.ability = attacker_ability
