@@ -1,5 +1,6 @@
 """MCP tools for bulk offensive damage calculations and export."""
 
+import asyncio
 import logging
 from typing import Optional
 
@@ -146,21 +147,24 @@ def register_bulk_calc_tools(
             if attacker_tera_type:
                 attacker.tera_type = attacker_tera_type
 
-            # Fetch moves
-            moves = []
-            for move_name in move_names:
-                move = await pokeapi.get_move(move_name, user_name=attacker_name)
-                moves.append(move)
+            # Fetch moves in parallel
+            moves = list(await asyncio.gather(
+                *[pokeapi.get_move(m, user_name=attacker_name) for m in move_names]
+            ))
 
-            # Build defenders
+            # Build defenders in parallel — up to 30 PokeAPI fetches at once
+            # (cached after first request, so subsequent runs are essentially free)
+            defender_results = await asyncio.gather(
+                *[_build_pokemon_from_smogon(n, pokeapi) for n in defender_names],
+                return_exceptions=True,
+            )
             defenders = []
             failed_defenders = []
-            for defender_name in defender_names:
-                try:
-                    defender = await _build_pokemon_from_smogon(defender_name, pokeapi)
-                    defenders.append(defender)
-                except Exception as e:
-                    failed_defenders.append({"name": defender_name, "error": str(e)})
+            for name, result in zip(defender_names, defender_results):
+                if isinstance(result, Exception):
+                    failed_defenders.append({"name": name, "error": str(result)})
+                else:
+                    defenders.append(result)
 
             if not defenders:
                 return error_response(ErrorCodes.INTERNAL_ERROR, 'Could not build any defenders. Check Pokemon names.')
@@ -344,11 +348,10 @@ def register_bulk_calc_tools(
             if attacker_tera_type:
                 attacker.tera_type = attacker_tera_type
 
-            # Fetch moves
-            moves = []
-            for move_name in move_names:
-                move = await pokeapi.get_move(move_name, user_name=attacker_name)
-                moves.append(move)
+            # Fetch moves in parallel
+            moves = list(await asyncio.gather(
+                *[pokeapi.get_move(m, user_name=attacker_name) for m in move_names]
+            ))
 
             # Build defenders
             defenders = []
