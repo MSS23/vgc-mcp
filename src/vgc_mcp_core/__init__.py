@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
-"""VGC MCP Core - Shared modules for VGC team building tools.
+"""VGC MCP Core - Shared library for VGC team-building MCP servers.
 
-This package contains the shared functionality used by both vgc_mcp (full)
-and vgc_mcp_lite servers.
+Contains the calculation engine, data models, API clients, and helpers used
+by the plain-MCP `vgc_mcp` server in this repo (and by any MCP-UI sibling
+project that wants to reuse the same logic).
 """
 
 __version__ = "1.0.0"

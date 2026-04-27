@@ -6,5 +6,13 @@ enabling bidirectional sync between UI and chat commands.
 """
 
 from .build_manager import BuildStateManager
+from .battle_manager import BattleStateManager, BattleState, PokemonBattleState, FieldState, TurnRecord
 
-__all__ = ["BuildStateManager"]
+__all__ = [
+    "BuildStateManager",
+    "BattleStateManager",
+    "BattleState",
+    "PokemonBattleState",
+    "FieldState",
+    "TurnRecord",
+]

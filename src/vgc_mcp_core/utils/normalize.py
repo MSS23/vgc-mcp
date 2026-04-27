@@ -85,6 +85,171 @@ ITEM_ALIASES: dict[str, str] = {
     "roseliberry": "roseli-berry",
 }
 
+# Smogon API returns concatenated move names (e.g., "surgingstrikes" instead of
+# "surging-strikes"). PokeAPI requires the hyphenated form. This is a curated
+# list of the 200ish most-used VGC moves where the concatenation is ambiguous
+# enough that a naive split won't work. Single-word moves (e.g. "protect",
+# "psychic") pass through normalize_move() unchanged.
+MOVE_ALIASES: dict[str, str] = {
+    "surgingstrikes": "surging-strikes",
+    "closecombat": "close-combat",
+    "aquajet": "aqua-jet",
+    "uturn": "u-turn",
+    "voltswitch": "volt-switch",
+    "knockoff": "knock-off",
+    "earthpower": "earth-power",
+    "earthquake": "earthquake",
+    "fakeout": "fake-out",
+    "rockslide": "rock-slide",
+    "stoneedge": "stone-edge",
+    "iceshard": "ice-shard",
+    "icebeam": "ice-beam",
+    "icicelance": "icicle-lance",
+    "iciclespear": "icicle-spear",
+    "iciclecrash": "icicle-crash",
+    "icyshard": "icy-shard",
+    "thunderwave": "thunder-wave",
+    "thunderbolt": "thunderbolt",
+    "thunderpunch": "thunder-punch",
+    "wildcharge": "wild-charge",
+    "shadowball": "shadow-ball",
+    "shadowsneak": "shadow-sneak",
+    "moonblast": "moonblast",
+    "dazzlinggleam": "dazzling-gleam",
+    "playrough": "play-rough",
+    "drainingkiss": "draining-kiss",
+    "fairyball": "fairy-ball",
+    "energyball": "energy-ball",
+    "leafstorm": "leaf-storm",
+    "leafblade": "leaf-blade",
+    "powerwhip": "power-whip",
+    "hornleech": "horn-leech",
+    "spore": "spore",
+    "raining": "raining",
+    "ragepowder": "rage-powder",
+    "followme": "follow-me",
+    "helpinghand": "helping-hand",
+    "trickroom": "trick-room",
+    "tailwind": "tailwind",
+    "lightscreen": "light-screen",
+    "reflect": "reflect",
+    "auroraveil": "aurora-veil",
+    "willowisp": "will-o-wisp",
+    "stunspore": "stun-spore",
+    "sleeppowder": "sleep-powder",
+    "ragingfury": "raging-fury",
+    "flareblitz": "flare-blitz",
+    "sacredfire": "sacred-fire",
+    "heatwave": "heat-wave",
+    "flamethrower": "flamethrower",
+    "fireblast": "fire-blast",
+    "burningjealousy": "burning-jealousy",
+    "burnup": "burn-up",
+    "vcreate": "v-create",
+    "extremespeed": "extreme-speed",
+    "machpunch": "mach-punch",
+    "drainpunch": "drain-punch",
+    "focusblast": "focus-blast",
+    "focuspunch": "focus-punch",
+    "ironhead": "iron-head",
+    "irondefense": "iron-defense",
+    "bulletpunch": "bullet-punch",
+    "sandsearstorm": "sandsear-storm",
+    "wildboltstorm": "wildbolt-storm",
+    "bleakwindstorm": "bleakwind-storm",
+    "springtidestorm": "springtide-storm",
+    "psychic": "psychic",
+    "psyshock": "psyshock",
+    "expandingforce": "expanding-force",
+    "futuresight": "future-sight",
+    "storedpower": "stored-power",
+    "darkpulse": "dark-pulse",
+    "knock": "knock-off",
+    "suckerpunch": "sucker-punch",
+    "wickedblow": "wicked-blow",
+    "ruination": "ruination",
+    "snarl": "snarl",
+    "lashout": "lash-out",
+    "throatchop": "throat-chop",
+    "bittermalice": "bitter-malice",
+    "spiritbreak": "spirit-break",
+    "draconergy": "draco-meteor",
+    "dracometeor": "draco-meteor",
+    "dragonpulse": "dragon-pulse",
+    "dragonclaw": "dragon-claw",
+    "outrage": "outrage",
+    "scaleshot": "scale-shot",
+    "earthlypulse": "earth-power",
+    "highhorsepower": "high-horsepower",
+    "spikes": "spikes",
+    "stealthrock": "stealth-rock",
+    "ivycudgel": "ivy-cudgel",
+    "matchacudgel": "matcha-cudgel",
+    "syrupbomb": "syrup-bomb",
+    "trickroom2": "trick-room",
+    "calmmind": "calm-mind",
+    "swordsdance": "swords-dance",
+    "nastyplot": "nasty-plot",
+    "dragondance": "dragon-dance",
+    "tailglow": "tail-glow",
+    "shellsmash": "shell-smash",
+    "bodyslam": "body-slam",
+    "doubleedge": "double-edge",
+    "tripledive": "triple-dive",
+    "headlongrush": "headlong-rush",
+    "rockblast": "rock-blast",
+    "rockwrecker": "rock-wrecker",
+    "powerupperpunch": "power-up-punch",
+    "ragefist": "rage-fist",
+    "sappysneak": "sappy-sneak",
+    "armorcannon": "armor-cannon",
+    "torchsong": "torch-song",
+    "kickofftherace": "kickoff",
+    "skitterskat": "skitter-smack",
+    "skitterhop": "skitter-smack",
+    "tearfullook": "tearful-look",
+    "tantrumstomp": "stomping-tantrum",
+    "stompingtantrum": "stomping-tantrum",
+    "voltdrive": "volt-tackle",
+    "tachyoncutter": "tachyon-cutter",
+    "tripleaxel": "triple-axel",
+    "thousandwaves": "thousand-waves",
+    "thousandarrows": "thousand-arrows",
+    "spectralthief": "spectral-thief",
+    "fierywrath": "fiery-wrath",
+    "astralbarrage": "astral-barrage",
+    "glaciallance": "glacial-lance",
+    "blueflare": "blue-flare",
+    "boltstrike": "bolt-strike",
+    "secretpower": "secret-power",
+    "ancientpower": "ancient-power",
+    "weatherball": "weather-ball",
+    "muddywater": "muddy-water",
+    "originpulse": "origin-pulse",
+    "precipiceblades": "precipice-blades",
+    "freezedry": "freeze-dry",
+    "tritreasure": "tri-attack",
+    "triattack": "tri-attack",
+    "hyperbeam": "hyper-beam",
+    "gigaimpact": "giga-impact",
+    "shellsidearm": "shell-side-arm",
+    "icefang": "ice-fang",
+    "firefang": "fire-fang",
+    "thunderfang": "thunder-fang",
+    "psychicfangs": "psychic-fangs",
+    "powergem": "power-gem",
+    "ironhead2": "iron-head",
+    "headsmash": "head-smash",
+    "filletaway": "filletaway",
+    "trick": "trick",
+    "switcheroo": "switcheroo",
+    "encore": "encore",
+    "taunt": "taunt",
+    "disable": "disable",
+    "haze": "haze",
+    "topsyturvy": "topsy-turvy",
+}
+
 # Smogon API returns concatenated ability names (e.g., "sheerforce")
 # This maps them to hyphenated format for damage calc comparisons.
 ABILITY_ALIASES: dict[str, str] = {
@@ -232,15 +397,25 @@ def normalize_item(item: str) -> str:
 def normalize_move(move: str) -> str:
     """Normalize move name for consistent lookups.
 
+    Handles three input shapes:
+      - "Surging Strikes"    -> "surging-strikes"   (display)
+      - "surgingstrikes"     -> "surging-strikes"   (Smogon concatenated)
+      - "surging-strikes"    -> "surging-strikes"   (already canonical)
+
     Args:
-        move: Move name
+        move: Move name in any common shape.
 
     Returns:
-        Normalized move name (lowercase, hyphenated, no apostrophes)
+        Lowercase hyphenated form suitable for PokeAPI lookup.
     """
     if not move:
         return ""
-    return move.lower().replace(" ", "-").replace("'", "").strip()
+    lower = move.lower().replace(" ", "-").replace("'", "").strip()
+    # If already hyphenated, that's our canonical form. Otherwise the Smogon
+    # concatenated variant might need an explicit alias.
+    if "-" not in lower:
+        return MOVE_ALIASES.get(lower, lower)
+    return lower
 
 
 # Backwards-compatible alias — some older modules imported this name.

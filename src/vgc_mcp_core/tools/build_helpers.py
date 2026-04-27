@@ -1,7 +1,7 @@
 """Shared helpers for constructing PokemonBuild objects in tools.
 
-Tool implementations across `vgc_mcp/tools/` and `vgc_mcp_lite/tools/`
-repeatedly do:
+Tool implementations across `vgc_mcp/tools/` (and any sibling project that
+reuses this core) repeatedly do:
 
     base = await pokeapi.get_base_stats(name)
     types = await pokeapi.get_pokemon_types(name)

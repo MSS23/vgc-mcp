@@ -38,12 +38,13 @@ from vgc_mcp_core.api.smogon import SmogonStatsClient
 from vgc_mcp_core.api.pokepaste import PokePasteClient
 from vgc_mcp_core.team.manager import TeamManager
 from vgc_mcp_core.team.analysis import TeamAnalyzer
-from vgc_mcp_core.state import BuildStateManager
+from vgc_mcp_core.state import BuildStateManager, BattleStateManager
 
 from .tools import register_all as register_all_tools
 
-# Note: MCP-UI is only enabled in vgc-mcp-lite for smaller footprint
-# Full server focuses on tool completeness over visual components
+# This is the plain-MCP server. It does NOT depend on mcp-ui-server. Any
+# MCP-UI version of these tools lives in a sibling project so this one
+# stays client-agnostic (Claude Desktop, Claude.ai, ChatGPT, etc).
 
 
 # Initialize MCP server — shared presentation rules in vgc_mcp_core.presentation
@@ -177,6 +178,7 @@ pokepaste = PokePasteClient(cache)
 team_manager = TeamManager()
 analyzer = TeamAnalyzer()
 build_manager = BuildStateManager()
+battle_manager = BattleStateManager()
 
 # Auto-discover and register every `*_tools.py` module in tools/.
 # Each register_*_tools function is introspected and given the deps it asks for.
@@ -190,6 +192,7 @@ register_all_tools(
     team_manager=team_manager,
     analyzer=analyzer,
     build_manager=build_manager,
+    battle_manager=battle_manager,
 )
 
 

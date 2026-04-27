@@ -41,7 +41,8 @@ mypy src/vgc_mcp
 
 ### Repository Layout
 
-The repo ships **three server flavors** that share one core library:
+This project is the **plain-MCP** VGC server (no MCP-UI dependency). MCP-UI
+versions live in a sibling project that builds on top of this one's `core`.
 
 ```
 src/
@@ -55,34 +56,24 @@ src/
 │   ├── data/             # Static VGC data (glossary, sample teams, spread presets)
 │   ├── diff/             # Team diff models and reasoning
 │   ├── export/           # Excel/PDF damage report generators
-│   ├── state/            # BuildStateManager
-│   ├── tools/            # SHARED tool handlers (pure functions returning dicts)
+│   ├── state/            # BuildStateManager, BattleStateManager
+│   ├── tools/            # Shared tool handlers (pure functions returning dicts)
 │   ├── utils/            # errors, fuzzy matching, normalize, synergies, verdicts
 │   ├── validation/       # learnset validation
+│   ├── presentation.py   # MCP server `instructions=` block (table format rules)
 │   └── config.py         # Settings (API URLs, VGC defaults, EV limits)
 │
-├── vgc_mcp/              # FULL server (~197 tools) — entry: vgc-mcp
-│   ├── server.py         # FastMCP setup + tool registration loop
-│   └── tools/            # Thin register_*_tools(mcp, deps) wrappers
-│
-├── vgc_mcp_lite/         # LITE server (curated subset) — entry: vgc-mcp-lite
-│   ├── server.py
-│   └── tools/            # Thin wrappers calling shared handlers
-│
-└── vgc_mcp_micro/        # MICRO server (1 file, smallest footprint) — entry: vgc-mcp-micro
-    ├── server.py
-    └── tools/core_tools.py
+└── vgc_mcp/              # MCP server (200+ tools) — entry: vgc-mcp / vgc-mcp-http
+    ├── server.py         # FastMCP setup + tool registration loop
+    └── tools/            # Thin register_*_tools(mcp, deps) wrappers
+                          # Auto-discovered by tools/__init__.py
 ```
-
-**Why three flavors:** the full server exposes every tool (best for power users
-running locally). Lite is a curated subset for hosted/remote deployment where
-context size matters. Micro is the smallest viable footprint.
 
 **Where to put new code:**
 - New calc/data logic → `vgc_mcp_core/`
 - New tool handler logic → `vgc_mcp_core/tools/<area>_handlers.py`
 - New tool registration → `vgc_mcp/tools/<area>_tools.py` (thin wrapper)
-- Want it in lite/micro too? → register from those flavors' tools dirs
+  — auto-discovered, no edit to `server.py` required.
 
 ### Key Patterns
 

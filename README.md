@@ -77,9 +77,10 @@ IVs: 0 Atk
 
 | Server | Tools | Best For |
 |--------|-------|----------|
-| `vgc-mcp` | 195 | Claude, GPT-4 (full feature set) |
-| `vgc-mcp-lite` | ~57 | Smaller models, essential tools only |
-| `vgc-mcp-micro` | 12 | Minimal deployment, core features |
+| `vgc-mcp` | 206 | Claude / ChatGPT — full feature set, plain MCP (no MCP-UI) |
+
+> Looking for the MCP-UI / lite versions? They live in a separate sibling project
+> so this one can stay client-agnostic. Plain-MCP is the broadly-supported transport.
 
 ## Deployment Options
 

@@ -40,6 +40,7 @@ DEP_ALIASES: dict[str, list[str]] = {
     "team_manager": ["team_manager"],
     "analyzer": ["analyzer", "team_analyzer"],
     "build_manager": ["build_manager"],
+    "battle_manager": ["battle_manager"],
 }
 
 

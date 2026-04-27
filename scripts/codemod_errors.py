@@ -37,8 +37,6 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 TARGET_DIRS = [
     REPO / "src" / "vgc_mcp" / "tools",
-    REPO / "src" / "vgc_mcp_lite" / "tools",
-    REPO / "src" / "vgc_mcp_micro" / "tools",
 ]
 
 

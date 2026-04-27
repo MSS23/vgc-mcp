@@ -1,8 +1,8 @@
-"""Shared tool helpers used by both `vgc_mcp` and `vgc_mcp_lite` flavors.
+"""Shared tool helpers used by `vgc_mcp` and re-usable by any sibling project.
 
-The MCP server flavors (full / lite / micro) each declare which tools they
-expose, but the *implementation* of common patterns lives here so we don't
-maintain three forks of the same logic.
+This module holds *implementation* helpers (not tool registrations). The
+plain-MCP server in `vgc_mcp/tools/` and any MCP-UI sibling project can both
+import from here so the logic stays in one place.
 
 Currently exports:
 

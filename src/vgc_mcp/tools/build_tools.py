@@ -1,12 +1,10 @@
 # -*- coding: utf-8 -*-
-"""MCP tools for build state management (non-UI version).
+"""MCP tools for build state management.
 
 These tools enable state management for Pokemon builds:
 - Create/modify builds via chat commands
 - Reference builds by Pokemon name (natural language)
-- Returns JSON state (no HTML rendering)
-
-For UI-enabled version, see vgc_mcp_lite.tools.build_tools.
+- Returns JSON state (rendered as tables by the agent per presentation rules)
 """
 
 from typing import Optional

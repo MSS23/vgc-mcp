@@ -21,6 +21,7 @@ from .normalize import (
     clear_caches,
     ITEM_ALIASES,
     ABILITY_ALIASES,
+    MOVE_ALIASES,
 )
 
 __all__ = [
@@ -48,4 +49,5 @@ __all__ = [
     "clear_caches",
     "ITEM_ALIASES",
     "ABILITY_ALIASES",
+    "MOVE_ALIASES",
 ]

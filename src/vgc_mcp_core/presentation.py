@@ -1,13 +1,11 @@
 """MCP server `instructions=` block — controls how Claude renders tool output.
 
-This text is sent to every Claude session that connects to the full
-`vgc-mcp` server. It tells Claude to display damage calcs, spreads, and
-team analyses as **tables and code blocks** rather than prose paragraphs,
+This text is sent to every Claude session that connects to the `vgc-mcp`
+server. It tells Claude to display damage calcs, spreads, and team
+analyses as **tables and code blocks** rather than prose paragraphs,
 which is what end users actually want to read.
 
-The lite + micro flavors are out of scope here — they're being spun off
-into their own project. Edit this file when you want to change how
-the full server presents results.
+Edit this file when you want to change how the server presents results.
 """
 
 PRESENTATION_INSTRUCTIONS = """VGC Pokemon team building server (damage calcs, usage stats, team analysis).
