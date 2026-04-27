@@ -11,6 +11,7 @@ from vgc_mcp_core.api.smogon import SmogonStatsClient
 from vgc_mcp_core.calc.stats import calculate_speed, find_speed_evs
 from vgc_mcp_core.calc.speed import SPEED_BENCHMARKS, calculate_speed_tier, get_competitive_speed_benchmarks
 from vgc_mcp_core.models.pokemon import Nature
+from vgc_mcp_core.utils.errors import error_response, ErrorCodes
 
 # MCP-UI support (enabled in vgc-mcp-lite)
 from ..ui.resources import (
@@ -123,7 +124,7 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
                 nature1 = Nature(pokemon1_nature.lower())
                 nature2 = Nature(pokemon2_nature.lower())
             except ValueError as e:
-                return {"error": f"Invalid nature: {e}"}
+                return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {e}')
 
             # Calculate speeds
             speed1 = calculate_speed(base1.speed, 31, pokemon1_speed_evs, 50, nature1)
@@ -209,7 +210,7 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
             return result_dict
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def find_speed_evs_to_outspeed(
@@ -234,7 +235,7 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
             try:
                 parsed_nature = Nature(nature.lower())
             except ValueError:
-                return {"error": f"Invalid nature: {nature}"}
+                return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {nature}')
 
             evs_needed = find_speed_evs(
                 base_stats.speed,
@@ -348,7 +349,7 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
             return result_dict
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def get_speed_tiers(
@@ -405,7 +406,7 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def analyze_speed_spread(
@@ -433,7 +434,7 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
             try:
                 parsed_nature = Nature(nature.lower())
             except ValueError:
-                return {"error": f"Invalid nature: {nature}"}
+                return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {nature}')
 
             # Fetch competitive benchmarks if requested and smogon client available
             competitive_benchmarks = None
@@ -469,7 +470,7 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     # ========== Speed Tier Visualization Tools (merged from speed_tier_tools.py) ==========
 
@@ -852,7 +853,7 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
             try:
                 parsed_nature = Nature(nature.lower())
             except ValueError:
-                return {"error": f"Invalid nature: {nature}"}
+                return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {nature}')
 
             # Calculate your speed - use speed_stat directly if provided
             if speed_stat is not None:
@@ -912,7 +913,7 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
                     target_base_speed = target_base.speed
                     data_source = "calculated"
                 except Exception:
-                    return {"error": f"Could not find data for {target_pokemon}"}
+                    return error_response(ErrorCodes.POKEMON_NOT_FOUND, f'Could not find data for {target_pokemon}')
 
             # Calculate outspeed percentage with interpolation for speeds between known tiers
             total_usage = sum(s["usage"] for s in target_spreads)
@@ -1049,7 +1050,7 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
             return result_dict
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def visualize_speed_histogram(

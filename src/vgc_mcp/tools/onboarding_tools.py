@@ -4,7 +4,7 @@ from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp_core.config import logger
-from vgc_mcp_core.utils.errors import api_error
+from vgc_mcp_core.utils.errors import api_error, error_response, ErrorCodes
 
 
 def register_onboarding_tools(mcp: FastMCP):

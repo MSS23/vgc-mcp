@@ -51,7 +51,7 @@ class TestAnalyzeTeamMatchup:
         fn = tools["analyze_team_matchup"].fn
         result = await fn(team_pokemon=["incineroar", "rillaboom"])
         assert "error" in result
-        assert "6" in str(result["error"])
+        assert "6" in str(result.get("message", "")) or "6" in str(result["error"])
 
     async def test_full_team_vs_meta(self, tools):
         """Test with full team against meta (may error due to Team model validation)."""

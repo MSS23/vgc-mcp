@@ -4,6 +4,7 @@ from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp_core.api.smogon import SmogonStatsClient
+from vgc_mcp_core.utils.errors import error_response, ErrorCodes
 
 # MCP-UI support (enabled in vgc-mcp-lite)
 from ..ui.resources import create_usage_stats_resource, add_ui_metadata
@@ -34,14 +35,7 @@ def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
             usage = await smogon.get_pokemon_usage(pokemon_name, format_name, rating)
 
             if not usage:
-                return {
-                    "error": f"No usage data found for {pokemon_name}",
-                    "suggestions": [
-                        "Check spelling (use hyphens: 'flutter-mane' not 'Flutter Mane')",
-                        "Try a different format or rating",
-                        "This Pokemon may not have enough usage data"
-                    ]
-                }
+                return error_response(ErrorCodes.INTERNAL_ERROR, f'No usage data found for {pokemon_name}', suggestions=["Check spelling (use hyphens: 'flutter-mane' not 'Flutter Mane')", 'Try a different format or rating', 'This Pokemon may not have enough usage data'])
 
             # Add interactive UI (only in vgc-mcp-lite)
             if HAS_UI:
@@ -75,7 +69,7 @@ def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
             return usage
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def get_common_sets(
@@ -96,12 +90,12 @@ def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
             sets = await smogon.get_common_sets(pokemon_name, format_name)
 
             if not sets:
-                return {"error": f"No set data found for {pokemon_name}"}
+                return error_response(ErrorCodes.INTERNAL_ERROR, f'No set data found for {pokemon_name}')
 
             return sets
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def suggest_teammates(
@@ -124,12 +118,12 @@ def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
             teammates = await smogon.suggest_teammates(pokemon_name, format_name, limit)
 
             if not teammates:
-                return {"error": f"No teammate data found for {pokemon_name}"}
+                return error_response(ErrorCodes.INTERNAL_ERROR, f'No teammate data found for {pokemon_name}')
 
             return teammates
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def get_current_format_info() -> dict:
@@ -160,7 +154,7 @@ def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
             return result
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def get_top_pokemon(
@@ -183,7 +177,7 @@ def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
             stats = await smogon.get_usage_stats(format_name, rating)
 
             if "data" not in stats:
-                return {"error": "Could not fetch usage stats"}
+                return error_response(ErrorCodes.API_ERROR, 'Could not fetch usage stats')
 
             # Sort by usage
             pokemon_list = []
@@ -205,7 +199,7 @@ def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def compare_pokemon_month_over_month(
@@ -234,12 +228,9 @@ def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
             comparison = await smogon.compare_pokemon_usage(pokemon_name, format_name, rating)
 
             if not comparison:
-                return {
-                    "error": f"Could not find comparison data for {pokemon_name}",
-                    "suggestion": "Pokemon may not have been used enough in both months"
-                }
+                return error_response(ErrorCodes.POKEMON_NOT_FOUND, f'Could not find comparison data for {pokemon_name}', suggestion='Pokemon may not have been used enough in both months')
 
             return comparison
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))

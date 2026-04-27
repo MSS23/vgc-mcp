@@ -144,7 +144,7 @@ class TestExportTeamToPaste:
         fn = tools["export_team_to_paste"].fn
         result = await fn()
         assert result["success"] is False
-        assert "empty" in result["error"]
+        assert "empty" in result.get("message", "") or "empty" in result.get("error", "")
 
     async def test_export_after_import(self, tools):
         """Test exporting after importing."""

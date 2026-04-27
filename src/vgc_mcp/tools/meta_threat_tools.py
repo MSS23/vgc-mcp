@@ -20,6 +20,7 @@ from vgc_mcp_core.calc.meta_threats import (
 )
 from vgc_mcp_core.models.pokemon import PokemonBuild, BaseStats, EVSpread, Nature
 from vgc_mcp_core.config import EV_BREAKPOINTS_LV50
+from vgc_mcp_core.utils.errors import error_response, ErrorCodes
 
 
 def _format_matchup_row(r: ThreatDamageResult) -> dict:
@@ -151,14 +152,14 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
         try:
             nature_enum = Nature(nature.lower())
         except ValueError:
-            return {"error": f"Invalid nature: {nature}"}
+            return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {nature}')
 
         # Get your Pokemon's data
         try:
             base_stats = await pokeapi.get_base_stats(pokemon_name)
             your_types = await pokeapi.get_pokemon_types(pokemon_name)
         except Exception as e:
-            return {"error": f"Pokemon not found: {pokemon_name}"}
+            return error_response(ErrorCodes.POKEMON_NOT_FOUND, f'Pokemon not found: {pokemon_name}')
 
         evs = EVSpread(
             hp=hp_evs,
@@ -366,11 +367,7 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
         pokemon = team_manager.get_pokemon_context(pokemon_reference)
         if not pokemon:
             stored = team_manager.list_pokemon_context()
-            return {
-                "error": "No stored Pokemon found",
-                "hint": "Use set_my_pokemon first to store a Pokemon",
-                "stored_pokemon": [p["reference"] for p in stored]
-            }
+            return error_response(ErrorCodes.INTERNAL_ERROR, 'No stored Pokemon found', hint='Use set_my_pokemon first to store a Pokemon', stored_pokemon=[p['reference'] for p in stored])
 
         your_stats = calculate_all_stats(pokemon)
 
@@ -567,25 +564,25 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
         try:
             nature_enum = Nature(nature.lower())
         except ValueError:
-            return {"error": f"Invalid nature: {nature}"}
+            return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {nature}')
 
         # Get your Pokemon's data
         try:
             base_stats = await pokeapi.get_base_stats(pokemon_name)
             your_types = await pokeapi.get_pokemon_types(pokemon_name)
         except Exception:
-            return {"error": f"Pokemon not found: {pokemon_name}"}
+            return error_response(ErrorCodes.POKEMON_NOT_FOUND, f'Pokemon not found: {pokemon_name}')
 
         # Get threat data
         try:
             threat_base_stats = await pokeapi.get_base_stats(threat_pokemon)
             threat_types = await pokeapi.get_pokemon_types(threat_pokemon)
         except Exception:
-            return {"error": f"Pokemon not found: {threat_pokemon}"}
+            return error_response(ErrorCodes.POKEMON_NOT_FOUND, f'Pokemon not found: {threat_pokemon}')
 
         move_data = await pokeapi.get_move(threat_move)
         if not move_data:
-            return {"error": f"Move not found: {threat_move}"}
+            return error_response(ErrorCodes.MOVE_NOT_FOUND, f'Move not found: {threat_move}')
 
         evs = EVSpread(
             hp=hp_evs,
@@ -821,24 +818,24 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
         try:
             nature_enum = Nature(nature.lower())
         except ValueError:
-            return {"error": f"Invalid nature: {nature}"}
+            return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {nature}')
 
         # Get Pokemon data
         try:
             base_stats = await pokeapi.get_base_stats(pokemon_name)
             your_types = await pokeapi.get_pokemon_types(pokemon_name)
         except Exception:
-            return {"error": f"Pokemon not found: {pokemon_name}"}
+            return error_response(ErrorCodes.POKEMON_NOT_FOUND, f'Pokemon not found: {pokemon_name}')
 
         try:
             threat_base_stats = await pokeapi.get_base_stats(threat_pokemon)
             threat_types = await pokeapi.get_pokemon_types(threat_pokemon)
         except Exception:
-            return {"error": f"Pokemon not found: {threat_pokemon}"}
+            return error_response(ErrorCodes.POKEMON_NOT_FOUND, f'Pokemon not found: {threat_pokemon}')
 
         move_data = await pokeapi.get_move(threat_move)
         if not move_data:
-            return {"error": f"Move not found: {threat_move}"}
+            return error_response(ErrorCodes.MOVE_NOT_FOUND, f'Move not found: {threat_move}')
 
         move_is_physical = is_physical if is_physical is not None else (
             move_data.category.value == "physical"

@@ -16,6 +16,7 @@ from vgc_mcp_core.calc.bulk_calc import (
 )
 from vgc_mcp_core.calc.damage import format_percent
 from vgc_mcp_core.formats.showdown import pokemon_build_to_showdown
+from vgc_mcp_core.utils.errors import error_response, ErrorCodes
 
 from .multicalc_tools import _build_pokemon_from_smogon
 
@@ -121,7 +122,7 @@ def register_bulk_calc_tools(
         """
         try:
             if len(move_names) > 4:
-                return {"error": "Maximum 4 moves supported."}
+                return error_response(ErrorCodes.INVALID_PARAMETER, 'Maximum 4 moves supported.')
 
             # Auto-fetch top meta defenders if not specified
             if defender_names is None:
@@ -129,13 +130,10 @@ def register_bulk_calc_tools(
                     smogon, count=25, exclude=attacker_name,
                 )
                 if not defender_names:
-                    return {
-                        "error": "Could not fetch top meta Pokemon. "
-                        "Please specify defender_names manually."
-                    }
+                    return error_response(ErrorCodes.API_ERROR, 'Could not fetch top meta Pokemon. Please specify defender_names manually.')
 
             if len(defender_names) > 30:
-                return {"error": "Maximum 30 defenders supported."}
+                return error_response(ErrorCodes.INVALID_PARAMETER, 'Maximum 30 defenders supported.')
 
             # Parse attacker EVs if provided
             evs_dict = _parse_ev_string(attacker_evs) if attacker_evs else None
@@ -165,7 +163,7 @@ def register_bulk_calc_tools(
                     failed_defenders.append({"name": defender_name, "error": str(e)})
 
             if not defenders:
-                return {"error": "Could not build any defenders. Check Pokemon names."}
+                return error_response(ErrorCodes.INTERNAL_ERROR, 'Could not build any defenders. Check Pokemon names.')
 
             # Resolve scenarios
             scenario_configs = []
@@ -175,10 +173,7 @@ def register_bulk_calc_tools(
                     scenario_configs.append(DEFAULT_SCENARIOS[s_name])
                 else:
                     avail = list(DEFAULT_SCENARIOS.keys())
-                    return {
-                        "error": f"Unknown scenario '{s_name}'. "
-                        f"Available: {avail}"
-                    }
+                    return error_response(ErrorCodes.INTERNAL_ERROR, f"Unknown scenario '{s_name}'. Available: {avail}")
 
             # Run bulk calcs
             summary = run_bulk_calcs(
@@ -278,7 +273,7 @@ def register_bulk_calc_tools(
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def export_damage_report(
@@ -322,10 +317,10 @@ def register_bulk_calc_tools(
         """
         try:
             if format not in ("excel", "pdf"):
-                return {"error": f"Unsupported format '{format}'. Use 'excel' or 'pdf'."}
+                return error_response(ErrorCodes.INVALID_PARAMETER, f"Unsupported format '{format}'. Use 'excel' or 'pdf'.")
 
             if len(move_names) > 4:
-                return {"error": "Maximum 4 moves supported."}
+                return error_response(ErrorCodes.INVALID_PARAMETER, 'Maximum 4 moves supported.')
 
             # Auto-fetch top meta defenders if not specified
             if defender_names is None:
@@ -333,13 +328,10 @@ def register_bulk_calc_tools(
                     smogon, count=25, exclude=attacker_name,
                 )
                 if not defender_names:
-                    return {
-                        "error": "Could not fetch top meta Pokemon. "
-                        "Please specify defender_names manually."
-                    }
+                    return error_response(ErrorCodes.API_ERROR, 'Could not fetch top meta Pokemon. Please specify defender_names manually.')
 
             if len(defender_names) > 30:
-                return {"error": "Maximum 30 defenders supported."}
+                return error_response(ErrorCodes.INVALID_PARAMETER, 'Maximum 30 defenders supported.')
 
             # Parse attacker EVs
             evs_dict = _parse_ev_string(attacker_evs) if attacker_evs else None
@@ -368,7 +360,7 @@ def register_bulk_calc_tools(
                     logger.warning("Failed to build defender %s for export: %s", defender_name, e)
 
             if not defenders:
-                return {"error": "Could not build any defenders."}
+                return error_response(ErrorCodes.INTERNAL_ERROR, 'Could not build any defenders.')
 
             # Resolve scenarios
             scenario_configs = []
@@ -376,7 +368,7 @@ def register_bulk_calc_tools(
                 if s_name in DEFAULT_SCENARIOS:
                     scenario_configs.append(DEFAULT_SCENARIOS[s_name])
                 else:
-                    return {"error": f"Unknown scenario '{s_name}'."}
+                    return error_response(ErrorCodes.INTERNAL_ERROR, f"Unknown scenario '{s_name}'.")
 
             # Run bulk calcs
             summary = run_bulk_calcs(
@@ -402,6 +394,6 @@ def register_bulk_calc_tools(
             }
 
         except ImportError as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))

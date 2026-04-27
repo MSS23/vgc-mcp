@@ -5,6 +5,7 @@ from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp_core.api.pokepaste import PokePasteClient, PokePasteError
 from vgc_mcp_core.formats.showdown import parse_showdown_team, ShowdownParseError
+from vgc_mcp_core.utils.errors import error_response, ErrorCodes
 
 
 def register_pokepaste_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi=None, smogon=None):
@@ -36,10 +37,7 @@ def register_pokepaste_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi=N
             parsed_team = parse_showdown_team(raw_paste)
 
             if not parsed_team:
-                return {
-                    "error": "Could not parse any Pokemon from the paste",
-                    "raw_preview": raw_paste[:500] if raw_paste else None
-                }
+                return error_response(ErrorCodes.PARSE_ERROR, 'Could not parse any Pokemon from the paste', raw_preview=raw_paste[:500] if raw_paste else None)
 
             # Format the team for output
             team_data = []
@@ -80,17 +78,11 @@ def register_pokepaste_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi=N
             }
 
         except PokePasteError as e:
-            return {
-                "error": str(e),
-                "suggestion": "Check the URL is correct and the paste exists"
-            }
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e), suggestion='Check the URL is correct and the paste exists')
         except ShowdownParseError as e:
-            return {
-                "error": f"Failed to parse paste: {e}",
-                "suggestion": "The paste format may be invalid"
-            }
+            return error_response(ErrorCodes.PARSE_ERROR, f'Failed to parse paste: {e}', suggestion='The paste format may be invalid')
         except Exception as e:
-            return {"error": f"Unexpected error: {e}"}
+            return error_response(ErrorCodes.INVALID_PARAMETER, f'Unexpected error: {e}')
 
     @mcp.tool()
     async def analyze_pokepaste(
@@ -120,7 +112,7 @@ def register_pokepaste_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi=N
             parsed_team = parse_showdown_team(raw_paste)
 
             if not parsed_team:
-                return {"error": "Could not parse any Pokemon from the paste"}
+                return error_response(ErrorCodes.PARSE_ERROR, 'Could not parse any Pokemon from the paste')
 
             paste_id = pokepaste.extract_paste_id(url_or_id)
             analysis = {
@@ -282,9 +274,9 @@ def register_pokepaste_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi=N
             return analysis
 
         except PokePasteError as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
         except Exception as e:
-            return {"error": f"Analysis failed: {e}"}
+            return error_response(ErrorCodes.INTERNAL_ERROR, f'Analysis failed: {e}')
 
     @mcp.tool()
     async def optimize_pokepaste_pokemon(
@@ -312,13 +304,10 @@ def register_pokepaste_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi=N
             parsed_team = parse_showdown_team(raw_paste)
 
             if not parsed_team:
-                return {"error": "Could not parse any Pokemon from the paste"}
+                return error_response(ErrorCodes.PARSE_ERROR, 'Could not parse any Pokemon from the paste')
 
             if pokemon_index < 0 or pokemon_index >= len(parsed_team):
-                return {
-                    "error": f"Pokemon index {pokemon_index} out of range",
-                    "available_pokemon": [p.species for p in parsed_team]
-                }
+                return error_response(ErrorCodes.INTERNAL_ERROR, f'Pokemon index {pokemon_index} out of range', available_pokemon=[p.species for p in parsed_team])
 
             pokemon = parsed_team[pokemon_index]
             suggestions = {
@@ -390,6 +379,6 @@ def register_pokepaste_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi=N
             return suggestions
 
         except PokePasteError as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
         except Exception as e:
-            return {"error": f"Optimization failed: {e}"}
+            return error_response(ErrorCodes.INTERNAL_ERROR, f'Optimization failed: {e}')

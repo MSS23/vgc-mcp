@@ -19,7 +19,7 @@ from vgc_mcp_core.calc.modifiers import DamageModifiers
 from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, IVSpread, BaseStats
 from vgc_mcp_core.models.move import Move, MoveCategory
 from vgc_mcp_core.formats.showdown import pokemon_build_to_showdown
-from vgc_mcp_core.utils.errors import pokemon_not_found_error, api_error
+from vgc_mcp_core.utils.errors import pokemon_not_found_error, api_error, error_response, ErrorCodes
 from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name
 from vgc_mcp_core.utils.synergies import get_synergy_ability
 
@@ -238,7 +238,7 @@ def register_item_optimization_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogo
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def optimize_life_orb_sustainability(
@@ -353,7 +353,7 @@ def register_item_optimization_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogo
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def analyze_item_ev_tradeoff(
@@ -433,10 +433,7 @@ def register_item_optimization_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogo
 
             # Get best item
             if not tradeoff_results:
-                return {
-                    "error": "No valid tradeoff results generated",
-                    "pokemon": pokemon_name
-                }
+                return error_response(ErrorCodes.INTERNAL_ERROR, 'No valid tradeoff results generated', pokemon=pokemon_name)
             
             best_result = tradeoff_results[0]
 
@@ -453,4 +450,4 @@ def register_item_optimization_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogo
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))

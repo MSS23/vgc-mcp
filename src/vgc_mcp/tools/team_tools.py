@@ -7,6 +7,7 @@ from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.team.manager import TeamManager
 from vgc_mcp_core.team.analysis import TeamAnalyzer
 from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, IVSpread
+from vgc_mcp_core.utils.errors import error_response, ErrorCodes
 
 
 def register_team_tools(
@@ -54,7 +55,7 @@ def register_team_tools(
             # Validate EVs
             total_evs = hp_evs + atk_evs + def_evs + spa_evs + spd_evs + spe_evs
             if total_evs > 508:
-                return {"success": False, "error": f"Total EVs ({total_evs}) exceed 508"}
+                return error_response(ErrorCodes.INVALID_EVS, f'Total EVs ({total_evs}) exceed 508')
 
             # Fetch Pokemon data
             base_stats = await pokeapi.get_base_stats(pokemon_name)
@@ -64,7 +65,7 @@ def register_team_tools(
             try:
                 parsed_nature = Nature(nature.lower())
             except ValueError:
-                return {"success": False, "error": f"Invalid nature: {nature}"}
+                return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {nature}')
 
             # Build moves list
             moves = [m for m in [move1, move2, move3, move4] if m]
@@ -98,7 +99,7 @@ def register_team_tools(
             }
 
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def remove_from_team(slot: int) -> dict:
@@ -116,7 +117,7 @@ def register_team_tools(
             success, message, data = team_manager.remove_pokemon(slot - 1)
             return {"success": success, "message": message, **data}
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def remove_pokemon_by_name(name: str) -> dict:
@@ -133,7 +134,7 @@ def register_team_tools(
             success, message, data = team_manager.remove_by_name(name)
             return {"success": success, "message": message, **data}
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def swap_team_pokemon(
@@ -169,7 +170,7 @@ def register_team_tools(
             # Validate EVs
             total_evs = hp_evs + atk_evs + def_evs + spa_evs + spd_evs + spe_evs
             if total_evs > 508:
-                return {"success": False, "error": f"Total EVs ({total_evs}) exceed 508"}
+                return error_response(ErrorCodes.INVALID_EVS, f'Total EVs ({total_evs}) exceed 508')
 
             # Fetch Pokemon data
             base_stats = await pokeapi.get_base_stats(pokemon_name)
@@ -179,7 +180,7 @@ def register_team_tools(
             try:
                 parsed_nature = Nature(nature.lower())
             except ValueError:
-                return {"success": False, "error": f"Invalid nature: {nature}"}
+                return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {nature}')
 
             moves = [m for m in [move1, move2, move3, move4] if m]
 
@@ -206,7 +207,7 @@ def register_team_tools(
             return {"success": success, "message": message, **data}
 
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def reorder_team(slot1: int, slot2: int) -> dict:
@@ -224,7 +225,7 @@ def register_team_tools(
             success, message, data = team_manager.reorder(slot1 - 1, slot2 - 1)
             return {"success": success, "message": message, **data}
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def view_team() -> dict:
@@ -238,7 +239,7 @@ def register_team_tools(
             result = team_manager.get_team_summary()
             return result
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def clear_team() -> dict:
@@ -252,7 +253,7 @@ def register_team_tools(
             success, message, data = team_manager.clear()
             return {"success": success, "message": message, **data}
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def analyze_team() -> dict:
@@ -264,9 +265,9 @@ def register_team_tools(
         """
         try:
             if team_manager.size == 0:
-                return {"error": "No Pokemon on team to analyze. Add Pokemon first."}
+                return error_response(ErrorCodes.TEAM_EMPTY, 'No Pokemon on team to analyze. Add Pokemon first.')
 
             return analyzer.get_summary(team_manager.team)
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 

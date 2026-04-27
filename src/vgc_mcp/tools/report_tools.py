@@ -11,6 +11,7 @@ from mcp.server.fastmcp import FastMCP
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.pokepaste import PokePasteClient, PokePasteError
 from vgc_mcp_core.formats.showdown import parse_showdown_team, ShowdownParseError
+from vgc_mcp_core.utils.errors import error_response, ErrorCodes
 
 
 def register_report_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
@@ -164,23 +165,11 @@ def register_report_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             }
 
         except PokePasteError as e:
-            return {
-                "success": False,
-                "error": "fetch_error",
-                "message": str(e),
-            }
+            return error_response(ErrorCodes.FETCH_ERROR, str(e))
         except ShowdownParseError as e:
-            return {
-                "success": False,
-                "error": "parse_error",
-                "message": str(e),
-            }
+            return error_response(ErrorCodes.PARSE_ERROR, str(e))
         except Exception as e:
-            return {
-                "success": False,
-                "error": "unknown_error",
-                "message": str(e),
-            }
+            return error_response(ErrorCodes.UNKNOWN_ERROR, str(e))
 
 
 async def _enrich_team_data(parsed_team: list, pokeapi: PokeAPIClient) -> list[dict]:

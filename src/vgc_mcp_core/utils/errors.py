@@ -52,6 +52,15 @@ class ErrorCodes:
     # General
     INTERNAL_ERROR = "internal_error"
     NOT_IMPLEMENTED = "not_implemented"
+    UNKNOWN_ERROR = "unknown_error"
+    VALIDATION_ERROR = "validation_error"
+    EXPORT_ERROR = "export_error"
+    FETCH_ERROR = "fetch_error"
+    INVALID_SLOT = "invalid_slot"
+    INVALID_URL = "invalid_url"
+
+    # Aliases (keep both for backwards-compat with older code)
+    EMPTY_TEAM = "team_empty"  # alias for TEAM_EMPTY
 
 
 def error_response(

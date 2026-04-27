@@ -20,6 +20,7 @@ from vgc_mcp_core.models.pokemon import (
     PokemonBuild, BaseStats, Nature, EVSpread, IVSpread
 )
 from vgc_mcp_core.models.move import Move, MoveCategory
+from vgc_mcp_core.utils.errors import error_response, ErrorCodes
 
 
 # Priority moves that Armor Tail / Queenly Majesty / Dazzling block
@@ -363,7 +364,7 @@ def register_tournament_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi:
             parsed_team = parse_showdown_team(raw_paste)
 
             if not parsed_team:
-                return {"error": "Could not parse any Pokemon from the paste"}
+                return error_response(ErrorCodes.PARSE_ERROR, 'Could not parse any Pokemon from the paste')
 
             # Convert to PokemonBuild objects
             user_team = []
@@ -373,10 +374,7 @@ def register_tournament_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi:
                     user_team.append(build)
 
             if len(user_team) < 4:
-                return {
-                    "error": f"Only parsed {len(user_team)} Pokemon. Need at least 4 for matchup analysis.",
-                    "parsed_pokemon": [p.name for p in user_team]
-                }
+                return error_response(ErrorCodes.PARSE_ERROR, f'Only parsed {len(user_team)} Pokemon. Need at least 4 for matchup analysis.', parsed_pokemon=[p.name for p in user_team])
 
             # Analyze against each sample team
             results = []
@@ -426,11 +424,11 @@ def register_tournament_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi:
             }
 
         except PokePasteError as e:
-            return {"error": f"Failed to fetch paste: {e}"}
+            return error_response(ErrorCodes.API_ERROR, f'Failed to fetch paste: {e}')
         except ShowdownParseError as e:
-            return {"error": f"Failed to parse paste: {e}"}
+            return error_response(ErrorCodes.PARSE_ERROR, f'Failed to parse paste: {e}')
         except Exception as e:
-            return {"error": f"Analysis failed: {e}"}
+            return error_response(ErrorCodes.INTERNAL_ERROR, f'Analysis failed: {e}')
 
     @mcp.tool()
     async def compare_two_teams(
@@ -463,7 +461,7 @@ def register_tournament_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi:
             parsed2 = parse_showdown_team(raw2)
 
             if not parsed1 or not parsed2:
-                return {"error": "Could not parse one or both teams"}
+                return error_response(ErrorCodes.PARSE_ERROR, 'Could not parse one or both teams')
 
             # Convert to PokemonBuild
             team1 = []
@@ -479,7 +477,7 @@ def register_tournament_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi:
                     team2.append(build)
 
             if len(team1) < 4 or len(team2) < 4:
-                return {"error": "Both teams need at least 4 Pokemon for analysis"}
+                return error_response(ErrorCodes.INTERNAL_ERROR, 'Both teams need at least 4 Pokemon for analysis')
 
             # Run analysis
             result = full_team_matchup_analysis(
@@ -498,7 +496,7 @@ def register_tournament_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi:
             }
 
         except Exception as e:
-            return {"error": f"Comparison failed: {e}"}
+            return error_response(ErrorCodes.INTERNAL_ERROR, f'Comparison failed: {e}')
 
     @mcp.tool()
     async def get_meta_teams() -> dict:
@@ -552,17 +550,14 @@ def register_tournament_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi:
 
             if not matching_team:
                 available = list(set(t.archetype for t in ALL_SAMPLE_TEAMS))
-                return {
-                    "error": f"Unknown archetype: {opponent_archetype}",
-                    "available_archetypes": available
-                }
+                return error_response(ErrorCodes.INTERNAL_ERROR, f'Unknown archetype: {opponent_archetype}', available_archetypes=available)
 
             # Parse user team
             raw_paste = await pokepaste.get_paste(pokepaste_url)
             parsed = parse_showdown_team(raw_paste)
 
             if not parsed:
-                return {"error": "Could not parse your team"}
+                return error_response(ErrorCodes.PARSE_ERROR, 'Could not parse your team')
 
             user_team = []
             for p in parsed:
@@ -600,7 +595,7 @@ def register_tournament_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi:
             }
 
         except Exception as e:
-            return {"error": f"Analysis failed: {e}"}
+            return error_response(ErrorCodes.INTERNAL_ERROR, f'Analysis failed: {e}')
 
     @mcp.tool()
     async def analyze_paste_bulk(
@@ -630,13 +625,13 @@ def register_tournament_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi:
             Bulk analysis with survival benchmarks against meta threats
         """
         if smogon is None:
-            return {"error": "Smogon client not available for meta threat analysis"}
+            return error_response(ErrorCodes.API_ERROR, 'Smogon client not available for meta threat analysis')
 
         try:
             # Parse the paste
             parsed = parse_showdown_pokemon(pokemon_paste)
             if not parsed:
-                return {"error": "Could not parse Pokemon paste"}
+                return error_response(ErrorCodes.PARSE_ERROR, 'Could not parse Pokemon paste')
 
             # Get base stats and types
             base_stats = await pokeapi.get_base_stats(parsed.species)
@@ -929,6 +924,6 @@ def register_tournament_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi:
             }
 
         except ShowdownParseError as e:
-            return {"error": f"Failed to parse paste: {e}"}
+            return error_response(ErrorCodes.PARSE_ERROR, f'Failed to parse paste: {e}')
         except Exception as e:
-            return {"error": f"Bulk analysis failed: {e}"}
+            return error_response(ErrorCodes.INTERNAL_ERROR, f'Bulk analysis failed: {e}')

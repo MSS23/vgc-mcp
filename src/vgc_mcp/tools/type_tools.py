@@ -6,7 +6,7 @@ from mcp.server.fastmcp import FastMCP
 from vgc_mcp_core.config import logger
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.calc.modifiers import get_type_effectiveness, TYPE_CHART
-from vgc_mcp_core.utils.errors import api_error
+from vgc_mcp_core.utils.errors import api_error, error_response, ErrorCodes
 
 
 def register_type_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
@@ -35,9 +35,7 @@ def register_type_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 defending_types = await pokeapi.get_pokemon_types(pokemon_name)
             
             if not attacking_type or not defending_types:
-                return {
-                    "error": "Must provide either (attacking_type and defending_types) or pokemon_name"
-                }
+                return error_response(ErrorCodes.INTERNAL_ERROR, 'Must provide either (attacking_type and defending_types) or pokemon_name')
             
             # Calculate effectiveness
             effectiveness = get_type_effectiveness(attacking_type, defending_types)

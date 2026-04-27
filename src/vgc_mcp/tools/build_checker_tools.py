@@ -7,7 +7,7 @@ from vgc_mcp_core.config import logger
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.models.pokemon import Nature, get_nature_modifier
 from vgc_mcp_core.models.move import MoveCategory
-from vgc_mcp_core.utils.errors import pokemon_not_found_error, api_error
+from vgc_mcp_core.utils.errors import pokemon_not_found_error, api_error, error_response, ErrorCodes
 from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name
 
 
@@ -45,7 +45,7 @@ def register_build_checker_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             try:
                 nature_enum = Nature(nature.lower())
             except ValueError:
-                return {"error": f"Invalid nature: {nature}"}
+                return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {nature}')
             
             # Fetch move data
             move_data = []

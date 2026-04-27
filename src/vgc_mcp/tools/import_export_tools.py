@@ -16,6 +16,7 @@ from vgc_mcp_core.formats.showdown import (
     ShowdownParseError,
 )
 from vgc_mcp_core.models.pokemon import PokemonBuild
+from vgc_mcp_core.utils.errors import error_response, ErrorCodes
 
 
 def register_import_export_tools(
@@ -62,15 +63,7 @@ def register_import_export_tools(
                 base_stats = await pokeapi.get_base_stats(species_name)
                 types = await pokeapi.get_pokemon_types(species_name)
             except Exception as e:
-                return {
-                    "success": False,
-                    "error": "api_error",
-                    "message": f"Could not fetch Pokemon data: {e}",
-                    "parsed": {
-                        "species": parsed.species,
-                        "nickname": parsed.nickname
-                    }
-                }
+                return error_response(ErrorCodes.API_ERROR, f'Could not fetch Pokemon data: {e}', parsed={'species': parsed.species, 'nickname': parsed.nickname})
 
             result = {
                 "success": True,
@@ -117,17 +110,9 @@ def register_import_export_tools(
             return result
 
         except ShowdownParseError as e:
-            return {
-                "success": False,
-                "error": "parse_error",
-                "message": str(e)
-            }
+            return error_response(ErrorCodes.PARSE_ERROR, str(e))
         except Exception as e:
-            return {
-                "success": False,
-                "error": "unknown_error",
-                "message": str(e)
-            }
+            return error_response(ErrorCodes.UNKNOWN_ERROR, str(e))
 
     @mcp.tool()
     async def import_showdown_team(paste: str, clear_existing: bool = False) -> dict:
@@ -150,11 +135,7 @@ def register_import_export_tools(
             parsed_team = parse_showdown_team(paste)
 
             if not parsed_team:
-                return {
-                    "success": False,
-                    "error": "parse_error",
-                    "message": "No Pokemon found in paste"
-                }
+                return error_response(ErrorCodes.PARSE_ERROR, 'No Pokemon found in paste')
 
             results = []
             added_count = 0
@@ -212,11 +193,7 @@ def register_import_export_tools(
             }
 
         except Exception as e:
-            return {
-                "success": False,
-                "error": "unknown_error",
-                "message": str(e)
-            }
+            return error_response(ErrorCodes.UNKNOWN_ERROR, str(e))
 
     @mcp.tool()
     async def export_team_to_paste() -> dict:
@@ -228,11 +205,7 @@ def register_import_export_tools(
         """
         try:
             if team_manager.size == 0:
-                return {
-                    "success": False,
-                    "error": "empty_team",
-                    "message": "No Pokemon on team to export"
-                }
+                return error_response(ErrorCodes.EMPTY_TEAM, 'No Pokemon on team to export')
 
             team_data = []
 
@@ -273,11 +246,7 @@ def register_import_export_tools(
             }
 
         except Exception as e:
-            return {
-                "success": False,
-                "error": "export_error",
-                "message": str(e)
-            }
+            return error_response(ErrorCodes.EXPORT_ERROR, str(e))
 
     @mcp.tool()
     async def export_pokemon_to_paste(slot: int) -> dict:
@@ -294,11 +263,7 @@ def register_import_export_tools(
             pokemon = team_manager.get_pokemon(slot - 1)
 
             if not pokemon:
-                return {
-                    "success": False,
-                    "error": "invalid_slot",
-                    "message": f"No Pokemon in slot {slot}"
-                }
+                return error_response(ErrorCodes.INVALID_SLOT, f'No Pokemon in slot {slot}')
 
             paste = export_pokemon_to_showdown(
                 species=pokemon.name.replace("-", " ").title(),
@@ -333,8 +298,4 @@ def register_import_export_tools(
             }
 
         except Exception as e:
-            return {
-                "success": False,
-                "error": "export_error",
-                "message": str(e)
-            }
+            return error_response(ErrorCodes.EXPORT_ERROR, str(e))

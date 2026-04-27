@@ -14,6 +14,7 @@ from vgc_mcp_core.calc.stats import calculate_stat, calculate_hp, calculate_spee
 from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, BaseStats, get_nature_modifier
 from vgc_mcp_core.models.move import MoveCategory
 from vgc_mcp_core.utils.synergies import get_synergy_ability
+from vgc_mcp_core.utils.errors import error_response, ErrorCodes
 
 # EV breakpoints at level 50
 EV_BREAKPOINTS_LV50 = [0, 4, 12, 20, 28, 36, 44, 52, 60, 68, 76, 84, 92, 100, 108, 116, 124, 132, 140, 148, 156, 164, 172, 180, 188, 196, 204, 212, 220, 228, 236, 244, 252]
@@ -189,7 +190,7 @@ def register_core_tools(
                 "analysis": f"{attacker}'s {move} vs {defender}: {result.min_percent:.1f}-{result.max_percent:.1f}%. {result.ko_chance}"
             }
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def get_pokemon_data(pokemon: str) -> dict:
@@ -197,7 +198,7 @@ def register_core_tools(
         try:
             stats = await smogon.get_pokemon_stats(pokemon)
             if not stats:
-                return {"error": f"No data found for {pokemon}"}
+                return error_response(ErrorCodes.INTERNAL_ERROR, f'No data found for {pokemon}')
 
             return {
                 "pokemon": pokemon,
@@ -224,7 +225,7 @@ def register_core_tools(
                 ]
             }
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def compare_speed(
@@ -263,7 +264,7 @@ def register_core_tools(
                 "difference": abs(speed1 - speed2)
             }
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def find_survival_evs(
@@ -389,7 +390,7 @@ def register_core_tools(
                     "result": "IMPOSSIBLE - Cannot survive this attack with any EV investment"
                 }
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def design_spread(
@@ -543,4 +544,4 @@ def register_core_tools(
                 "summary": f"{hp_evs} HP / {def_evs} Def or SpD / {speed_evs_needed} Spe ({leftover} EVs remaining)"
             }
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))

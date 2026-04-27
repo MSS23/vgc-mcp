@@ -121,7 +121,7 @@ class TestSetMyPokemon:
             hp_evs=252, atk_evs=252, spe_evs=252  # 756 total
         )
         assert result["success"] is False
-        assert "508" in result["error"]
+        assert "508" in result["message"]
 
     async def test_invalid_nature(self, tools):
         """Test invalid nature returns error."""
@@ -131,7 +131,7 @@ class TestSetMyPokemon:
             nature="InvalidNature"
         )
         assert result["success"] is False
-        assert "nature" in result["error"].lower()
+        assert "nature" in result["message"].lower()
 
 
 class TestGetMyPokemon:

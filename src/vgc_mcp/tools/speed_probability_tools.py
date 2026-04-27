@@ -19,6 +19,7 @@ from vgc_mcp_core.calc.speed_probability import (
     calculate_speed_stat,
 )
 from vgc_mcp_core.models.pokemon import Nature
+from vgc_mcp_core.utils.errors import error_response, ErrorCodes
 
 
 def register_speed_probability_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
@@ -52,7 +53,7 @@ def register_speed_probability_tools(mcp: FastMCP, smogon, pokeapi, team_manager
         try:
             your_base_stats = await pokeapi.get_base_stats(your_pokemon)
         except Exception:
-            return {"error": f"Pokemon not found: {your_pokemon}"}
+            return error_response(ErrorCodes.POKEMON_NOT_FOUND, f'Pokemon not found: {your_pokemon}')
 
         your_base_speed = your_base_stats.speed
 
@@ -60,7 +61,7 @@ def register_speed_probability_tools(mcp: FastMCP, smogon, pokeapi, team_manager
         try:
             nature_enum = Nature(your_nature.lower())
         except ValueError:
-            return {"error": f"Invalid nature: {your_nature}"}
+            return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {your_nature}')
 
         # Calculate your speed stat
         your_speed = calculate_speed(your_base_speed, ev=your_speed_evs, nature=nature_enum)
@@ -69,7 +70,7 @@ def register_speed_probability_tools(mcp: FastMCP, smogon, pokeapi, team_manager
         try:
             target_base_stats = await pokeapi.get_base_stats(target_pokemon)
         except Exception:
-            return {"error": f"Pokemon not found: {target_pokemon}"}
+            return error_response(ErrorCodes.POKEMON_NOT_FOUND, f'Pokemon not found: {target_pokemon}')
 
         target_base_speed = target_base_stats.speed
 
@@ -93,10 +94,7 @@ def register_speed_probability_tools(mcp: FastMCP, smogon, pokeapi, team_manager
             # Fallback to raw spreads
             target_usage = await smogon.get_pokemon_usage(target_pokemon)
             if not target_usage:
-                return {
-                    "error": f"No usage data found for {target_pokemon}",
-                    "note": "Target may not be common enough in the current meta"
-                }
+                return error_response(ErrorCodes.INTERNAL_ERROR, f'No usage data found for {target_pokemon}', note='Target may not be common enough in the current meta')
 
             target_spreads = target_usage.get("spreads", [])
             meta_info = target_usage.get("_meta", {})
@@ -151,11 +149,7 @@ def register_speed_probability_tools(mcp: FastMCP, smogon, pokeapi, team_manager
         pokemon = team_manager.get_pokemon_context(your_pokemon_reference)
         if not pokemon:
             stored = team_manager.list_pokemon_context()
-            return {
-                "error": "No stored Pokemon found",
-                "hint": "Use set_my_pokemon first to store a Pokemon",
-                "stored_pokemon": [p["reference"] for p in stored]
-            }
+            return error_response(ErrorCodes.INTERNAL_ERROR, 'No stored Pokemon found', hint='Use set_my_pokemon first to store a Pokemon', stored_pokemon=[p['reference'] for p in stored])
 
         your_base_speed = pokemon.base_stats.speed
         your_speed = calculate_speed(
@@ -168,7 +162,7 @@ def register_speed_probability_tools(mcp: FastMCP, smogon, pokeapi, team_manager
         try:
             target_base_stats = await pokeapi.get_base_stats(target_pokemon)
         except Exception:
-            return {"error": f"Pokemon not found: {target_pokemon}"}
+            return error_response(ErrorCodes.POKEMON_NOT_FOUND, f'Pokemon not found: {target_pokemon}')
 
         target_base_speed = target_base_stats.speed
 
@@ -191,7 +185,7 @@ def register_speed_probability_tools(mcp: FastMCP, smogon, pokeapi, team_manager
             # Fallback to raw spreads
             target_usage = await smogon.get_pokemon_usage(target_pokemon)
             if not target_usage:
-                return {"error": f"No usage data found for {target_pokemon}"}
+                return error_response(ErrorCodes.INTERNAL_ERROR, f'No usage data found for {target_pokemon}')
 
             target_spreads = target_usage.get("spreads", [])
             meta_info = target_usage.get("_meta", {})
@@ -247,14 +241,14 @@ def register_speed_probability_tools(mcp: FastMCP, smogon, pokeapi, team_manager
         try:
             your_base_stats = await pokeapi.get_base_stats(your_pokemon)
         except Exception:
-            return {"error": f"Pokemon not found: {your_pokemon}"}
+            return error_response(ErrorCodes.POKEMON_NOT_FOUND, f'Pokemon not found: {your_pokemon}')
 
         your_base_speed = your_base_stats.speed
 
         try:
             nature_enum = Nature(your_nature.lower())
         except ValueError:
-            return {"error": f"Invalid nature: {your_nature}"}
+            return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {your_nature}')
 
         your_speed = calculate_speed(your_base_speed, ev=your_speed_evs, nature=nature_enum)
 
@@ -341,7 +335,7 @@ def register_speed_probability_tools(mcp: FastMCP, smogon, pokeapi, team_manager
         try:
             your_base_stats = await pokeapi.get_base_stats(your_pokemon)
         except Exception:
-            return {"error": f"Pokemon not found: {your_pokemon}"}
+            return error_response(ErrorCodes.POKEMON_NOT_FOUND, f'Pokemon not found: {your_pokemon}')
 
         your_base_speed = your_base_stats.speed
 
@@ -349,14 +343,14 @@ def register_speed_probability_tools(mcp: FastMCP, smogon, pokeapi, team_manager
         try:
             target_base_stats = await pokeapi.get_base_stats(target_pokemon)
         except Exception:
-            return {"error": f"Pokemon not found: {target_pokemon}"}
+            return error_response(ErrorCodes.POKEMON_NOT_FOUND, f'Pokemon not found: {target_pokemon}')
 
         target_base_speed = target_base_stats.speed
 
         # Get target's spread distribution
         target_usage = await smogon.get_pokemon_usage(target_pokemon)
         if not target_usage:
-            return {"error": f"No usage data found for {target_pokemon}"}
+            return error_response(ErrorCodes.INTERNAL_ERROR, f'No usage data found for {target_pokemon}')
 
         target_spreads = target_usage.get("spreads", [])
         meta_info = target_usage.get("_meta", {})
@@ -410,7 +404,7 @@ def register_speed_probability_tools(mcp: FastMCP, smogon, pokeapi, team_manager
             try:
                 ev_list = [int(x.strip()) for x in ev_options.split(",")]
             except ValueError:
-                return {"error": "Invalid EV options format. Use comma-separated numbers."}
+                return error_response(ErrorCodes.INVALID_EVS, 'Invalid EV options format. Use comma-separated numbers.')
         else:
             ev_list = [0, 52, 100, 156, 196, 252]
 
@@ -418,21 +412,21 @@ def register_speed_probability_tools(mcp: FastMCP, smogon, pokeapi, team_manager
         try:
             your_base_stats = await pokeapi.get_base_stats(pokemon_name)
         except Exception:
-            return {"error": f"Pokemon not found: {pokemon_name}"}
+            return error_response(ErrorCodes.POKEMON_NOT_FOUND, f'Pokemon not found: {pokemon_name}')
 
         your_base_speed = your_base_stats.speed
 
         try:
             target_base_stats = await pokeapi.get_base_stats(target_pokemon)
         except Exception:
-            return {"error": f"Pokemon not found: {target_pokemon}"}
+            return error_response(ErrorCodes.POKEMON_NOT_FOUND, f'Pokemon not found: {target_pokemon}')
 
         target_base_speed = target_base_stats.speed
 
         # Get target spreads
         target_usage = await smogon.get_pokemon_usage(target_pokemon)
         if not target_usage:
-            return {"error": f"No usage data found for {target_pokemon}"}
+            return error_response(ErrorCodes.INTERNAL_ERROR, f'No usage data found for {target_pokemon}')
 
         target_spreads = target_usage.get("spreads", [])
 

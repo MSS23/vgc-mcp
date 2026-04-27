@@ -14,6 +14,7 @@ from vgc_mcp_core.calc.coverage import (
     COVERAGE_MOVES,
 )
 from vgc_mcp_core.calc.modifiers import get_type_effectiveness
+from vgc_mcp_core.utils.errors import error_response, ErrorCodes
 
 # MCP-UI support
 from ..ui.resources import create_coverage_resource, add_ui_metadata
@@ -41,10 +42,7 @@ def register_coverage_tools(mcp: FastMCP, team_manager, pokeapi):
         team = team_manager.get_current_team()
 
         if not team or len(team.slots) == 0:
-            return {
-                "error": "No Pokemon on team",
-                "message": "Add Pokemon with moves to analyze coverage"
-            }
+            return error_response(ErrorCodes.TEAM_EMPTY, 'Add Pokemon with moves to analyze coverage')
 
         # Build team data for analysis
         team_data = []
@@ -271,16 +269,10 @@ def register_coverage_tools(mcp: FastMCP, team_manager, pokeapi):
             target_data = await pokeapi.get_pokemon(target_pokemon)
             target_types = target_data.get("types", [])
         except Exception:
-            return {
-                "error": f"Could not find Pokemon: {target_pokemon}",
-                "message": "Please check the Pokemon name"
-            }
+            return error_response(ErrorCodes.POKEMON_NOT_FOUND, 'Please check the Pokemon name')
 
         if not target_types:
-            return {
-                "error": f"Could not determine types for {target_pokemon}",
-                "message": "Pokemon data incomplete"
-            }
+            return error_response(ErrorCodes.INTERNAL_ERROR, 'Pokemon data incomplete')
 
         team_data = []
         for slot in team.slots:
@@ -389,11 +381,7 @@ def register_coverage_tools(mcp: FastMCP, team_manager, pokeapi):
         move_type = move_type.capitalize()
 
         if move_type not in ALL_TYPES:
-            return {
-                "error": f"Invalid type: {move_type}",
-                "valid_types": ALL_TYPES,
-                "message": "Please specify a valid type"
-            }
+            return error_response(ErrorCodes.INTERNAL_ERROR, 'Please specify a valid type', valid_types=ALL_TYPES)
 
         if move_type not in COVERAGE_MOVES:
             return {

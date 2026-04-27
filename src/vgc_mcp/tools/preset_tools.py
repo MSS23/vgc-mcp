@@ -9,6 +9,7 @@ from vgc_mcp_core.data.spread_presets import (
     get_all_pokemon_with_presets,
     SpreadPreset,
 )
+from vgc_mcp_core.utils.errors import error_response, ErrorCodes
 
 
 def register_preset_tools(mcp: FastMCP, smogon=None):
@@ -35,7 +36,7 @@ def register_preset_tools(mcp: FastMCP, smogon=None):
             Top spreads with usage %, nature, EVs, and metadata about the data source
         """
         if smogon is None:
-            return {"error": "Smogon client not available"}
+            return error_response(ErrorCodes.API_ERROR, "Smogon client not available")
 
         try:
             data = await smogon.get_pokemon_usage(pokemon_name, format_name)
@@ -127,7 +128,7 @@ def register_preset_tools(mcp: FastMCP, smogon=None):
 
             return result
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def get_spread_presets(

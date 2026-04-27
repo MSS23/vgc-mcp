@@ -4,7 +4,7 @@ from typing import Optional, Dict
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp_core.config import logger
-from vgc_mcp_core.utils.errors import api_error
+from vgc_mcp_core.utils.errors import api_error, error_response, ErrorCodes
 
 
 def register_wizard_tools(mcp: FastMCP):
@@ -188,7 +188,7 @@ def register_wizard_tools(mcp: FastMCP):
                 }
                 
             else:
-                return {"error": f"Invalid step: {step}. Must be 1-5."}
+                return error_response(ErrorCodes.INVALID_PARAMETER, f'Invalid step: {step}. Must be 1-5.')
             
             return response
             

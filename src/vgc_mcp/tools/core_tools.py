@@ -12,6 +12,7 @@ from vgc_mcp_core.team.core_builder import (
     get_pokemon_role,
     POKEMON_ROLES,
 )
+from vgc_mcp_core.utils.errors import error_response, ErrorCodes
 
 
 def register_core_tools(
@@ -68,7 +69,7 @@ def register_core_tools(
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def get_popular_cores(limit: int = 10) -> dict:
@@ -107,7 +108,7 @@ def register_core_tools(
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def analyze_team_synergy() -> dict:
@@ -145,7 +146,7 @@ def register_core_tools(
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def suggest_team_completion(limit: int = 5) -> dict:
@@ -206,7 +207,7 @@ def register_core_tools(
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def get_pokemon_roles(pokemon_name: str) -> dict:
@@ -233,7 +234,7 @@ def register_core_tools(
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def list_role_pokemon(role: str) -> dict:
@@ -271,7 +272,7 @@ def register_core_tools(
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
 
 def _get_synergy_rating(score: float) -> str:

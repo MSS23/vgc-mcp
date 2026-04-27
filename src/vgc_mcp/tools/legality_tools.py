@@ -11,6 +11,7 @@ from vgc_mcp_core.rules.restricted import (
     get_pokemon_legality
 )
 from vgc_mcp_core.rules.item_clause import check_item_clause, get_duplicate_items, suggest_alternative_items
+from vgc_mcp_core.utils.errors import error_response, ErrorCodes
 
 
 def register_legality_tools(mcp: FastMCP, team_manager):
@@ -41,20 +42,13 @@ def register_legality_tools(mcp: FastMCP, team_manager):
         team = team_manager.get_current_team()
 
         if not team or len(team.slots) == 0:
-            return {
-                "valid": False,
-                "error": "No team to validate. Add Pokemon first.",
-                "regulation": reg_code
-            }
+            return error_response(ErrorCodes.INTERNAL_ERROR, 'No team to validate. Add Pokemon first.', valid=False, regulation=reg_code)
 
         # Get regulation rules
         reg = get_regulation(reg_code)
         if not reg:
             available = config.list_regulation_codes()
-            return {
-                "valid": False,
-                "error": f"Unknown regulation: {reg_code}. Valid: {', '.join(available)}"
-            }
+            return error_response(ErrorCodes.INTERNAL_ERROR, f"Unknown regulation: {reg_code}. Valid: {', '.join(available)}", valid=False)
 
         # Run full validation
         result = validate_team_rules(team, reg_code)
@@ -98,7 +92,7 @@ def register_legality_tools(mcp: FastMCP, team_manager):
 
         reg = get_regulation(reg_code)
         if not reg:
-            return {"error": f"Unknown regulation: {reg_code}"}
+            return error_response(ErrorCodes.INTERNAL_ERROR, f'Unknown regulation: {reg_code}')
 
         # Get Pokemon names
         pokemon_names = [slot.pokemon.name for slot in team.slots]
@@ -182,10 +176,7 @@ def register_legality_tools(mcp: FastMCP, team_manager):
 
         if not reg:
             available = config.list_regulation_codes()
-            return {
-                "error": f"Unknown regulation: {reg_code}",
-                "available": available
-            }
+            return error_response(ErrorCodes.INTERNAL_ERROR, f'Unknown regulation: {reg_code}', available=available)
 
         return {
             "name": reg.name,
@@ -405,11 +396,7 @@ def register_legality_tools(mcp: FastMCP, team_manager):
                 "message": f"Session regulation set to {reg_data.get('name', reg_code)}"
             }
         else:
-            return {
-                "success": False,
-                "error": f"Unknown regulation: {regulation}",
-                "available": available
-            }
+            return error_response(ErrorCodes.INTERNAL_ERROR, f'Unknown regulation: {regulation}', available=available)
 
     @mcp.tool()
     async def clear_session_regulation() -> dict:

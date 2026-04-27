@@ -25,7 +25,7 @@ from vgc_mcp_core.calc.items import (
     NFE_POKEMON,
 )
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
-from vgc_mcp_core.utils.errors import error_response, success_response
+from vgc_mcp_core.utils.errors import error_response, success_response, ErrorCodes
 
 
 def register_item_tools(mcp: FastMCP, pokeapi: PokeAPIClient):

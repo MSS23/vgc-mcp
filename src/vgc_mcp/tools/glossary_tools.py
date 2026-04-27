@@ -5,7 +5,7 @@ from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp_core.config import logger
 from vgc_mcp_core.data.glossary_data import VGC_GLOSSARY
-from vgc_mcp_core.utils.errors import api_error
+from vgc_mcp_core.utils.errors import api_error, error_response, ErrorCodes
 
 
 def register_glossary_tools(mcp: FastMCP):
@@ -44,11 +44,7 @@ def register_glossary_tools(mcp: FastMCP):
                         if term_lower[0] == key[0] or any(c in key for c in term_lower[:3]):
                             suggestions.append(key)
                     
-                    return {
-                        "error": f"Term '{term}' not found in glossary",
-                        "suggestions": suggestions[:5],
-                        "available_terms": list(VGC_GLOSSARY.keys())[:20]
-                    }
+                    return error_response(ErrorCodes.POKEMON_NOT_FOUND, f"Term '{term}' not found in glossary", suggestions=suggestions[:5], available_terms=list(VGC_GLOSSARY.keys())[:20])
             
             # Build markdown output
             markdown_lines = [

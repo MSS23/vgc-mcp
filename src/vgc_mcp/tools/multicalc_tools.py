@@ -21,7 +21,7 @@ from vgc_mcp_core.calc.modifiers import DamageModifiers
 from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, IVSpread, BaseStats
 from vgc_mcp_core.models.move import Move, MoveCategory
 from vgc_mcp_core.formats.showdown import pokemon_build_to_showdown
-from vgc_mcp_core.utils.errors import pokemon_not_found_error, api_error
+from vgc_mcp_core.utils.errors import pokemon_not_found_error, api_error, error_response, ErrorCodes
 from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name
 from vgc_mcp_core.utils.synergies import get_synergy_ability
 from vgc_mcp_core.utils.normalize import normalize_smogon_name as _normalize_smogon_name
@@ -122,7 +122,7 @@ def register_multicalc_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
         """
         try:
             if len(defender_names) > 10:
-                return {"error": "Maximum 10 defenders supported. Please reduce the list."}
+                return error_response(ErrorCodes.INVALID_PARAMETER, 'Maximum 10 defenders supported. Please reduce the list.')
 
             # Fetch attacker data
             attacker_base = await pokeapi.get_base_stats(attacker_name)
@@ -237,7 +237,7 @@ def register_multicalc_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def calculate_defensive_threats(
@@ -271,7 +271,7 @@ def register_multicalc_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
         """
         try:
             if len(attacker_configs) > 10:
-                return {"error": "Maximum 10 attackers supported. Please reduce the list."}
+                return error_response(ErrorCodes.INVALID_PARAMETER, 'Maximum 10 attackers supported. Please reduce the list.')
 
             # Build defender
             defender = await _build_pokemon_from_smogon(
@@ -378,7 +378,7 @@ def register_multicalc_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def calculate_team_coverage_matrix(
@@ -402,7 +402,7 @@ def register_multicalc_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
         """
         try:
             if len(team_pokemon) > 6:
-                return {"error": "Maximum 6 team members supported."}
+                return error_response(ErrorCodes.INVALID_PARAMETER, 'Maximum 6 team members supported.')
 
             # Get meta threats if not provided
             if meta_threats is None:
@@ -530,4 +530,4 @@ def register_multicalc_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))

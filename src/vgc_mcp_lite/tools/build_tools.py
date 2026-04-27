@@ -12,6 +12,7 @@ from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.state import BuildStateManager
+from vgc_mcp_core.utils.errors import error_response, ErrorCodes
 from ..ui.components import create_pokemon_build_card_ui
 from ..ui.resources import add_ui_metadata
 
@@ -140,7 +141,7 @@ def register_build_tools(
             )
 
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def modify_build(
@@ -179,7 +180,7 @@ def register_build_tools(
             # Find build by name
             build = build_manager.get_build_by_name(pokemon_name)
             if not build:
-                return {"success": False, "error": f"No build found for '{pokemon_name}'"}
+                return error_response(ErrorCodes.INTERNAL_ERROR, f"No build found for '{pokemon_name}'")
 
             build_id = build["build_id"]
 
@@ -252,7 +253,7 @@ def register_build_tools(
             )
 
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def change_move(
@@ -279,7 +280,7 @@ def register_build_tools(
         try:
             build = build_manager.get_build_by_name(pokemon_name)
             if not build:
-                return {"success": False, "error": f"No build found for '{pokemon_name}'"}
+                return error_response(ErrorCodes.INTERNAL_ERROR, f"No build found for '{pokemon_name}'")
 
             build_id = build["build_id"]
 
@@ -291,7 +292,7 @@ def register_build_tools(
             # Change the move
             success, message = build_manager.change_move(build_id, old_move, new_move)
             if not success:
-                return {"success": False, "error": message}
+                return error_response(ErrorCodes.INTERNAL_ERROR, message)
 
             # Get updated build
             build = build_manager.get_build(build_id)
@@ -326,7 +327,7 @@ def register_build_tools(
             )
 
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def list_builds() -> dict:
@@ -361,7 +362,7 @@ def register_build_tools(
         """
         build = build_manager.get_build_by_name(pokemon_name)
         if not build:
-            return {"success": False, "error": f"No build found for '{pokemon_name}'"}
+            return error_response(ErrorCodes.INTERNAL_ERROR, f"No build found for '{pokemon_name}'")
 
         return {
             "success": True,

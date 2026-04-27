@@ -17,6 +17,7 @@ from vgc_mcp_core.models.pokemon import Nature, get_nature_modifier, PokemonBuil
 from vgc_mcp_core.models.move import Move, MoveCategory
 from vgc_mcp_core.config import EV_BREAKPOINTS_LV50, normalize_evs
 from vgc_mcp_core.utils.synergies import get_synergy_ability
+from vgc_mcp_core.utils.errors import error_response, ErrorCodes
 
 
 # Module-level Smogon client reference (set during registration)
@@ -115,7 +116,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             try:
                 parsed_nature = Nature(nature.lower())
             except ValueError:
-                return {"error": f"Invalid nature: {nature}"}
+                return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {nature}')
 
             total = hp_evs + atk_evs + def_evs + spa_evs + spd_evs + spe_evs
             issues = []
@@ -173,7 +174,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def optimize_bulk(
@@ -200,7 +201,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             try:
                 parsed_nature = Nature(nature.lower())
             except ValueError:
-                return {"error": f"Invalid nature: {nature}"}
+                return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {nature}')
 
             # Simple optimization: balance HP with defenses based on bias
             # General rule: invest in HP until it's ~2x each defense stat
@@ -257,7 +258,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def suggest_spread(
@@ -336,7 +337,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             }
 
             if role not in spreads:
-                return {"error": f"Unknown role: {role}. Use: offensive, bulky, bulky_offense, support"}
+                return error_response(ErrorCodes.INTERNAL_ERROR, f'Unknown role: {role}. Use: offensive, bulky, bulky_offense, support')
 
             spread = spreads[role]
 
@@ -367,7 +368,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def optimize_bulk_math(
@@ -402,7 +403,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             try:
                 parsed_nature = Nature(nature.lower())
             except ValueError:
-                return {"error": f"Invalid nature: {nature}"}
+                return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {nature}')
 
             # Use the mathematical optimizer
             result = calculate_optimal_bulk_distribution(
@@ -445,7 +446,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def analyze_bulk_diminishing_returns(
@@ -471,7 +472,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             try:
                 parsed_nature = Nature(nature.lower())
             except ValueError:
-                return {"error": f"Invalid nature: {nature}"}
+                return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {nature}')
 
             analysis = analyze_diminishing_returns(
                 base_hp=base_stats.hp,
@@ -501,7 +502,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     # Speed stage multipliers (Gen 9)
     SPEED_STAGE_MULTIPLIERS = {
@@ -1085,7 +1086,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             return results
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def optimize_dual_survival_spread(
@@ -1176,7 +1177,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             try:
                 parsed_nature = Nature(nature.lower())
             except ValueError:
-                return {"error": f"Invalid nature: {nature}"}
+                return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {nature}')
 
             # Fetch attacker 1 data
             atk1_base = await pokeapi.get_base_stats(survive_hit1_attacker)
@@ -1599,12 +1600,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                             }
 
             if best_spread is None:
-                return {
-                    "verdict": "IMPOSSIBLE",
-                    "error": "No valid EV spread found - try reducing speed requirement or changing nature",
-                    "speed_evs_needed": speed_evs_needed,
-                    "remaining_for_bulk": remaining_evs
-                }
+                return error_response(ErrorCodes.INTERNAL_ERROR, 'No valid EV spread found - try reducing speed requirement or changing nature', verdict='IMPOSSIBLE', speed_evs_needed=speed_evs_needed, remaining_for_bulk=remaining_evs)
 
             # Calculate offensive EVs (normalized to valid breakpoints)
             raw_offensive = 508 - speed_evs_needed - best_spread["hp"] - best_spread["def"] - best_spread["spd"]
@@ -1708,4 +1704,4 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))

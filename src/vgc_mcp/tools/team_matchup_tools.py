@@ -8,7 +8,7 @@ from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
 from vgc_mcp_core.team.manager import TeamManager
 from vgc_mcp_core.calc.matchup import COMMON_THREATS, analyze_threat_matchup
-from vgc_mcp_core.utils.errors import api_error
+from vgc_mcp_core.utils.errors import api_error, error_response, ErrorCodes
 
 
 def register_team_matchup_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[SmogonStatsClient], team_manager: TeamManager):
@@ -35,7 +35,7 @@ def register_team_matchup_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Op
         """
         try:
             if len(team_pokemon) != 6:
-                return {"error": "Team must have exactly 6 Pokemon"}
+                return error_response(ErrorCodes.INVALID_PARAMETER, 'Team must have exactly 6 Pokemon')
             
             # Analyze against meta threats if requested
             threat_coverage = {}
@@ -67,7 +67,7 @@ def register_team_matchup_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Op
                             continue
                     
                     if len(team_slots) < 6:
-                        return {"error": f"Failed to fetch data for some Pokemon: {team_pokemon}"}
+                        return error_response(ErrorCodes.API_ERROR, f'Failed to fetch data for some Pokemon: {team_pokemon}')
                     
                     temp_team = Team(slots=[TeamSlot(pokemon=p, slot_index=i) for i, p in enumerate(team_slots)])
                     

@@ -21,6 +21,7 @@ from vgc_mcp_core.formats.showdown import pokemon_build_to_showdown
 from vgc_mcp_core.models.move import Move, MoveCategory
 from vgc_mcp_core.config import EV_BREAKPOINTS_LV50, normalize_evs
 from vgc_mcp_core.utils.synergies import get_synergy_ability
+from vgc_mcp_core.utils.errors import error_response, ErrorCodes
 import math
 
 
@@ -599,7 +600,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             try:
                 parsed_nature = Nature(nature.lower())
             except ValueError:
-                return {"error": f"Invalid nature: {nature}"}
+                return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {nature}')
 
             total = hp_evs + atk_evs + def_evs + spa_evs + spd_evs + spe_evs
             issues = []
@@ -699,7 +700,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def suggest_nature_optimization(
@@ -733,7 +734,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             try:
                 current_nature_enum = Nature(current_nature.lower())
             except ValueError:
-                return {"error": f"Invalid nature: {current_nature}"}
+                return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {current_nature}')
             
             # Calculate current final stats
             current_stats = {
@@ -989,7 +990,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             
         except Exception as e:
             logger.error(f"Error in suggest_nature_optimization: {e}", exc_info=True)
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def optimize_bulk(
@@ -1018,7 +1019,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             try:
                 parsed_nature = Nature(nature.lower())
             except ValueError:
-                return {"error": f"Invalid nature: {nature}"}
+                return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {nature}')
 
             # Simple optimization: balance HP with defenses based on bias
             # General rule: invest in HP until it's ~2x each defense stat
@@ -1138,7 +1139,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             return result
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def suggest_spread(
@@ -1246,7 +1247,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             }
 
             if role not in spreads:
-                return {"error": f"Unknown role: {role}. Use: offensive, bulky, bulky_offense, support"}
+                return error_response(ErrorCodes.INTERNAL_ERROR, f'Unknown role: {role}. Use: offensive, bulky, bulky_offense, support')
 
             spread = spreads[role]
 
@@ -1314,7 +1315,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             return result
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def optimize_bulk_math(
@@ -1351,7 +1352,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             try:
                 parsed_nature = Nature(nature.lower())
             except ValueError:
-                return {"error": f"Invalid nature: {nature}"}
+                return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {nature}')
 
             # Use the mathematical optimizer
             result = calculate_optimal_bulk_distribution(
@@ -1428,7 +1429,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             return response
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def analyze_bulk_diminishing_returns(
@@ -1454,7 +1455,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             try:
                 parsed_nature = Nature(nature.lower())
             except ValueError:
-                return {"error": f"Invalid nature: {nature}"}
+                return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {nature}')
 
             analysis = analyze_diminishing_returns(
                 base_hp=base_stats.hp,
@@ -1484,7 +1485,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     # Speed stage multipliers (Gen 9)
     SPEED_STAGE_MULTIPLIERS = {
@@ -2171,7 +2172,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             return results
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     # Natures to try when auto-selecting, prioritizing BULK-BOOSTING natures
     # Speed EVs are cheap, nature boost is precious - use EVs for speed, nature for bulk
@@ -2330,7 +2331,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 try:
                     parsed_nature = Nature(nature.lower())
                 except ValueError:
-                    return {"error": f"Invalid nature: {nature}"}
+                    return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {nature}')
 
             # Fetch attacker 1 data
             atk1_base = await pokeapi.get_base_stats(survive_hit1_attacker)
@@ -2783,12 +2784,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                             best_results = {"result1": r1, "result2": r2, "survival_pct1": pct1, "survival_pct2": pct2, "survives1": s1, "survives2": s2}
 
                 if best_spread is None:
-                    return {
-                        "verdict": "IMPOSSIBLE",
-                        "error": "No valid EV spread found - benchmarks may be impossible",
-                        "speed_evs_needed": speed_evs_needed,
-                        "remaining_for_bulk": remaining_evs
-                    }
+                    return error_response(ErrorCodes.INTERNAL_ERROR, 'No valid EV spread found - benchmarks may be impossible', verdict='IMPOSSIBLE', speed_evs_needed=speed_evs_needed, remaining_for_bulk=remaining_evs)
 
                 # Store fallback result
                 all_valid_natures.append({
@@ -3000,7 +2996,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             return dual_result
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def optimize_multi_survival_spread(
@@ -3073,13 +3069,9 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         try:
             # Validate threat count
             if len(threats) < 3:
-                return {
-                    "error": "This tool requires 3-6 threats. For 2 threats, use optimize_dual_survival_spread instead."
-                }
+                return error_response(ErrorCodes.INTERNAL_ERROR, 'This tool requires 3-6 threats. For 2 threats, use optimize_dual_survival_spread instead.')
             if len(threats) > 6:
-                return {
-                    "error": "Maximum 6 threats supported. Please reduce the number of threats or prioritize the most important ones."
-                }
+                return error_response(ErrorCodes.INVALID_PARAMETER, 'Maximum 6 threats supported. Please reduce the number of threats or prioritize the most important ones.')
 
             # Auto-assign fixed Tera type if needed
             from vgc_mcp_core.calc.items import get_fixed_tera_type
@@ -3197,7 +3189,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         "special_attack": get_nature_modifier(parsed_nature, "special_attack"),
                     })]
                 except ValueError:
-                    return {"error": f"Invalid nature: {nature}"}
+                    return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {nature}')
 
             # Categorize threats by type
             physical_threats = [i for i, t in enumerate(prepared_threats) if t.is_physical]
@@ -3484,7 +3476,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def analyze_hp_number(
@@ -3578,4 +3570,4 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))

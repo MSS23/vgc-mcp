@@ -10,6 +10,7 @@ from vgc_mcp_core.calc.matchup import (
     analyze_defensive_matchup,
     COMMON_THREATS,
 )
+from vgc_mcp_core.utils.errors import error_response, ErrorCodes
 
 
 def register_matchup_tools(mcp: FastMCP, team_manager: TeamManager):
@@ -35,7 +36,7 @@ def register_matchup_tools(mcp: FastMCP, team_manager: TeamManager):
         """
         try:
             if team_manager.size == 0:
-                return {"error": "No Pokemon on team. Add Pokemon first."}
+                return error_response(ErrorCodes.TEAM_EMPTY, "No Pokemon on team. Add Pokemon first.")
 
             # Normalize name
             threat_name = threat_name.lower().replace(" ", "-")
@@ -63,7 +64,7 @@ def register_matchup_tools(mcp: FastMCP, team_manager: TeamManager):
             return result
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def find_threats_to_team() -> dict:
@@ -80,7 +81,7 @@ def register_matchup_tools(mcp: FastMCP, team_manager: TeamManager):
         """
         try:
             if team_manager.size == 0:
-                return {"error": "No Pokemon on team. Add Pokemon first."}
+                return error_response(ErrorCodes.TEAM_EMPTY, "No Pokemon on team. Add Pokemon first.")
 
             summary = find_team_threats(team_manager.team)
 
@@ -101,7 +102,7 @@ def register_matchup_tools(mcp: FastMCP, team_manager: TeamManager):
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def check_offensive_coverage(target_type: str) -> dict:
@@ -119,7 +120,7 @@ def register_matchup_tools(mcp: FastMCP, team_manager: TeamManager):
         """
         try:
             if team_manager.size == 0:
-                return {"error": "No Pokemon on team. Add Pokemon first."}
+                return error_response(ErrorCodes.TEAM_EMPTY, "No Pokemon on team. Add Pokemon first.")
 
             # Normalize type
             target_type = target_type.capitalize()
@@ -140,7 +141,7 @@ def register_matchup_tools(mcp: FastMCP, team_manager: TeamManager):
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def check_defensive_matchup(attacking_type: str) -> dict:
@@ -157,7 +158,7 @@ def register_matchup_tools(mcp: FastMCP, team_manager: TeamManager):
         """
         try:
             if team_manager.size == 0:
-                return {"error": "No Pokemon on team. Add Pokemon first."}
+                return error_response(ErrorCodes.TEAM_EMPTY, "No Pokemon on team. Add Pokemon first.")
 
             # Normalize type
             attacking_type = attacking_type.capitalize()
@@ -179,7 +180,7 @@ def register_matchup_tools(mcp: FastMCP, team_manager: TeamManager):
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def get_available_threats() -> dict:
@@ -219,7 +220,7 @@ def register_matchup_tools(mcp: FastMCP, team_manager: TeamManager):
         """
         try:
             if team_manager.size == 0:
-                return {"error": "No Pokemon on team. Add Pokemon first."}
+                return error_response(ErrorCodes.TEAM_EMPTY, "No Pokemon on team. Add Pokemon first.")
 
             # Get threat summary
             threat_summary = find_team_threats(team_manager.team)
@@ -272,4 +273,4 @@ def register_matchup_tools(mcp: FastMCP, team_manager: TeamManager):
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))

@@ -6,7 +6,7 @@ from mcp.server.fastmcp import FastMCP
 from vgc_mcp_core.config import logger
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.calc.matchup import COMMON_THREATS
-from vgc_mcp_core.utils.errors import api_error
+from vgc_mcp_core.utils.errors import api_error, error_response, ErrorCodes
 
 
 def register_readiness_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
@@ -29,7 +29,7 @@ def register_readiness_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         """
         try:
             if len(team_pokemon) != 6:
-                return {"error": "Team must have exactly 6 Pokemon"}
+                return error_response(ErrorCodes.INVALID_PARAMETER, 'Team must have exactly 6 Pokemon')
             
             scores = {
                 "legality": 100,

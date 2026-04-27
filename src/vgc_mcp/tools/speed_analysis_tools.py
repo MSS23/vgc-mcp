@@ -31,6 +31,7 @@ from vgc_mcp_core.calc.speed_control import (
 )
 from vgc_mcp_core.models.pokemon import Nature
 from vgc_mcp_core.config import EV_BREAKPOINTS_LV50
+from vgc_mcp_core.utils.errors import error_response, ErrorCodes
 
 
 def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_manager: TeamManager, smogon_client: SmogonStatsClient):
@@ -71,7 +72,7 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
                 nature1 = Nature(pokemon1_nature.lower())
                 nature2 = Nature(pokemon2_nature.lower())
             except ValueError as e:
-                return {"error": f"Invalid nature: {e}"}
+                return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {e}')
 
             # Calculate speeds
             speed1 = calculate_speed(base1.speed, 31, pokemon1_speed_evs, 50, nature1)
@@ -132,7 +133,7 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def find_speed_evs_to_outspeed(
@@ -157,7 +158,7 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
             try:
                 parsed_nature = Nature(nature.lower())
             except ValueError:
-                return {"error": f"Invalid nature: {nature}"}
+                return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {nature}')
 
             evs_needed = find_speed_evs(
                 base_stats.speed,
@@ -213,7 +214,7 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     # ========== Speed Tier Analysis ==========
 
@@ -272,7 +273,7 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def analyze_speed_spread(
@@ -301,7 +302,7 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
             try:
                 parsed_nature = Nature(nature.lower())
             except ValueError:
-                return {"error": f"Invalid nature: {nature}"}
+                return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {nature}')
 
             # Fetch competitive benchmarks from Smogon if requested
             competitive_benchmarks = None
@@ -337,7 +338,7 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def visualize_speed_tiers(
@@ -685,7 +686,7 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
         """
         try:
             if team_manager.size == 0:
-                return {"error": "No Pokemon on team. Add Pokemon first."}
+                return error_response(ErrorCodes.TEAM_EMPTY, 'No Pokemon on team. Add Pokemon first.')
 
             analysis = analyze_trick_room(team_manager.team)
 
@@ -708,7 +709,7 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def analyze_team_tailwind() -> dict:
@@ -727,7 +728,7 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
         """
         try:
             if team_manager.size == 0:
-                return {"error": "No Pokemon on team. Add Pokemon first."}
+                return error_response(ErrorCodes.TEAM_EMPTY, 'No Pokemon on team. Add Pokemon first.')
 
             analysis = analyze_tailwind(team_manager.team)
 
@@ -750,7 +751,7 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def analyze_speed_drops(stages: int = -1) -> dict:
@@ -767,7 +768,7 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
         """
         try:
             if team_manager.size == 0:
-                return {"error": "No Pokemon on team. Add Pokemon first."}
+                return error_response(ErrorCodes.TEAM_EMPTY, 'No Pokemon on team. Add Pokemon first.')
 
             # Clamp stages
             stages = max(-6, min(0, stages))
@@ -785,7 +786,7 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def analyze_paralysis_matchup() -> dict:
@@ -799,7 +800,7 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
         """
         try:
             if team_manager.size == 0:
-                return {"error": "No Pokemon on team. Add Pokemon first."}
+                return error_response(ErrorCodes.TEAM_EMPTY, 'No Pokemon on team. Add Pokemon first.')
 
             analysis = analyze_paralysis(team_manager.team)
 
@@ -814,7 +815,7 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def get_full_speed_analysis() -> dict:
@@ -832,12 +833,12 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
         """
         try:
             if team_manager.size == 0:
-                return {"error": "No Pokemon on team. Add Pokemon first."}
+                return error_response(ErrorCodes.TEAM_EMPTY, 'No Pokemon on team. Add Pokemon first.')
 
             return get_speed_control_summary(team_manager.team)
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
     @mcp.tool()
     async def calculate_speed_after_modifier(
@@ -894,4 +895,4 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))

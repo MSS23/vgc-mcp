@@ -11,6 +11,7 @@ from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
 from vgc_mcp_core.calc.stats import calculate_speed
 from vgc_mcp_core.models.pokemon import Nature
+from vgc_mcp_core.utils.errors import error_response, ErrorCodes
 
 
 # Common VGC Pokemon with their base speeds and common speed investments
@@ -110,7 +111,7 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
             try:
                 parsed_nature = Nature(nature.lower())
             except ValueError:
-                return {"error": f"Invalid nature: {nature}"}
+                return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {nature}')
 
             # Calculate your speed - use speed_stat directly if provided
             if speed_stat is not None:
@@ -197,7 +198,7 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
                     target_base_speed = target_base.speed
                     data_source = "calculated"
                 except Exception:
-                    return {"error": f"Could not find data for {target_pokemon}"}
+                    return error_response(ErrorCodes.POKEMON_NOT_FOUND, f'Could not find data for {target_pokemon}')
 
             # Calculate outspeed percentage with interpolation for speeds between known tiers
             total_usage = sum(s["usage"] for s in target_spreads)
@@ -305,4 +306,4 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))

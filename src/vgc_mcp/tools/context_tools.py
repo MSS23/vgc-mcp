@@ -11,6 +11,7 @@ from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, IVSpread, BaseStats
 from vgc_mcp_core.calc.stats import calculate_all_stats
+from vgc_mcp_core.utils.errors import error_response, ErrorCodes
 
 
 def register_context_tools(mcp: FastMCP, pokeapi, team_manager):
@@ -55,21 +56,14 @@ def register_context_tools(mcp: FastMCP, pokeapi, team_manager):
         # Validate EVs
         total_evs = hp_evs + atk_evs + def_evs + spa_evs + spd_evs + spe_evs
         if total_evs > 508:
-            return {
-                "success": False,
-                "error": f"Total EVs ({total_evs}) exceeds maximum of 508"
-            }
+            return error_response(ErrorCodes.INVALID_PARAMETER, f'Total EVs ({total_evs}) exceeds maximum of 508')
 
         # Validate nature
         try:
             nature_enum = Nature(nature.lower())
         except ValueError:
             valid_natures = [n.value.title() for n in Nature]
-            return {
-                "success": False,
-                "error": f"Invalid nature: {nature}",
-                "valid_natures": valid_natures[:10]  # Show first 10
-            }
+            return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {nature}', valid_natures=valid_natures[:10])
 
         # Get Pokemon data from API
         try:
@@ -78,16 +72,10 @@ def register_context_tools(mcp: FastMCP, pokeapi, team_manager):
             abilities = await pokeapi.get_pokemon_abilities(pokemon_name)
             pokemon_data = await pokeapi.get_pokemon(pokemon_name)
         except Exception as e:
-            return {
-                "success": False,
-                "error": f"Pokemon not found: {pokemon_name}"
-            }
+            return error_response(ErrorCodes.POKEMON_NOT_FOUND, f'Pokemon not found: {pokemon_name}')
 
         if not pokemon_data:
-            return {
-                "success": False,
-                "error": f"Pokemon not found: {pokemon_name}"
-            }
+            return error_response(ErrorCodes.POKEMON_NOT_FOUND, f'Pokemon not found: {pokemon_name}')
 
         evs = EVSpread(
             hp=hp_evs,
@@ -293,21 +281,14 @@ def register_context_tools(mcp: FastMCP, pokeapi, team_manager):
         pokemon = team_manager.get_pokemon_context(reference)
 
         if not pokemon:
-            return {
-                "success": False,
-                "error": f"No Pokemon found for '{reference}'",
-                "stored_pokemon": [p["reference"] for p in team_manager.list_pokemon_context()]
-            }
+            return error_response(ErrorCodes.INTERNAL_ERROR, f"No Pokemon found for '{reference}'", stored_pokemon=[p['reference'] for p in team_manager.list_pokemon_context()])
 
         # Update nature if provided
         if nature:
             try:
                 pokemon.nature = Nature(nature.lower())
             except ValueError:
-                return {
-                    "success": False,
-                    "error": f"Invalid nature: {nature}"
-                }
+                return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {nature}')
 
         # Update EVs if provided
         new_evs = {
@@ -321,10 +302,7 @@ def register_context_tools(mcp: FastMCP, pokeapi, team_manager):
 
         total = sum(new_evs.values())
         if total > 508:
-            return {
-                "success": False,
-                "error": f"Total EVs ({total}) exceeds maximum of 508"
-            }
+            return error_response(ErrorCodes.INVALID_PARAMETER, f'Total EVs ({total}) exceeds maximum of 508')
 
         pokemon.evs = EVSpread(**new_evs)
 

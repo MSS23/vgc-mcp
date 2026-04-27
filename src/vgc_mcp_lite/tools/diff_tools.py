@@ -6,6 +6,7 @@ from mcp.server.fastmcp import FastMCP
 from vgc_mcp_core.api.pokepaste import PokePasteClient, PokePasteError
 from vgc_mcp_core.formats.showdown import parse_showdown_team, ShowdownParseError
 from vgc_mcp_core.diff import generate_team_diff
+from vgc_mcp_core.utils.errors import error_response, ErrorCodes
 
 # Flag indicating this module provides UI components
 HAS_UI = True
@@ -76,17 +77,11 @@ def register_diff_tools(mcp: FastMCP):
         # Parse both teams
         team1, name1 = await parse_team_input(version1)
         if team1 is None:
-            return {
-                "success": False,
-                "error": f"Failed to parse version 1: {name1}",
-            }
+            return error_response(ErrorCodes.PARSE_ERROR, f'Failed to parse version 1: {name1}')
 
         team2, name2 = await parse_team_input(version2)
         if team2 is None:
-            return {
-                "success": False,
-                "error": f"Failed to parse version 2: {name2}",
-            }
+            return error_response(ErrorCodes.PARSE_ERROR, f'Failed to parse version 2: {name2}')
 
         # Use provided names or detected names
         display_v1 = v1_name or name1

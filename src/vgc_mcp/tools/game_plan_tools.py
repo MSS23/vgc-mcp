@@ -19,7 +19,7 @@ from vgc_mcp_core.calc.team_matchup import (
 )
 from vgc_mcp_core.calc.priority import normalize_move_name
 from vgc_mcp_core.team.manager import TeamManager
-from vgc_mcp_core.utils.errors import pokemon_not_found_error, api_error
+from vgc_mcp_core.utils.errors import pokemon_not_found_error, api_error, error_response, ErrorCodes
 from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name
 from vgc_mcp_core.utils.normalize import normalize_smogon_name as _normalize_smogon_name
 
@@ -187,15 +187,12 @@ def register_game_plan_tools(
                     your_builds.append(slot.pokemon)
                     your_names.append(slot.pokemon.name)
             else:
-                return {
-                    "error": "No team provided. Either pass your_team names or load a team first.",
-                    "hint": "Use import_showdown_paste to load your team, or pass your_team=['pokemon1', 'pokemon2', ...]"
-                }
+                return error_response(ErrorCodes.INTERNAL_ERROR, 'No team provided. Either pass your_team names or load a team first.', hint="Use import_showdown_paste to load your team, or pass your_team=['pokemon1', 'pokemon2', ...]")
 
         if len(your_names) < 2:
-            return {"error": "Your team needs at least 2 Pokemon."}
+            return error_response(ErrorCodes.INTERNAL_ERROR, 'Your team needs at least 2 Pokemon.')
         if len(opponent_team) < 2:
-            return {"error": "Opponent team needs at least 2 Pokemon."}
+            return error_response(ErrorCodes.INTERNAL_ERROR, 'Opponent team needs at least 2 Pokemon.')
 
         # Build profiles for all Pokemon in parallel
         try:
@@ -240,13 +237,10 @@ def register_game_plan_tools(
                     their_profiles.append(result)
 
             if errors:
-                return {
-                    "error": "Could not find some Pokemon",
-                    "details": errors,
-                }
+                return error_response(ErrorCodes.POKEMON_NOT_FOUND, 'Could not find some Pokemon', details=errors)
 
             if len(your_profiles) < 2 or len(their_profiles) < 2:
-                return {"error": "Need at least 2 valid Pokemon on each side."}
+                return error_response(ErrorCodes.INTERNAL_ERROR, 'Need at least 2 valid Pokemon on each side.')
 
         except Exception as e:
             return api_error("game plan generation", str(e))

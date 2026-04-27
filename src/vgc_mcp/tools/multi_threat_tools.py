@@ -9,7 +9,7 @@ from vgc_mcp_core.calc.damage import calculate_damage
 from vgc_mcp_core.calc.modifiers import DamageModifiers
 from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, BaseStats
 from vgc_mcp_core.models.move import Move
-from vgc_mcp_core.utils.errors import pokemon_not_found_error, api_error
+from vgc_mcp_core.utils.errors import pokemon_not_found_error, api_error, error_response, ErrorCodes
 from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name
 from vgc_mcp_core.config import EV_BREAKPOINTS_LV50
 
@@ -60,18 +60,18 @@ def register_multi_threat_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             try:
                 def_nature = Nature(nature.lower())
             except ValueError:
-                return {"error": f"Invalid nature: {nature}"}
+                return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {nature}')
             
             # Parse and validate threats
             parsed_threats = []
             for i, threat in enumerate(threats):
                 if not isinstance(threat, dict):
-                    return {"error": f"Threat {i+1} must be a dict with 'name' and 'move' keys"}
+                    return error_response(ErrorCodes.INVALID_PARAMETER, f"Threat {i + 1} must be a dict with 'name' and 'move' keys")
                 
                 threat_name = threat.get("name")
                 threat_move = threat.get("move")
                 if not threat_name or not threat_move:
-                    return {"error": f"Threat {i+1} missing 'name' or 'move'"}
+                    return error_response(ErrorCodes.INTERNAL_ERROR, f"Threat {i + 1} missing 'name' or 'move'")
                 
                 parsed_threats.append({
                     "name": threat_name,
@@ -117,7 +117,7 @@ def register_multi_threat_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                     })
                 except Exception as e:
                     logger.warning(f"Failed to build threat {threat['name']}: {e}")
-                    return {"error": f"Failed to process threat {threat['name']}: {str(e)}"}
+                    return error_response(ErrorCodes.INTERNAL_ERROR, f"Failed to process threat {threat['name']}: {str(e)}")
             
             # Try different EV combinations to find minimum that survives all threats
             best_spread = None
@@ -198,10 +198,7 @@ def register_multi_threat_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                     break
             
             if best_spread is None:
-                return {
-                    "error": "Could not find a spread that survives all threats with the given constraints",
-                    "threats": [t["name"] for t in parsed_threats]
-                }
+                return error_response(ErrorCodes.POKEMON_NOT_FOUND, 'Could not find a spread that survives all threats with the given constraints', threats=[t['name'] for t in parsed_threats])
             
             # Format response
             response = {
