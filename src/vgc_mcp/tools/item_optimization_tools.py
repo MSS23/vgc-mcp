@@ -31,31 +31,12 @@ from .spread_tools import META_SYNERGIES
 _smogon_client: Optional[SmogonStatsClient] = None
 
 
+from vgc_mcp_core.tools.smogon_helpers import get_common_spread as _shared_get_common_spread
+
+
 async def _get_common_spread(pokemon_name: str) -> Optional[dict]:
-    """Fetch the most common spread for a Pokemon from Smogon usage stats."""
-    if _smogon_client is None:
-        return None
-    try:
-        usage = await _smogon_client.get_pokemon_usage(pokemon_name)
-        if usage and usage.get("spreads"):
-            top_spread = usage["spreads"][0]
-            items = usage.get("items", {})
-            abilities = usage.get("abilities", {})
-            top_item = list(items.keys())[0] if items else None
-            
-            # Get ability based on item synergy
-            top_ability, _ = get_synergy_ability(top_item, abilities)
-            
-            return {
-                "nature": top_spread.get("nature", "Serious"),
-                "evs": top_spread.get("evs", {}),
-                "usage": top_spread.get("usage", 0),
-                "item": top_item,
-                "ability": top_ability,
-            }
-    except Exception as e:
-        pass
-    return None
+    """Module-local wrapper — passes the registered Smogon client through."""
+    return await _shared_get_common_spread(_smogon_client, pokemon_name)
 
 
 def register_item_optimization_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[SmogonStatsClient] = None):

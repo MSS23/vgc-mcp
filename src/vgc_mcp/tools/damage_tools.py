@@ -25,58 +25,22 @@ _smogon_client: Optional[SmogonStatsClient] = None
 from vgc_mcp_core.utils.normalize import normalize_smogon_name as _normalize_smogon_name  # noqa: F401  (re-exported for back-compat)
 
 
+# Delegate to shared core helpers — the local module-level _smogon_client
+# is captured in these wrappers so existing call sites stay unchanged.
+from vgc_mcp_core.tools.smogon_helpers import (
+    get_common_spread as _shared_get_common_spread,
+    get_common_spreads as _shared_get_common_spreads,
+)
+
+
 async def _get_common_spreads(pokemon_name: str, limit: int = 3) -> list[dict]:
-    """Fetch the top common spreads for a Pokemon from Smogon usage stats.
-
-    Args:
-        pokemon_name: Name of the Pokemon
-        limit: Number of top spreads to return (default 3)
-
-    Returns:
-        List of dicts with 'nature', 'evs', 'item', 'ability', 'usage' keys.
-        Returns empty list if not found.
-    """
-    if _smogon_client is None:
-        return []
-    try:
-        usage = await _smogon_client.get_pokemon_usage(pokemon_name)
-        if usage and usage.get("spreads"):
-            spreads = usage["spreads"][:limit]
-            # Get items and abilities with their usage percentages
-            items = usage.get("items", {})
-            abilities = usage.get("abilities", {})
-            top_item = list(items.keys())[0] if items else None
-            top_item_usage = list(items.values())[0] if items else 0
-
-            # Get ability based on item synergy (e.g., Life Orb -> Sheer Force)
-            top_ability, top_ability_usage = get_synergy_ability(top_item, abilities)
-
-            result = []
-            for i, spread in enumerate(spreads):
-                result.append({
-                    "rank": i + 1,
-                    "nature": spread.get("nature", "Serious"),
-                    "evs": spread.get("evs", {}),
-                    "usage": spread.get("usage", 0),
-                    "item": top_item,
-                    "item_usage": top_item_usage,
-                    "ability": top_ability,
-                    "ability_usage": top_ability_usage,
-                })
-            return result
-    except Exception as e:
-        logger.warning("Failed to fetch Smogon spreads for %s: %s", pokemon_name, e)
-    return []
+    """Module-local wrapper — passes the registered Smogon client through."""
+    return await _shared_get_common_spreads(_smogon_client, pokemon_name, limit)
 
 
 async def _get_common_spread(pokemon_name: str) -> Optional[dict]:
-    """Fetch the most common spread for a Pokemon from Smogon usage stats.
-
-    Returns:
-        dict with 'nature' and 'evs' keys, or None if not found
-    """
-    spreads = await _get_common_spreads(pokemon_name, limit=1)
-    return spreads[0] if spreads else None
+    """Module-local wrapper — passes the registered Smogon client through."""
+    return await _shared_get_common_spread(_smogon_client, pokemon_name)
 
 
 def format_transparent_output(
