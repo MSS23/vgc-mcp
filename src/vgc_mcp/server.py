@@ -39,51 +39,7 @@ from vgc_mcp_core.team.manager import TeamManager
 from vgc_mcp_core.team.analysis import TeamAnalyzer
 from vgc_mcp_core.state import BuildStateManager
 
-from .tools.stats_tools import register_stats_tools
-from .tools.damage_tools import register_damage_tools
-from .tools.speed_analysis_tools import register_speed_analysis_tools
-from .tools.team_tools import register_team_tools
-from .tools.usage_tools import register_usage_tools
-from .tools.spread_tools import register_spread_tools
-from .tools.import_export_tools import register_import_export_tools
-from .tools.matchup_tools import register_matchup_tools
-from .tools.core_tools import register_core_tools
-from .tools.legality_tools import register_legality_tools
-from .tools.move_tools import register_move_tools
-from .tools.priority_tools import register_priority_tools
-from .tools.ability_tools import register_ability_tools
-from .tools.coverage_tools import register_coverage_tools
-from .tools.context_tools import register_context_tools
-from .tools.speed_probability_tools import register_speed_probability_tools
-from .tools.meta_threat_tools import register_meta_threat_tools
-from .tools.workflow_tools import register_workflow_tools
-from .tools.item_tools import register_item_tools
-from .tools.chip_damage_tools import register_chip_damage_tools
-from .tools.item_optimization_tools import register_item_optimization_tools
-from .tools.multicalc_tools import register_multicalc_tools
-from .tools.preset_tools import register_preset_tools
-from .tools.sample_team_tools import register_sample_team_tools
-from .tools.pokepaste_tools import register_pokepaste_tools
-from .tools.build_tools import register_build_tools
-from .tools.diff_tools import register_diff_tools
-from .tools.report_tools import register_report_tools
-from .tools.speed_tools import register_speed_tools
-from .tools.tournament_tools import register_tournament_tools
-from .tools.multi_threat_tools import register_multi_threat_tools
-from .tools.team_matchup_tools import register_team_matchup_tools
-from .tools.tera_tools import register_tera_tools
-from .tools.lead_tools import register_lead_tools
-from .tools.speed_viz_tools import register_speed_viz_tools
-from .tools.readiness_tools import register_readiness_tools
-from .tools.glossary_tools import register_glossary_tools
-from .tools.education_tools import register_education_tools
-from .tools.help_tools import register_help_tools
-from .tools.build_checker_tools import register_build_checker_tools
-from .tools.wizard_tools import register_wizard_tools
-from .tools.type_tools import register_type_tools
-from .tools.onboarding_tools import register_onboarding_tools
-from .tools.game_plan_tools import register_game_plan_tools
-from .tools.bulk_calc_tools import register_bulk_calc_tools
+from .tools import register_all as register_all_tools
 
 # Note: MCP-UI is only enabled in vgc-mcp-lite for smaller footprint
 # Full server focuses on tool completeness over visual components
@@ -232,84 +188,19 @@ team_manager = TeamManager()
 analyzer = TeamAnalyzer()
 build_manager = BuildStateManager()
 
-# Register all tools
-register_stats_tools(mcp, pokeapi)
-register_damage_tools(mcp, pokeapi, smogon)  # Pass smogon for auto-fetching common spreads
-register_speed_analysis_tools(mcp, pokeapi, team_manager, smogon)  # Combined speed + speed control tools
-register_team_tools(mcp, pokeapi, team_manager, analyzer)
-register_usage_tools(mcp, smogon)
-register_spread_tools(mcp, pokeapi, smogon)  # Pass smogon for auto-fetching attacker spreads
-register_import_export_tools(mcp, pokeapi, team_manager)
-register_matchup_tools(mcp, team_manager)
-register_core_tools(mcp, team_manager, smogon)
-
-# Phase 3 tools
-register_legality_tools(mcp, team_manager)
-register_move_tools(mcp, pokeapi, smogon, team_manager)
-register_priority_tools(mcp, team_manager)
-register_ability_tools(mcp, team_manager)
-
-# Phase 4 tools
-register_coverage_tools(mcp, team_manager, pokeapi)
-
-# Phase 6 tools - Meta-aware speed probability and optimization
-register_context_tools(mcp, pokeapi, team_manager)
-register_speed_probability_tools(mcp, smogon, pokeapi, team_manager)
-register_meta_threat_tools(mcp, smogon, pokeapi, team_manager)
-
-# Phase 7 tools - User experience improvements (workflow coordinators)
-register_workflow_tools(mcp, pokeapi, smogon, team_manager, analyzer)
-
-# Phase 9 tools - Advanced battle mechanics
-register_item_tools(mcp, pokeapi)
-register_chip_damage_tools(mcp, pokeapi)
-
-# Life Orb Optimization & Multicalc tools
-register_item_optimization_tools(mcp, pokeapi, smogon)
-register_multicalc_tools(mcp, pokeapi, smogon)
-
-# Phase 10 tools - Quality of life improvements
-register_preset_tools(mcp, smogon)
-register_sample_team_tools(mcp)
-register_pokepaste_tools(mcp, pokepaste, pokeapi, smogon)
-
-# Build state management (5 tools)
-register_build_tools(mcp, build_manager, pokeapi)
-
-# Team diff and reporting tools
-register_diff_tools(mcp)
-register_report_tools(mcp, pokeapi)
-
-# Consolidated speed tools (complements speed_analysis and speed_probability)
-register_speed_tools(mcp, pokeapi, smogon)
-
-# Tournament matchup analysis tools
-register_tournament_tools(mcp, pokepaste, pokeapi, smogon)
-
-# New comprehensive tools (Part 2)
-register_multi_threat_tools(mcp, pokeapi)
-register_team_matchup_tools(mcp, pokeapi, smogon, team_manager)
-register_tera_tools(mcp, pokeapi)
-register_lead_tools(mcp, pokeapi)
-register_speed_viz_tools(mcp, pokeapi, smogon)
-register_readiness_tools(mcp, pokeapi)
-
-# Beginner-friendly tools (Part 4)
-register_glossary_tools(mcp)
-register_education_tools(mcp, pokeapi)
-register_help_tools(mcp)
-register_build_checker_tools(mcp, pokeapi)
-register_wizard_tools(mcp)
-register_type_tools(mcp, pokeapi)
-
-# Discoverability and onboarding tools (Part 0)
-register_onboarding_tools(mcp)
-
-# Game plan tools - opponent-aware strategy generation
-register_game_plan_tools(mcp, pokeapi, team_manager, smogon)
-
-# Bulk offensive damage calcs + Excel/PDF export
-register_bulk_calc_tools(mcp, pokeapi, smogon)
+# Auto-discover and register every `*_tools.py` module in tools/.
+# Each register_*_tools function is introspected and given the deps it asks for.
+# To add a new tool category: drop a `<area>_tools.py` file in tools/ exposing
+# `register_<area>_tools(mcp, ...)` — no edit to this file required.
+register_all_tools(
+    mcp,
+    pokeapi=pokeapi,
+    smogon=smogon,
+    pokepaste=pokepaste,
+    team_manager=team_manager,
+    analyzer=analyzer,
+    build_manager=build_manager,
+)
 
 
 def main():
