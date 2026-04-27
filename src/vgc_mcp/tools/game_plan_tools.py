@@ -21,9 +21,10 @@ from vgc_mcp_core.calc.priority import normalize_move_name
 from vgc_mcp_core.team.manager import TeamManager
 from vgc_mcp_core.utils.errors import pokemon_not_found_error, api_error
 from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name
+from vgc_mcp_core.utils.normalize import normalize_smogon_name as _normalize_smogon_name
 
 # Import helpers from damage_tools for Smogon data fetching
-from .damage_tools import _get_common_spread, _normalize_smogon_name
+from .damage_tools import _get_common_spread
 
 # Module-level references
 _smogon_client: Optional[SmogonStatsClient] = None

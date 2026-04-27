@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from typing import Optional
 from enum import IntEnum
 
+from ..utils.normalize import normalize_move_name  # noqa: F401  (re-export for back-compat)
+
 
 class PriorityBracket(IntEnum):
     """Priority bracket values for moves."""
@@ -185,11 +187,6 @@ class PriorityMoveInfo:
     priority: int
     category: str  # "offensive", "defensive", "support"
     description: str
-
-
-def normalize_move_name(move: str) -> str:
-    """Normalize move name for lookup."""
-    return move.lower().replace(" ", "-").replace("'", "").strip()
 
 
 def get_move_priority(

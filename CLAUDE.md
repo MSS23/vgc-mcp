@@ -39,56 +39,80 @@ mypy src/vgc_mcp
 
 ## Architecture
 
-### Core Structure
+### Repository Layout
+
+The repo ships **three server flavors** that share one core library:
 
 ```
-src/vgc_mcp/
-├── server.py          # MCP server entry point, registers all tools
-├── config.py          # Settings (API URLs, VGC defaults, EV limits)
-├── api/               # External API clients
-│   ├── pokeapi.py     # PokeAPI client for Pokemon data
-│   ├── smogon.py      # Smogon Stats client for usage data
-│   └── cache.py       # Disk-based API response caching
-├── calc/              # Pure calculation functions
-│   ├── damage.py      # Full Gen 9 damage formula
-│   ├── modifiers.py   # Type chart, weather, terrain, items
-│   ├── stats.py       # Stat calculation formulas
-│   └── ...            # Speed, matchup, chip damage calcs
-├── models/            # Pydantic data models
-│   ├── pokemon.py     # PokemonBuild, Nature, EVSpread, IVSpread
-│   ├── move.py        # Move model with multi-hit support
-│   └── team.py        # Team with species clause validation
-├── tools/             # MCP tool definitions (22 files)
-│   └── *_tools.py     # Each registers tools via register_*_tools(mcp, ...)
-├── rules/             # VGC format rules and legality
-├── formats/           # Showdown paste import/export
-└── utils/             # Error handling, fuzzy matching
+src/
+├── vgc_mcp_core/         # SHARED LIBRARY — all calc/data/IO logic lives here
+│   ├── api/              # External API clients (pokeapi, smogon, pokepaste, cache)
+│   ├── calc/             # Pure calculation functions (damage, stats, speed, matchup, ...)
+│   ├── models/           # Pydantic data models (PokemonBuild, Move, Team)
+│   ├── team/             # TeamManager, TeamAnalyzer, core_builder, validation
+│   ├── rules/            # VGC format rules and legality (regulation_loader, item_clause)
+│   ├── formats/          # Showdown paste import/export
+│   ├── data/             # Static VGC data (glossary, sample teams, spread presets)
+│   ├── diff/             # Team diff models and reasoning
+│   ├── export/           # Excel/PDF damage report generators
+│   ├── state/            # BuildStateManager
+│   ├── tools/            # SHARED tool handlers (pure functions returning dicts)
+│   ├── utils/            # errors, fuzzy matching, normalize, synergies, verdicts
+│   ├── validation/       # learnset validation
+│   └── config.py         # Settings (API URLs, VGC defaults, EV limits)
+│
+├── vgc_mcp/              # FULL server (~197 tools) — entry: vgc-mcp
+│   ├── server.py         # FastMCP setup + tool registration loop
+│   └── tools/            # Thin register_*_tools(mcp, deps) wrappers
+│
+├── vgc_mcp_lite/         # LITE server (curated subset) — entry: vgc-mcp-lite
+│   ├── server.py
+│   └── tools/            # Thin wrappers calling shared handlers
+│
+└── vgc_mcp_micro/        # MICRO server (1 file, smallest footprint) — entry: vgc-mcp-micro
+    ├── server.py
+    └── tools/core_tools.py
 ```
+
+**Why three flavors:** the full server exposes every tool (best for power users
+running locally). Lite is a curated subset for hosted/remote deployment where
+context size matters. Micro is the smallest viable footprint.
+
+**Where to put new code:**
+- New calc/data logic → `vgc_mcp_core/`
+- New tool handler logic → `vgc_mcp_core/tools/<area>_handlers.py`
+- New tool registration → `vgc_mcp/tools/<area>_tools.py` (thin wrapper)
+- Want it in lite/micro too? → register from those flavors' tools dirs
 
 ### Key Patterns
 
-**Tool Registration**: Each `tools/*_tools.py` exports a `register_*_tools(mcp, ...)` function that decorates async functions with `@mcp.tool()`. Dependencies (pokeapi, team_manager, etc.) are passed in.
+**Tool Registration**: Each `tools/*_tools.py` exports a `register_*_tools(mcp, ...)` function that decorates async functions with `@mcp.tool()`. Dependencies (pokeapi, team_manager, etc.) are passed in. The full server auto-discovers all `register_*_tools` modules in `vgc_mcp/tools/` — see `vgc_mcp/tools/__init__.py`.
 
-**Error Handling**: Use `utils/errors.py` helpers:
+**Error Handling**: Always use `vgc_mcp_core/utils/errors.py` helpers — never raw `{"error": "..."}` returns. Tools enforce this contract:
 ```python
-from ..utils.errors import pokemon_not_found_error, api_error
-from ..utils.fuzzy import suggest_pokemon_name
+from vgc_mcp_core.utils.errors import pokemon_not_found_error, api_error, error_response, ErrorCodes
+from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name
 
 # Good - structured error with suggestions
 suggestions = suggest_pokemon_name(pokemon_name)
 return pokemon_not_found_error(pokemon_name, suggestions)
 
-# Avoid - raw error strings
+# Good - generic structured error
+return error_response(ErrorCodes.INVALID_INPUT, "Maximum 4 moves supported")
+
+# AVOID - raw error strings (clients can't branch on these)
 return {"error": f"Pokemon not found: {name}"}  # Don't do this
 ```
 
+**Name Normalization**: One canonical module — `vgc_mcp_core/utils/normalize.py`. It exposes `normalize_pokemon`, `normalize_move`, `normalize_item`, `normalize_ability`, plus the `ITEM_ALIASES` / `ABILITY_ALIASES` dicts for Smogon's concatenated format. Do not re-implement these per-file.
+
 **Pydantic Models**: All data structures use Pydantic for validation. `PokemonBuild` is the central model containing base stats, nature, EVs, IVs, item, ability, and tera type.
 
-**Calculations**: `calc/` modules are pure functions. `calc/damage.py` implements the Gen 9 damage formula with all modifiers (STAB, type effectiveness, weather, terrain, screens, items).
+**Calculations**: `vgc_mcp_core/calc/` modules are pure functions. `calc/damage.py` implements the Gen 9 damage formula with all modifiers (STAB, type effectiveness, weather, terrain, screens, items).
 
 ### Type Chart
 
-Located in `calc/modifiers.py`. Key mechanics:
+Located in `vgc_mcp_core/calc/modifiers.py`. Key mechanics:
 - Fire is super effective against Steel (2x), not resisted
 - Fire resists Fire (0.5x)
 - Type effectiveness stacks for dual types (0.25x to 4x)

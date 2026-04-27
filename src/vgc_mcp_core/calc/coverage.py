@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from .modifiers import TYPE_CHART, get_type_effectiveness
+from ..utils.normalize import normalize_move_name  # noqa: F401  (re-export for back-compat)
 
 
 # All Pokemon types
@@ -209,11 +210,6 @@ class CoverageAnalysisResult:
     coverage_summary: dict[str, int]  # Type -> count of Pokemon that can hit SE
     best_coverage: list[str]  # Top 5 types with most coverage
     worst_coverage: list[str]  # Types with least/no coverage
-
-
-def normalize_move_name(move_name: str) -> str:
-    """Normalize move name for lookups."""
-    return move_name.lower().replace(" ", "-").replace("'", "")
 
 
 def get_move_type_from_name(move_name: str, move_data: Optional[dict] = None) -> Optional[str]:

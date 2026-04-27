@@ -6,19 +6,30 @@ normalized to a consistent format for dictionary lookups.
 Standard format: lowercase with hyphens (e.g., "life-orb", "sheer-force", "flare-blitz")
 
 Handles Smogon API's concatenated format (e.g., "lifeorb" -> "life-orb").
+
+This is the single canonical normalization module — DO NOT re-implement these
+functions per-file. Import from here:
+
+    from vgc_mcp_core.utils.normalize import (
+        normalize_name, normalize_pokemon_name,
+        normalize_move, normalize_ability, normalize_item,
+        ITEM_ALIASES, ABILITY_ALIASES,
+    )
 """
 
 from functools import lru_cache
 
 
 # Smogon API returns concatenated item names (e.g., "lifeorb")
-# This maps them to hyphenated format for damage calc comparisons
+# This maps them to hyphenated format for damage calc comparisons.
 ITEM_ALIASES: dict[str, str] = {
+    # Choice items
     "lifeorb": "life-orb",
     "choiceband": "choice-band",
     "choicespecs": "choice-specs",
     "choicescarf": "choice-scarf",
     "assaultvest": "assault-vest",
+    # Defensive items
     "rockyhelmet": "rocky-helmet",
     "blacksludge": "black-sludge",
     "flameorb": "flame-orb",
@@ -34,6 +45,7 @@ ITEM_ALIASES: dict[str, str] = {
     "powerherb": "power-herb",
     "ejectbutton": "eject-button",
     "ejectpack": "eject-pack",
+    # Coverage / utility
     "expertbelt": "expert-belt",
     "scopelens": "scope-lens",
     "widelens": "wide-lens",
@@ -46,36 +58,93 @@ ITEM_ALIASES: dict[str, str] = {
     "redcard": "red-card",
     "weaknesspolicy": "weakness-policy",
     "whiteherb": "white-herb",
-    "widelens": "wide-lens",
-    "leftovers": "leftovers",  # already correct but included for completeness
+    "throatspray": "throat-spray",
+    "leftovers": "leftovers",
+    "eviolite": "eviolite",
+    # Ogerpon masks
+    "hearthflamemask": "hearthflame-mask",
+    "wellspringmask": "wellspring-mask",
+    "cornerstonemask": "cornerstone-mask",
+    # Resistance berries
+    "occaberry": "occa-berry",
+    "passhoberry": "passho-berry",
+    "wacanberry": "wacan-berry",
+    "rindoberry": "rindo-berry",
+    "yacheberry": "yache-berry",
+    "chopleberry": "chople-berry",
+    "kebiaberry": "kebia-berry",
+    "shucaberry": "shuca-berry",
+    "cobaberry": "coba-berry",
+    "payapaberry": "payapa-berry",
+    "tangaberry": "tanga-berry",
+    "chartiberry": "charti-berry",
+    "kasibberry": "kasib-berry",
+    "habanberry": "haban-berry",
+    "colburberry": "colbur-berry",
+    "babiriberry": "babiri-berry",
+    "roseliberry": "roseli-berry",
 }
 
 # Smogon API returns concatenated ability names (e.g., "sheerforce")
-# This maps them to hyphenated format for damage calc comparisons
+# This maps them to hyphenated format for damage calc comparisons.
 ABILITY_ALIASES: dict[str, str] = {
+    # Offensive
     "sheerforce": "sheer-force",
+    "sandforce": "sand-force",
     "hugepower": "huge-power",
     "purepower": "pure-power",
     "gorillatactics": "gorilla-tactics",
-    "quarkdrive": "quark-drive",
-    "protosynthesis": "protosynthesis",  # already correct
-    "orichalcumpulse": "orichalcum-pulse",
-    "hadronengine": "hadron-engine",
-    "supremeoverlord": "supreme-overlord",
-    "rockypayload": "rocky-payload",
-    "strongjaw": "strong-jaw",
     "toughclaws": "tough-claws",
     "ironfist": "iron-fist",
-    "sandforce": "sand-force",
-    "adaptability": "adaptability",  # already correct
-    "technician": "technician",  # already correct
+    "strongjaw": "strong-jaw",
+    "rockypayload": "rocky-payload",
+    "supremeoverlord": "supreme-overlord",
+    "orichalcumpulse": "orichalcum-pulse",
+    "hadronengine": "hadron-engine",
     "unseenfist": "unseen-fist",
     "mindseye": "minds-eye",
     "embodyaspect": "embody-aspect",
-    "terashell": "tera-shell",
+    # Type-changing (-ate)
+    "pixilate": "pixilate",
+    "refrigerate": "refrigerate",
+    "galvanize": "galvanize",
+    "aerilate": "aerilate",
+    # Paradox
+    "quarkdrive": "quark-drive",
+    "protosynthesis": "protosynthesis",
+    # Ruin
+    "swordofruin": "sword-of-ruin",
+    "beadsofruin": "beads-of-ruin",
+    "tabletsofruin": "tablets-of-ruin",
+    "vesselofruin": "vessel-of-ruin",
+    # Defensive
+    "multiscale": "multiscale",
+    "shadowshield": "shadow-shield",
+    "icescales": "ice-scales",
+    "solidrock": "solid-rock",
+    "filter": "filter",
+    "prismarmor": "prism-armor",
+    "fluffy": "fluffy",
+    "thickfat": "thick-fat",
+    "furcoat": "fur-coat",
+    "waterbubble": "water-bubble",
+    "heatproof": "heatproof",
     "purifyingsalt": "purifying-salt",
-    "regenerator": "regenerator",  # already correct
-    "intimidate": "intimidate",  # already correct
+    "terashell": "tera-shell",
+    "friendguard": "friend-guard",
+    # Common utility
+    "intimidate": "intimidate",
+    "moldbreaker": "mold-breaker",
+    "teravolt": "teravolt",
+    "turboblaze": "turboblaze",
+    "clearbody": "clear-body",
+    "innerfocus": "inner-focus",
+    "regenerator": "regenerator",
+    "magicguard": "magic-guard",
+    "magicbounce": "magic-bounce",
+    "prankster": "prankster",
+    "technician": "technician",
+    "adaptability": "adaptability",
 }
 
 
@@ -167,11 +236,36 @@ def normalize_move(move: str) -> str:
         move: Move name
 
     Returns:
-        Normalized move name
+        Normalized move name (lowercase, hyphenated, no apostrophes)
     """
     if not move:
         return ""
     return move.lower().replace(" ", "-").replace("'", "").strip()
+
+
+# Backwards-compatible alias — some older modules imported this name.
+# Prefer normalize_move in new code.
+normalize_move_name = normalize_move
+
+
+def normalize_smogon_name(name: str) -> str:
+    """Normalize Smogon's concatenated names (items + abilities) to hyphenated format.
+
+    Smogon API uses concatenated names ("lifeorb", "sheerforce") while damage
+    calc expects hyphenated ("life-orb", "sheer-force"). This checks both
+    ITEM_ALIASES and ABILITY_ALIASES.
+
+    Args:
+        name: Smogon-style name (concatenated or already hyphenated)
+
+    Returns:
+        Hyphenated name suitable for damage calc lookup
+    """
+    if not name:
+        return ""
+    name_lower = name.lower().replace(" ", "-").strip()
+    concat = name_lower.replace("-", "")
+    return ITEM_ALIASES.get(concat) or ABILITY_ALIASES.get(concat) or name_lower
 
 
 def clear_caches():

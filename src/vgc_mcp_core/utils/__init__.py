@@ -16,7 +16,11 @@ from .normalize import (
     normalize_ability,
     normalize_item,
     normalize_move,
+    normalize_move_name,
+    normalize_smogon_name,
     clear_caches,
+    ITEM_ALIASES,
+    ABILITY_ALIASES,
 )
 
 __all__ = [
@@ -39,5 +43,9 @@ __all__ = [
     "normalize_ability",
     "normalize_item",
     "normalize_move",
+    "normalize_move_name",
+    "normalize_smogon_name",
     "clear_caches",
+    "ITEM_ALIASES",
+    "ABILITY_ALIASES",
 ]

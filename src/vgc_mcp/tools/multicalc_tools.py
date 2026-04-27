@@ -24,9 +24,10 @@ from vgc_mcp_core.formats.showdown import pokemon_build_to_showdown
 from vgc_mcp_core.utils.errors import pokemon_not_found_error, api_error
 from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name
 from vgc_mcp_core.utils.synergies import get_synergy_ability
+from vgc_mcp_core.utils.normalize import normalize_smogon_name as _normalize_smogon_name
 
 # Import helper functions from damage_tools
-from .damage_tools import _get_common_spread, _normalize_smogon_name
+from .damage_tools import _get_common_spread
 
 # Module-level Smogon client reference
 _smogon_client: Optional[SmogonStatsClient] = None

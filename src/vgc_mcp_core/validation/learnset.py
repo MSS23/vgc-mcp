@@ -3,6 +3,8 @@
 from typing import Optional
 from dataclasses import dataclass
 
+from ..utils.normalize import normalize_move_name  # noqa: F401  (re-export for back-compat)
+
 
 @dataclass
 class MoveValidationResult:
@@ -20,11 +22,6 @@ class MovesetValidationResult:
     all_legal: bool
     moves: list[MoveValidationResult]
     illegal_moves: list[str]
-
-
-def normalize_move_name(move: str) -> str:
-    """Normalize move name for comparison."""
-    return move.lower().replace(" ", "-").replace("'", "").strip()
 
 
 async def get_learnable_moves(
