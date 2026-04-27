@@ -31,6 +31,7 @@ Usage:
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp_core.config import logger
+from vgc_mcp_core.presentation import PRESENTATION_INSTRUCTIONS
 from vgc_mcp_core.api.cache import APICache
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
@@ -45,19 +46,8 @@ from .tools import register_all as register_all_tools
 # Full server focuses on tool completeness over visual components
 
 
-# Initialize MCP server
-mcp = FastMCP(
-    "VGC Team Builder",
-    instructions="""VGC Pokemon team building server with damage calc, usage stats, and team analysis.
-
-IMPORTANT - For ALL damage calculations, ALWAYS show full spreads for BOTH Pokemon:
-**Attacker:** [Nature] [HP]/[Atk]/[Def]/[SpA]/[SpD]/[Spe] [Pokemon] @ [Item]
-**Defender:** [Nature] [HP]/[Atk]/[Def]/[SpA]/[SpD]/[Spe] [Pokemon] @ [Item]
-**Result:** [damage]% ([verdict])
-
-Example: "**Attacker:** Adamant 4/252/0/0/0/252 Urshifu @ Choice Scarf"
-Users need EXACT spreads to verify calculations themselves."""
-)
+# Initialize MCP server — shared presentation rules in vgc_mcp_core.presentation
+mcp = FastMCP("VGC Team Builder", instructions=PRESENTATION_INSTRUCTIONS)
 
 
 # ============================================================================
