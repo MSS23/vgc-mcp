@@ -39,6 +39,34 @@ POKEAPI_FORM_ALIASES = {
     "ogerpon-hearthflame": "ogerpon-hearthflame-mask",
     "ogerpon-cornerstone": "ogerpon-cornerstone-mask",
     "ogerpon-teal": "ogerpon-teal-mask",
+
+    # Mega Evolution forms — PokeAPI uses `<species>-mega`. Users (and many
+    # tools) write them as "Mega Charizard X", "Manectric-Mega", or
+    # "Mega-Manectric". The rewriter in `_normalize_name` collapses all of
+    # those to the canonical PokeAPI key. Mega forms are legal only in
+    # Pokemon Champions Reg MA; the format inference picks up on this.
+    "mega-charizard-x": "charizard-mega-x",
+    "mega-charizard-y": "charizard-mega-y",
+    "mega-mewtwo-x": "mewtwo-mega-x",
+    "mega-mewtwo-y": "mewtwo-mega-y",
+    "charizard-mega": "charizard-mega-y",  # default Mega Charizard -> Y form
+    "mewtwo-mega": "mewtwo-mega-y",
+}
+
+
+# Pokemon names where prepending "mega-" should produce a valid PokeAPI form.
+# Used by `_normalize_name` to rewrite "Mega Manectric" / "mega-manectric"
+# -> "manectric-mega" without a per-species alias for every Mega-capable mon.
+_MEGA_CAPABLE_BASES = {
+    "venusaur", "charizard", "blastoise", "alakazam", "gengar", "kangaskhan",
+    "pinsir", "gyarados", "aerodactyl", "ampharos", "scizor", "heracross",
+    "houndoom", "tyranitar", "blaziken", "gardevoir", "mawile", "aggron",
+    "medicham", "manectric", "banette", "absol", "garchomp", "lucario",
+    "abomasnow", "beedrill", "pidgeot", "slowbro", "steelix", "sceptile",
+    "swampert", "sableye", "sharpedo", "camerupt", "altaria", "glalie",
+    "salamence", "metagross", "latias", "latios", "lopunny", "gallade",
+    "audino", "diancie", "rayquaza", "lopunny", "latios", "latias",
+    "mewtwo", "groudon", "kyogre",
 }
 
 
@@ -73,12 +101,30 @@ class PokeAPIClient:
             "Urshifu-Rapid-Strike" -> "urshifu-rapid-strike"
             "King's Rock" -> "kings-rock"
             "Landorus" -> "landorus-incarnate" (with form aliases)
+            "Mega Manectric" -> "manectric-mega"
+            "Mega Charizard Y" -> "charizard-mega-y"
 
         Args:
             name: The name to normalize
             apply_form_aliases: If True, apply POKEAPI_FORM_ALIASES mapping
         """
         normalized = name.lower().replace(" ", "-").replace("'", "").replace("'", "")
+
+        # Mega rewrite: PokeAPI keys are `<species>-mega` (e.g. `manectric-mega`)
+        # but users commonly write "Mega Manectric" / "mega-manectric". Convert
+        # leading `mega-<species>` to `<species>-mega`. Done before alias lookup
+        # so explicit aliases (e.g. `mega-charizard-y` -> `charizard-mega-y`)
+        # still take precedence.
+        if apply_form_aliases and normalized.startswith("mega-"):
+            rest = normalized[len("mega-"):]
+            # Strip a trailing -x/-y so "mega-charizard-x" -> base "charizard"
+            base = rest
+            suffix = ""
+            if rest.endswith(("-x", "-y")):
+                base, suffix = rest[:-2], rest[-2:]
+            if base in _MEGA_CAPABLE_BASES:
+                normalized = f"{base}-mega{suffix}"
+
         # Apply form aliases for Pokemon that need explicit form suffixes in PokeAPI
         if apply_form_aliases:
             normalized = POKEAPI_FORM_ALIASES.get(normalized, normalized)

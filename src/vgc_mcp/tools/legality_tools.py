@@ -418,6 +418,67 @@ def register_legality_tools(mcp: FastMCP, team_manager):
         return info
 
     @mcp.tool()
+    async def infer_regulation_from_team(pokemon_names: list[str]) -> dict:
+        """
+        Infer the most likely VGC regulation from the Pokemon mentioned in a team.
+
+        Use this whenever a user pastes a team or mentions specific Pokemon and
+        you don't already know the regulation. Call BEFORE other tools so the
+        session can be set with `set_session_regulation` to the inferred code.
+
+        Detection rules (in order of confidence):
+        - Any Mega form (e.g. "Mega Manectric", "Charizard-Mega-Y") -> Champions
+          Reg MA. Megas only exist in Pokemon Champions.
+        - Any Pokemon legal in Champions but banned in mainline (NCP-only mons)
+          -> Champions Reg MA.
+        - 1 restricted Pokemon -> Reg G (1-restricted format).
+        - 2+ restricted Pokemon (e.g. Calyrex Shadow + Koraidon) -> Reg I
+          (current 2-restrict format), with Reg F as a fallback alternative.
+        - 0 restricteds + no Mega -> Reg F primary, with Reg MA as a popularity-
+          weighted alternative since Champions is the most popular current format.
+
+        Args:
+            pokemon_names: list of Pokemon names from the team. Accepts any
+                           common phrasing — "Mega Kangaskhan", "Calyrex-Shadow",
+                           "Urshifu Rapid Strike", etc. Form variations are
+                           normalized internally.
+
+        Returns:
+            {
+                "regulation": "reg_ma_champs" | "reg_g" | "reg_i" | "reg_f" | ...,
+                "confidence": "high" | "medium" | "low",
+                "reasons": [str, ...],
+                "alternatives": [reg_code, ...],
+                "restricted_seen": [pokemon_name, ...],
+                "illegal_seen": [pokemon_name, ...],
+                "format_system": "mainline" | "champions",
+                "stat_units": "EVs" | "Stat Points (SPs)",
+                "next_step": "Call set_session_regulation('<code>') to apply."
+            }
+        """
+        from vgc_mcp_core.rules.regulation_router import (
+            describe_regulation,
+            infer_format_from_pokemon,
+        )
+        config = get_regulation_config()
+        result = infer_format_from_pokemon(pokemon_names, config)
+        if result.get("regulation"):
+            info = describe_regulation(result["regulation"], config)
+            result["format_system"] = info["format_system"]
+            result["stat_units"] = info["stat_units"]
+            result["regulation_name"] = info["name"]
+            result["next_step"] = (
+                f"Call set_session_regulation('{result['regulation']}') to apply, "
+                f"or pass a phrase like 'Reg I' or 'Champions' which the router resolves."
+            )
+        else:
+            result["next_step"] = (
+                "Could not determine regulation from Pokemon list. Ask the user "
+                "directly which regulation they're playing."
+            )
+        return result
+
+    @mcp.tool()
     async def clear_session_regulation() -> dict:
         """
         Clear the session regulation override.
