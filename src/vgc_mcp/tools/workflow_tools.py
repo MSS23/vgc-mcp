@@ -988,43 +988,68 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                             best_def = 0
                             survived = False
 
-                            for hp_ev in EV_BREAKPOINTS_LV50:
-                                if hp_ev > min(252, remaining_evs):
+                            # Lean-survival search: find the MINIMUM (hp + def/spd)
+                            # investment such that max-roll damage < 100%, so the
+                            # spread sits as close to "barely survives" (≈99%
+                            # damage taken at max roll) as the EV grain allows.
+                            # Spare EVs go elsewhere via the leftover step.
+                            #
+                            # We sweep total budget from 0 upward in EV_BREAKPOINT
+                            # steps (every 4 EVs); at each budget we try every
+                            # (hp, defensive) split and stop on the first survival.
+                            cap = min(508, remaining_evs)
+                            found_pair = None
+                            for total_budget in EV_BREAKPOINTS_LV50:
+                                if total_budget > cap:
                                     break
-                                def_ev = normalize_evs(min(252, remaining_evs - hp_ev)) if is_phys else 0
-                                spd_ev = normalize_evs(min(252, remaining_evs - hp_ev)) if not is_phys else 0
+                                # Try every hp split at this budget; for each we
+                                # spend the remaining on the relevant defense.
+                                for hp_ev in EV_BREAKPOINTS_LV50:
+                                    if hp_ev > total_budget or hp_ev > 252:
+                                        break
+                                    def_alloc = total_budget - hp_ev
+                                    if def_alloc > 252:
+                                        continue
+                                    def_ev = def_alloc if is_phys else 0
+                                    spd_ev = def_alloc if not is_phys else 0
 
-                                defender = PokemonBuild(
-                                    name=pokemon_name,
-                                    base_stats=base_stats_model,
-                                    types=types,
-                                    nature=parsed_nature,
-                                    evs=EVSpread(hp=hp_ev, defense=def_ev, special_defense=spd_ev),
-                                    ability=defender_ability,
-                                )
-
-                                modifiers = DamageModifiers(
-                                    is_doubles=True,
-                                    attacker_ability=attacker_ability,
-                                    attacker_item=attacker_item,
-                                    attack_stage=stage_attack,
-                                )
-                                result = calculate_damage(attacker, defender, move, modifiers)
-
-                                if result.max_percent < 100:
-                                    best_hp = hp_ev
-                                    best_def = def_ev if is_phys else spd_ev
-                                    survived = True
-                                    note = ""
-                                    if mega_intimidate_active and is_phys:
-                                        note += " [Intimidate -1 Atk]"
-                                    if attacker_item and item_source != "user-supplied":
-                                        note += f" [item={attacker_item}]"
-                                    benchmarks_met.append(
-                                        f"Survives {attacker_name} {move_name} "
-                                        f"({result.min_percent:.0f}-{result.max_percent:.0f}%){note}"
+                                    defender = PokemonBuild(
+                                        name=pokemon_name,
+                                        base_stats=base_stats_model,
+                                        types=types,
+                                        nature=parsed_nature,
+                                        evs=EVSpread(hp=hp_ev, defense=def_ev, special_defense=spd_ev),
+                                        ability=defender_ability,
                                     )
+
+                                    modifiers = DamageModifiers(
+                                        is_doubles=True,
+                                        attacker_ability=attacker_ability,
+                                        attacker_item=attacker_item,
+                                        attack_stage=stage_attack,
+                                    )
+                                    result = calculate_damage(attacker, defender, move, modifiers)
+
+                                    if result.max_percent < 100:
+                                        found_pair = (hp_ev, def_alloc, result)
+                                        break
+                                if found_pair:
                                     break
+
+                            if found_pair:
+                                hp_ev, def_alloc, result = found_pair
+                                best_hp = hp_ev
+                                best_def = def_alloc
+                                survived = True
+                                note = ""
+                                if mega_intimidate_active and is_phys:
+                                    note += " [Intimidate -1 Atk]"
+                                if attacker_item and item_source != "user-supplied":
+                                    note += f" [item={attacker_item}]"
+                                benchmarks_met.append(
+                                    f"Survives {attacker_name} {move_name} "
+                                    f"({result.min_percent:.0f}-{result.max_percent:.0f}%){note}"
+                                )
 
                             if survived:
                                 hp_evs = max(hp_evs, best_hp)
@@ -1103,19 +1128,42 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                         benchmarks_failed.append(f"Error checking KO on {defender_name}: {str(e)}")
 
             # 4. Distribute remaining EVs (ensure multiples of 4)
+            #
+            # If a survival benchmark was met we already invested the minimum
+            # needed (lean-survival search above), so leftover here is genuine
+            # surplus. In bulk mode it goes into the OPPOSITE defense (so we
+            # don't pad past what's needed); in offense mode it tops up the
+            # offensive stat; in speed mode it tops up Speed. We deliberately
+            # do NOT auto-fill HP — that would push the spread back toward
+            # over-investment and undo the lean-survival goal.
             used_evs = speed_evs_needed + hp_evs + def_evs + spd_evs + atk_evs
             leftover = 508 - used_evs
 
             if leftover > 0:
+                survival_was_used = bool(survive_hits) and (def_evs > 0 or spd_evs > 0 or hp_evs > 0)
+
                 if prioritize == "bulk":
-                    hp_evs = normalize_evs(min(252, hp_evs + leftover))
-                    leftover = 508 - (speed_evs_needed + hp_evs + def_evs + spd_evs + atk_evs)
-                    if leftover > 0:
-                        # Split remaining between defenses, keeping multiples of 4
-                        def_share = normalize_evs(leftover // 2)
-                        spd_share = normalize_evs(leftover - def_share)
-                        def_evs = normalize_evs(min(252, def_evs + def_share))
-                        spd_evs = normalize_evs(min(252, spd_evs + spd_share))
+                    if survival_was_used:
+                        # Survival was lean-fitted; spend leftover on the
+                        # OPPOSITE defensive stat for general bulk, then HP
+                        # only if there's still surplus.
+                        if is_physical or def_evs > 0:
+                            spd_share = normalize_evs(min(252 - spd_evs, leftover))
+                            spd_evs = normalize_evs(min(252, spd_evs + spd_share))
+                        else:
+                            def_share = normalize_evs(min(252 - def_evs, leftover))
+                            def_evs = normalize_evs(min(252, def_evs + def_share))
+                        leftover = 508 - (speed_evs_needed + hp_evs + def_evs + spd_evs + atk_evs)
+                        if leftover > 0:
+                            hp_evs = normalize_evs(min(252, hp_evs + leftover))
+                    else:
+                        hp_evs = normalize_evs(min(252, hp_evs + leftover))
+                        leftover = 508 - (speed_evs_needed + hp_evs + def_evs + spd_evs + atk_evs)
+                        if leftover > 0:
+                            def_share = normalize_evs(leftover // 2)
+                            spd_share = normalize_evs(leftover - def_share)
+                            def_evs = normalize_evs(min(252, def_evs + def_share))
+                            spd_evs = normalize_evs(min(252, spd_evs + spd_share))
                 elif prioritize == "offense":
                     atk_evs = normalize_evs(min(252, atk_evs + leftover))
                 else:  # speed
