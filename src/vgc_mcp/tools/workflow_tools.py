@@ -813,16 +813,26 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                 ko_targets=[{"defender": "palafin", "move": "wood-hammer"}]
             )
         """
-        from vgc_mcp_core.models.pokemon import Nature, PokemonBuild, EVSpread, BaseStats, get_nature_modifier
+        from vgc_mcp_core.models.pokemon import (
+            Nature, PokemonBuild, EVSpread, StatPointSpread, BaseStats, get_nature_modifier,
+        )
         from vgc_mcp_core.models.move import MoveCategory
         from vgc_mcp_core.calc.stats import calculate_stat, calculate_hp
         from vgc_mcp_core.calc.damage import calculate_damage
         from vgc_mcp_core.calc.modifiers import DamageModifiers
+        from vgc_mcp_core.rules.regulation_loader import get_regulation_config
+        from vgc_mcp_core.rules.regulation_router import auto_detect_regulation, describe_regulation
+        from vgc_mcp_core.calc.conversion import evs_to_sps_spread, sp_to_ev
+        from vgc_mcp_core.config import normalize_evs, EV_BREAKPOINTS_LV50
 
         try:
-            # Get Pokemon data
-            pokemon_data = await pokeapi.get_pokemon(pokemon_name)
-            if not pokemon_data:
+            # Resolve base stats + types via the canonical helpers (raw PokeAPI
+            # response uses a `stats` array, not a `base_stats` dict — calling
+            # get_pokemon directly here used to raise KeyError).
+            try:
+                base_stats_model = await pokeapi.get_base_stats(pokemon_name)
+                types = await pokeapi.get_pokemon_types(pokemon_name)
+            except Exception:
                 suggestions = suggest_pokemon_name(pokemon_name)
                 return error_response(
                     ErrorCodes.POKEMON_NOT_FOUND,
@@ -830,8 +840,27 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                     suggestions=[f"Did you mean: {', '.join(suggestions)}?"] if suggestions else []
                 )
 
-            base_stats = pokemon_data["base_stats"]
-            types = pokemon_data.get("types", [])
+            base_stats = {
+                "hp": base_stats_model.hp,
+                "attack": base_stats_model.attack,
+                "defense": base_stats_model.defense,
+                "special_attack": base_stats_model.special_attack,
+                "special_defense": base_stats_model.special_defense,
+                "speed": base_stats_model.speed,
+            }
+
+            # Detect Champions vs mainline. We use whichever signal fires:
+            # explicit session regulation, then Pokemon-name inference. Survive
+            # targets aren't included in inference so the user's defender drives
+            # the format choice.
+            cfg = get_regulation_config()
+            inference_names = [pokemon_name] + (outspeed_targets or [])
+            try:
+                auto_detect_regulation(inference_names, cfg)
+            except Exception:
+                pass
+            format_system = cfg.get_format_system() or "mainline"
+            is_champions = format_system == "champions"
 
             # Determine nature
             is_physical = base_stats["attack"] > base_stats["special_attack"]
@@ -862,24 +891,21 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                 max_speed_needed = 0
                 for target in outspeed_targets:
                     try:
-                        target_data = await pokeapi.get_pokemon(target)
-                        if target_data:
-                            # Assume max speed investment
-                            target_base_speed = target_data["base_stats"]["speed"]
-                            target_speed = calculate_stat(target_base_speed, 31, 252, 50, 1.1)  # Assume +Speed nature
+                        target_base = await pokeapi.get_base_stats(target)
+                        target_base_speed = target_base.speed
+                        target_speed = calculate_stat(target_base_speed, 31, 252, 50, 1.1)  # Assume +Speed nature
 
-                            # Find EVs needed to outspeed
-                            speed_mod = get_nature_modifier(parsed_nature, "speed")
-                            for ev in EV_BREAKPOINTS_LV50:
-                                my_speed = calculate_stat(base_stats["speed"], 31, ev, 50, speed_mod)
-                                if my_speed > target_speed:
-                                    if ev > max_speed_needed:
-                                        max_speed_needed = ev
-                                    benchmarks_met.append(f"Outspeeds {target} ({my_speed} vs {target_speed})")
-                                    break
-                            else:
-                                benchmarks_failed.append(f"Cannot outspeed {target} even with 252 Speed EVs")
-                                max_speed_needed = 252
+                        speed_mod = get_nature_modifier(parsed_nature, "speed")
+                        for ev in EV_BREAKPOINTS_LV50:
+                            my_speed = calculate_stat(base_stats["speed"], 31, ev, 50, speed_mod)
+                            if my_speed > target_speed:
+                                if ev > max_speed_needed:
+                                    max_speed_needed = ev
+                                benchmarks_met.append(f"Outspeeds {target} ({my_speed} vs {target_speed})")
+                                break
+                        else:
+                            benchmarks_failed.append(f"Cannot outspeed {target} even with 252 Speed EVs")
+                            max_speed_needed = 252
                     except Exception:
                         benchmarks_failed.append(f"Could not check speed vs {target}")
 
@@ -896,18 +922,21 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                     attacker_ability = hit.get("ability")
 
                     try:
-                        atk_data = await pokeapi.get_pokemon(attacker_name)
+                        atk_base = await pokeapi.get_base_stats(attacker_name)
+                        atk_types = await pokeapi.get_pokemon_types(attacker_name)
                         move = await pokeapi.get_move(move_name)
 
-                        if atk_data and move:
+                        if atk_base and move:
                             is_phys = move.category == MoveCategory.PHYSICAL
-                            atk_nature = Nature.adamant if is_phys else Nature.modest
+                            atk_nature = Nature.ADAMANT if is_phys else Nature.MODEST
 
-                            # Create attacker
+                            # Create attacker (mainline; attacker side never converted to SPs
+                            # because Smogon meta is EV-shaped — survival math still works in
+                            # both directions because damage is the only output we read).
                             attacker = PokemonBuild(
                                 name=attacker_name,
-                                base_stats=BaseStats(**atk_data["base_stats"]),
-                                types=atk_data.get("types", []),
+                                base_stats=atk_base,
+                                types=atk_types,
                                 nature=atk_nature,
                                 evs=EVSpread(
                                     attack=252 if is_phys else 0,
@@ -930,7 +959,7 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
 
                                 defender = PokemonBuild(
                                     name=pokemon_name,
-                                    base_stats=BaseStats(**base_stats),
+                                    base_stats=base_stats_model,
                                     types=types,
                                     nature=parsed_nature,
                                     evs=EVSpread(hp=hp_ev, defense=def_ev, special_defense=spd_ev)
@@ -972,18 +1001,19 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                     defender_hp_evs = target.get("evs", 0)
 
                     try:
-                        def_data = await pokeapi.get_pokemon(defender_name)
+                        def_base = await pokeapi.get_base_stats(defender_name)
+                        def_types = await pokeapi.get_pokemon_types(defender_name)
                         move = await pokeapi.get_move(move_name)
 
-                        if def_data and move:
+                        if def_base and move:
                             is_phys = move.category == MoveCategory.PHYSICAL
 
                             # Create defender
                             defender = PokemonBuild(
                                 name=defender_name,
-                                base_stats=BaseStats(**def_data["base_stats"]),
-                                types=def_data.get("types", []),
-                                nature=Nature.serious,
+                                base_stats=def_base,
+                                types=def_types,
+                                nature=Nature.SERIOUS,
                                 evs=EVSpread(hp=defender_hp_evs)
                             )
 
@@ -993,7 +1023,7 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
 
                             attacker = PokemonBuild(
                                 name=pokemon_name,
-                                base_stats=BaseStats(**base_stats),
+                                base_stats=base_stats_model,
                                 types=types,
                                 nature=parsed_nature,
                                 evs=EVSpread(
@@ -1020,8 +1050,6 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                         benchmarks_failed.append(f"Error checking KO on {defender_name}: {str(e)}")
 
             # 4. Distribute remaining EVs (ensure multiples of 4)
-            from vgc_mcp_core.config import normalize_evs, EV_BREAKPOINTS_LV50
-
             used_evs = speed_evs_needed + hp_evs + def_evs + spd_evs + atk_evs
             leftover = 508 - used_evs
 
@@ -1066,14 +1094,72 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                 "total": hp_evs + atk_evs + def_evs + spd_evs + speed_evs_needed
             }
 
-            summary = (
-                f"{pokemon_name.title()} @ {nature.title()}: "
-                f"{hp_evs} HP / {atk_evs if is_physical else 0} Atk / {def_evs} Def / "
-                f"{0 if is_physical else atk_evs} SpA / {spd_evs} SpD / {speed_evs_needed} Spe"
+            from vgc_mcp_core.formats.showdown import export_pokemon_to_showdown
+
+            # Champions branch: convert the EV spread we built to SPs and emit the
+            # showdown paste with `SPs:` instead of `EVs:`. The stat math is the
+            # same (32 SP saturates to 252 EV); the `evs_to_sps_spread` helper
+            # rounds up so we don't lose survival benchmarks.
+            champions_block = None
+            if is_champions:
+                ev_obj = EVSpread(
+                    hp=hp_evs,
+                    attack=atk_evs if is_physical else 0,
+                    defense=def_evs,
+                    special_attack=0 if is_physical else atk_evs,
+                    special_defense=spd_evs,
+                    speed=speed_evs_needed,
+                )
+                sp_obj = evs_to_sps_spread(ev_obj, round_mode="ceil")
+                sp_dict = {
+                    "hp": sp_obj.hp,
+                    "atk": sp_obj.attack,
+                    "def": sp_obj.defense,
+                    "spa": sp_obj.special_attack,
+                    "spd": sp_obj.special_defense,
+                    "spe": sp_obj.speed,
+                }
+                champions_paste = export_pokemon_to_showdown(
+                    species=pokemon_name,
+                    nature=nature.title(),
+                    sps=sp_dict,
+                )
+                champions_block = {
+                    "spread_sps": {
+                        **sp_dict,
+                        "total": sp_obj.total,
+                    },
+                    "showdown_paste": champions_paste,
+                    "format_system": "champions",
+                    "stat_units": "Stat Points (SPs)",
+                    "sp_budget_remaining": max(0, 66 - sp_obj.total),
+                }
+                summary = (
+                    f"{pokemon_name.title()} @ {nature.title()} (Champions): "
+                    f"{sp_obj.hp} HP / {sp_obj.attack if is_physical else 0} Atk / {sp_obj.defense} Def / "
+                    f"{0 if is_physical else sp_obj.special_attack} SpA / {sp_obj.special_defense} SpD / {sp_obj.speed} Spe SPs"
+                )
+            else:
+                summary = (
+                    f"{pokemon_name.title()} @ {nature.title()}: "
+                    f"{hp_evs} HP / {atk_evs if is_physical else 0} Atk / {def_evs} Def / "
+                    f"{0 if is_physical else atk_evs} SpA / {spd_evs} SpD / {speed_evs_needed} Spe"
+                )
+
+            mainline_paste = export_pokemon_to_showdown(
+                species=pokemon_name,
+                nature=nature.title(),
+                evs={
+                    "hp": hp_evs,
+                    "atk": atk_evs if is_physical else 0,
+                    "def": def_evs,
+                    "spa": 0 if is_physical else atk_evs,
+                    "spd": spd_evs,
+                    "spe": speed_evs_needed,
+                },
             )
 
-            return success_response(
-                f"Designed spread for {pokemon_name}",
+            response_kwargs = dict(
                 pokemon=pokemon_name,
                 nature=nature,
                 spread=spread,
@@ -1081,7 +1167,16 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                 benchmarks_met=benchmarks_met if benchmarks_met else ["No specific benchmarks requested"],
                 benchmarks_failed=benchmarks_failed if benchmarks_failed else [],
                 all_constraints_met=len(benchmarks_failed) == 0,
-                summary=summary
+                summary=summary,
+                format_system=format_system,
+                showdown_paste=(champions_block["showdown_paste"] if champions_block else mainline_paste),
+                mainline_showdown_paste=mainline_paste,
+            )
+            if champions_block:
+                response_kwargs["champions"] = champions_block
+            return success_response(
+                f"Designed spread for {pokemon_name}",
+                **response_kwargs,
             )
 
         except Exception as e:

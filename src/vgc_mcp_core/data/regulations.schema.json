@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vgc-mcp.local/schemas/regulations.schema.json",
+  "title": "VGC Regulations",
+  "description": "Schema for src/vgc_mcp_core/data/regulations.json. Each regulation must declare a format_system; champions regs use an allowlist + SP caps, mainline regs use restricted/banned lists + EV caps.",
+  "type": "object",
+  "required": ["current_regulation", "regulations"],
+  "additionalProperties": false,
+  "properties": {
+    "current_regulation": {
+      "type": "string",
+      "description": "The default regulation when no session override is set."
+    },
+    "regulations": {
+      "type": "object",
+      "minProperties": 1,
+      "patternProperties": {
+        "^[a-z][a-z0-9_]*$": {
+          "$ref": "#/$defs/regulation"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "regulation": {
+      "type": "object",
+      "required": ["name", "description"],
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "smogon_formats": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "default_smogon_rating": {
+          "type": "integer",
+          "enum": [0, 1500, 1630, 1760]
+        },
+        "start_date": { "type": "string", "format": "date" },
+        "end_date": { "type": "string", "format": "date" },
+        "level": { "type": "integer", "minimum": 1, "maximum": 100 },
+        "pokemon_limit": { "type": "integer", "minimum": 1, "maximum": 6 },
+        "bring_limit": { "type": "integer", "minimum": 1, "maximum": 6 },
+        "item_clause": { "type": "boolean" },
+        "species_clause": { "type": "boolean" },
+        "format_system": { "enum": ["mainline", "champions"] },
+
+        "restricted_limit": { "type": "integer", "minimum": 0, "maximum": 6 },
+        "restricted_pokemon": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "banned_pokemon": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+
+        "legality_mode": { "enum": ["allowlist", "banlist"] },
+        "legal_pokemon": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "sp_per_stat_max": { "type": "integer", "minimum": 1 },
+        "sp_total_max": { "type": "integer", "minimum": 1 }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "format_system": { "const": "champions" } },
+            "required": ["format_system"]
+          },
+          "then": {
+            "required": ["legal_pokemon", "legality_mode", "sp_per_stat_max", "sp_total_max"],
+            "properties": {
+              "legality_mode": { "const": "allowlist" }
+            }
+          }
+        },
+        {
+          "if": {
+            "anyOf": [
+              { "not": { "required": ["format_system"] } },
+              { "properties": { "format_system": { "const": "mainline" } } }
+            ]
+          },
+          "then": {
+            "required": ["restricted_pokemon", "banned_pokemon", "restricted_limit"]
+          }
+        }
+      ]
+    }
+  }
+}

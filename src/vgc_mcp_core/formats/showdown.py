@@ -392,6 +392,74 @@ def export_pokemon_to_showdown(
     return "\n".join(lines)
 
 
+def build_dual_paste_payload(
+    species: str,
+    nature: str,
+    evs: dict,
+    *,
+    format_system: str = "mainline",
+    item: Optional[str] = None,
+    ability: Optional[str] = None,
+    tera_type: Optional[str] = None,
+    moves: Optional[list] = None,
+    ivs: Optional[dict] = None,
+) -> dict:
+    """Return both EV and SP showdown pastes plus the spread in both units.
+
+    Tools that build a spread internally as EVs (because the search is
+    EV-grained) can call this once to produce the response payload that
+    works in either format: mainline tools see an EV paste; Champions
+    tools see an SP paste; both are always present. The chosen
+    `showdown_paste` follows `format_system`.
+
+    Returns a dict suitable for spreading into success_response().
+    """
+    from ..calc.conversion import evs_to_sps_spread
+    from ..models.pokemon import EVSpread
+
+    ev_obj = EVSpread(
+        hp=evs.get("hp", 0),
+        attack=evs.get("atk", evs.get("attack", 0)),
+        defense=evs.get("def", evs.get("defense", 0)),
+        special_attack=evs.get("spa", evs.get("special_attack", 0)),
+        special_defense=evs.get("spd", evs.get("special_defense", 0)),
+        speed=evs.get("spe", evs.get("speed", 0)),
+    )
+    ev_dict = {
+        "hp": ev_obj.hp,
+        "atk": ev_obj.attack,
+        "def": ev_obj.defense,
+        "spa": ev_obj.special_attack,
+        "spd": ev_obj.special_defense,
+        "spe": ev_obj.speed,
+    }
+
+    mainline_paste = export_pokemon_to_showdown(
+        species=species, nature=nature, evs=ev_dict,
+        item=item, ability=ability, tera_type=tera_type, moves=moves, ivs=ivs,
+    )
+
+    sp_obj = evs_to_sps_spread(ev_obj, round_mode="ceil")
+    sp_dict = {
+        "hp": sp_obj.hp, "atk": sp_obj.attack, "def": sp_obj.defense,
+        "spa": sp_obj.special_attack, "spd": sp_obj.special_defense, "spe": sp_obj.speed,
+    }
+    champions_paste = export_pokemon_to_showdown(
+        species=species, nature=nature, sps=sp_dict,
+        item=item, ability=ability, tera_type=tera_type, moves=moves, ivs=ivs,
+    )
+
+    primary = champions_paste if format_system == "champions" else mainline_paste
+    return {
+        "format_system": format_system,
+        "showdown_paste": primary,
+        "mainline_showdown_paste": mainline_paste,
+        "champions_showdown_paste": champions_paste,
+        "spread_evs": {**ev_dict, "total": ev_obj.total},
+        "spread_sps": {**sp_dict, "total": sp_obj.total},
+    }
+
+
 def export_team_to_showdown(team: list[dict]) -> str:
     """
     Export a full team to Showdown paste format.
