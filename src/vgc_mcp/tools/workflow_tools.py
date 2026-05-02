@@ -1131,11 +1131,17 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
             #
             # If a survival benchmark was met we already invested the minimum
             # needed (lean-survival search above), so leftover here is genuine
-            # surplus. In bulk mode it goes into the OPPOSITE defense (so we
-            # don't pad past what's needed); in offense mode it tops up the
-            # offensive stat; in speed mode it tops up Speed. We deliberately
-            # do NOT auto-fill HP — that would push the spread back toward
-            # over-investment and undo the lean-survival goal.
+            # surplus. Default policy:
+            #   1. The Pokemon's primary OFFENSIVE stat (Atk or SpA, picked
+            #      from base stats — Mega Manectric base SpA 135 > Atk 75 so
+            #      it pumps SpA). Capped at 252.
+            #   2. Speed, if not already maxed and Speed is competitive
+            #      (≥80 base — slow Pokemon don't benefit from creep).
+            #   3. Secondary defensive bulk (the OPPOSITE of the survival
+            #      stat we already invested in).
+            #   4. HP last — never auto-padded, since that undoes the lean
+            #      survival fit.
+            # In offense / speed modes the existing single-stat fill stands.
             used_evs = speed_evs_needed + hp_evs + def_evs + spd_evs + atk_evs
             leftover = 508 - used_evs
 
@@ -1144,19 +1150,49 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
 
                 if prioritize == "bulk":
                     if survival_was_used:
-                        # Survival was lean-fitted; spend leftover on the
-                        # OPPOSITE defensive stat for general bulk, then HP
-                        # only if there's still surplus.
-                        if is_physical or def_evs > 0:
-                            spd_share = normalize_evs(min(252 - spd_evs, leftover))
-                            spd_evs = normalize_evs(min(252, spd_evs + spd_share))
-                        else:
-                            def_share = normalize_evs(min(252 - def_evs, leftover))
-                            def_evs = normalize_evs(min(252, def_evs + def_share))
-                        leftover = 508 - (speed_evs_needed + hp_evs + def_evs + spd_evs + atk_evs)
+                        # 1. Pump the species' primary offensive stat.
+                        # `atk_evs` is mapped to atk OR spa in final_stats via
+                        # `is_physical`, so this single counter works for both.
+                        atk_room = max(0, 252 - atk_evs)
+                        if atk_room > 0:
+                            atk_share = normalize_evs(min(atk_room, leftover))
+                            atk_evs = normalize_evs(min(252, atk_evs + atk_share))
+                            leftover = 508 - (speed_evs_needed + hp_evs + def_evs + spd_evs + atk_evs)
+
+                        # 2. Speed, if the species is Speed-relevant
+                        # (base ≥80) and we still have surplus. Slow species
+                        # like Incineroar (base 60) skip this and dump into
+                        # secondary bulk instead.
+                        if leftover > 0 and base_stats["speed"] >= 80:
+                            spe_room = max(0, 252 - speed_evs_needed)
+                            if spe_room > 0:
+                                spe_share = normalize_evs(min(spe_room, leftover))
+                                speed_evs_needed = normalize_evs(min(252, speed_evs_needed + spe_share))
+                                leftover = 508 - (speed_evs_needed + hp_evs + def_evs + spd_evs + atk_evs)
+
+                        # 3. Secondary defense — opposite of whichever side we
+                        # invested in for survival.
+                        if leftover > 0:
+                            if def_evs > 0 and spd_evs == 0:
+                                spd_share = normalize_evs(min(252 - spd_evs, leftover))
+                                spd_evs = normalize_evs(min(252, spd_evs + spd_share))
+                            elif spd_evs > 0 and def_evs == 0:
+                                def_share = normalize_evs(min(252 - def_evs, leftover))
+                                def_evs = normalize_evs(min(252, def_evs + def_share))
+                            else:
+                                # Both sides already touched — split.
+                                def_share = normalize_evs(leftover // 2)
+                                spd_share = normalize_evs(leftover - def_share)
+                                def_evs = normalize_evs(min(252, def_evs + def_share))
+                                spd_evs = normalize_evs(min(252, spd_evs + spd_share))
+                            leftover = 508 - (speed_evs_needed + hp_evs + def_evs + spd_evs + atk_evs)
+
+                        # 4. HP last (only if anything's still leftover).
                         if leftover > 0:
                             hp_evs = normalize_evs(min(252, hp_evs + leftover))
                     else:
+                        # No survival benchmark — fall back to the original
+                        # bulk distribution (HP-first, defenses split).
                         hp_evs = normalize_evs(min(252, hp_evs + leftover))
                         leftover = 508 - (speed_evs_needed + hp_evs + def_evs + spd_evs + atk_evs)
                         if leftover > 0:
