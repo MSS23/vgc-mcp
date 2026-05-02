@@ -914,6 +914,21 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
             remaining_evs = 508 - speed_evs_needed
 
             # 2. Calculate survival requirements
+            #
+            # Two pieces of context the caller usually omits but that change the
+            # math materially:
+            #   - Defender's post-mega ability. Mega Manectric is Intimidate,
+            #     not Lightning Rod. Without this, the calc misses the -1 Atk
+            #     drop on physical attackers.
+            #   - Attacker's most-used item from the active regulation's Smogon
+            #     usage data. Excadrill in Reg MA usually runs Life Orb, which
+            #     bumps damage by 1.3x — assuming "no item" silently understates
+            #     the threat.
+            from vgc_mcp_core.calc.mega_evolution import get_mega_ability, is_mega_form
+
+            defender_ability = get_mega_ability(pokemon_name) if is_mega_form(pokemon_name) else None
+            mega_intimidate_active = defender_ability and defender_ability.lower() == "intimidate"
+
             if survive_hits and remaining_evs > 0:
                 for hit in survive_hits:
                     attacker_name = hit.get("attacker", "")
@@ -926,13 +941,36 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                         atk_types = await pokeapi.get_pokemon_types(attacker_name)
                         move = await pokeapi.get_move(move_name)
 
+                        # Auto-fetch attacker item from Smogon's active-regulation
+                        # usage stats if the caller didn't provide one. We pull
+                        # the format-specific dataset (Reg MA chaos JSON for
+                        # Champions, Reg F for mainline) so the answer reflects
+                        # the meta the user is actually playing.
+                        item_source = "user-supplied" if attacker_item else None
+                        if not attacker_item:
+                            try:
+                                fmt_list = cfg.get_smogon_formats() if hasattr(cfg, "get_smogon_formats") else None
+                                fmt_name = fmt_list[0] if fmt_list else None
+                                rating = cfg.get_default_smogon_rating() or 1500
+                                common = await smogon.get_common_sets(
+                                    attacker_name, format_name=fmt_name, rating=rating, limit=1,
+                                )
+                                if common and common.get("top_items"):
+                                    top = common["top_items"][0]
+                                    if top.get("name") and top["name"].lower() != "nothing":
+                                        attacker_item = top["name"]
+                                        item_source = f"Smogon {fmt_name or 'auto'} top item"
+                            except Exception:
+                                pass
+
                         if atk_base and move:
                             is_phys = move.category == MoveCategory.PHYSICAL
                             atk_nature = Nature.ADAMANT if is_phys else Nature.MODEST
 
-                            # Create attacker (mainline; attacker side never converted to SPs
-                            # because Smogon meta is EV-shaped — survival math still works in
-                            # both directions because damage is the only output we read).
+                            # Apply Intimidate if defender is Mega → Intimidate
+                            # AND the attacker is a physical mover. -1 Atk stage.
+                            stage_attack = -1 if (mega_intimidate_active and is_phys) else 0
+
                             attacker = PokemonBuild(
                                 name=attacker_name,
                                 base_stats=atk_base,
@@ -946,7 +984,6 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                                 item=attacker_item
                             )
 
-                            # Find bulk EVs needed
                             best_hp = 0
                             best_def = 0
                             survived = False
@@ -962,13 +999,15 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                                     base_stats=base_stats_model,
                                     types=types,
                                     nature=parsed_nature,
-                                    evs=EVSpread(hp=hp_ev, defense=def_ev, special_defense=spd_ev)
+                                    evs=EVSpread(hp=hp_ev, defense=def_ev, special_defense=spd_ev),
+                                    ability=defender_ability,
                                 )
 
                                 modifiers = DamageModifiers(
                                     is_doubles=True,
                                     attacker_ability=attacker_ability,
-                                    attacker_item=attacker_item
+                                    attacker_item=attacker_item,
+                                    attack_stage=stage_attack,
                                 )
                                 result = calculate_damage(attacker, defender, move, modifiers)
 
@@ -976,8 +1015,14 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                                     best_hp = hp_ev
                                     best_def = def_ev if is_phys else spd_ev
                                     survived = True
+                                    note = ""
+                                    if mega_intimidate_active and is_phys:
+                                        note += " [Intimidate -1 Atk]"
+                                    if attacker_item and item_source != "user-supplied":
+                                        note += f" [item={attacker_item}]"
                                     benchmarks_met.append(
-                                        f"Survives {attacker_name} {move_name} ({result.min_percent:.0f}-{result.max_percent:.0f}%)"
+                                        f"Survives {attacker_name} {move_name} "
+                                        f"({result.min_percent:.0f}-{result.max_percent:.0f}%){note}"
                                     )
                                     break
 
@@ -988,7 +1033,15 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                                 else:
                                     spd_evs = max(spd_evs, best_def)
                             else:
-                                benchmarks_failed.append(f"Cannot survive {attacker_name} {move_name}")
+                                detail = []
+                                if mega_intimidate_active and is_phys:
+                                    detail.append("Intimidate applied")
+                                if attacker_item:
+                                    detail.append(f"item={attacker_item}")
+                                suffix = f" ({', '.join(detail)})" if detail else ""
+                                benchmarks_failed.append(
+                                    f"Cannot survive {attacker_name} {move_name}{suffix}"
+                                )
 
                     except Exception as e:
                         benchmarks_failed.append(f"Error checking survival vs {attacker_name}: {str(e)}")
