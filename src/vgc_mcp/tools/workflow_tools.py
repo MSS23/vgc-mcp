@@ -1137,6 +1137,104 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                 "speed": calculate_stat(base_stats["speed"], 31, speed_evs_needed, 50, speed_mod)
             }
 
+            # 5b. Re-run damage on the FINAL spread for every survival benchmark.
+            # The search loop reports the % at search-time (often 0 HP / max Def);
+            # the leftover-redistribution step then bumps HP, lowering the actual
+            # final %. We rewrite each "Survives ..." message with the real
+            # final-spread numbers so users see what they actually copy-paste.
+            if survive_hits:
+                final_defender_evs = EVSpread(
+                    hp=hp_evs,
+                    defense=def_evs,
+                    special_defense=spd_evs,
+                    attack=atk_evs if is_physical else 0,
+                    special_attack=0 if is_physical else atk_evs,
+                    speed=speed_evs_needed,
+                )
+                rewritten_msgs: list[str] = []
+                for hit in survive_hits:
+                    attacker_name = hit.get("attacker", "")
+                    move_name = hit.get("move", "")
+                    attacker_item = hit.get("item")
+                    attacker_ability = hit.get("ability")
+                    try:
+                        atk_base2 = await pokeapi.get_base_stats(attacker_name)
+                        atk_types2 = await pokeapi.get_pokemon_types(attacker_name)
+                        move2 = await pokeapi.get_move(move_name)
+                        if atk_base2 is None or move2 is None:
+                            continue
+                        is_phys2 = move2.category == MoveCategory.PHYSICAL
+                        atk_nature2 = Nature.ADAMANT if is_phys2 else Nature.MODEST
+
+                        # Re-fetch attacker item if not user-supplied (cheap; cached).
+                        if not attacker_item:
+                            try:
+                                fmt_list = cfg.get_smogon_formats() if hasattr(cfg, "get_smogon_formats") else None
+                                fmt_name = fmt_list[0] if fmt_list else None
+                                rating = cfg.get_default_smogon_rating() or 1500
+                                common = await smogon.get_common_sets(
+                                    attacker_name, format_name=fmt_name, rating=rating, limit=1,
+                                )
+                                if common and common.get("top_items"):
+                                    top = common["top_items"][0]
+                                    if top.get("name") and top["name"].lower() != "nothing":
+                                        attacker_item = top["name"]
+                            except Exception:
+                                pass
+
+                        stage_attack2 = -1 if (mega_intimidate_active and is_phys2) else 0
+                        attacker2 = PokemonBuild(
+                            name=attacker_name, base_stats=atk_base2, types=atk_types2,
+                            nature=atk_nature2,
+                            evs=EVSpread(
+                                attack=252 if is_phys2 else 0,
+                                special_attack=0 if is_phys2 else 252,
+                            ),
+                            ability=attacker_ability, item=attacker_item,
+                        )
+                        defender2 = PokemonBuild(
+                            name=pokemon_name, base_stats=base_stats_model, types=types,
+                            nature=parsed_nature, evs=final_defender_evs,
+                            ability=defender_ability,
+                        )
+                        mods2 = DamageModifiers(
+                            is_doubles=True,
+                            attacker_ability=attacker_ability,
+                            attacker_item=attacker_item,
+                            attack_stage=stage_attack2,
+                        )
+                        result2 = calculate_damage(attacker2, defender2, move2, mods2)
+                        note = ""
+                        if mega_intimidate_active and is_phys2:
+                            note += " [Intimidate -1 Atk]"
+                        if attacker_item:
+                            note += f" [item={attacker_item}]"
+                        if result2.max_percent < 100:
+                            rewritten_msgs.append(
+                                f"Survives {attacker_name} {move_name} "
+                                f"({result2.min_damage}-{result2.max_damage} = "
+                                f"{result2.min_percent:.1f}-{result2.max_percent:.1f}%){note}"
+                            )
+                        else:
+                            verdict = "guaranteed OHKO" if result2.min_percent >= 100 else f"{result2.max_percent:.1f}% max — does NOT survive"
+                            rewritten_msgs.append(
+                                f"Cannot survive {attacker_name} {move_name} "
+                                f"({result2.min_damage}-{result2.max_damage} = "
+                                f"{result2.min_percent:.1f}-{result2.max_percent:.1f}%, {verdict}){note}"
+                            )
+                    except Exception:
+                        pass
+
+                # Replace the search-time "Survives ..." entries with final-spread ones.
+                if rewritten_msgs:
+                    benchmarks_met = [m for m in benchmarks_met if not m.startswith("Survives ")]
+                    benchmarks_failed = [m for m in benchmarks_failed if not m.startswith("Cannot survive ")]
+                    for msg in rewritten_msgs:
+                        if msg.startswith("Survives "):
+                            benchmarks_met.append(msg)
+                        else:
+                            benchmarks_failed.append(msg)
+
             spread = {
                 "hp": hp_evs,
                 "atk": atk_evs if is_physical else 0,
