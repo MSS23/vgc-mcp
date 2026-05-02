@@ -263,6 +263,65 @@ class RegulationConfig:
             })
         return result
 
+    def get_format_system(self, regulation: Optional[str] = None) -> str:
+        """Get format system: 'mainline' (EVs) or 'champions' (Stat Points).
+
+        Defaults to 'mainline' for any regulation that doesn't declare it,
+        which preserves behavior for all existing reg_f/g/h/i entries.
+        """
+        reg_data = self.get_regulation(regulation)
+        return reg_data.get("format_system", "mainline")
+
+    def get_legality_mode(self, regulation: Optional[str] = None) -> str:
+        """Get legality mode: 'banlist' (default) or 'allowlist'.
+
+        Banlist mode (default): everything legal except restricted/banned lists.
+        Allowlist mode: only Pokemon in `legal_pokemon` are allowed.
+        """
+        reg_data = self.get_regulation(regulation)
+        return reg_data.get("legality_mode", "banlist")
+
+    def get_legal_pokemon(self, regulation: Optional[str] = None) -> set[str]:
+        """Get explicit allowlist of legal Pokemon (only meaningful for allowlist mode)."""
+        reg_data = self.get_regulation(regulation)
+        return set(reg_data.get("legal_pokemon", []))
+
+    def get_sp_limits(self, regulation: Optional[str] = None) -> dict[str, int]:
+        """Get Champions stat-point caps. Returns {} for non-champions formats."""
+        reg_data = self.get_regulation(regulation)
+        if reg_data.get("format_system") != "champions":
+            return {}
+        return {
+            "per_stat_max": reg_data.get("sp_per_stat_max", 32),
+            "total_max": reg_data.get("sp_total_max", 66),
+        }
+
+    def get_default_smogon_rating(self, regulation: Optional[str] = None) -> int:
+        """Get the rating cutoff to use when fetching usage stats. Defaults to 0."""
+        reg_data = self.get_regulation(regulation)
+        return reg_data.get("default_smogon_rating", 0)
+
+    def is_pokemon_legal(
+        self,
+        pokemon_name: str,
+        regulation: Optional[str] = None
+    ) -> bool:
+        """Check if a Pokemon is legal in the given regulation.
+
+        For banlist regulations, "legal" = not banned and not restricted-over-limit.
+        Restricted Pokemon are reported as legal here (they have their own slot count).
+        For allowlist regulations (e.g., reg_ma_champs), only Pokemon in
+        `legal_pokemon` are legal.
+        """
+        name_normalized = pokemon_name.lower().replace(" ", "-")
+        mode = self.get_legality_mode(regulation)
+        if mode == "allowlist":
+            return name_normalized in self.get_legal_pokemon(regulation)
+        # Banlist mode
+        if name_normalized in self.get_banned_pokemon(regulation):
+            return False
+        return True
+
     def is_pokemon_restricted(
         self,
         pokemon_name: str,

@@ -367,36 +367,55 @@ def register_legality_tools(mcp: FastMCP, team_manager):
     @mcp.tool()
     async def set_session_regulation(regulation: str) -> dict:
         """
-        Override the current regulation for this session.
+        Override the current regulation for this session based on user phrasing.
 
-        This temporarily changes which regulation is used for validation
-        until the server restarts or this is cleared.
+        Accepts natural inputs and routes them to the right format system:
+        - "Reg F" / "F" / "regulation_f" -> reg_f (mainline EVs, 252/508)
+        - "Reg G" / "G" -> reg_g (mainline EVs)
+        - "Reg H" / "H" -> reg_h (mainline EVs)
+        - "Reg I" / "I" -> reg_i (mainline EVs, when defined)
+        - "Champions" / "Pokemon Champions" / "Reg MA" / "MA" -> reg_ma_champs
+          (Stat Points, 32/66)
+
+        Champions formats automatically use the gen9championsvgc2026regma
+        Smogon JSON files; mainline regulations use the gen9vgc2025/2026
+        regulation-specific JSON files. The format system flag flips
+        downstream stat / damage calcs to the correct math.
 
         Args:
-            regulation: Regulation code to use (e.g., "reg_f", "reg_g", "reg_h")
+            regulation: Any reasonable phrasing — see examples above.
 
         Returns:
-            Confirmation of the change
+            Confirmation including the resolved code and active format system.
         """
+        from vgc_mcp_core.rules.regulation_router import (
+            resolve_regulation,
+            describe_regulation,
+        )
+
         config = get_regulation_config()
         available = config.list_regulation_codes()
 
-        # Normalize input
-        reg_code = regulation.lower().replace(" ", "_").replace("-", "_")
-        if not reg_code.startswith("reg_"):
-            reg_code = f"reg_{reg_code}"
+        reg_code = resolve_regulation(regulation, config)
+        if reg_code is None or not config.set_session_regulation(reg_code):
+            return error_response(
+                ErrorCodes.INTERNAL_ERROR,
+                f"Unknown regulation: {regulation!r}. "
+                f"Try 'Reg F', 'Reg G', 'Reg H', 'Reg I', or 'Champions' / 'Reg MA'.",
+                available=available,
+            )
 
-        if config.set_session_regulation(reg_code):
-            reg_data = config.get_regulation(reg_code)
-            return {
-                "success": True,
-                "regulation": reg_code,
-                "name": reg_data.get("name", reg_code),
-                "restricted_limit": reg_data.get("restricted_limit", 2),
-                "message": f"Session regulation set to {reg_data.get('name', reg_code)}"
-            }
-        else:
-            return error_response(ErrorCodes.INTERNAL_ERROR, f'Unknown regulation: {regulation}', available=available)
+        info = describe_regulation(reg_code, config)
+        info.update({
+            "success": True,
+            "regulation": reg_code,
+            "restricted_limit": config.get_restricted_limit(reg_code),
+            "message": (
+                f"Session regulation set to {info['name']} "
+                f"(format system: {info['format_system']}, units: {info['stat_units']})."
+            ),
+        })
+        return info
 
     @mcp.tool()
     async def clear_session_regulation() -> dict:

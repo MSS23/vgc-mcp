@@ -115,13 +115,22 @@ def calculate_all_stats(
     """
     Calculate all stats for a Pokemon build.
 
+    Dispatches to the Champions SP calculator when the build's format_system
+    is "champions"; otherwise uses the mainline EV formula. This keeps all
+    existing call sites working without changes — they only see different
+    numbers when given a Champions build.
+
     Args:
-        pokemon: Pokemon build with base stats, EVs, IVs, nature
+        pokemon: Pokemon build with base stats, EVs/SPs, IVs, nature
         level: Override level (uses pokemon.level if None)
 
     Returns:
         Dict with all calculated stats
     """
+    if getattr(pokemon, "format_system", "mainline") == "champions":
+        from .stats_champions import calculate_all_stats_champions
+        return calculate_all_stats_champions(pokemon, level)
+
     lvl = level if level is not None else pokemon.level
     base = pokemon.base_stats
 

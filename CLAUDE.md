@@ -6,6 +6,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 VGC MCP Server - A Model Context Protocol server for Pokemon VGC (Video Game Championships) team building. Provides 120+ tools for damage calculations, stat analysis, team management, and competitive play optimization.
 
+Supports two parallel format systems:
+- **Mainline VGC** (Reg F/G/H/I) — classic EV system, 0-252 per stat / 508 total
+- **Pokemon Champions VGC** (Reg MA) — Stat Point system, 0-32 per stat / 66 total
+
+Each `PokemonBuild` carries a `format_system` flag (`"mainline"` default or
+`"champions"`); `calculate_all_stats` and damage calc dispatch on it
+automatically. All existing mainline tools and tests remain unchanged.
+
 ## Commands
 
 ```bash
@@ -111,8 +119,41 @@ Located in `vgc_mcp_core/calc/modifiers.py`. Key mechanics:
 ### VGC Defaults
 
 - Level 50 (standard VGC)
-- 508 max total EVs, 252 per stat
+- Mainline: 508 max total EVs, 252 per stat
+- Champions Reg MA: 66 max total Stat Points, 32 per stat
 - Doubles format (spread moves get 0.75x multiplier)
+
+### Pokemon Champions Reg MA — Stat Point System
+
+Champions builds use `StatPointSpread` (in `models/pokemon.py`) instead of
+`EVSpread`. Field names match canonical stat names; the NCP setdex JSON
+abbreviations (`hp/at/df/sa/sd/sp`) round-trip via
+`StatPointSpread.from_sps_dict()` / `.to_sps_dict()`.
+
+**Stat formula** (level 50): the SP slot maps to "8 EVs of effectiveness" — i.e.
+substituted into the EV formula as `SP*2`. So 32 SP saturates to the same stat
+as 252 EV (Flutter Mane Timid 32 SP = 205 Speed, identical to mainline).
+
+**Where to dispatch by format**:
+- `calc/stats.py::calculate_all_stats(pokemon)` — automatic, reads `pokemon.format_system`
+- `calc/damage.py::calculate_damage(...)` — automatic via `calculate_all_stats`
+- Showdown paste: parser detects `SPs:` vs `EVs:`; exporter emits `SPs:` for champions builds
+- Smogon usage: `SmogonStatsClient` auto-falls-back to rating 1500 when format string
+  contains "champions"; spreads tagged with `format_system: "champions"` and stored
+  under `sps` key
+
+**Champions optimization primitives** live in `calc/champions_optimization.py`
+(parallel to mainline `bulk_optimization.py` / `hp_optimization.py`):
+- `find_speed_sps_to_outspeed(base, target, nature, ...)` → minimum SP
+- `find_optimal_hp_sps(base_hp, item)` → HP-number ranking under SP grain
+- `find_bulk_sps_to_survive(base_hp, base_def, raw_dmg)` → cheapest HP+Def SP allocation
+- `find_attack_sps_for_ko(...)` → minimum offensive SP to clear damage floor
+- `validate_sp_allocation(dict)` → 32/66 cap enforcement
+
+**Reg MA legality**: `regulations.json::reg_ma_champs` uses an explicit
+`legal_pokemon` allowlist (168 species from Serebii). Use
+`RegulationConfig.is_pokemon_legal(name, "reg_ma_champs")` rather than
+`is_pokemon_banned`, since banlist mode doesn't apply to allowlist regulations.
 
 ### Critical Hits and Ruin Abilities
 

@@ -33,7 +33,7 @@ import re
 from typing import Optional
 from dataclasses import dataclass, field
 
-from ..models.pokemon import Nature, EVSpread, IVSpread, PokemonBuild
+from ..models.pokemon import Nature, EVSpread, IVSpread, PokemonBuild, StatPointSpread
 
 
 class ShowdownParseError(Exception):
@@ -55,6 +55,7 @@ class ParsedPokemon:
     evs: dict = field(default_factory=lambda: {
         "hp": 0, "atk": 0, "def": 0, "spa": 0, "spd": 0, "spe": 0
     })
+    sps: Optional[dict] = None  # Champions stat points; None means EV-format paste
     ivs: dict = field(default_factory=lambda: {
         "hp": 31, "atk": 31, "def": 31, "spa": 31, "spd": 31, "spe": 31
     })
@@ -168,6 +169,11 @@ def parse_showdown_pokemon(paste: str) -> ParsedPokemon:
 
         elif line_lower.startswith("evs:"):
             pokemon.evs = _parse_stat_spread(line.split(":", 1)[1])
+
+        elif line_lower.startswith("sps:") or line_lower.startswith("stat points:"):
+            # Champions stat-point line — same syntax as EVs but values 0-32.
+            sep_idx = 4 if line_lower.startswith("sps:") else 12
+            pokemon.sps = _parse_stat_spread(line[sep_idx:])
 
         elif line_lower.startswith("ivs:"):
             # IVs default to 31, only override stats that are explicitly specified
@@ -292,6 +298,7 @@ def export_pokemon_to_showdown(
     ivs: Optional[dict] = None,
     nature: str = "Serious",
     moves: Optional[list] = None,
+    sps: Optional[dict] = None,
 ) -> str:
     """
     Export a Pokemon to Showdown paste format.
@@ -347,8 +354,15 @@ def export_pokemon_to_showdown(
     if tera_type:
         lines.append(f"Tera Type: {tera_type}")
 
-    # EVs
-    if evs:
+    # SPs (Champions) take precedence over EVs when present
+    if sps:
+        sp_parts = []
+        for stat in ["hp", "atk", "def", "spa", "spd", "spe"]:
+            if sps.get(stat, 0) > 0:
+                sp_parts.append(f"{sps[stat]} {STAT_EXPORT_NAMES[stat]}")
+        if sp_parts:
+            lines.append(f"SPs: {' / '.join(sp_parts)}")
+    elif evs:
         ev_parts = []
         for stat in ["hp", "atk", "def", "spa", "spd", "spe"]:
             if evs.get(stat, 0) > 0:
@@ -409,6 +423,23 @@ def parsed_to_ev_spread(parsed: ParsedPokemon) -> EVSpread:
     )
 
 
+def parsed_to_sp_spread(parsed: ParsedPokemon) -> Optional[StatPointSpread]:
+    """Convert ParsedPokemon SPs to StatPointSpread model.
+
+    Returns None if the paste did not declare a Champions SPs line.
+    """
+    if parsed.sps is None:
+        return None
+    return StatPointSpread(
+        hp=parsed.sps.get("hp", 0),
+        attack=parsed.sps.get("atk", 0),
+        defense=parsed.sps.get("def", 0),
+        special_attack=parsed.sps.get("spa", 0),
+        special_defense=parsed.sps.get("spd", 0),
+        speed=parsed.sps.get("spe", 0),
+    )
+
+
 def parsed_to_iv_spread(parsed: ParsedPokemon) -> IVSpread:
     """Convert ParsedPokemon IVs to IVSpread model."""
     return IVSpread(
@@ -432,16 +463,28 @@ def parsed_to_nature(parsed: ParsedPokemon) -> Nature:
 def pokemon_build_to_showdown(pokemon: PokemonBuild) -> str:
     """
     Convert a PokemonBuild model to Showdown paste format.
-    
+
     Args:
         pokemon: PokemonBuild instance
-        
+
     Returns:
         Showdown paste format string
     """
     # Convert PokemonBuild to dict format for export_pokemon_to_showdown
     species = pokemon.name.replace("-", " ").title()
-    
+
+    # Champions builds emit an SPs line and skip EVs
+    sps_dict = None
+    if pokemon.is_champions() and pokemon.sps is not None:
+        sps_dict = {
+            "hp": pokemon.sps.hp,
+            "atk": pokemon.sps.attack,
+            "def": pokemon.sps.defense,
+            "spa": pokemon.sps.special_attack,
+            "spd": pokemon.sps.special_defense,
+            "spe": pokemon.sps.speed,
+        }
+
     # Convert EVSpread to dict
     evs_dict = {
         "hp": pokemon.evs.hp,
@@ -486,6 +529,7 @@ def pokemon_build_to_showdown(pokemon: PokemonBuild) -> str:
         level=pokemon.level,
         tera_type=tera_type,
         evs=evs_dict,
+        sps=sps_dict,
         ivs=ivs_dict if ivs_dict else None,
         nature=nature,
         moves=pokemon.moves if pokemon.moves else None,

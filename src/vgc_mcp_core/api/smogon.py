@@ -156,6 +156,45 @@ class SmogonStatsClient:
 
         return None
 
+    @staticmethod
+    def _is_champions_format(fmt: str) -> bool:
+        """True if this Smogon format string is for Pokemon Champions."""
+        return "champions" in (fmt or "").lower()
+
+    def _ratings_to_try(self, rating: int, formats: list[str]) -> list[int]:
+        """Resolve which rating cutoffs to try.
+
+        When the caller passes `rating=0` (the function default), we look up
+        each format's regulation in regulations.json and prepend its
+        `default_smogon_rating`. All current regs (Reg F/G/H, Reg MA Champions)
+        declare 1500 — keeping cross-regulation comparisons apples-to-apples.
+
+        Always falls back to 1500 then 0 so we still find data if a regulation
+        somehow lacks a default and the user didn't pass an explicit cutoff.
+        """
+        if rating != 0:
+            return [rating]
+
+        ratings: list[int] = []
+        seen: set[int] = set()
+        cfg = self.regulation_config
+        # Walk every reg whose Smogon format string we're about to try and
+        # collect its declared default rating.
+        for fmt in formats:
+            for reg_code in cfg.list_regulation_codes():
+                if fmt in cfg.get_smogon_formats(reg_code):
+                    default = cfg.get_default_smogon_rating(reg_code)
+                    if default not in seen:
+                        ratings.append(default)
+                        seen.add(default)
+                    break
+        # Fallback chain: 1500 (the project-wide convention) then 0 (broadest)
+        for fallback in (1500, 0):
+            if fallback not in seen:
+                ratings.append(fallback)
+                seen.add(fallback)
+        return ratings
+
     async def get_usage_stats(
         self,
         format_name: Optional[str] = None,
@@ -175,11 +214,18 @@ class SmogonStatsClient:
         """
         months = [month] if month else self._get_recent_months(3)
         formats = [format_name] if format_name else self.VGC_FORMATS
+        ratings = self._ratings_to_try(rating, formats)
 
         # Try combinations until we find one that works
         for m in months:
             for fmt in formats:
-                data = await self._try_fetch_stats(m, fmt, rating)
+                for r in ratings:
+                    data = await self._try_fetch_stats(m, fmt, r)
+                    if data:
+                        rating = r  # remember which cutoff actually returned data
+                        break
+                else:
+                    continue
                 if data:
                     self._current_format = fmt
                     self._current_month = m
@@ -262,11 +308,12 @@ class SmogonStatsClient:
                 spreads = mon_data.get("Spreads", {})
                 spread_total = sum(spreads.values()) or 1
                 spreads_processed = []
+                is_champions = self._is_champions_format(stats.get("_meta", {}).get("format", ""))
                 for spread_str, weight in sorted(spreads.items(), key=lambda x: -x[1]):
                     pct = weight / spread_total
                     if pct < 0.01:
                         continue
-                    parsed = self._parse_spread(spread_str)
+                    parsed = self._parse_spread(spread_str, champions=is_champions)
                     parsed["usage"] = round(pct * 100, 1)
                     spreads_processed.append(parsed)
 
@@ -302,22 +349,37 @@ class SmogonStatsClient:
 
         return None
 
-    def _parse_spread(self, spread_str: str) -> dict:
-        """Parse spread string like 'Modest:252/0/4/252/0/0' into structured data."""
+    def _parse_spread(self, spread_str: str, champions: bool = False) -> dict:
+        """Parse spread string like 'Modest:252/0/4/252/0/0' into structured data.
+
+        For Champions formats (`champions=True`), the same `Nature:N/N/N/N/N/N`
+        syntax holds but values are 0-32 stat points. The result includes a
+        `sps` dict and a `format_system` tag instead of `evs`, so downstream
+        consumers can dispatch on the right stat formula.
+        """
         try:
-            nature, evs = spread_str.split(":")
-            hp, atk, def_, spa, spd, spe = map(int, evs.split("/"))
+            nature, allocs = spread_str.split(":")
+            hp, atk, def_, spa, spd, spe = map(int, allocs.split("/"))
+            stat_dict = {
+                "hp": hp,
+                "attack": atk,
+                "defense": def_,
+                "special_attack": spa,
+                "special_defense": spd,
+                "speed": spe,
+            }
+            if champions:
+                return {
+                    "nature": nature,
+                    "sps": stat_dict,
+                    "format_system": "champions",
+                    "spread_string": spread_str,
+                }
             return {
                 "nature": nature,
-                "evs": {
-                    "hp": hp,
-                    "attack": atk,
-                    "defense": def_,
-                    "special_attack": spa,
-                    "special_defense": spd,
-                    "speed": spe
-                },
-                "spread_string": spread_str
+                "evs": stat_dict,
+                "format_system": "mainline",
+                "spread_string": spread_str,
             }
         except Exception:
             return {"raw": spread_str}
@@ -491,9 +553,10 @@ class SmogonStatsClient:
                             spreads = mon_data.get("Spreads", {})
                             spread_total = sum(spreads.values()) or 1
                             spreads_processed = []
+                            prev_is_champions = self._is_champions_format(fmt)
                             for spread_str, weight in sorted(spreads.items(), key=lambda x: -x[1])[:5]:
                                 pct = weight / spread_total
-                                parsed = self._parse_spread(spread_str)
+                                parsed = self._parse_spread(spread_str, champions=prev_is_champions)
                                 parsed["usage"] = round(pct * 100, 1)
                                 spreads_processed.append(parsed)
 
@@ -547,17 +610,23 @@ class SmogonStatsClient:
                 prev_top_spread = previous_stats["spreads"][0] if previous_stats["spreads"] else None
 
                 if current_top_spread and prev_top_spread:
-                    curr_spe = current_top_spread.get("evs", {}).get("speed", 0)
-                    prev_spe = prev_top_spread.get("evs", {}).get("speed", 0)
+                    is_champ = (
+                        current_top_spread.get("format_system") == "champions"
+                        or prev_top_spread.get("format_system") == "champions"
+                    )
+                    units = "SPs" if is_champ else "EVs"
+                    key = "sps" if is_champ else "evs"
+                    curr_spe = current_top_spread.get(key, {}).get("speed", 0)
+                    prev_spe = prev_top_spread.get(key, {}).get("speed", 0)
 
                     if curr_spe != prev_spe:
                         if curr_spe > prev_spe:
                             comparison["changes"].append(
-                                f"Speed investment increased: {prev_spe} EVs → {curr_spe} EVs (running faster)"
+                                f"Speed investment increased: {prev_spe} {units} → {curr_spe} {units} (running faster)"
                             )
                         else:
                             comparison["changes"].append(
-                                f"Speed investment decreased: {prev_spe} EVs → {curr_spe} EVs (running slower/bulkier)"
+                                f"Speed investment decreased: {prev_spe} {units} → {curr_spe} {units} (running slower/bulkier)"
                             )
 
         return comparison
@@ -598,6 +667,7 @@ class SmogonStatsClient:
             }
         """
         from ..calc.stats import calculate_speed
+        from ..calc.stats_champions import calculate_speed_sp
         from ..models.pokemon import Nature
 
         # Nature name -> Nature enum mapping
@@ -617,18 +687,21 @@ class SmogonStatsClient:
         if not usage or not usage.get("spreads"):
             return None
 
-        # Calculate speed for each spread and aggregate by speed value
+        # Calculate speed for each spread and aggregate by speed value.
+        # Champions spreads carry `sps` + format_system="champions"; mainline
+        # spreads carry `evs`. Dispatch to the matching stat formula.
         speed_usage: dict[int, float] = {}
         for spread in usage["spreads"]:
             nature_str = spread.get("nature", "Serious").lower()
-            evs = spread.get("evs", {})
             spread_usage = spread.get("usage", 0)
-
             nature = NATURE_MAP.get(nature_str, Nature.SERIOUS)
-            speed_evs = evs.get("speed", 0)
 
-            # Calculate final speed stat (level 50, 31 IVs)
-            final_speed = calculate_speed(base_speed, 31, speed_evs, 50, nature)
+            if spread.get("format_system") == "champions":
+                speed_sps = spread.get("sps", {}).get("speed", 0)
+                final_speed = calculate_speed_sp(base_speed, 31, speed_sps, 50, nature)
+            else:
+                speed_evs = spread.get("evs", {}).get("speed", 0)
+                final_speed = calculate_speed(base_speed, 31, speed_evs, 50, nature)
 
             if final_speed in speed_usage:
                 speed_usage[final_speed] += spread_usage
