@@ -25,6 +25,11 @@ class RegulationConfig:
         self._config_path = config_path
         self._data: dict = {}
         self._session_override: Optional[str] = None
+        # Tracks whether the user explicitly chose the session regulation
+        # (via `set_session_regulation` or wording) vs. it being auto-inferred.
+        # Auto-inference must never overwrite an explicit choice.
+        self._session_set_explicitly: bool = False
+        self._last_auto_detection: Optional[dict] = None
         self._load_config()
 
     def _load_config(self) -> None:
@@ -100,24 +105,47 @@ class RegulationConfig:
         reg_data = self.get_regulation()
         return reg_data.get("name", self.current_regulation.upper().replace("_", " "))
 
-    def set_session_regulation(self, regulation: str) -> bool:
+    def set_session_regulation(self, regulation: str, *, by_user: bool = True) -> bool:
         """
         Override current regulation for this session.
 
         Args:
             regulation: Regulation code (e.g., "reg_f", "reg_g")
+            by_user: True when explicitly set by the user (or by a tool the
+                user invoked); False when auto-inferred from Pokemon mentions.
+                The distinction lets later auto-detect calls upgrade a guess
+                to a more confident answer without overriding the user's
+                explicit choice.
 
         Returns:
             True if valid regulation, False otherwise
         """
         if regulation in self._data.get("regulations", {}):
             self._session_override = regulation
+            self._session_set_explicitly = self._session_set_explicitly or by_user
+            self._last_auto_detection = None if by_user else self._last_auto_detection
             return True
         return False
+
+    @property
+    def session_set_explicitly(self) -> bool:
+        """True if the user explicitly set the session regulation this run."""
+        return getattr(self, "_session_set_explicitly", False)
+
+    @property
+    def last_auto_detection(self) -> Optional[dict]:
+        """Last auto-detection result (set by `auto_detect_regulation`)."""
+        return getattr(self, "_last_auto_detection", None)
+
+    def record_auto_detection(self, result: dict) -> None:
+        """Record an auto-detection result so callers can surface it in responses."""
+        self._last_auto_detection = result
 
     def clear_session_override(self) -> None:
         """Clear session regulation override, reverting to default detection."""
         self._session_override = None
+        self._session_set_explicitly = False
+        self._last_auto_detection = None
 
     def get_regulation(self, regulation: Optional[str] = None) -> dict:
         """

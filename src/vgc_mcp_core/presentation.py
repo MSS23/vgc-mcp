@@ -12,22 +12,29 @@ PRESENTATION_INSTRUCTIONS = """VGC Pokemon team building server (damage calcs, u
 Supports both mainline VGC (EVs, 252/508) and Pokemon Champions Reg MA (Stat Points, 32/66).
 
 ═══════════════════════════════════════════════════════════════════════════
-FORMAT DETECTION — do this BEFORE anything else
+FORMAT DETECTION — ZERO-CONFIG WORKFLOW (the user shouldn't have to ask)
 ═══════════════════════════════════════════════════════════════════════════
 
-Whenever the user mentions specific Pokemon, pastes a team, or asks a question
-that depends on regulation rules (legality, restricted limits, EV vs SP system),
-you MUST resolve the regulation FIRST. Two paths:
+The user should NEVER need to type "use Champions" or "set regulation X" to
+get correct answers. The server auto-detects the format from any Pokemon
+mention. Your job: pass the Pokemon names along.
 
-1. **Wording-based** — if the user says "Reg F", "Reg G", "Reg H", "Reg I",
-   "Champions", "Pokemon Champions", "Reg MA", "M-A", or any reasonable
-   variation, call `set_session_regulation` with that exact phrase. The router
-   accepts free-form input — do not normalize before calling.
+**The default move is `auto_detect_regulation_from_pokemon(names)`.** Call it
+the FIRST TIME you see Pokemon names in a conversation. It:
+- Infers the regulation from the names (Mega → Champions, restricteds → Reg G/I, etc.)
+- Auto-sets the session regulation if confidence is high or medium
+- Skips silently if the user already picked a regulation explicitly
+- Returns what it inferred so you can mention it ("I noticed Mega Manectric — using Champions Reg MA")
 
-2. **Pokemon-based** — if the user names Pokemon but doesn't state a
-   regulation, call `infer_regulation_from_team(pokemon_names)` FIRST. It
-   returns a regulation code, confidence, and reasoning. Then call
-   `set_session_regulation(<code>)` to apply. Common signals:
+**When you also have a wording signal** ("Reg F", "Champions", "Reg MA",
+"M-A", etc.), call `set_session_regulation` with that exact phrase — explicit
+user wording always wins over inference.
+
+**Adding Pokemon to a team auto-detects too.** `add_pokemon_smart` and the
+import tools run inference internally; their response includes a
+`regulation_auto_detected` field when this happens. Surface it to the user.
+
+Common signals the inference uses:
 
    | What they mention | Inferred regulation |
    |---|---|
@@ -36,12 +43,11 @@ you MUST resolve the regulation FIRST. Two paths:
    | 2 restricteds (Calyrex-Shadow + Koraidon, etc.) | Reg I |
    | 0 restricteds, no Megas | Reg F (or Reg MA — ask if all are also Champions-legal) |
 
-   If `infer_regulation_from_team` returns `confidence: "low"` or surfaces
-   alternatives, ASK the user which regulation they meant before continuing.
-   Don't guess silently.
+If the auto-detect returns `action: "low_confidence"` or surfaces alternatives,
+ASK the user which regulation they meant before continuing. Don't guess silently.
 
-3. **Format system implications** — once a regulation is set, the entire
-   server dispatches accordingly. You don't need to track this manually:
+**Format system implications** — once a regulation is set, the entire
+server dispatches accordingly. You don't need to track this manually:
    - Mainline regs (F/G/H/I) → builds use EVs (0-252/stat, 508 total)
    - Champions Reg MA → builds use Stat Points (0-32/stat, 66 total)
    - Damage calcs, stat displays, Showdown pastes, and usage stats all

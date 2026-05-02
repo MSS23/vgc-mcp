@@ -418,6 +418,59 @@ def register_legality_tools(mcp: FastMCP, team_manager):
         return info
 
     @mcp.tool()
+    async def auto_detect_regulation_from_pokemon(pokemon_names: list[str]) -> dict:
+        """
+        ZERO-CONFIG REGULATION DETECTION — call this whenever a user mentions
+        Pokemon and you don't know the format yet. Combines inference and
+        session-set in one call.
+
+        Behavior:
+        - If the user already explicitly chose a regulation (via
+          set_session_regulation), this is a no-op and returns
+          `{"action": "skipped"}` — explicit user choice always wins.
+        - Otherwise infers from Pokemon mentions and AUTO-SETS the session
+          regulation if confidence is high or medium.
+        - Returns the regulation code, format_system, stat units, and the
+          reasoning so you can mention it to the user (e.g. "I noticed you
+          have a Mega — using Champions Reg MA").
+
+        Use cases that should trigger this tool:
+        - User pastes a team
+        - User asks about a specific Pokemon ("Mega Manectric needs ___")
+        - User asks about a damage matchup involving named Pokemon
+        - Anytime the model isn't sure which regulation is active
+
+        Args:
+            pokemon_names: list of Pokemon names from the conversation. Pass
+                whatever the user wrote — Mega forms, restricteds, partial
+                names — the inference normalizes everything.
+
+        Returns:
+            {
+                "action": "set" | "skipped" | "low_confidence",
+                "regulation": "reg_ma_champs" | ...,
+                "format_system": "champions" | "mainline",
+                "stat_units": "Stat Points (SPs)" | "EVs",
+                "regulation_name": "Champions Regulation MA" | ...,
+                "confidence": "high" | "medium" | "low",
+                "reasons": [...],
+                "alternatives": [...],
+            }
+        """
+        from vgc_mcp_core.rules.regulation_router import (
+            auto_detect_regulation,
+            describe_regulation,
+        )
+        config = get_regulation_config()
+        result = auto_detect_regulation(pokemon_names, config)
+        if result.get("regulation"):
+            info = describe_regulation(result["regulation"], config)
+            result["format_system"] = info["format_system"]
+            result["stat_units"] = info["stat_units"]
+            result["regulation_name"] = info["name"]
+        return result
+
+    @mcp.tool()
     async def infer_regulation_from_team(pokemon_names: list[str]) -> dict:
         """
         Infer the most likely VGC regulation from the Pokemon mentioned in a team.

@@ -306,6 +306,54 @@ def infer_format_from_pokemon(
     }
 
 
+def auto_detect_regulation(
+    pokemon_names: list[str],
+    config: Optional[RegulationConfig] = None,
+) -> dict:
+    """Auto-detect the regulation from mentioned Pokemon and apply it.
+
+    This is the zero-config entry point — call it from any tool that takes
+    Pokemon names as input. Behavior:
+
+    - If the user already explicitly set the session regulation
+      (`set_session_regulation` invoked directly or via wording), this is a
+      no-op that returns `{"action": "skipped", ...}` so the existing choice
+      is respected.
+    - Otherwise runs `infer_format_from_pokemon` and, if confidence is
+      high or medium, sets the session regulation as a side effect (with
+      `by_user=False` so a later explicit set still wins).
+    - Records the result on the config so tool responses can surface
+      `regulation_auto_detected` and tell the user what happened.
+
+    Returns a dict with: `action` ("set" | "skipped" | "low_confidence"),
+    plus the inference fields (`regulation`, `confidence`, `reasons`,
+    `alternatives`, etc.). Tools should pass the returned dict through to
+    their response so the user sees what the server inferred.
+    """
+    cfg = config or get_regulation_config()
+
+    if cfg.session_set_explicitly:
+        return {
+            "action": "skipped",
+            "reason": "session regulation was set explicitly — keeping it",
+            "regulation": cfg.current_regulation,
+        }
+
+    result = infer_format_from_pokemon(pokemon_names, cfg)
+    primary = result.get("regulation")
+    confidence = result.get("confidence", "low")
+
+    if primary and confidence in ("high", "medium"):
+        cfg.set_session_regulation(primary, by_user=False)
+        result["action"] = "set"
+        cfg.record_auto_detection(result)
+        return result
+
+    result["action"] = "low_confidence"
+    cfg.record_auto_detection(result)
+    return result
+
+
 def describe_regulation(code: str, config: Optional[RegulationConfig] = None) -> dict:
     """Return a small dict describing the regulation's format system + key caps.
 

@@ -46,6 +46,10 @@ class TeamManager:
         """
         Add a Pokemon to the team.
 
+        Auto-detects the regulation if the session hasn't pinned one
+        explicitly — so a user who pastes a team with Mega Manectric flips
+        the session into Champions Reg MA without ever typing the words.
+
         Args:
             pokemon: The Pokemon build to add
 
@@ -71,11 +75,40 @@ class TeamManager:
         slot = TeamSlot(pokemon=pokemon, slot_index=self.size)
         self._team.slots.append(slot)
 
-        return True, f"Added {pokemon.name} to slot {slot.slot_index + 1}", {
+        # Zero-config regulation detection — fire after the add so the new
+        # mon's name is part of the inference signal. Lazy import keeps
+        # this module free of regulation_router as a hard dependency.
+        auto_result = None
+        try:
+            from ..rules.regulation_router import (
+                auto_detect_regulation,
+                describe_regulation,
+            )
+            names = self._team.get_pokemon_names()
+            detection = auto_detect_regulation(names)
+            if detection.get("action") == "set" and detection.get("regulation"):
+                info = describe_regulation(detection["regulation"])
+                auto_result = {
+                    "regulation": detection["regulation"],
+                    "regulation_name": info.get("name"),
+                    "confidence": detection.get("confidence"),
+                    "reasons": detection.get("reasons", []),
+                    "format_system": info.get("format_system"),
+                    "stat_units": info.get("stat_units"),
+                }
+        except Exception:
+            # Auto-detection is a convenience, never a hard requirement.
+            auto_result = None
+
+        data = {
             "slot": slot.slot_index + 1,
             "team_size": self.size,
             "team": self._team.get_pokemon_names()
         }
+        if auto_result is not None:
+            data["regulation_auto_detected"] = auto_result
+
+        return True, f"Added {pokemon.name} to slot {slot.slot_index + 1}", data
 
     def remove_pokemon(self, slot_index: int) -> tuple[bool, str, dict]:
         """
