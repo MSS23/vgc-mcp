@@ -988,25 +988,34 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                             best_def = 0
                             survived = False
 
-                            # Lean-survival search: find the MINIMUM (hp + def/spd)
-                            # investment such that max-roll damage < 100%, so the
-                            # spread sits as close to "barely survives" (≈99%
-                            # damage taken at max roll) as the EV grain allows.
-                            # Spare EVs go elsewhere via the leftover step.
+                            # Lean-survival search: find the MINIMUM total
+                            # investment (hp + def/spd) such that max-roll damage
+                            # < 100%, then within that minimum prefer the most
+                            # HP-heavy split. HP is a flat buffer that helps
+                            # against ALL hits (physical and special), so
+                            # HP-first matches VGC convention and gives the
+                            # spread side-benefits against threats outside the
+                            # explicit benchmark — much more useful than pure
+                            # Def, which only helps this one matchup.
                             #
-                            # We sweep total budget from 0 upward in EV_BREAKPOINT
-                            # steps (every 4 EVs); at each budget we try every
-                            # (hp, defensive) split and stop on the first survival.
+                            # Outer loop sweeps total budget low → high (4 EVs at
+                            # a time) so we stop at the cheapest survival.
+                            # Inner loop sweeps hp HIGH → low at each budget, so
+                            # the first split that survives is the maximum-HP
+                            # one that still works. This produces spreads like
+                            # "156 HP / 16 Def" rather than "0 HP / 172 Def".
                             cap = min(508, remaining_evs)
                             found_pair = None
                             for total_budget in EV_BREAKPOINTS_LV50:
                                 if total_budget > cap:
                                     break
-                                # Try every hp split at this budget; for each we
-                                # spend the remaining on the relevant defense.
-                                for hp_ev in EV_BREAKPOINTS_LV50:
-                                    if hp_ev > total_budget or hp_ev > 252:
-                                        break
+                                # Try most-HP split first, then peel HP off in
+                                # 4-EV steps and feed it to defense.
+                                hp_candidates = [
+                                    h for h in EV_BREAKPOINTS_LV50
+                                    if h <= min(total_budget, 252)
+                                ]
+                                for hp_ev in reversed(hp_candidates):
                                     def_alloc = total_budget - hp_ev
                                     if def_alloc > 252:
                                         continue
