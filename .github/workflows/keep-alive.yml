@@ -1,0 +1,52 @@
+name: Keep Render dyno warm
+
+# Render's free tier spins instances down after 15 minutes of inactivity
+# (cold restart adds ~50s latency to the next request, which breaks the
+# Claude Desktop MCP connector handshake). This workflow pings the
+# /health endpoint every 14 minutes so the dyno stays warm.
+#
+# Notes:
+# - GitHub Actions cron schedules can drift up to 15 min during peak load.
+#   We hedge by setting the interval to 14 min, not 15.
+# - Free Render tier gives 750 instance-hours/month. Continuous keep-alive
+#   uses ~720h, so this fits inside the cap as long as you only run ONE
+#   free Render service. Spinning up a second free service will exceed it.
+# - This workflow runs in GitHub's hosted runners (Ubuntu) and is free for
+#   public repos.
+
+on:
+  schedule:
+    - cron: "*/14 * * * *"
+  workflow_dispatch:  # allow manual trigger from the Actions tab
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Wake the dyno
+        # 90s timeout absorbs the worst-case cold start. Retry up to 3
+        # times with backoff so a single transient failure doesn't go
+        # unnoticed but also doesn't fail the whole workflow.
+        run: |
+          set -u
+          URL="https://vgc-mcp.onrender.com/health"
+          attempt=0
+          max_attempts=3
+          while [ $attempt -lt $max_attempts ]; do
+            attempt=$((attempt + 1))
+            echo "Attempt $attempt: GET $URL"
+            if curl -fsS --max-time 90 -o /tmp/body -w "HTTP %{http_code}, %{time_total}s\n" "$URL"; then
+              echo "Body:"
+              head -c 500 /tmp/body
+              echo
+              exit 0
+            fi
+            echo "Attempt $attempt failed, sleeping ${attempt}0s before retry..."
+            sleep $((attempt * 10))
+          done
+          echo "All $max_attempts attempts failed."
+          exit 1
