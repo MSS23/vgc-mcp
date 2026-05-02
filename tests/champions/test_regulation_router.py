@@ -61,11 +61,13 @@ def test_unknown_phrasing_returns_none(cfg):
     assert resolve_regulation("", cfg) is None
 
 
-def test_reg_i_returns_none_when_not_defined(cfg):
-    # reg_i isn't in regulations.json yet; router must return None rather than
-    # silently mapping to a non-existent code.
-    assert resolve_regulation("Reg I", cfg) is None
-    assert resolve_regulation("I", cfg) is None
+def test_reg_i_resolves_now_that_it_exists(cfg):
+    # reg_i was promoted to a real regulation (2-restrict format) — these
+    # phrasings should now resolve. If reg_i is ever removed from JSON, this
+    # test must be reverted to assert None.
+    assert "reg_i" in cfg.list_regulation_codes()
+    assert resolve_regulation("Reg I", cfg) == "reg_i"
+    assert resolve_regulation("I", cfg) == "reg_i"
 
 
 def test_describe_mainline(cfg):

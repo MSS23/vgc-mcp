@@ -12,8 +12,9 @@ from vgc_mcp_core.rules.regulation_router import _ALIASES, resolve_regulation
 # Codes that exist in the router's alias table but are intentionally not yet
 # defined in regulations.json (e.g. future regulations stubbed out so users
 # don't get blank stares when they ask early). These should resolve to None
-# until the JSON entry is added.
-_PROVISIONAL_CODES = {"reg_i"}
+# until the JSON entry is added. Empty for now — reg_i was promoted to a real
+# regulation when the 2-restrict format definition landed.
+_PROVISIONAL_CODES: set[str] = set()
 
 
 def test_every_regulation_has_a_router_alias():

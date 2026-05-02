@@ -125,6 +125,187 @@ def resolve_regulation(
     return None
 
 
+def _is_mega_form(name: str) -> bool:
+    """A Pokemon name suggests a Mega form (e.g. `kangaskhan-mega`, `mega-charizard-x`)."""
+    n = name.lower().strip().replace(" ", "-")
+    return "-mega" in n or n.startswith("mega-") or n.endswith("-mega-x") or n.endswith("-mega-y")
+
+
+# Restricted-format preference order: when multiple regulations match a given
+# restricted-count, prefer the one most aligned with the real-world 2026 VGC
+# progression (where F = 0 restricteds, G = 1, H = 0/no-items, I = 2, MA = NCP).
+# These keys are consulted by `infer_format_from_pokemon` to pick a primary
+# answer when the data alone leaves multiple regs as valid candidates.
+_PREFERENCE_BY_RESTRICTED_COUNT: dict[int, list[str]] = {
+    0: ["reg_f", "reg_h"],          # Reg F is the active 0-restrict format; H is older/no-items
+    1: ["reg_g"],                   # Only mainline 1-restrict format
+    2: ["reg_i", "reg_f"],          # Prefer reg_i (true 2-restrict format) over legacy reg_f
+}
+
+
+def infer_format_from_pokemon(
+    pokemon_names: list[str],
+    config: Optional[RegulationConfig] = None,
+) -> dict:
+    """Guess which regulation a team belongs to from the Pokemon mentioned.
+
+    Heuristics, in order:
+    1. Any Mega form -> `reg_ma_champs` (Megas are Champions-only).
+    2. Any name in the Champions allowlist BUT illegal in mainline (e.g. an
+       NCP-only mon) -> `reg_ma_champs`.
+    3. Count Pokemon that are restricted in mainline regs:
+       - 0 restricteds -> the active 0-restrict reg (`reg_f` first, then `reg_h`)
+       - 1 restricted  -> `reg_g`
+       - 2+ restricteds -> `reg_i` (the modern 2-restrict format), then `reg_f`
+    4. If a mentioned Pokemon is banned in every regulation -> return None
+       primary with a `notes` field flagging the illegal mention.
+
+    Returns:
+        {
+            "regulation": "reg_g" | None,
+            "confidence": "high" | "medium" | "low",
+            "reasons": [str, ...],
+            "alternatives": [reg_code, ...],
+            "restricted_seen": [pokemon_name, ...],
+            "illegal_seen": [pokemon_name, ...],
+        }
+    """
+    cfg = config or get_regulation_config()
+    available = cfg.list_regulation_codes()
+
+    norm_names = [n.lower().strip().replace(" ", "-") for n in pokemon_names if n]
+    reasons: list[str] = []
+    illegal_seen: list[str] = []
+
+    # 1. Mega forms => Champions
+    megas = [n for n in norm_names if _is_mega_form(n)]
+    if megas and "reg_ma_champs" in available:
+        reasons.append(f"Mega form(s) detected ({', '.join(megas)}) — Megas are only legal in Champions Reg MA.")
+        return {
+            "regulation": "reg_ma_champs",
+            "confidence": "high",
+            "reasons": reasons,
+            "alternatives": [],
+            "restricted_seen": [],
+            "illegal_seen": [],
+        }
+
+    # 2. Pokemon legal in Champions but absent from mainline => Champions.
+    # We approximate "absent from mainline" by checking the union of all
+    # mainline regs' banned + restricted lists; if the mon isn't legal in any
+    # mainline format and IS in Champions, it must be Champions.
+    if "reg_ma_champs" in available:
+        champ_legal = cfg.get_legal_pokemon("reg_ma_champs")
+        mainline_codes = [c for c in available if cfg.get_format_system(c) == "mainline"]
+        # A Pokemon is "mainline-legal" if it's NOT banned and NOT in any reg's
+        # banned list. Banned lists are uniform across regs, so it's enough to
+        # check one. If any mentioned mon is banned mainline but legal in champs,
+        # that's a strong Champions signal.
+        for n in norm_names:
+            if n in champ_legal:
+                # Banned in mainline?
+                banned_mainline = any(cfg.is_pokemon_banned(n, c) for c in mainline_codes)
+                if banned_mainline:
+                    reasons.append(
+                        f"{n!r} is in the Champions allowlist but banned in mainline — Champions only."
+                    )
+                    return {
+                        "regulation": "reg_ma_champs",
+                        "confidence": "high",
+                        "reasons": reasons,
+                        "alternatives": [],
+                        "restricted_seen": [],
+                        "illegal_seen": [],
+                    }
+
+    # 3. Count restricteds against any mainline reg's restricted list (they're
+    # the same across regs, so use the first available).
+    mainline_codes = [c for c in available if cfg.get_format_system(c) == "mainline"]
+    if not mainline_codes:
+        return {
+            "regulation": None,
+            "confidence": "low",
+            "reasons": ["No mainline regulations defined in regulations.json."],
+            "alternatives": [],
+            "restricted_seen": [],
+            "illegal_seen": [],
+        }
+
+    restricted_set = cfg.get_restricted_pokemon(mainline_codes[0])
+    banned_set = cfg.get_banned_pokemon(mainline_codes[0])
+    restricteds_seen = [n for n in norm_names if n in restricted_set]
+    illegal_seen = [n for n in norm_names if n in banned_set]
+
+    if illegal_seen:
+        reasons.append(
+            f"Mentioned Pokemon is banned in all mainline regs: {', '.join(illegal_seen)}. "
+            f"This may be a Champions team or a typo."
+        )
+
+    n_restricted = len(restricteds_seen)
+    bucket = min(n_restricted, 2)  # 2+ all map to the 2-restrict bucket
+    preferred = _PREFERENCE_BY_RESTRICTED_COUNT.get(bucket, [])
+    primary: Optional[str] = None
+    alternatives: list[str] = []
+    for code in preferred:
+        if code in available:
+            if primary is None:
+                primary = code
+            else:
+                alternatives.append(code)
+
+    # If none of the preferred codes exist, fall back to ANY mainline reg with
+    # the matching restricted_limit.
+    if primary is None:
+        for code in mainline_codes:
+            if cfg.get_restricted_limit(code) == bucket:
+                primary = code
+                break
+
+    if restricteds_seen:
+        reasons.append(
+            f"{len(restricteds_seen)} restricted Pokemon mentioned ({', '.join(restricteds_seen)}) — "
+            f"matches a {bucket}-restricted format."
+        )
+    else:
+        reasons.append(
+            "No restricted Pokemon mentioned — matches a 0-restricted format."
+        )
+
+    # Current-meta hint: tournaments through May 2026 are predominantly Reg I,
+    # transitioning to Reg MA Champions in June (Turin onward). For teams that
+    # could plausibly fit either Champions or a mainline 0-restrict reg, surface
+    # Champions as a likely-popular alternative so callers can ask.
+    if (
+        bucket == 0
+        and not illegal_seen
+        and "reg_ma_champs" in available
+        and "reg_ma_champs" not in alternatives
+        and primary != "reg_ma_champs"
+    ):
+        champ_legal = cfg.get_legal_pokemon("reg_ma_champs")
+        if norm_names and all(n in champ_legal for n in norm_names):
+            alternatives.append("reg_ma_champs")
+            reasons.append(
+                "All mentioned Pokemon are also legal in Champions Reg MA — "
+                "consider it if this is a recent team (Champions is the most "
+                "popular current format from June 2026 onward)."
+            )
+
+    confidence = "high" if restricteds_seen else "medium"
+    if illegal_seen:
+        confidence = "low"
+
+    return {
+        "regulation": primary,
+        "confidence": confidence,
+        "reasons": reasons,
+        "alternatives": alternatives,
+        "restricted_seen": restricteds_seen,
+        "illegal_seen": illegal_seen,
+    }
+
+
 def describe_regulation(code: str, config: Optional[RegulationConfig] = None) -> dict:
     """Return a small dict describing the regulation's format system + key caps.
 
