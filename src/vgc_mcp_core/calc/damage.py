@@ -546,6 +546,75 @@ def calculate_damage(
     if modifiers.defender_ability is None and defender.ability:
         modifiers = replace(modifiers, defender_ability=defender.ability)
 
+    # Auto-set has_adaptability from attacker_ability so callers don't need to
+    # know about the separate flag. Adaptability boosts STAB from 1.5x to 2x.
+    if not modifiers.has_adaptability and modifiers.attacker_ability:
+        if normalize_ability(modifiers.attacker_ability) == "adaptability":
+            modifiers = replace(modifiers, has_adaptability=True)
+
+    # Auto-derive Protosynthesis / Quark Drive boost stats so callers don't
+    # need to recompute the highest-stat logic per tool. Booster Energy
+    # always activates them; sun activates Protosynthesis; electric terrain
+    # activates Quark Drive. Speed wins ties (Game-mechanic accurate).
+    def _highest_non_hp_stat(p: PokemonBuild) -> str:
+        from .stats import calculate_stat, calculate_speed
+        from ..models.pokemon import get_nature_modifier
+        evs = p.evs
+        stats = {
+            "attack": calculate_stat(p.base_stats.attack, 31, evs.attack, 50, get_nature_modifier(p.nature, "attack")),
+            "defense": calculate_stat(p.base_stats.defense, 31, evs.defense, 50, get_nature_modifier(p.nature, "defense")),
+            "special_attack": calculate_stat(p.base_stats.special_attack, 31, evs.special_attack, 50, get_nature_modifier(p.nature, "special_attack")),
+            "special_defense": calculate_stat(p.base_stats.special_defense, 31, evs.special_defense, 50, get_nature_modifier(p.nature, "special_defense")),
+            "speed": calculate_speed(p.base_stats.speed, 31, evs.speed, 50, get_nature_modifier(p.nature, "speed")),
+        }
+        max_value = max(stats.values())
+        tied = [s for s, v in stats.items() if v == max_value]
+        return "speed" if "speed" in tied else tied[0]
+
+    def _paradox_active(ability_norm: str, item_norm: str | None, weather: str | None, terrain: str | None) -> bool:
+        if ability_norm == "protosynthesis":
+            return item_norm == "booster-energy" or weather == "sun"
+        if ability_norm == "quark-drive":
+            return item_norm == "booster-energy" or terrain == "electric"
+        return False
+
+    if modifiers.attacker_ability:
+        atk_ab_norm = normalize_ability(modifiers.attacker_ability)
+        atk_item_norm = normalize_item(modifiers.attacker_item) if modifiers.attacker_item else None
+        if atk_ab_norm == "protosynthesis" and modifiers.protosynthesis_boost is None:
+            if _paradox_active(atk_ab_norm, atk_item_norm, modifiers.weather, modifiers.terrain):
+                modifiers = replace(modifiers, protosynthesis_boost=_highest_non_hp_stat(attacker))
+        elif atk_ab_norm == "quark-drive" and modifiers.quark_drive_boost is None:
+            if _paradox_active(atk_ab_norm, atk_item_norm, modifiers.weather, modifiers.terrain):
+                modifiers = replace(modifiers, quark_drive_boost=_highest_non_hp_stat(attacker))
+
+    if modifiers.defender_ability:
+        def_ab_norm = normalize_ability(modifiers.defender_ability)
+        def_item_norm = normalize_item(modifiers.defender_item) if modifiers.defender_item else None
+        if def_ab_norm == "protosynthesis" and modifiers.defender_protosynthesis_boost is None:
+            if _paradox_active(def_ab_norm, def_item_norm, modifiers.weather, modifiers.terrain):
+                modifiers = replace(modifiers, defender_protosynthesis_boost=_highest_non_hp_stat(defender))
+        elif def_ab_norm == "quark-drive" and modifiers.defender_quark_drive_boost is None:
+            if _paradox_active(def_ab_norm, def_item_norm, modifiers.weather, modifiers.terrain):
+                modifiers = replace(modifiers, defender_quark_drive_boost=_highest_non_hp_stat(defender))
+
+    # Auto-apply attacker switch-in / Tera-on stat-stage abilities. These are
+    # mechanically guaranteed when the ability is present, so callers don't need
+    # to remember to encode them. Stack additively with any caller-supplied stage.
+    #   - Intrepid Sword: +1 Atk on switch-in (Zacian-Crowned)
+    #   - Embody Aspect (Hearthflame): +1 Atk on Tera (Ogerpon-Hearthflame)
+    if modifiers.attacker_ability:
+        ab_norm = normalize_ability(modifiers.attacker_ability)
+        atk_name_norm = (attacker.name or "").lower().replace(" ", "-")
+        atk_bonus = 0
+        if ab_norm == "intrepid-sword":
+            atk_bonus = 1
+        elif ab_norm in ("embody-aspect", "embody-aspect-hearthflame") and modifiers.tera_active:
+            if "hearthflame" in atk_name_norm or ab_norm == "embody-aspect-hearthflame":
+                atk_bonus = 1
+        if atk_bonus:
+            modifiers = replace(modifiers, attack_stage=modifiers.attack_stage + atk_bonus)
+
     # Auto-detect Ruin abilities from attacker/defender ability names.
     # Ruin abilities are field effects (not stat stages), so they always apply
     # even on critical hits. Only auto-detect if the flags aren't already set.

@@ -741,13 +741,23 @@ def register_tournament_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi:
                     threat_evs = EVSpread()
                     threat_spread_str = "Neutral"
 
+                # Resolve threat's most-used ability (mega > Smogon > pokeapi)
+                from vgc_mcp_core.tools.ability_helpers import (
+                    resolve_ability,
+                    compute_intimidate_attack_stage,
+                )
+                threat_ability, _ = await resolve_ability(
+                    threat_name, pokeapi=pokeapi, smogon_client=smogon,
+                )
+
                 threat_pokemon = PokemonBuild(
                     name=threat_name,
                     base_stats=threat_base_stats,
                     nature=threat_nature if threat_spread else Nature.SERIOUS,
                     evs=threat_evs if threat_spread else EVSpread(),
                     types=threat_types,
-                    level=50
+                    level=50,
+                    ability=threat_ability,
                 )
 
                 # Get threat's top attacking moves
@@ -769,8 +779,22 @@ def register_tournament_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi:
                             })
                             continue
 
+                        # Per-move modifiers — defender Intimidate stage event,
+                        # plus attacker/defender ability bridging.
+                        is_phys = move.category == MoveCategory.PHYSICAL
+                        intim, _ = compute_intimidate_attack_stage(
+                            defender_ability=your_pokemon.ability,
+                            attacker_ability=threat_ability,
+                            is_physical=is_phys,
+                        )
+                        per_move_modifiers = DamageModifiers(
+                            is_doubles=True,
+                            attacker_ability=threat_ability,
+                            defender_ability=your_pokemon.ability,
+                            attack_stage=intim if is_phys else 0,
+                        )
                         # Calculate damage
-                        result = calculate_damage(threat_pokemon, your_pokemon, move, modifiers)
+                        result = calculate_damage(threat_pokemon, your_pokemon, move, per_move_modifiers)
 
                         # Format the attacker description with full spread (all non-zero EVs)
                         is_physical = move.category == MoveCategory.PHYSICAL

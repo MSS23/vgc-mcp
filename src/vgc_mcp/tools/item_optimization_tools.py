@@ -150,11 +150,23 @@ def register_item_optimization_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogo
             defender_nature_enum = Nature(target_nature.lower() if target_nature else "serious")
             defender_evs_dict = target_evs or {}
 
+            # Resolve defender ability so defensive interactions (Multiscale,
+            # Filter, Thick Fat, etc.) propagate into compare_items_damage.
+            defender_ability = (
+                defender_spread.get("ability") if defender_spread else None
+            )
+            from vgc_mcp_core.tools.ability_helpers import resolve_ability
+            if defender_ability is None:
+                defender_ability, _ = await resolve_ability(
+                    target_name, pokeapi=pokeapi, smogon_client=_smogon_client,
+                )
+
             defender = PokemonBuild(
                 name=target_name,
                 base_stats=defender_base,
                 types=defender_types,
                 nature=defender_nature_enum,
+                ability=defender_ability,
                 evs=EVSpread(
                     hp=defender_evs_dict.get("hp", 0),
                     attack=defender_evs_dict.get("attack", 0),

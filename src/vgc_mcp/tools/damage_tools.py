@@ -484,17 +484,25 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             defender_def_evs = defender_def_evs if defender_def_evs is not None else 0
             defender_spd_evs = defender_spd_evs if defender_spd_evs is not None else 0
 
-            # Auto-fetch abilities if not specified
+            # Auto-fetch abilities if not specified — use Smogon-aware resolver
+            # (Mega-form > Smogon's most-used > pokeapi first-listed) so VGC
+            # builds get the right ability (e.g. Dragonite → Multiscale, not
+            # pokeapi's first-listed Inner Focus).
+            from vgc_mcp_core.tools.ability_helpers import resolve_ability
             if attacker_ability is None:
-                atk_abilities = await pokeapi.get_pokemon_abilities(attacker_name)
-                if atk_abilities:
-                    # Use first (primary) ability as default
-                    attacker_ability = atk_abilities[0].lower().replace(" ", "-")
-
+                attacker_ability, _ = await resolve_ability(
+                    attacker_name, pokeapi=pokeapi, smogon_client=_smogon_client,
+                    use_smogon=use_smogon_spreads,
+                )
+                if attacker_ability:
+                    attacker_ability = attacker_ability.lower().replace(" ", "-")
             if defender_ability is None:
-                def_abilities = await pokeapi.get_pokemon_abilities(defender_name)
-                if def_abilities:
-                    defender_ability = def_abilities[0].lower().replace(" ", "-")
+                defender_ability, _ = await resolve_ability(
+                    defender_name, pokeapi=pokeapi, smogon_client=_smogon_client,
+                    use_smogon=use_smogon_spreads,
+                )
+                if defender_ability:
+                    defender_ability = defender_ability.lower().replace(" ", "-")
 
             # Auto-detect Ruinous abilities from attacker/defender
             # Create temporary modifiers to use the helper function
@@ -1058,7 +1066,11 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         defender_nature: str = "calm",
         defender_hp_evs: int = 252,
         defender_def_evs: int = 0,
-        target_ko_chance: float = 100.0
+        target_ko_chance: float = 100.0,
+        attacker_item: Optional[str] = None,
+        attacker_ability: Optional[str] = None,
+        defender_ability: Optional[str] = None,
+        use_smogon_spreads: bool = True,
     ) -> dict:
         """
         Find minimum offensive EVs needed to achieve a certain KO probability.
@@ -1072,9 +1084,18 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             defender_hp_evs: Defender's HP EVs (typically 252 for max bulk)
             defender_def_evs: Defender's Def/SpD EVs
             target_ko_chance: Target KO probability (100 = guaranteed OHKO)
+            attacker_item: Attacker's item (auto-filled with signature item if None).
+            attacker_ability: Attacker's ability — overrides auto-detection. Engine
+                auto-applies offensive abilities (Sheer Force, Tough Claws, Adaptability,
+                Iron Fist, etc.) and static stages (Intrepid Sword, Embody Aspect on
+                Tera, Booster Energy / sun / electric-terrain Paradox boosts).
+            defender_ability: Defender's ability — overrides auto-detection. Auto-applies
+                defensive abilities (Multiscale, Ice Scales, Thick Fat, Filter, etc.).
+            use_smogon_spreads: Auto-fetch ability defaults from Smogon (default True).
 
         Returns:
-            Required EVs and resulting damage calculation
+            Required offensive EVs and resulting damage calculation. Response includes
+            resolved attacker/defender abilities.
         """
         try:
             # Fetch data
@@ -1084,28 +1105,48 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             def_types = await pokeapi.get_pokemon_types(defender_name)
             move = await pokeapi.get_move(move_name, user_name=attacker_name)
 
-            # Auto-detect Ruinous abilities from attacker
-            sword_of_ruin = False
-            beads_of_ruin = False
-            atk_abilities = await pokeapi.get_pokemon_abilities(attacker_name)
-            if atk_abilities:
-                attacker_ability = atk_abilities[0].lower().replace(" ", "-")
-                if attacker_ability == "sword-of-ruin":
-                    sword_of_ruin = True
-                elif attacker_ability == "beads-of-ruin":
-                    beads_of_ruin = True
+            # Resolve abilities (mega-form > Smogon > pokeapi). Stamping
+            # attacker.ability lets the engine apply offensive ability
+            # multipliers (Sheer Force, Tough Claws, Adaptability, Aerilate,
+            # Iron Fist, Reckless, Sniper, Stakeout, Steely Spirit, Punk Rock,
+            # Mega Launcher, Strong Jaw, Tinted Lens, Sand Force, Solar Power,
+            # Hustle, Huge Power, Pure Power, Defeatist, etc.). Stamping
+            # defender.ability lets the engine apply defensive resistances
+            # (Multiscale, Ice Scales, Thick Fat, Fluffy, Filter/Solid Rock,
+            # Levitate, Heatproof, type absorption, Wonder Guard, etc.).
+            from vgc_mcp_core.tools.ability_helpers import resolve_ability
+            attacker_ability, attacker_ability_source = await resolve_ability(
+                attacker_name, pokeapi=pokeapi, smogon_client=_smogon_client,
+                user_override=attacker_ability, use_smogon=use_smogon_spreads,
+            )
+            defender_ability, defender_ability_source = await resolve_ability(
+                defender_name, pokeapi=pokeapi, smogon_client=_smogon_client,
+                user_override=defender_ability, use_smogon=use_smogon_spreads,
+            )
+            atk_norm = (attacker_ability or "").lower().replace(" ", "-")
+            sword_of_ruin = atk_norm == "sword-of-ruin"
+            beads_of_ruin = atk_norm == "beads-of-ruin"
 
             # Parse natures
             atk_nature = Nature(attacker_nature.lower())
             def_nature = Nature(defender_nature.lower())
 
-            # Create builds
+            # Auto-fill signature items
+            if attacker_item is None:
+                from vgc_mcp_core.calc.items import get_signature_item
+                sig_item = get_signature_item(attacker_name)
+                if sig_item:
+                    attacker_item = sig_item
+
+            # Create builds — abilities stamped so the engine auto-applies them.
             attacker = PokemonBuild(
                 name=attacker_name,
                 base_stats=atk_base,
                 types=atk_types,
                 nature=atk_nature,
-                evs=EVSpread()
+                evs=EVSpread(),
+                item=attacker_item,
+                ability=attacker_ability,
             )
 
             defender = PokemonBuild(
@@ -1117,14 +1158,17 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     hp=defender_hp_evs,
                     defense=defender_def_evs if move.category.value == "physical" else 0,
                     special_defense=defender_def_evs if move.category.value == "special" else 0
-                )
+                ),
+                ability=defender_ability,
             )
 
-            # Create modifiers with Ruinous abilities
+            # Create modifiers with Ruinous abilities + ability/item bridge
             modifiers = DamageModifiers(
                 is_doubles=True,
                 sword_of_ruin=sword_of_ruin,
-                beads_of_ruin=beads_of_ruin
+                beads_of_ruin=beads_of_ruin,
+                attacker_item=attacker_item,
+                attacker_ability=attacker_ability,
             )
 
             result = calculate_ko_threshold(
@@ -1180,10 +1224,6 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "speed": 0
             }
 
-            # Fetch attacker ability for Showdown paste
-            attacker_abilities = await pokeapi.get_pokemon_abilities(attacker_name)
-            attacker_ability = attacker_abilities[0] if attacker_abilities else None
-
             attacker_pokemon = PokemonBuild(
                 name=attacker_name,
                 base_stats=atk_base,
@@ -1197,13 +1237,18 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     special_defense=attacker_evs_dict["special_defense"],
                     speed=attacker_evs_dict["speed"]
                 ),
-                ability=attacker_ability
+                ability=attacker_ability,
+                item=attacker_item,
             )
             attacker_showdown = pokemon_build_to_showdown(attacker_pokemon)
 
             return {
                 "attacker": attacker_name,
+                "attacker_ability": attacker_ability.replace("-", " ").title() if attacker_ability else None,
+                "attacker_ability_source": attacker_ability_source,
                 "defender": defender_name,
+                "defender_ability": defender_ability.replace("-", " ").title() if defender_ability else None,
+                "defender_ability_source": defender_ability_source,
                 "defender_spread": defender_spread_str,
                 "move": move_name,
                 "achievable": True,
@@ -1236,7 +1281,10 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         attacker_item: Optional[str] = None,
         defender_nature: str = "calm",
         target_survival_chance: float = 93.75,
-        use_smogon_spreads: bool = True
+        use_smogon_spreads: bool = True,
+        defender_ability: Optional[str] = None,
+        attacker_ability: Optional[str] = None,
+        apply_defender_intimidate: bool = True
     ) -> dict:
         """
         Find minimum HP/Defense EVs needed to SURVIVE a specific attack.
@@ -1270,6 +1318,12 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 - 87.5% (14/16 rolls) = can die to 2 highest rolls
                 - 100% (16/16 rolls) = guaranteed survival (wastes EVs)
             use_smogon_spreads: Auto-fetch attacker spread from Smogon (default True)
+            defender_ability: Defender's ability. Auto-detected if not specified
+                (Mega forms resolve to their post-mega ability, e.g. Mega Manectric → Intimidate).
+            apply_defender_intimidate: If True (default), automatically applies the defender's
+                Intimidate (-1 attacker Atk for physical moves), accounting for attacker
+                blockers (Clear Body, Inner Focus, etc.) and punishers (Defiant, Contrary).
+                Set False to ignore Intimidate (e.g. simulating a turn after switch-in).
 
         Returns:
             Required HP/Def EVs, damage calculation, and full attacker spread info
@@ -1290,7 +1344,8 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "source": "custom"
             }
             attacker_full_evs = {}
-            attacker_ability_name = None
+            # User-supplied attacker_ability wins over Smogon auto-fetch.
+            attacker_ability_name = attacker_ability
 
             # Auto-fetch Smogon spread if enabled and not fully specified
             if use_smogon_spreads and (attacker_nature is None or attacker_evs is None or attacker_item is None):
@@ -1315,7 +1370,8 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         attacker_item = _normalize_smogon_name(atk_spread["item"])
                         attacker_spread_info["item_usage_percent"] = atk_spread.get("item_usage", 0)
 
-                    if atk_spread.get("ability"):
+                    if atk_spread.get("ability") and attacker_ability_name is None:
+                        # Don't overwrite an explicit user override with Smogon
                         attacker_ability_name = atk_spread["ability"]
                         attacker_spread_info["ability_usage_percent"] = atk_spread.get("ability_usage", 0)
 
@@ -1374,7 +1430,6 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     if attacker_item and attacker_item.lower().replace(" ", "-") == "booster-energy":
                         # Calculate which stat gets boosted (highest non-HP stat, Speed priority when tied)
                         from vgc_mcp_core.calc.stats import calculate_stat, calculate_speed
-                        from vgc_mcp_core.models.pokemon import get_nature_modifier
                         stats = {
                             "attack": calculate_stat(atk_base.attack, 31, attacker_full_evs.get("attack", 0), 50, get_nature_modifier(atk_nature, "attack")),
                             "defense": calculate_stat(atk_base.defense, 31, attacker_full_evs.get("defense", 0), 50, get_nature_modifier(atk_nature, "defense")),
@@ -1389,7 +1444,6 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 elif ability_normalized == "quark-drive":
                     if attacker_item and attacker_item.lower().replace(" ", "-") == "booster-energy":
                         from vgc_mcp_core.calc.stats import calculate_stat, calculate_speed
-                        from vgc_mcp_core.models.pokemon import get_nature_modifier
                         stats = {
                             "attack": calculate_stat(atk_base.attack, 31, attacker_full_evs.get("attack", 0), 50, get_nature_modifier(atk_nature, "attack")),
                             "defense": calculate_stat(atk_base.defense, 31, attacker_full_evs.get("defense", 0), 50, get_nature_modifier(atk_nature, "defense")),
@@ -1402,7 +1456,19 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         tied_stats = [stat for stat, val in stats.items() if val == max_value]
                         quark_drive_boost = "speed" if "speed" in tied_stats else tied_stats[0]
 
-            # Create builds
+            # Auto-detect defender's ability so all defensive ability interactions
+            # (Multiscale, Ice Scales, Thick Fat, Fluffy, Filter/Solid Rock, Heatproof,
+            #  Levitate, Furry Coat, Prism Armor, Wonder Guard, type absorption like
+            #  Flash Fire/Water Absorb/Volt Absorb/Sap Sipper/Storm Drain/Lightning
+            #  Rod/Motor Drive/Dry Skin, etc.) flow through calculate_damage.
+            from vgc_mcp_core.tools.ability_helpers import resolve_ability
+            defender_ability, defender_ability_source = await resolve_ability(
+                defender_name, pokeapi=pokeapi, smogon_client=_smogon_client,
+                user_override=defender_ability, use_smogon=use_smogon_spreads,
+            )
+
+            # Create builds — stamp abilities so the damage engine auto-applies
+            # every offensive AND defensive ability interaction generically.
             attacker = PokemonBuild(
                 name=attacker_name,
                 base_stats=atk_base,
@@ -1416,7 +1482,8 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     special_defense=attacker_full_evs.get("special_defense", 0),
                     speed=attacker_full_evs.get("speed", 0)
                 ),
-                item=attacker_item
+                item=attacker_item,
+                ability=attacker_ability_name,
             )
 
             defender = PokemonBuild(
@@ -1424,17 +1491,28 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 base_stats=def_base,
                 types=def_types,
                 nature=def_nature,
-                evs=EVSpread()
+                evs=EVSpread(),
+                ability=defender_ability,
             )
 
-            # Create modifiers with Ruinous abilities, item, and Paradox boosts
+            from vgc_mcp_core.tools.ability_helpers import compute_intimidate_attack_stage
+            attack_stage, intimidate_note = compute_intimidate_attack_stage(
+                defender_ability=defender_ability,
+                attacker_ability=attacker_ability_name,
+                is_physical=is_physical,
+                apply=apply_defender_intimidate,
+            )
+
+            # Create modifiers with Ruinous abilities, item, Paradox boosts, and Intimidate
             modifiers = DamageModifiers(
                 is_doubles=True,
                 sword_of_ruin=sword_of_ruin,
                 beads_of_ruin=beads_of_ruin,
                 attacker_item=attacker_item,
+                attacker_ability=attacker_ability_name,
                 protosynthesis_boost=protosynthesis_boost,
-                quark_drive_boost=quark_drive_boost
+                quark_drive_boost=quark_drive_boost,
+                attack_stage=attack_stage,
             )
 
             result = calculate_bulk_threshold(
@@ -1478,9 +1556,12 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     f"| Attacker Item    | {attacker_item.replace('-', ' ').title() if attacker_item else 'None'} |",
                     f"| Move             | {move_name}                                |",
                     f"| Defender         | {defender_name}                            |",
+                    f"| Defender Ability | {defender_ability.replace('-', ' ').title() if defender_ability else 'Unknown'} |",
                     f"| Target Survival  | {target_survival_chance}%                  |",
                     f"| Result           | Not achievable with max investment         |",
                 ]
+                if intimidate_note:
+                    table_lines.append(f"| Intimidate       | {intimidate_note}                          |")
                 return {
                     "attacker": attacker_name,
                     # Top-level attacker info for LLM visibility
@@ -1490,6 +1571,9 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     "attacker_ability": attacker_ability_name.replace("-", " ").title() if attacker_ability_name else None,
                     "attacker_spread": attacker_spread_info,
                     "defender": defender_name,
+                    "defender_ability": defender_ability.replace("-", " ").title() if defender_ability else None,
+                    "intimidate_applied": intimidate_note is not None and attack_stage != 0,
+                    "intimidate_note": intimidate_note,
                     "move": move_name,
                     "achievable": False,
                     "message": f"Cannot survive this attack with max investment. Consider items, Tera typing, or screens.",
@@ -1521,6 +1605,14 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 reg = attacker_spread_info.get("regulation", "")
                 reg_str = f" [{reg}]" if reg else ""
                 table_lines.append(f"| Spread Source    | Smogon ({usage:.1f}% usage){reg_str}        |")
+
+            # Surface defender ability + Intimidate handling
+            if defender_ability:
+                table_lines.append(
+                    f"| Defender Ability | {defender_ability.replace('-', ' ').title()}                  |"
+                )
+            if intimidate_note:
+                table_lines.append(f"| Intimidate       | {intimidate_note}                          |")
 
             # Build analysis string with explicit attacker and defender info
             item_str = f" with {attacker_item.replace('-', ' ').title()}" if attacker_item else ""
@@ -1555,8 +1647,12 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "defender": defender_name,
                 # Top-level defender info for LLM visibility
                 "defender_nature": defender_nature.title(),
+                "defender_ability": defender_ability.replace("-", " ").title() if defender_ability else None,
+                "defender_ability_source": defender_ability_source,
                 "defender_recommended_spread": defender_ev_str,
                 "defender_showdown_paste": defender_showdown_paste,
+                "intimidate_applied": intimidate_note is not None and attack_stage != 0,
+                "intimidate_note": intimidate_note,
                 "move": move_name,
                 "achievable": True,
                 "hp_evs_needed": result["hp_evs"],
@@ -1608,6 +1704,9 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         weather: Optional[str] = None,
         terrain: Optional[str] = None,
         attacker_item: Optional[str] = None,
+        attacker_ability: Optional[str] = None,
+        defender_ability: Optional[str] = None,
+        apply_defender_intimidate: bool = True,
         reflect: bool = False,
         light_screen: bool = False,
         aurora_veil: bool = False,
@@ -1633,18 +1732,31 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             defender_def_evs: Defender's Defense EVs
             defender_spd_evs: Defender's Sp. Def EVs
             use_smogon_spreads: Auto-fetch spreads from Smogon
-            attacker_attack_stage: Attack/Sp.Atk stage (-6 to +6). Use -1 for Intimidate.
+            attacker_attack_stage: Attack/Sp.Atk stage (-6 to +6). Stacks additively
+                with auto-applied defender Intimidate (-1) when apply_defender_intimidate=True.
             defender_defense_stage: Defense/Sp.Def stage (-6 to +6). Use -1 for Screech, etc.
             weather: "sun", "rain", "sand", or "snow"
             terrain: "electric", "grassy", "psychic", or "misty"
-            attacker_item: Attacker's item
+            attacker_item: Attacker's item (auto-fetched if None)
+            attacker_ability: Attacker's ability — overrides auto-detection. Engine
+                auto-applies offensive abilities (Sheer Force, Tough Claws, Adaptability,
+                Aerilate, Iron Fist, etc.) and static stages (Intrepid Sword +1 Atk,
+                Embody Aspect on Tera, Booster Energy / sun / electric-terrain Paradox
+                boosts).
+            defender_ability: Defender's ability — overrides auto-detection (mega-form >
+                Smogon > pokeapi). Auto-applies defensive abilities (Multiscale, Ice
+                Scales, Thick Fat, Filter, Levitate, type absorption, etc.).
+            apply_defender_intimidate: If True (default), defender Intimidate auto-drops
+                the attacker's Atk by -1 for physical moves (with Defiant/Contrary
+                punishment and Clear Body / Inner Focus blocking handled correctly).
             reflect: True if Reflect is active
             light_screen: True if Light Screen is active
             aurora_veil: True if Aurora Veil is active
             friend_guard: True if ally has Friend Guard ability
 
         Returns:
-            Analysis of whether the defender survives N hits
+            Analysis of whether the defender survives N hits. Response includes
+            resolved attacker/defender abilities and any Intimidate note.
         """
         try:
             # Fetch Pokemon data
@@ -1711,14 +1823,40 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 suggestions = suggest_nature(defender_nature)
                 return invalid_nature_error(defender_nature, suggestions if suggestions else [n.value for n in Nature])
 
-            # Create builds
+            is_physical = move.category.value == "physical"
+
+            # Resolve abilities so all offensive/defensive ability interactions
+            # (Sheer Force, Tough Claws, Adaptability, Multiscale, Ice Scales,
+            # Thick Fat, Filter, Levitate, Flash Fire, etc.) flow through the
+            # damage engine. Intimidate is computed as a stage event below.
+            from vgc_mcp_core.tools.ability_helpers import (
+                resolve_ability,
+                compute_intimidate_attack_stage,
+            )
+            attacker_ability, attacker_ability_source = await resolve_ability(
+                attacker_name, pokeapi=pokeapi, smogon_client=_smogon_client,
+                user_override=attacker_ability, use_smogon=use_smogon_spreads,
+            )
+            defender_ability, defender_ability_source = await resolve_ability(
+                defender_name, pokeapi=pokeapi, smogon_client=_smogon_client,
+                user_override=defender_ability, use_smogon=use_smogon_spreads,
+            )
+            intimidate_stage, intimidate_note = compute_intimidate_attack_stage(
+                defender_ability=defender_ability,
+                attacker_ability=attacker_ability,
+                is_physical=is_physical,
+                apply=apply_defender_intimidate,
+            )
+
+            # Create builds — stamp abilities so the engine auto-applies them.
             attacker = PokemonBuild(
                 name=attacker_name,
                 base_stats=atk_base,
                 types=atk_types,
                 nature=atk_nature,
                 evs=EVSpread(attack=attacker_atk_evs, special_attack=attacker_spa_evs),
-                item=attacker_item
+                item=attacker_item,
+                ability=attacker_ability,
             )
 
             defender = PokemonBuild(
@@ -1726,22 +1864,26 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 base_stats=def_base,
                 types=def_types,
                 nature=def_nature,
-                evs=EVSpread(hp=defender_hp_evs, defense=defender_def_evs, special_defense=defender_spd_evs)
+                evs=EVSpread(hp=defender_hp_evs, defense=defender_def_evs, special_defense=defender_spd_evs),
+                ability=defender_ability,
             )
 
-            # Set up modifiers with attack stage
-            is_physical = move.category.value == "physical"
+            # Set up modifiers with attack stage (caller-supplied stage stacks
+            # with defender Intimidate's auto-detected -1).
+            effective_attack_stage = attacker_attack_stage + (intimidate_stage if is_physical else 0)
+            effective_spa_stage = attacker_attack_stage if not is_physical else 0
             modifiers = DamageModifiers(
                 is_doubles=True,
                 weather=weather,
                 terrain=terrain,
                 attacker_item=attacker_item,
+                attacker_ability=attacker_ability,
                 reflect_up=reflect,
                 light_screen_up=light_screen,
                 aurora_veil_up=aurora_veil,
                 friend_guard=friend_guard,
-                attack_stage=attacker_attack_stage if is_physical else 0,
-                special_attack_stage=attacker_attack_stage if not is_physical else 0,
+                attack_stage=effective_attack_stage if is_physical else 0,
+                special_attack_stage=effective_spa_stage,
                 defense_stage=defender_defense_stage if is_physical else 0,
                 special_defense_stage=defender_defense_stage if not is_physical else 0
             )
@@ -1860,20 +2002,31 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     "spa_evs": attacker_spa_evs,
                     "attack_stage": attacker_attack_stage
                 },
+                "attacker_ability": attacker_ability.replace("-", " ").title() if attacker_ability else None,
+                "attacker_ability_source": attacker_ability_source,
                 "defender_spread": {
                     "nature": defender_nature,
                     "hp_evs": defender_hp_evs,
                     "def_evs": defender_def_evs,
                     "spd_evs": defender_spd_evs
                 },
+                "defender_ability": defender_ability.replace("-", " ").title() if defender_ability else None,
+                "defender_ability_source": defender_ability_source,
+                "intimidate_applied": intimidate_note is not None and intimidate_stage != 0,
+                "intimidate_note": intimidate_note,
                 "summary_table": "\n".join(table_lines),
                 "analysis": analysis_str
             }
 
+            notes = []
             if attacker_attack_stage == -1:
-                response["notes"] = ["Attacker at -1 Attack (Intimidate)"]
+                notes.append("Caller-supplied attacker_attack_stage=-1")
             elif attacker_attack_stage < 0:
-                response["notes"] = [f"Attacker at {attacker_attack_stage} Attack"]
+                notes.append(f"Caller-supplied attacker_attack_stage={attacker_attack_stage}")
+            if intimidate_note:
+                notes.append(intimidate_note)
+            if notes:
+                response["notes"] = notes
 
             return response
 
@@ -1901,7 +2054,12 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         reflect: bool = False,
         light_screen: bool = False,
         aurora_veil: bool = False,
-        friend_guard: bool = False
+        friend_guard: bool = False,
+        attacker_item: Optional[str] = None,
+        attacker_ability: Optional[str] = None,
+        defender_ability: Optional[str] = None,
+        apply_defender_intimidate: bool = True,
+        use_smogon_spreads: bool = True,
     ) -> dict:
         """
         Find minimum HP/Def EVs to survive multiple hits of an attack.
@@ -1914,15 +2072,32 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             attacker_nature: Attacker's nature
             attacker_evs: Attacker's offensive EVs
             defender_nature: Your nature (+Def: Impish/Bold, +SpD: Calm/Careful)
-            attacker_attack_stage: Attack stage (-6 to +6). Use -1 for Intimidate.
+            attacker_attack_stage: Attack stage (-6 to +6). Use -1 for manual Intimidate
+                override; defender Intimidate is auto-applied unless apply_defender_intimidate=False.
             defender_defense_stage: Defense stage (-6 to +6). Use -1 for Screech, etc.
             reflect: True if Reflect is active
             light_screen: True if Light Screen is active
             aurora_veil: True if Aurora Veil is active
             friend_guard: True if ally has Friend Guard ability
+            attacker_item: Attacker's item (auto-fetched signature item if None).
+            attacker_ability: Attacker's ability — overrides auto-detection.
+                The damage engine auto-applies offensive abilities (Sheer Force, Tough
+                Claws, Adaptability, Aerilate, Iron Fist, Reckless, Sniper, Stakeout,
+                Steely Spirit, Punk Rock, Mega Launcher, Strong Jaw, Tinted Lens, Sand
+                Force, Solar Power, Hustle, Huge Power, Pure Power, Defeatist, etc.) and
+                static stat-stage events (Intrepid Sword +1 Atk, Embody Aspect on Tera,
+                Booster Energy / sun / electric-terrain Paradox boosts).
+            defender_ability: Defender's ability — overrides auto-detection (mega-form >
+                Smogon > pokeapi). Auto-applies defensive abilities (Multiscale, Ice
+                Scales, Thick Fat, Fluffy, Filter, Levitate, type absorption, etc.).
+            apply_defender_intimidate: If True (default), defender Intimidate auto-drops
+                the attacker's Atk by -1 for physical moves (with Defiant/Contrary
+                punishment and Clear Body / Inner Focus blocking handled correctly).
+            use_smogon_spreads: Auto-fetch attacker spread from Smogon (default True).
 
         Returns:
-            Required HP/Def EVs to survive, or indication if impossible
+            Required HP/Def EVs to survive, or indication if impossible. Response
+            includes resolved attacker/defender abilities and any Intimidate note.
         """
         try:
             atk_base = await pokeapi.get_base_stats(attacker_name)
@@ -1935,6 +2110,36 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             def_nature_parsed = Nature(defender_nature.lower())
             is_physical = move.category.value == "physical"
 
+            # Resolve abilities so offensive (Sheer Force, Tough Claws,
+            # Adaptability, Aerilate, etc.) AND defensive (Multiscale, Ice
+            # Scales, Thick Fat, Fluffy, Filter, Levitate, type absorption)
+            # interactions all flow through calculate_damage.
+            from vgc_mcp_core.tools.ability_helpers import (
+                resolve_ability,
+                compute_intimidate_attack_stage,
+            )
+            attacker_ability, attacker_ability_source = await resolve_ability(
+                attacker_name, pokeapi=pokeapi, smogon_client=_smogon_client,
+                user_override=attacker_ability, use_smogon=use_smogon_spreads,
+            )
+            defender_ability, defender_ability_source = await resolve_ability(
+                defender_name, pokeapi=pokeapi, smogon_client=_smogon_client,
+                user_override=defender_ability, use_smogon=use_smogon_spreads,
+            )
+            intimidate_stage, intimidate_note = compute_intimidate_attack_stage(
+                defender_ability=defender_ability,
+                attacker_ability=attacker_ability,
+                is_physical=is_physical,
+                apply=apply_defender_intimidate,
+            )
+
+            # Auto-fill signature items if needed.
+            if attacker_item is None:
+                from vgc_mcp_core.calc.items import get_signature_item
+                sig_item = get_signature_item(attacker_name)
+                if sig_item:
+                    attacker_item = sig_item
+
             attacker = PokemonBuild(
                 name=attacker_name,
                 base_stats=atk_base,
@@ -1943,8 +2148,12 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 evs=EVSpread(
                     attack=attacker_evs if is_physical else 0,
                     special_attack=0 if is_physical else attacker_evs
-                )
+                ),
+                item=attacker_item,
+                ability=attacker_ability,
             )
+
+            effective_attack_stage = attacker_attack_stage + (intimidate_stage if is_physical else 0)
 
             best_spread = None
             min_total_evs = 999
@@ -1965,19 +2174,22 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         base_stats=def_base,
                         types=def_types,
                         nature=def_nature_parsed,
-                        evs=test_evs
+                        evs=test_evs,
+                        ability=defender_ability,
                     )
 
                     modifiers = DamageModifiers(
                         is_doubles=True,
-                        attack_stage=attacker_attack_stage if is_physical else 0,
+                        attack_stage=effective_attack_stage if is_physical else 0,
                         special_attack_stage=attacker_attack_stage if not is_physical else 0,
                         defense_stage=defender_defense_stage if is_physical else 0,
                         special_defense_stage=defender_defense_stage if not is_physical else 0,
                         reflect_up=reflect,
                         light_screen_up=light_screen,
                         aurora_veil_up=aurora_veil,
-                        friend_guard=friend_guard
+                        friend_guard=friend_guard,
+                        attacker_item=attacker_item,
+                        attacker_ability=attacker_ability,
                     )
 
                     result = calculate_damage(attacker, defender, move, modifiers)
@@ -2004,18 +2216,21 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     base_stats=def_base,
                     types=def_types,
                     nature=def_nature_parsed,
-                    evs=EVSpread(hp=252, defense=252 if is_physical else 0, special_defense=0 if is_physical else 252)
+                    evs=EVSpread(hp=252, defense=252 if is_physical else 0, special_defense=0 if is_physical else 252),
+                    ability=defender_ability,
                 )
                 modifiers = DamageModifiers(
                     is_doubles=True,
-                    attack_stage=attacker_attack_stage if is_physical else 0,
+                    attack_stage=effective_attack_stage if is_physical else 0,
                     special_attack_stage=attacker_attack_stage if not is_physical else 0,
                     defense_stage=defender_defense_stage if is_physical else 0,
                     special_defense_stage=defender_defense_stage if not is_physical else 0,
                     reflect_up=reflect,
                     light_screen_up=light_screen,
                     aurora_veil_up=aurora_veil,
-                    friend_guard=friend_guard
+                    friend_guard=friend_guard,
+                    attacker_item=attacker_item,
+                    attacker_ability=attacker_ability,
                 )
                 result = calculate_damage(attacker, max_defender, move, modifiers)
                 total_max = result.max_damage * num_hits
@@ -2035,7 +2250,13 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
 
                 return {
                     "attacker": attacker_name,
+                    "attacker_ability": attacker_ability.replace("-", " ").title() if attacker_ability else None,
+                    "attacker_ability_source": attacker_ability_source,
                     "defender": defender_name,
+                    "defender_ability": defender_ability.replace("-", " ").title() if defender_ability else None,
+                    "defender_ability_source": defender_ability_source,
+                    "intimidate_applied": intimidate_note is not None and intimidate_stage != 0,
+                    "intimidate_note": intimidate_note,
                     "move": move_name,
                     "num_hits": num_hits,
                     "achievable": False,
@@ -2094,6 +2315,12 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     "total_max": best_spread["total_max"],
                     "hp_remaining": best_spread["remaining_hp"]
                 },
+                "attacker_ability": attacker_ability.replace("-", " ").title() if attacker_ability else None,
+                "attacker_ability_source": attacker_ability_source,
+                "defender_ability": defender_ability.replace("-", " ").title() if defender_ability else None,
+                "defender_ability_source": defender_ability_source,
+                "intimidate_applied": intimidate_note is not None and intimidate_stage != 0,
+                "intimidate_note": intimidate_note,
                 "summary_table": "\n".join(table_lines),
                 "analysis": f"Need {best_spread['hp_evs']} HP / {best_spread['def_evs']} {def_stat_name} EVs to survive {num_hits}x {move_name} from {attacker_spread_str}, left at {hp_remain_pct}% HP"
             }
@@ -2271,7 +2498,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             attacker2_spa_evs = attacker2_spa_evs if attacker2_spa_evs is not None else 0
 
             # Auto-assign signature items
-            from ...vgc_mcp_core.calc.items import get_signature_item
+            from vgc_mcp_core.calc.items import get_signature_item
             if attacker1_item is None:
                 sig_item = get_signature_item(attacker1_name)
                 if sig_item:
@@ -2280,6 +2507,27 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 sig_item = get_signature_item(attacker2_name)
                 if sig_item:
                     attacker2_item = sig_item
+
+            # Backfill any abilities Smogon didn't supply (mega > Smogon > pokeapi).
+            from vgc_mcp_core.tools.ability_helpers import (
+                resolve_ability,
+                compute_intimidate_attack_stage,
+            )
+            if attacker1_ability is None:
+                attacker1_ability, _ = await resolve_ability(
+                    attacker1_name, pokeapi=pokeapi, smogon_client=_smogon_client,
+                    use_smogon=use_smogon_spreads,
+                )
+            if attacker2_ability is None:
+                attacker2_ability, _ = await resolve_ability(
+                    attacker2_name, pokeapi=pokeapi, smogon_client=_smogon_client,
+                    use_smogon=use_smogon_spreads,
+                )
+            if defender_ability is None:
+                defender_ability, _ = await resolve_ability(
+                    defender_name, pokeapi=pokeapi, smogon_client=_smogon_client,
+                    use_smogon=use_smogon_spreads,
+                )
 
             # Parse natures
             try:
@@ -2300,7 +2548,8 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 suggestions = suggest_nature(attacker2_nature)
                 return invalid_nature_error(attacker2_nature, suggestions if suggestions else [n.value for n in Nature])
 
-            # Create Pokemon builds
+            # Create Pokemon builds — abilities stamped so engine auto-applies
+            # offensive/defensive ability interactions even without modifier override.
             defender = PokemonBuild(
                 name=defender_name,
                 base_stats=def_base,
@@ -2312,6 +2561,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     special_defense=defender_spd_evs
                 ),
                 item=defender_item,
+                ability=defender_ability,
                 tera_type=defender_tera_type
             )
 
@@ -2324,7 +2574,8 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     attack=attacker1_atk_evs,
                     special_attack=attacker1_spa_evs
                 ),
-                item=attacker1_item
+                item=attacker1_item,
+                ability=attacker1_ability,
             )
 
             attacker2 = PokemonBuild(
@@ -2336,12 +2587,28 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     attack=attacker2_atk_evs,
                     special_attack=attacker2_spa_evs
                 ),
-                item=attacker2_item
+                item=attacker2_item,
+                ability=attacker2_ability,
             )
 
             # Determine if each move is physical or special
             is_physical1 = move1.category.value == "physical"
             is_physical2 = move2.category.value == "physical"
+
+            # Defender Intimidate event: lowers each opposing attacker's Atk by -1
+            # for physical moves, accounting for blockers/punishers on each attacker.
+            intim1_stage, _ = compute_intimidate_attack_stage(
+                defender_ability=defender_ability,
+                attacker_ability=attacker1_ability,
+                is_physical=is_physical1,
+            )
+            intim2_stage, _ = compute_intimidate_attack_stage(
+                defender_ability=defender_ability,
+                attacker_ability=attacker2_ability,
+                is_physical=is_physical2,
+            )
+            effective_atk1_stage = attacker1_attack_stage + (intim1_stage if is_physical1 else 0)
+            effective_atk2_stage = attacker2_attack_stage + (intim2_stage if is_physical2 else 0)
 
             # Set up modifiers for both attacks
             modifiers1 = DamageModifiers(
@@ -2362,7 +2629,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 beads_of_ruin=beads_of_ruin,
                 tablets_of_ruin=tablets_of_ruin,
                 vessel_of_ruin=vessel_of_ruin,
-                attack_stage=attacker1_attack_stage if is_physical1 else 0,
+                attack_stage=effective_atk1_stage if is_physical1 else 0,
                 special_attack_stage=attacker1_attack_stage if not is_physical1 else 0,
                 defense_stage=defender_defense_stage if is_physical1 else 0,
                 special_defense_stage=defender_special_defense_stage if not is_physical1 else 0
@@ -2386,7 +2653,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 beads_of_ruin=beads_of_ruin,
                 tablets_of_ruin=tablets_of_ruin,
                 vessel_of_ruin=vessel_of_ruin,
-                attack_stage=attacker2_attack_stage if is_physical2 else 0,
+                attack_stage=effective_atk2_stage if is_physical2 else 0,
                 special_attack_stage=attacker2_attack_stage if not is_physical2 else 0,
                 defense_stage=defender_defense_stage if is_physical2 else 0,
                 special_defense_stage=defender_special_defense_stage if not is_physical2 else 0

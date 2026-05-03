@@ -34,6 +34,10 @@ from vgc_mcp_core.models.pokemon import (
 from vgc_mcp_core.formats.showdown import pokemon_build_to_showdown
 from vgc_mcp_core.utils.errors import error_response, ErrorCodes
 from vgc_mcp_core.tools import get_common_spread
+from vgc_mcp_core.tools.ability_helpers import (
+    resolve_ability,
+    compute_intimidate_attack_stage,
+)
 
 
 # Natures that boost / nerf each stat
@@ -75,7 +79,18 @@ def register_breakpoint_tools(
                          if you want to outpace something else (rare).
             survival_chance: For "survive" — 93.75 (default), 87.5, 75, 100, etc.
             target_spread_overrides: Override the opponent's auto-fetched spread
-                                     ({"nature":"adamant", "evs":{...}, "item":"..."}).
+                                     ({"nature":"adamant", "evs":{...}, "item":"...",
+                                      "ability":"..."}). The ability key wins over
+                                     Smogon — pass it explicitly to test alt abilities
+                                     like Multiscale vs Inner Focus on Dragonite.
+
+        Ability awareness: BOTH sides have abilities resolved automatically
+        (mega-form > Smogon > pokeapi). All offensive abilities (Sheer Force,
+        Tough Claws, Adaptability, Intrepid Sword, Embody Aspect, Booster
+        Energy + Paradox) and defensive ones (Multiscale, Ice Scales, Thick
+        Fat, Filter, Levitate) auto-apply. Defender Intimidate auto-drops the
+        attacker's Atk for physical moves, with Defiant/Contrary punishment
+        and Clear Body / Inner Focus blocking handled correctly.
 
         Returns 3 Pareto-optimal options:
             1. CHEAPEST: minimum total EVs investment, neutral nature
@@ -109,6 +124,20 @@ def register_breakpoint_tools(
                 tgt_spread["evs"] = {**(tgt_spread.get("evs") or {}),
                                      **target_spread_overrides["evs"]}
 
+        # Resolve abilities (mega > Smogon > pokeapi) so offensive abilities
+        # like Sheer Force, Tough Claws, Adaptability AND defensive ones like
+        # Multiscale, Ice Scales, Thick Fat all flow through the calc.
+        me_ability, _ = await resolve_ability(
+            pokemon_name, pokeapi=pokeapi, smogon_client=smogon,
+        )
+        tgt_ability_override = tgt_spread.get("ability") if tgt_spread else None
+        tgt_ability, _ = await resolve_ability(
+            target_pokemon, pokeapi=pokeapi, smogon_client=smogon,
+            user_override=tgt_ability_override,
+        )
+        if tgt_spread is not None and tgt_ability and not tgt_spread.get("ability"):
+            tgt_spread["ability"] = tgt_ability
+
         if benchmark_type == "outspeed":
             return _find_speed_breakpoint(me_base, tgt_base, tgt_spread,
                                           pokemon_name, target_pokemon,
@@ -117,10 +146,12 @@ def register_breakpoint_tools(
             return await _find_ko_breakpoint(
                 pokeapi, me_base, me_types, tgt_base, tgt_types, tgt_spread,
                 pokemon_name, target_pokemon, target_move,
+                me_ability=me_ability,
             )
         return await _find_survival_breakpoint(
             pokeapi, me_base, me_types, tgt_base, tgt_types, tgt_spread,
             pokemon_name, target_pokemon, target_move, survival_chance,
+            me_ability=me_ability,
         )
 
 
@@ -205,7 +236,7 @@ def _min_evs_to_reach(base: int, target: int, nature_mod: float, level: int = 50
 
 
 async def _find_ko_breakpoint(pokeapi, me_base, me_types, tgt_base, tgt_types, tgt_spread,
-                              me_name, tgt_name, move_name):
+                              me_name, tgt_name, move_name, me_ability=None):
     """Find min Atk/SpA EVs to guarantee KO with `move_name`."""
     if not move_name:
         return error_response(ErrorCodes.INVALID_PARAMETER,
@@ -217,6 +248,14 @@ async def _find_ko_breakpoint(pokeapi, me_base, me_types, tgt_base, tgt_types, t
 
     tgt_build = _build_from_spread(tgt_base, tgt_types, tgt_name, tgt_spread)
 
+    # Defender Intimidate event: if target has Intimidate and we're using a
+    # physical move, drop our Atk by -1 (accounting for blockers/punishers).
+    intim_stage, _ = compute_intimidate_attack_stage(
+        defender_ability=tgt_build.ability,
+        attacker_ability=me_ability,
+        is_physical=is_physical,
+    )
+
     options = []
     for label, nature, mod in [
         ("cheapest (neutral)", "serious", 1.0),
@@ -225,6 +264,7 @@ async def _find_ko_breakpoint(pokeapi, me_base, me_types, tgt_base, tgt_types, t
         ev = _min_evs_for_ko(
             me_base, me_types, me_name, offensive_stat,
             mod, move, tgt_build,
+            me_ability=me_ability, intim_stage=intim_stage if is_physical else 0,
         )
         if ev is None:
             options.append({"label": label, "nature": nature, "achievable": False})
@@ -232,7 +272,7 @@ async def _find_ko_breakpoint(pokeapi, me_base, me_types, tgt_base, tgt_types, t
         # Build resulting Pokémon for paste
         ev_dict = {offensive_stat: ev}
         me_build = _build_from_spread(me_base, me_types, me_name,
-                                      {"nature": nature, "evs": ev_dict})
+                                      {"nature": nature, "evs": ev_dict, "ability": me_ability})
         options.append({
             "label": label,
             "nature": nature,
@@ -245,17 +285,22 @@ async def _find_ko_breakpoint(pokeapi, me_base, me_types, tgt_base, tgt_types, t
     return {
         "success": True,
         "benchmark": f"guarantee KO on {tgt_name} with {move_name}",
+        "attacker_ability": (me_ability.replace("-", " ").title() if me_ability else None),
+        "defender_ability": (tgt_build.ability.replace("-", " ").title() if tgt_build.ability else None),
+        "intimidate_applied": intim_stage != 0,
         "options": options,
         "agent_instruction": (
             "Render `options` as a Label | Nature | EVs | Cost table. "
             "Show the showdown_paste for the cheapest achievable option as a code block. "
             "If neither option is achievable, say so plainly and suggest item "
-            "or Tera as alternatives."
+            "or Tera as alternatives. Mention the resolved attacker/defender abilities "
+            "if they materially shift the calc (Multiscale, Sheer Force, Intimidate, etc.)."
         ),
     }
 
 
-def _min_evs_for_ko(me_base, me_types, me_name, off_stat, nat_mod, move, tgt_build) -> Optional[int]:
+def _min_evs_for_ko(me_base, me_types, me_name, off_stat, nat_mod, move, tgt_build,
+                    me_ability=None, intim_stage: int = 0) -> Optional[int]:
     nature = Nature.SERIOUS
     if nat_mod > 1.0:
         if off_stat == "attack":
@@ -263,15 +308,21 @@ def _min_evs_for_ko(me_base, me_types, me_name, off_stat, nat_mod, move, tgt_bui
         else:
             nature = Nature.MODEST
 
+    is_physical = off_stat == "attack"
     for ev in range(0, 256, 4):
         evs = EVSpread(**{off_stat: ev})
         me_build = PokemonBuild(
             name=me_name, base_stats=me_base, types=me_types,
             nature=nature, evs=evs, ivs=IVSpread(),
+            ability=me_ability,
         )
         result = calculate_damage(
             me_build, tgt_build, move,
-            DamageModifiers(is_doubles=True),
+            DamageModifiers(
+                is_doubles=True,
+                attacker_ability=me_ability,
+                attack_stage=intim_stage if is_physical else 0,
+            ),
         )
         if result.is_guaranteed_ohko:
             return ev
@@ -279,7 +330,8 @@ def _min_evs_for_ko(me_base, me_types, me_name, off_stat, nat_mod, move, tgt_bui
 
 
 async def _find_survival_breakpoint(pokeapi, me_base, me_types, tgt_base, tgt_types, tgt_spread,
-                                    me_name, tgt_name, move_name, survival_chance):
+                                    me_name, tgt_name, move_name, survival_chance,
+                                    me_ability=None):
     """Find min HP/Def or HP/SpD EVs to survive a target's attack at survival_chance."""
     if not move_name:
         return error_response(ErrorCodes.INVALID_PARAMETER,
@@ -291,6 +343,14 @@ async def _find_survival_breakpoint(pokeapi, me_base, me_types, tgt_base, tgt_ty
 
     tgt_build = _build_from_spread(tgt_base, tgt_types, tgt_name, tgt_spread)
 
+    # Our (defender) Intimidate vs the target's (attacker) ability — drop their
+    # Atk for physical moves only.
+    intim_stage, _ = compute_intimidate_attack_stage(
+        defender_ability=me_ability,
+        attacker_ability=tgt_build.ability,
+        is_physical=is_physical,
+    )
+
     # We sweep (HP, Def/SpD) jointly to minimize total EVs invested.
     options: list[dict] = []
     for label, nature, nat_mod in [
@@ -300,6 +360,8 @@ async def _find_survival_breakpoint(pokeapi, me_base, me_types, tgt_base, tgt_ty
         best = _min_total_evs_for_survival(
             me_base, me_types, me_name, def_stat,
             nat_mod, move, tgt_build, survival_chance,
+            me_ability=me_ability,
+            intim_stage=intim_stage if is_physical else 0,
         )
         if best is None:
             options.append({"label": label, "nature": nature, "achievable": False})
@@ -307,7 +369,7 @@ async def _find_survival_breakpoint(pokeapi, me_base, me_types, tgt_base, tgt_ty
         hp_ev, def_ev = best
         ev_dict = {"hp": hp_ev, def_stat: def_ev}
         me_build = _build_from_spread(me_base, me_types, me_name,
-                                      {"nature": nature, "evs": ev_dict})
+                                      {"nature": nature, "evs": ev_dict, "ability": me_ability})
         options.append({
             "label": label,
             "nature": nature,
@@ -321,11 +383,16 @@ async def _find_survival_breakpoint(pokeapi, me_base, me_types, tgt_base, tgt_ty
         "success": True,
         "benchmark": (f"survive {tgt_name}'s {move_name} at "
                       f"{survival_chance}%"),
+        "attacker_ability": (tgt_build.ability.replace("-", " ").title() if tgt_build.ability else None),
+        "defender_ability": (me_ability.replace("-", " ").title() if me_ability else None),
+        "intimidate_applied": intim_stage != 0,
         "options": options,
         "agent_instruction": (
             "Render options as a table. Show the cheapest achievable spread's "
             "showdown_paste in a code block. If unachievable, say so and suggest "
-            "Tera-typing into a resist or running a defensive item (Sitrus, AV)."
+            "Tera-typing into a resist or running a defensive item (Sitrus, AV). "
+            "Mention resolved attacker/defender abilities if they materially shift "
+            "the calc (Multiscale halves damage, Intimidate drops Atk, etc.)."
         ),
     }
 
@@ -350,11 +417,13 @@ def _build_from_spread(base, types, name, spread):
 
 
 def _min_total_evs_for_survival(me_base, me_types, me_name, def_stat,
-                                nat_mod, move, tgt_build, survival_chance) -> Optional[tuple[int, int]]:
+                                nat_mod, move, tgt_build, survival_chance,
+                                me_ability=None, intim_stage: int = 0) -> Optional[tuple[int, int]]:
     nature = Nature.SERIOUS
     if nat_mod > 1.0:
         nature = Nature((_PLUS_NATURES[def_stat]).upper().lower())
 
+    is_physical = def_stat == "defense"
     threshold_rolls = round(survival_chance / 100 * 16)
     best: Optional[tuple[int, int]] = None
     best_total = 9999
@@ -367,12 +436,15 @@ def _min_total_evs_for_survival(me_base, me_types, me_name, def_stat,
             me_build = PokemonBuild(
                 name=me_name, base_stats=me_base, types=me_types,
                 nature=nature, evs=evs, ivs=IVSpread(),
+                ability=me_ability,
             )
             result = calculate_damage(
                 tgt_build, me_build, move,
                 DamageModifiers(is_doubles=True,
                                 attacker_item=tgt_build.item,
-                                attacker_ability=tgt_build.ability),
+                                attacker_ability=tgt_build.ability,
+                                defender_ability=me_ability,
+                                attack_stage=intim_stage if is_physical else 0),
             )
             # Count rolls that don't KO
             survived = sum(1 for r in result.rolls if r < result.defender_hp)

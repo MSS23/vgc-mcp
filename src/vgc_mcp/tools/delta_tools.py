@@ -203,14 +203,32 @@ def register_delta_tools(
                                                        attacker_item=me_after.item,
                                                        attacker_ability=me_after.ability))
             else:
+                # Defender Intimidate event (per "before" / "after" defender state),
+                # honouring attacker blockers/punishers.
+                from vgc_mcp_core.tools.ability_helpers import compute_intimidate_attack_stage
+                is_phys = td["move"].category.value == "physical"
+                intim_b, _ = compute_intimidate_attack_stage(
+                    defender_ability=me_before.ability,
+                    attacker_ability=td["build"].ability,
+                    is_physical=is_phys,
+                )
+                intim_a, _ = compute_intimidate_attack_stage(
+                    defender_ability=me_after.ability,
+                    attacker_ability=td["build"].ability,
+                    is_physical=is_phys,
+                )
                 r_b = calculate_damage(td["build"], me_before, td["move"],
                                        DamageModifiers(is_doubles=True,
                                                        attacker_item=td["build"].item,
-                                                       attacker_ability=td["build"].ability))
+                                                       attacker_ability=td["build"].ability,
+                                                       defender_ability=me_before.ability,
+                                                       attack_stage=intim_b if is_phys else 0))
                 r_a = calculate_damage(td["build"], me_after, td["move"],
                                        DamageModifiers(is_doubles=True,
                                                        attacker_item=td["build"].item,
-                                                       attacker_ability=td["build"].ability))
+                                                       attacker_ability=td["build"].ability,
+                                                       defender_ability=me_after.ability,
+                                                       attack_stage=intim_a if is_phys else 0))
 
             v_b = _verdict(r_b.min_percent, r_b.max_percent)
             v_a = _verdict(r_a.min_percent, r_a.max_percent)

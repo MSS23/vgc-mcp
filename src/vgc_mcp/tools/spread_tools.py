@@ -194,11 +194,21 @@ class ThreatSpec:
 class DamageCache:
     """Cache damage calculations to avoid redundant computations."""
 
-    def __init__(self, threats: list[ThreatSpec], defender_name: str, defender_base: BaseStats, defender_types: list[str]):
+    def __init__(
+        self,
+        threats: list[ThreatSpec],
+        defender_name: str,
+        defender_base: BaseStats,
+        defender_types: list[str],
+        defender_ability: Optional[str] = None,
+        defender_item: Optional[str] = None,
+    ):
         self.threats = threats
         self.defender_name = defender_name
         self.defender_base = defender_base
         self.defender_types = defender_types
+        self.defender_ability = defender_ability
+        self.defender_item = defender_item
         self.cache: dict = {}  # Key: (threat_idx, hp_ev, def_ev, spd_ev, nature_name, tera_type)
 
     def get_damage(
@@ -215,23 +225,38 @@ class DamageCache:
         key = (threat_idx, hp_ev, def_ev, spd_ev, nature.value, tera_key)
 
         if key not in self.cache:
-            # Build defender with these EVs
+            # Build defender with these EVs — stamp the defender's ability so the
+            # damage engine auto-applies every defensive ability interaction
+            # (Multiscale, Ice Scales, Thick Fat, Fluffy, Filter, Levitate, type
+            # absorption, Heatproof, etc.).
             defender = PokemonBuild(
                 name=self.defender_name,
                 base_stats=self.defender_base,
                 types=self.defender_types,
                 nature=nature,
                 evs=EVSpread(hp=hp_ev, defense=def_ev, special_defense=spd_ev),
+                ability=self.defender_ability,
+                item=self.defender_item,
                 tera_type=defender_tera_type
             )
 
             threat = self.threats[threat_idx]
+
+            # Compute Intimidate stage event from defender's ability vs this
+            # threat's ability/move (only triggers for physical moves).
+            from vgc_mcp_core.tools.ability_helpers import compute_intimidate_attack_stage
+            intim_stage, _ = compute_intimidate_attack_stage(
+                defender_ability=self.defender_ability,
+                attacker_ability=threat.modifiers.attacker_ability,
+                is_physical=threat.is_physical,
+            )
 
             # Update modifiers with defender Tera if specified
             modifiers = DamageModifiers(
                 is_doubles=threat.modifiers.is_doubles,
                 attacker_item=threat.modifiers.attacker_item,
                 attacker_ability=threat.modifiers.attacker_ability,
+                defender_ability=self.defender_ability,
                 tera_type=threat.modifiers.tera_type,
                 tera_active=threat.modifiers.tera_active,
                 defender_tera_type=defender_tera_type,
@@ -240,7 +265,8 @@ class DamageCache:
                 sword_of_ruin=threat.modifiers.sword_of_ruin,
                 beads_of_ruin=threat.modifiers.beads_of_ruin,
                 vessel_of_ruin=threat.modifiers.vessel_of_ruin,
-                tablets_of_ruin=threat.modifiers.tablets_of_ruin
+                tablets_of_ruin=threat.modifiers.tablets_of_ruin,
+                attack_stage=intim_stage if threat.is_physical else 0,
             )
 
             # Calculate damage
@@ -1494,6 +1520,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         prioritize: str = "bulk",
         offensive_evs: int = 0,
         item: Optional[str] = None,
+        ability: Optional[str] = None,
     ) -> dict:
         """
         Design an EV spread that meets specific speed and SINGLE survival benchmarks.
@@ -1832,6 +1859,23 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         tera_type=survive_pokemon_tera_type
                     )
 
+                    # Resolve defender ability (mega > Smogon > pokeapi) so all
+                    # defensive ability interactions auto-apply, and pre-compute
+                    # the Intimidate stage event for this physical/special move.
+                    from vgc_mcp_core.tools.ability_helpers import (
+                        resolve_ability,
+                        compute_intimidate_attack_stage,
+                    )
+                    ability, _ability_source = await resolve_ability(
+                        pokemon_name, pokeapi=pokeapi, smogon_client=smogon,
+                        user_override=ability,
+                    )
+                    intim_stage, _ = compute_intimidate_attack_stage(
+                        defender_ability=ability,
+                        attacker_ability=survive_pokemon_ability,
+                        is_physical=is_physical,
+                    )
+
                     # Find optimal bulk distribution to survive
                     # Math: Effective Bulk = HP × Defense
                     # When HP stat < Def stat, HP EVs are more efficient (benefits both Def and SpD)
@@ -1875,6 +1919,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                                         defense=def_ev_norm,
                                         special_defense=spd_ev_norm
                                     ),
+                                    ability=ability,
+                                    item=item,
                                     tera_type=defender_tera_type
                                 )
 
@@ -1883,6 +1929,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                                     is_doubles=True,
                                     attacker_ability=survive_pokemon_ability,
                                     attacker_item=survive_pokemon_item,
+                                    defender_ability=ability,
                                     tera_type=survive_pokemon_tera_type,
                                     tera_active=survive_pokemon_tera_type is not None,
                                     defender_tera_type=defender_tera_type,
@@ -1891,7 +1938,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                                     sword_of_ruin=sword_of_ruin,
                                     beads_of_ruin=beads_of_ruin,
                                     tablets_of_ruin=tablets_of_ruin,
-                                    vessel_of_ruin=vessel_of_ruin
+                                    vessel_of_ruin=vessel_of_ruin,
+                                    attack_stage=intim_stage if is_physical else 0,
                                 )
                                 result = calculate_damage(attacker, defender, move, modifiers)
 
@@ -2084,6 +2132,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                                 defense=def_evs,
                                 special_defense=spd_evs,
                             ),
+                            ability=ability,
+                            item=item,
                             tera_type=defender_tera_type,
                         )
                         adj_result = calculate_damage(attacker, adj_defender, move, modifiers)
@@ -2221,6 +2271,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         defender_tera_type: Optional[str] = None,
         target_survival: float = 100.0,
         item: Optional[str] = None,
+        ability: Optional[str] = None,
     ) -> dict:
         """
         Find optimal EV spread to survive TWO DIFFERENT attacks while meeting a speed benchmark.
@@ -2439,6 +2490,26 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         beads_of_ruin2 = True
                         survive_hit2_ability = "beads-of-ruin"
 
+            # Resolve defender ability and pre-compute Intimidate stages once.
+            from vgc_mcp_core.tools.ability_helpers import (
+                resolve_ability,
+                compute_intimidate_attack_stage,
+            )
+            ability, _ability_source = await resolve_ability(
+                pokemon_name, pokeapi=pokeapi, smogon_client=smogon,
+                user_override=ability,
+            )
+            intim1_stage, _ = compute_intimidate_attack_stage(
+                defender_ability=ability,
+                attacker_ability=survive_hit1_ability,
+                is_physical=is_physical1,
+            )
+            intim2_stage, _ = compute_intimidate_attack_stage(
+                defender_ability=ability,
+                attacker_ability=survive_hit2_ability,
+                is_physical=is_physical2,
+            )
+
             # Calculate target speed first (independent of our nature)
             target_speed = 0
             if speed_evs is not None:
@@ -2579,6 +2650,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         name=pokemon_name, base_stats=my_base, types=my_types,
                         nature=current_nature,
                         evs=EVSpread(hp=hp_ev, defense=def_ev, special_defense=spd_ev),
+                        ability=ability,
+                        item=item,
                         tera_type=defender_tera_type
                     )
                     modifiers1 = DamageModifiers(
@@ -2589,7 +2662,9 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         defender_tera_active=defender_tera_type is not None,
                         is_critical=move1.always_crit,
                         sword_of_ruin=sword_of_ruin1,
-                        beads_of_ruin=beads_of_ruin1
+                        beads_of_ruin=beads_of_ruin1,
+                        defender_ability=ability,
+                        attack_stage=intim1_stage if is_physical1 else 0,
                     )
                     result1 = calculate_damage(attacker1, defender, move1, modifiers1)
                     modifiers2 = DamageModifiers(
@@ -2600,7 +2675,9 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         defender_tera_active=defender_tera_type is not None,
                         is_critical=move2.always_crit,
                         sword_of_ruin=sword_of_ruin2,
-                        beads_of_ruin=beads_of_ruin2
+                        beads_of_ruin=beads_of_ruin2,
+                        defender_ability=ability,
+                        attack_stage=intim2_stage if is_physical2 else 0,
                     )
                     result2 = calculate_damage(attacker2, defender, move2, modifiers2)
                     survive_rolls1 = sum(1 for r in result1.rolls if r < result1.defender_hp)
@@ -2710,6 +2787,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         name=pokemon_name, base_stats=my_base, types=my_types,
                         nature=current_nature,
                         evs=EVSpread(hp=hp_ev, defense=def_ev, special_defense=spd_ev),
+                        ability=ability,
+                        item=item,
                         tera_type=defender_tera_type
                     )
                     modifiers1 = DamageModifiers(
@@ -2720,7 +2799,9 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         defender_tera_active=defender_tera_type is not None,
                         is_critical=move1.always_crit,
                         sword_of_ruin=sword_of_ruin1,
-                        beads_of_ruin=beads_of_ruin1
+                        beads_of_ruin=beads_of_ruin1,
+                        defender_ability=ability,
+                        attack_stage=intim1_stage if is_physical1 else 0,
                     )
                     result1 = calculate_damage(attacker1, defender, move1, modifiers1)
                     modifiers2 = DamageModifiers(
@@ -2731,7 +2812,9 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         defender_tera_active=defender_tera_type is not None,
                         is_critical=move2.always_crit,
                         sword_of_ruin=sword_of_ruin2,
-                        beads_of_ruin=beads_of_ruin2
+                        beads_of_ruin=beads_of_ruin2,
+                        defender_ability=ability,
+                        attack_stage=intim2_stage if is_physical2 else 0,
                     )
                     result2 = calculate_damage(attacker2, defender, move2, modifiers2)
                     survive_rolls1 = sum(1 for r in result1.rolls if r < result1.defender_hp)
@@ -2963,6 +3046,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                             defense=best_spread["def"],
                             special_defense=final_spd_evs,
                         ),
+                        ability=ability,
+                        item=item,
                         tera_type=defender_tera_type,
                     )
                     adj_r1 = calculate_damage(attacker1, adj_defender, move1, mods1)
@@ -2992,6 +3077,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         defender_tera_type: Optional[str] = None,
         target_survival: float = 93.75,
         item: Optional[str] = None,
+        ability: Optional[str] = None,
     ) -> dict:
         """
         Find optimal EV spread to survive 3-6 different attacks while meeting speed benchmark.
@@ -3061,11 +3147,25 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             my_base = await pokeapi.get_base_stats(pokemon_name)
             my_types = await pokeapi.get_pokemon_types(pokemon_name)
 
+            # Resolve defender's ability so the engine auto-applies defensive
+            # ability interactions (Multiscale, Ice Scales, Thick Fat, Filter,
+            # Levitate, type absorption) AND so any defender Intimidate triggers
+            # the -1 Atk stage for physical threats.
+            from vgc_mcp_core.tools.ability_helpers import resolve_ability
+            ability, _ability_source = await resolve_ability(
+                pokemon_name, pokeapi=pokeapi, smogon_client=smogon,
+                user_override=ability,
+            )
+
             # Prepare all threats (fetch data, auto-detect spreads)
             prepared_threats = await _prepare_threats(threats, pokeapi)
 
-            # Create damage cache
-            cache = DamageCache(prepared_threats, pokemon_name, my_base, my_types)
+            # Create damage cache (defender ability flows through every test build)
+            cache = DamageCache(
+                prepared_threats, pokemon_name, my_base, my_types,
+                defender_ability=ability,
+                defender_item=item,
+            )
 
             # Track if nature was auto-selected
             nature_auto_selected = nature is None

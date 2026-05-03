@@ -9,12 +9,16 @@ from vgc_mcp_core.calc.damage import calculate_damage
 from vgc_mcp_core.calc.modifiers import DamageModifiers
 from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, BaseStats
 from vgc_mcp_core.models.move import Move
+from vgc_mcp_core.tools.ability_helpers import (
+    resolve_ability,
+    compute_intimidate_attack_stage,
+)
 from vgc_mcp_core.utils.errors import pokemon_not_found_error, api_error, error_response, ErrorCodes
 from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name
 from vgc_mcp_core.config import EV_BREAKPOINTS_LV50
 
 
-def register_multi_threat_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
+def register_multi_threat_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon_client=None):
     """Register multi-threat bulk calculation tools with the MCP server."""
 
     @mcp.tool()
@@ -52,10 +56,10 @@ def register_multi_threat_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             def_base = await pokeapi.get_base_stats(pokemon_name)
             def_types = await pokeapi.get_pokemon_types(pokemon_name)
             
-            if ability is None:
-                def_abilities = await pokeapi.get_pokemon_abilities(pokemon_name)
-                if def_abilities:
-                    ability = def_abilities[0].lower().replace(" ", "-")
+            ability, ability_source = await resolve_ability(
+                pokemon_name, pokeapi=pokeapi, smogon_client=smogon_client,
+                user_override=ability,
+            )
             
             try:
                 def_nature = Nature(nature.lower())
@@ -94,11 +98,11 @@ def register_multi_threat_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                     threat_item = spread.get("item")
                     threat_ability = spread.get("ability")
                     
-                    if threat_ability is None:
-                        threat_abilities = await pokeapi.get_pokemon_abilities(threat["name"])
-                        if threat_abilities:
-                            threat_ability = threat_abilities[0].lower().replace(" ", "-")
-                    
+                    threat_ability, _ = await resolve_ability(
+                        threat["name"], pokeapi=pokeapi, smogon_client=smogon_client,
+                        user_override=threat_ability,
+                    )
+
                     threat_build = PokemonBuild(
                         name=threat["name"],
                         base_stats=atk_base,
@@ -108,12 +112,24 @@ def register_multi_threat_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                         item=threat_item,
                         ability=threat_ability
                     )
-                    
+
+                    is_physical = move.category.value == "physical"
+                    intim_stage, intim_note = compute_intimidate_attack_stage(
+                        defender_ability=ability,
+                        attacker_ability=threat_ability,
+                        is_physical=is_physical,
+                    )
+
                     threat_builds.append({
                         "build": threat_build,
                         "move": move,
                         "name": threat["name"],
-                        "move_name": threat["move"]
+                        "move_name": threat["move"],
+                        "is_physical": is_physical,
+                        "intimidate_stage": intim_stage,
+                        "intimidate_note": intim_note,
+                        "attacker_ability": threat_ability,
+                        "attacker_item": threat_item,
                     })
                 except Exception as e:
                     logger.warning(f"Failed to build threat {threat['name']}: {e}")
@@ -147,11 +163,17 @@ def register_multi_threat_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                         all_survive = True
                         
                         for threat_data in threat_builds:
+                            mods = DamageModifiers(
+                                is_doubles=True,
+                                attack_stage=threat_data["intimidate_stage"] if threat_data["is_physical"] else 0,
+                                attacker_ability=threat_data["attacker_ability"],
+                                attacker_item=threat_data["attacker_item"],
+                            )
                             result = calculate_damage(
                                 threat_data["build"],
                                 test_defender,
                                 threat_data["move"],
-                                DamageModifiers(is_doubles=True)
+                                mods,
                             )
                             
                             # Calculate survival chance
@@ -205,7 +227,11 @@ def register_multi_threat_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 "pokemon": pokemon_name,
                 "nature": nature.title(),
                 "item": item or "None",
-                "ability": ability or "None",
+                "ability": ability.replace("-", " ").title() if ability else "None",
+                "ability_source": ability_source,
+                "intimidate_active_against": [
+                    t["name"] for t in threat_builds if t["intimidate_note"]
+                ],
                 "recommended_spread": {
                     "hp_evs": best_spread["hp_evs"],
                     "def_evs": best_spread["def_evs"],

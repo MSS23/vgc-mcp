@@ -41,7 +41,14 @@ async def _build_pokemon_from_smogon(
     item: Optional[str] = None,
     ability: Optional[str] = None
 ) -> PokemonBuild:
-    """Build a PokemonBuild from Smogon data or provided values."""
+    """Build a PokemonBuild from Smogon data or provided values.
+
+    Ability resolution: user override > mega-form lookup > Smogon's most-used >
+    pokeapi first-listed. Ensures every PokemonBuild carries the right ability
+    so the damage engine auto-applies offensive (Sheer Force, Tough Claws,
+    Adaptability, Aerilate, etc.) AND defensive (Multiscale, Ice Scales, Thick
+    Fat, Filter, Levitate, type absorption, etc.) interactions.
+    """
     base_stats = await pokeapi.get_base_stats(pokemon_name)
     types = await pokeapi.get_pokemon_types(pokemon_name)
 
@@ -57,6 +64,13 @@ async def _build_pokemon_from_smogon(
                 item = smogon_spread.get("item")
             if ability is None:
                 ability = smogon_spread.get("ability")
+
+    # Centralised ability resolver (mega > Smogon > pokeapi).
+    from vgc_mcp_core.tools.ability_helpers import resolve_ability
+    if ability is None:
+        ability, _ = await resolve_ability(
+            pokemon_name, pokeapi=pokeapi, smogon_client=_smogon_client,
+        )
 
     nature_enum = Nature(nature.lower() if nature else "serious")
     evs_dict = evs or {}
@@ -157,15 +171,24 @@ def register_multicalc_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
                         raise defender_or_err
                     defender = defender_or_err
 
-                    # Create modifiers
+                    # Create modifiers (defender Intimidate event stacks for physical moves)
+                    from vgc_mcp_core.tools.ability_helpers import compute_intimidate_attack_stage
+                    is_phys = move.category.value == "physical"
+                    intim, _ = compute_intimidate_attack_stage(
+                        defender_ability=defender.ability,
+                        attacker_ability=attacker.ability,
+                        is_physical=is_phys,
+                    )
                     modifiers = DamageModifiers(
                         is_doubles=True,
                         attacker_item=attacker.item,
                         attacker_ability=attacker.ability,
+                        defender_ability=defender.ability,
                         tera_type=attacker_tera_type,
                         tera_active=attacker_tera_type is not None,
                         weather=weather,
-                        terrain=terrain
+                        terrain=terrain,
+                        attack_stage=intim if is_phys else 0,
                     )
 
                     # Calculate damage
@@ -316,15 +339,24 @@ def register_multicalc_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
                         raise build_result
                     attacker, move = build_result
 
-                    # Create modifiers
+                    # Create modifiers (defender Intimidate stacks for physical moves)
+                    from vgc_mcp_core.tools.ability_helpers import compute_intimidate_attack_stage
+                    is_phys = move.category.value == "physical"
+                    intim, _ = compute_intimidate_attack_stage(
+                        defender_ability=defender.ability,
+                        attacker_ability=attacker.ability,
+                        is_physical=is_phys,
+                    )
                     modifiers = DamageModifiers(
                         is_doubles=True,
                         attacker_item=attacker.item,
                         attacker_ability=attacker.ability,
+                        defender_ability=defender.ability,
                         tera_type=attacker.tera_type,
                         tera_active=attacker.tera_type is not None,
                         defender_tera_type=defender.tera_type,
-                        defender_tera_active=defender.tera_type is not None
+                        defender_tera_active=defender.tera_type is not None,
+                        attack_stage=intim if is_phys else 0,
                     )
 
                     # Calculate damage
@@ -471,10 +503,19 @@ def register_multicalc_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
                             continue
 
                         try:
+                            from vgc_mcp_core.tools.ability_helpers import compute_intimidate_attack_stage
+                            is_phys = member["move"].category.value == "physical"
+                            intim, _ = compute_intimidate_attack_stage(
+                                defender_ability=threat.ability,
+                                attacker_ability=member["pokemon"].ability,
+                                is_physical=is_phys,
+                            )
                             modifiers = DamageModifiers(
                                 is_doubles=True,
                                 attacker_item=member["pokemon"].item,
-                                attacker_ability=member["pokemon"].ability
+                                attacker_ability=member["pokemon"].ability,
+                                defender_ability=threat.ability,
+                                attack_stage=intim if is_phys else 0,
                             )
 
                             result = calculate_damage(member["pokemon"], threat, member["move"], modifiers)
