@@ -8,14 +8,10 @@ from vgc_mcp_core.team.manager import TeamManager
 from vgc_mcp_core.formats.showdown import (
     parse_showdown_pokemon,
     parse_showdown_team,
-    export_pokemon_to_showdown,
-    export_team_to_showdown,
-    parsed_to_ev_spread,
-    parsed_to_iv_spread,
-    parsed_to_nature,
+    parsed_to_pokemon_build,
+    pokemon_build_to_showdown,
     ShowdownParseError,
 )
-from vgc_mcp_core.models.pokemon import PokemonBuild
 from vgc_mcp_core.utils.errors import error_response, ErrorCodes
 
 
@@ -76,6 +72,7 @@ def register_import_export_tools(
                     "tera_type": parsed.tera_type,
                     "nature": parsed.nature,
                     "evs": parsed.evs,
+                    "sps": parsed.sps,
                     "ivs": parsed.ivs,
                     "moves": parsed.moves,
                     "shiny": parsed.shiny,
@@ -84,21 +81,27 @@ def register_import_export_tools(
                 "types": types
             }
 
+            # Zero-config regulation detection from the imported species.
+            try:
+                from vgc_mcp_core.rules.regulation_loader import get_regulation_config
+                from vgc_mcp_core.rules.regulation_router import auto_detect_regulation
+                detection = auto_detect_regulation([parsed.species], get_regulation_config())
+                result["regulation_auto_detected"] = detection
+            except Exception:
+                pass
+
             if add_to_team:
-                # Create PokemonBuild and add to team
-                pokemon = PokemonBuild(
-                    name=species_name,
-                    base_stats=base_stats,
-                    types=types,
-                    nature=parsed_to_nature(parsed),
-                    evs=parsed_to_ev_spread(parsed),
-                    ivs=parsed_to_iv_spread(parsed),
-                    level=parsed.level,
-                    ability=parsed.ability,
-                    item=parsed.item,
-                    tera_type=parsed.tera_type,
-                    moves=parsed.moves[:4]
-                )
+                # Build a FORMAT-AWARE PokemonBuild: SPs paste -> champions+sps,
+                # EVs paste -> mainline+evs.
+                try:
+                    pokemon = parsed_to_pokemon_build(
+                        parsed,
+                        base_stats,
+                        types,
+                        extra_kwargs={"name": species_name},
+                    )
+                except ShowdownParseError as e:
+                    return error_response(ErrorCodes.PARSE_ERROR, str(e))
 
                 success, message, data = team_manager.add_pokemon(pokemon)
                 result["team"] = {
@@ -148,18 +151,12 @@ def register_import_export_tools(
                     base_stats = await pokeapi.get_base_stats(species_name)
                     types = await pokeapi.get_pokemon_types(species_name)
 
-                    pokemon = PokemonBuild(
-                        name=species_name,
-                        base_stats=base_stats,
-                        types=types,
-                        nature=parsed_to_nature(parsed),
-                        evs=parsed_to_ev_spread(parsed),
-                        ivs=parsed_to_iv_spread(parsed),
-                        level=parsed.level,
-                        ability=parsed.ability,
-                        item=parsed.item,
-                        tera_type=parsed.tera_type,
-                        moves=parsed.moves[:4]
+                    # Format-aware: SPs paste -> champions+sps, EVs -> mainline+evs.
+                    pokemon = parsed_to_pokemon_build(
+                        parsed,
+                        base_stats,
+                        types,
+                        extra_kwargs={"name": species_name},
                     )
 
                     success, message, _ = team_manager.add_pokemon(pokemon)
@@ -183,7 +180,7 @@ def register_import_export_tools(
                     })
                     failed_count += 1
 
-            return {
+            response = {
                 "success": added_count > 0,
                 "imported_count": added_count,
                 "failed_count": failed_count,
@@ -191,6 +188,19 @@ def register_import_export_tools(
                 "team_size": team_manager.size,
                 "team": team_manager.team.get_pokemon_names()
             }
+
+            # Zero-config regulation detection from imported species.
+            try:
+                from vgc_mcp_core.rules.regulation_loader import get_regulation_config
+                from vgc_mcp_core.rules.regulation_router import auto_detect_regulation
+                names = [p.species for p in parsed_team]
+                response["regulation_auto_detected"] = auto_detect_regulation(
+                    names, get_regulation_config()
+                )
+            except Exception:
+                pass
+
+            return response
 
         except Exception as e:
             return error_response(ErrorCodes.UNKNOWN_ERROR, str(e))
@@ -207,37 +217,12 @@ def register_import_export_tools(
             if team_manager.size == 0:
                 return error_response(ErrorCodes.EMPTY_TEAM, 'No Pokemon on team to export')
 
-            team_data = []
-
-            for slot in team_manager.team.slots:
-                pokemon = slot.pokemon
-                team_data.append({
-                    "species": pokemon.name.replace("-", " ").title(),
-                    "item": pokemon.item,
-                    "ability": pokemon.ability,
-                    "level": pokemon.level,
-                    "tera_type": pokemon.tera_type,
-                    "evs": {
-                        "hp": pokemon.evs.hp,
-                        "atk": pokemon.evs.attack,
-                        "def": pokemon.evs.defense,
-                        "spa": pokemon.evs.special_attack,
-                        "spd": pokemon.evs.special_defense,
-                        "spe": pokemon.evs.speed,
-                    },
-                    "ivs": {
-                        "hp": pokemon.ivs.hp,
-                        "atk": pokemon.ivs.attack,
-                        "def": pokemon.ivs.defense,
-                        "spa": pokemon.ivs.special_attack,
-                        "spd": pokemon.ivs.special_defense,
-                        "spe": pokemon.ivs.speed,
-                    },
-                    "nature": pokemon.nature.value.title(),
-                    "moves": pokemon.moves,
-                })
-
-            paste = export_team_to_showdown(team_data)
+            # Delegate per-slot to the format-aware exporter (emits 'SPs:' for
+            # champions builds and hyphenated Showdown species).
+            paste = "\n\n".join(
+                pokemon_build_to_showdown(slot.pokemon)
+                for slot in team_manager.team.slots
+            )
 
             return {
                 "success": True,
@@ -265,31 +250,9 @@ def register_import_export_tools(
             if not pokemon:
                 return error_response(ErrorCodes.INVALID_SLOT, f'No Pokemon in slot {slot}')
 
-            paste = export_pokemon_to_showdown(
-                species=pokemon.name.replace("-", " ").title(),
-                item=pokemon.item,
-                ability=pokemon.ability,
-                level=pokemon.level,
-                tera_type=pokemon.tera_type,
-                evs={
-                    "hp": pokemon.evs.hp,
-                    "atk": pokemon.evs.attack,
-                    "def": pokemon.evs.defense,
-                    "spa": pokemon.evs.special_attack,
-                    "spd": pokemon.evs.special_defense,
-                    "spe": pokemon.evs.speed,
-                },
-                ivs={
-                    "hp": pokemon.ivs.hp,
-                    "atk": pokemon.ivs.attack,
-                    "def": pokemon.ivs.defense,
-                    "spa": pokemon.ivs.special_attack,
-                    "spd": pokemon.ivs.special_defense,
-                    "spe": pokemon.ivs.speed,
-                },
-                nature=pokemon.nature.value.title(),
-                moves=pokemon.moves,
-            )
+            # Delegate to the format-aware exporter (emits 'SPs:' for champions
+            # builds and hyphenated Showdown species).
+            paste = pokemon_build_to_showdown(pokemon)
 
             return {
                 "success": True,

@@ -7,6 +7,7 @@ import httpx
 
 from ..config import settings, logger
 from ..models.pokemon import BaseStats
+from ..utils.normalize import reorder_mega_prefix
 from ..models.move import Move, MoveCategory, SPREAD_TARGETS, get_multi_hit_info, is_always_crit_move, get_move_type_for_user, MOVE_SECONDARY_EFFECTS
 from .cache import APICache
 
@@ -51,22 +52,6 @@ POKEAPI_FORM_ALIASES = {
     "mega-mewtwo-y": "mewtwo-mega-y",
     "charizard-mega": "charizard-mega-y",  # default Mega Charizard -> Y form
     "mewtwo-mega": "mewtwo-mega-y",
-}
-
-
-# Pokemon names where prepending "mega-" should produce a valid PokeAPI form.
-# Used by `_normalize_name` to rewrite "Mega Manectric" / "mega-manectric"
-# -> "manectric-mega" without a per-species alias for every Mega-capable mon.
-_MEGA_CAPABLE_BASES = {
-    "venusaur", "charizard", "blastoise", "alakazam", "gengar", "kangaskhan",
-    "pinsir", "gyarados", "aerodactyl", "ampharos", "scizor", "heracross",
-    "houndoom", "tyranitar", "blaziken", "gardevoir", "mawile", "aggron",
-    "medicham", "manectric", "banette", "absol", "garchomp", "lucario",
-    "abomasnow", "beedrill", "pidgeot", "slowbro", "steelix", "sceptile",
-    "swampert", "sableye", "sharpedo", "camerupt", "altaria", "glalie",
-    "salamence", "metagross", "latias", "latios", "lopunny", "gallade",
-    "audino", "diancie", "rayquaza", "lopunny", "latios", "latias",
-    "mewtwo", "groudon", "kyogre",
 }
 
 
@@ -115,15 +100,11 @@ class PokeAPIClient:
         # leading `mega-<species>` to `<species>-mega`. Done before alias lookup
         # so explicit aliases (e.g. `mega-charizard-y` -> `charizard-mega-y`)
         # still take precedence.
+        # The prefix is ALWAYS rewritten — there is no hardcoded "mega-capable"
+        # allowlist (that omitted every Champions-era Mega). A genuine 404 from
+        # PokeAPI is the "no such mega" signal.
         if apply_form_aliases and normalized.startswith("mega-"):
-            rest = normalized[len("mega-"):]
-            # Strip a trailing -x/-y so "mega-charizard-x" -> base "charizard"
-            base = rest
-            suffix = ""
-            if rest.endswith(("-x", "-y")):
-                base, suffix = rest[:-2], rest[-2:]
-            if base in _MEGA_CAPABLE_BASES:
-                normalized = f"{base}-mega{suffix}"
+            normalized = reorder_mega_prefix(normalized)
 
         # Apply form aliases for Pokemon that need explicit form suffixes in PokeAPI
         if apply_form_aliases:

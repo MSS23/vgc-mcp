@@ -12,7 +12,10 @@ from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
-from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, BaseStats
+from vgc_mcp_core.models.pokemon import (
+    PokemonBuild, Nature, EVSpread, BaseStats, StatPointSpread,
+)
+from vgc_mcp_core.rules.regulation_loader import get_regulation_config
 from vgc_mcp_core.models.move import Move, MoveCategory
 from vgc_mcp_core.calc.team_matchup import (
     build_pokemon_profile, generate_full_game_plan, PokemonProfile,
@@ -37,11 +40,17 @@ async def _build_profile(
     known_item: Optional[str] = None,
     known_ability: Optional[str] = None,
     existing_build: Optional[PokemonBuild] = None,
+    is_champions_subject: bool = False,
 ) -> PokemonProfile:
     """Build a PokemonProfile from PokeAPI + Smogon data.
 
-    If existing_build is provided (from team_manager), uses that directly.
-    Otherwise builds from Smogon's most common spread.
+    If existing_build is provided (from team_manager), uses that directly
+    (it already carries its own ``format_system``). Otherwise builds from
+    Smogon's most common spread.
+
+    ``is_champions_subject`` is only set for the USER'S team members in a
+    Champions session — those are built with ``format_system="champions"``
+    (Stat Point grain). Opponent meta references always stay mainline.
     """
     if existing_build:
         build = existing_build
@@ -56,7 +65,8 @@ async def _build_profile(
 
         # Get Smogon spread data
         nature_str = "serious"
-        evs_dict = {}
+        spread_dict: dict = {}
+        spread_is_champions = False
         item = known_item
         ability = known_ability or ""
 
@@ -64,7 +74,13 @@ async def _build_profile(
             smogon_spread = await _get_common_spread(pokemon_name)
             if smogon_spread:
                 nature_str = smogon_spread.get("nature", "serious")
-                evs_dict = smogon_spread.get("evs", {})
+                # Fetched spread carries its own format tag (Wave 1). A
+                # champions-tagged spread stores allocations under "sps".
+                if smogon_spread.get("format_system") == "champions":
+                    spread_is_champions = True
+                    spread_dict = smogon_spread.get("sps", {})
+                else:
+                    spread_dict = smogon_spread.get("evs", {})
                 if not item:
                     raw_item = smogon_spread.get("item")
                     item = _normalize_smogon_name(raw_item) if raw_item else None
@@ -77,22 +93,37 @@ async def _build_profile(
         except ValueError:
             nature_enum = Nature.SERIOUS
 
-        build = PokemonBuild(
-            name=pokemon_name,
-            base_stats=base_stats,
-            types=types,
-            nature=nature_enum,
-            evs=EVSpread(
-                hp=evs_dict.get("hp", 0),
-                attack=evs_dict.get("attack", 0),
-                defense=evs_dict.get("defense", 0),
-                special_attack=evs_dict.get("special_attack", 0),
-                special_defense=evs_dict.get("special_defense", 0),
-                speed=evs_dict.get("speed", 0),
-            ),
-            item=item,
-            ability=ability,
-        )
+        # Build as a Champions subject when the session is Champions OR the
+        # fetched spread is itself champions-tagged. Opponent references with a
+        # mainline spread stay mainline even in a Champions session.
+        if is_champions_subject or spread_is_champions:
+            build = PokemonBuild(
+                name=pokemon_name,
+                base_stats=base_stats,
+                types=types,
+                nature=nature_enum,
+                format_system="champions",
+                sps=StatPointSpread.from_sps_dict(spread_dict) if spread_dict else StatPointSpread(),
+                item=item,
+                ability=ability,
+            )
+        else:
+            build = PokemonBuild(
+                name=pokemon_name,
+                base_stats=base_stats,
+                types=types,
+                nature=nature_enum,
+                evs=EVSpread(
+                    hp=spread_dict.get("hp", 0),
+                    attack=spread_dict.get("attack", 0),
+                    defense=spread_dict.get("defense", 0),
+                    special_attack=spread_dict.get("special_attack", 0),
+                    special_defense=spread_dict.get("special_defense", 0),
+                    speed=spread_dict.get("speed", 0),
+                ),
+                item=item,
+                ability=ability,
+            )
 
     # Fetch top 4 moves from Smogon
     moves: list[Move] = []
@@ -194,6 +225,21 @@ def register_game_plan_tools(
         if len(opponent_team) < 2:
             return error_response(ErrorCodes.INTERNAL_ERROR, 'Opponent team needs at least 2 Pokemon.')
 
+        # Detect whether the user's team should be built on the Champions
+        # Stat Point grain. Auto-detect from the user's own roster (mirrors the
+        # zero-config workflow elsewhere); explicit user regulation wins.
+        is_champions = False
+        try:
+            cfg = get_regulation_config()
+            try:
+                from vgc_mcp_core.rules.regulation_router import auto_detect_regulation
+                auto_detect_regulation(list(your_names), cfg)
+            except Exception:
+                pass
+            is_champions = cfg.get_format_system() == "champions"
+        except Exception:
+            is_champions = False
+
         # Build profiles for all Pokemon in parallel
         try:
             your_tasks = []
@@ -204,6 +250,7 @@ def register_game_plan_tools(
                     known_item=known_items.get(name.lower()),
                     known_ability=known_abilities.get(name.lower()),
                     existing_build=existing,
+                    is_champions_subject=is_champions,
                 ))
 
             their_tasks = []

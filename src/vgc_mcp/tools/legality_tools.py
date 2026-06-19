@@ -215,6 +215,31 @@ def register_legality_tools(mcp: FastMCP, team_manager):
         config = get_regulation_config()
         reg_code = regulation or config.current_regulation
 
+        # Allowlist regulations (e.g. Reg MA Champions) decide legality purely
+        # from the allowlist — there is no banlist/restricted concept.
+        if config.get_legality_mode(reg_code) == "allowlist":
+            on_list = config.is_pokemon_legal(pokemon_name, reg_code)
+            if on_list:
+                return {
+                    "pokemon": pokemon_name,
+                    "status": "allowed",
+                    "regulation": reg_code,
+                    "legal": True,
+                    "restricted": False,
+                    "message": f"{pokemon_name} is legal in {reg_code}",
+                }
+            return {
+                "pokemon": pokemon_name,
+                "status": "illegal",
+                "regulation": reg_code,
+                "legal": False,
+                "restricted": False,
+                "message": (
+                    f"{pokemon_name} is NOT legal in {reg_code} "
+                    f"(not on the Reg MA allowlist)"
+                ),
+            }
+
         status = get_restricted_status(pokemon_name, reg_code)
 
         result = {

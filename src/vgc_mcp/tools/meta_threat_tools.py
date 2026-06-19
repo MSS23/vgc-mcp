@@ -18,9 +18,55 @@ from vgc_mcp_core.calc.meta_threats import (
     MetaThreatReport,
     ThreatDamageResult
 )
-from vgc_mcp_core.models.pokemon import PokemonBuild, BaseStats, EVSpread, Nature
+from vgc_mcp_core.models.pokemon import (
+    PokemonBuild, BaseStats, EVSpread, StatPointSpread, Nature,
+)
 from vgc_mcp_core.config import EV_BREAKPOINTS_LV50
+from vgc_mcp_core.calc.stats_champions import SP_BREAKPOINTS_LV50
+from vgc_mcp_core.calc.conversion import evs_to_sps_spread
+from vgc_mcp_core.formats.showdown import pokemon_build_to_showdown
+from vgc_mcp_core.rules.regulation_loader import get_regulation_config
 from vgc_mcp_core.utils.errors import error_response, ErrorCodes
+from vgc_mcp_core.utils.normalize import normalize_move
+
+
+def _detect_champions(pokemon_name: Optional[str] = None) -> bool:
+    """Return True when the active session is the Champions (Reg MA) SP system.
+
+    Mirrors spread_tools._detect_champions: reads the session regulation's
+    format system, optionally running Pokemon-name inference first so a Mega /
+    Reg MA mention auto-selects Champions. Mainline path is taken when False.
+    """
+    from vgc_mcp_core.rules.format_detect import detect_champions_format
+    return detect_champions_format(pokemon_name)
+
+
+async def _fetch_usage_moves(pokeapi, usage: Optional[dict]) -> list[dict]:
+    """Fetch the top usage moves as calc-ready dicts, tolerating bad keys.
+
+    Smogon usage keys arrive concatenated (e.g. "fakeout", "partingshot").
+    They are normalized to PokeAPI's hyphenated form before lookup; any key
+    PokeAPI still can't resolve (unmapped concatenations, status-only moves)
+    is skipped rather than crashing the whole tool. ``get_move`` returns a
+    ``Move`` object, so attributes (``.power``/``.type``/``.category``) are
+    used here, never dict ``.get(...)``.
+    """
+    moves: list[dict] = []
+    if not usage:
+        return moves
+    for move_name in list(usage.get("moves", {}).keys())[:4]:
+        try:
+            move_data = await pokeapi.get_move(normalize_move(move_name))
+        except Exception:
+            continue
+        if move_data:
+            moves.append({
+                "name": move_name,
+                "power": move_data.power or 0,
+                "type": move_data.type.lower(),
+                "category": move_data.category.value,
+            })
+    return moves
 
 
 def _format_matchup_row(r: ThreatDamageResult) -> dict:
@@ -161,39 +207,54 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
         except Exception as e:
             return error_response(ErrorCodes.POKEMON_NOT_FOUND, f'Pokemon not found: {pokemon_name}')
 
-        evs = EVSpread(
-            hp=hp_evs,
-            attack=atk_evs,
-            defense=def_evs,
-            special_attack=spa_evs,
-            special_defense=spd_evs,
-            speed=spe_evs
-        )
+        # Only the USER'S subject Pokemon becomes a Champions (SP) build when the
+        # session is Champions; the opposing meta threats below stay mainline
+        # (their own Smogon spreads). EV inputs map to the SP grain via
+        # evs_to_sps_spread so the same call signature works in both formats.
+        is_champions = _detect_champions(pokemon_name)
 
-        your_pokemon = PokemonBuild(
-            name=pokemon_name,
-            base_stats=base_stats,
-            types=your_types,
-            nature=nature_enum,
-            evs=evs,
-            level=50
-        )
+        if is_champions:
+            sps = evs_to_sps_spread(EVSpread(
+                hp=hp_evs,
+                attack=atk_evs,
+                defense=def_evs,
+                special_attack=spa_evs,
+                special_defense=spd_evs,
+                speed=spe_evs,
+            ))
+            your_pokemon = PokemonBuild(
+                name=pokemon_name,
+                base_stats=base_stats,
+                types=your_types,
+                nature=nature_enum,
+                format_system="champions",
+                sps=sps,
+                level=50
+            )
+        else:
+            evs = EVSpread(
+                hp=hp_evs,
+                attack=atk_evs,
+                defense=def_evs,
+                special_attack=spa_evs,
+                special_defense=spd_evs,
+                speed=spe_evs
+            )
+
+            your_pokemon = PokemonBuild(
+                name=pokemon_name,
+                base_stats=base_stats,
+                types=your_types,
+                nature=nature_enum,
+                evs=evs,
+                level=50
+            )
 
         your_stats = calculate_all_stats(your_pokemon)
 
         # Get your common moves (simplified - would need actual moveset data)
         your_usage = await smogon.get_pokemon_usage(pokemon_name)
-        your_moves = []
-        if your_usage:
-            for move_name, usage in list(your_usage.get("moves", {}).items())[:4]:
-                move_data = await pokeapi.get_move(move_name)
-                if move_data:
-                    your_moves.append({
-                        "name": move_name,
-                        "power": move_data.get("power", 0),
-                        "type": move_data.get("type", "normal"),
-                        "category": move_data.get("category", "physical")
-                    })
+        your_moves = await _fetch_usage_moves(pokeapi, your_usage)
 
         # Get meta usage stats
         usage_stats = await smogon.get_usage_stats()
@@ -223,17 +284,7 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
             threat_usage = await smogon.get_pokemon_usage(threat_name)
 
             # Get threat's common moves
-            threat_moves = []
-            if threat_usage:
-                for move_name, usage in list(threat_usage.get("moves", {}).items())[:4]:
-                    move_data = await pokeapi.get_move(move_name)
-                    if move_data:
-                        threat_moves.append({
-                            "name": move_name,
-                            "power": move_data.power or 0,
-                            "type": move_data.type.lower(),
-                            "category": move_data.category.value
-                        })
+            threat_moves = await _fetch_usage_moves(pokeapi, threat_usage)
 
             # Use actual Smogon spread if available, otherwise estimate
             threat_spread = None
@@ -316,9 +367,24 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
         # Format results as table
         table_data = _format_results_table(threat_results)
 
-        return {
-            "pokemon": pokemon_name,
-            "spread": {
+        if is_champions:
+            sp_map = your_pokemon.sps.to_sps_dict()
+            spread_out = {
+                "nature": nature,
+                "format_system": "champions",
+                "units": "Stat Points",
+                "sps": {
+                    "hp": your_pokemon.sps.hp,
+                    "attack": your_pokemon.sps.attack,
+                    "defense": your_pokemon.sps.defense,
+                    "special_attack": your_pokemon.sps.special_attack,
+                    "special_defense": your_pokemon.sps.special_defense,
+                    "speed": your_pokemon.sps.speed,
+                },
+                "sp_total": your_pokemon.sps.total,
+            }
+        else:
+            spread_out = {
                 "nature": nature,
                 "hp": hp_evs,
                 "attack": atk_evs,
@@ -326,7 +392,12 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                 "special_attack": spa_evs,
                 "special_defense": spd_evs,
                 "speed": spe_evs
-            },
+            }
+
+        return {
+            "pokemon": pokemon_name,
+            "spread": spread_out,
+            "showdown_paste": pokemon_build_to_showdown(your_pokemon),
             "final_stats": your_stats,
             "threats_analyzed": len(threat_results),
             "summary": {
@@ -373,17 +444,7 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
 
         # Get your common moves
         your_usage = await smogon.get_pokemon_usage(pokemon.name)
-        your_moves = []
-        if your_usage:
-            for move_name, usage in list(your_usage.get("moves", {}).items())[:4]:
-                move_data = await pokeapi.get_move(move_name)
-                if move_data:
-                    your_moves.append({
-                        "name": move_name,
-                        "power": move_data.get("power", 0),
-                        "type": move_data.get("type", "normal"),
-                        "category": move_data.get("category", "physical")
-                    })
+        your_moves = await _fetch_usage_moves(pokeapi, your_usage)
 
         # Get meta usage stats
         usage_stats = await smogon.get_usage_stats()
@@ -409,17 +470,7 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
 
             threat_usage = await smogon.get_pokemon_usage(threat_name)
 
-            threat_moves = []
-            if threat_usage:
-                for move_name, usage in list(threat_usage.get("moves", {}).items())[:4]:
-                    move_data = await pokeapi.get_move(move_name)
-                    if move_data:
-                        threat_moves.append({
-                            "name": move_name,
-                            "power": move_data.power or 0,
-                            "type": move_data.type.lower(),
-                            "category": move_data.category.value
-                        })
+            threat_moves = await _fetch_usage_moves(pokeapi, threat_usage)
 
             # Use actual Smogon spread if available, otherwise estimate
             threat_spread = None
@@ -497,9 +548,26 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
         # Format results as table
         table_data = _format_results_table(threat_results)
 
-        return {
-            "pokemon": pokemon.name,
-            "spread": {
+        # The stored Pokemon is already format-aware (it carries its own
+        # format_system / sps from when it was stored). Surface SP-scale spread
+        # output for champions subjects; the meta threats above stay mainline.
+        if pokemon.is_champions() and pokemon.sps is not None:
+            spread_out = {
+                "nature": pokemon.nature.value.title(),
+                "format_system": "champions",
+                "units": "Stat Points",
+                "sps": {
+                    "hp": pokemon.sps.hp,
+                    "attack": pokemon.sps.attack,
+                    "defense": pokemon.sps.defense,
+                    "special_attack": pokemon.sps.special_attack,
+                    "special_defense": pokemon.sps.special_defense,
+                    "speed": pokemon.sps.speed,
+                },
+                "sp_total": pokemon.sps.total,
+            }
+        else:
+            spread_out = {
                 "nature": pokemon.nature.value.title(),
                 "hp": pokemon.evs.hp,
                 "attack": pokemon.evs.attack,
@@ -507,7 +575,12 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                 "special_attack": pokemon.evs.special_attack,
                 "special_defense": pokemon.evs.special_defense,
                 "speed": pokemon.evs.speed
-            },
+            }
+
+        return {
+            "pokemon": pokemon.name,
+            "spread": spread_out,
+            "showdown_paste": pokemon_build_to_showdown(pokemon),
             "final_stats": your_stats,
             "threats_analyzed": len(threat_results),
             "summary": {
@@ -581,24 +654,44 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
         except Exception:
             return error_response(ErrorCodes.POKEMON_NOT_FOUND, f'Pokemon not found: {threat_pokemon}')
 
-        move_data = await pokeapi.get_move(threat_move)
+        move_data = await pokeapi.get_move(normalize_move(threat_move))
         if not move_data:
             return error_response(ErrorCodes.MOVE_NOT_FOUND, f'Move not found: {threat_move}')
 
-        evs = EVSpread(
-            hp=hp_evs,
-            defense=def_evs,
-            special_defense=spd_evs
-        )
+        # Champions: the USER'S subject becomes an SP build (EV inputs map onto
+        # the SP grain). The threat below stays mainline (its Smogon spread).
+        is_champions = _detect_champions(pokemon_name)
 
-        your_pokemon = PokemonBuild(
-            name=pokemon_name,
-            base_stats=base_stats,
-            types=your_types,
-            nature=nature_enum,
-            evs=evs,
-            level=50
-        )
+        if is_champions:
+            sps = evs_to_sps_spread(EVSpread(
+                hp=hp_evs,
+                defense=def_evs,
+                special_defense=spd_evs,
+            ))
+            your_pokemon = PokemonBuild(
+                name=pokemon_name,
+                base_stats=base_stats,
+                types=your_types,
+                nature=nature_enum,
+                format_system="champions",
+                sps=sps,
+                level=50
+            )
+        else:
+            evs = EVSpread(
+                hp=hp_evs,
+                defense=def_evs,
+                special_defense=spd_evs
+            )
+
+            your_pokemon = PokemonBuild(
+                name=pokemon_name,
+                base_stats=base_stats,
+                types=your_types,
+                nature=nature_enum,
+                evs=evs,
+                level=50
+            )
 
         your_stats = calculate_all_stats(your_pokemon)
 
@@ -761,7 +854,9 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
             "threshold_requested": survival_threshold,
             "ko_result": damage["ko_chance"],
             "type_effectiveness": type_eff,
-            "analysis": analysis_msg
+            "analysis": analysis_msg,
+            "format_system": "champions" if is_champions else "mainline",
+            "showdown_paste": pokemon_build_to_showdown(your_pokemon),
         }
 
         # Build benchmark table for clear display
@@ -839,7 +934,7 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
         except Exception:
             return error_response(ErrorCodes.POKEMON_NOT_FOUND, f'Pokemon not found: {threat_pokemon}')
 
-        move_data = await pokeapi.get_move(threat_move)
+        move_data = await pokeapi.get_move(normalize_move(threat_move))
         if not move_data:
             return error_response(ErrorCodes.MOVE_NOT_FOUND, f'Move not found: {threat_move}')
 
@@ -921,30 +1016,54 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                 defense_modifier = ruinous_info["modifier"]
                 ruinous_ability_applied = ruinous_info["ability"]
 
+        # Champions: sweep the SP grain (0-32 per stat, 66 total) and build the
+        # USER'S defender as a Champions SP build. The threat above stays
+        # mainline (its Smogon spread / estimate). Mainline keeps the EV sweep
+        # (0-252 per stat, 508 total) byte-for-byte. Loop vars stay named
+        # hp_evs/def_evs but hold SP units in the champions branch.
+        is_champions = _detect_champions(pokemon_name)
+        breakpoints = SP_BREAKPOINTS_LV50 if is_champions else EV_BREAKPOINTS_LV50
+        total_budget = 66 if is_champions else 508
+
         best_spread = None
         min_total_evs = 999
         max_achievable_survival = 0
         max_achievable_spread = None
 
-        for hp_evs in EV_BREAKPOINTS_LV50:
-            for def_evs in EV_BREAKPOINTS_LV50:
-                if hp_evs + def_evs > 508:
+        for hp_evs in breakpoints:
+            for def_evs in breakpoints:
+                if hp_evs + def_evs > total_budget:
                     continue
 
-                evs = EVSpread(
-                    hp=hp_evs,
-                    defense=def_evs if move_is_physical else 0,
-                    special_defense=0 if move_is_physical else def_evs
-                )
+                if is_champions:
+                    test_pokemon = PokemonBuild(
+                        name=pokemon_name,
+                        base_stats=base_stats,
+                        types=your_types,
+                        nature=nature_enum,
+                        format_system="champions",
+                        sps=StatPointSpread(
+                            hp=hp_evs,
+                            defense=def_evs if move_is_physical else 0,
+                            special_defense=0 if move_is_physical else def_evs,
+                        ),
+                        level=50
+                    )
+                else:
+                    evs = EVSpread(
+                        hp=hp_evs,
+                        defense=def_evs if move_is_physical else 0,
+                        special_defense=0 if move_is_physical else def_evs
+                    )
 
-                test_pokemon = PokemonBuild(
-                    name=pokemon_name,
-                    base_stats=base_stats,
-                    types=your_types,
-                    nature=nature_enum,
-                    evs=evs,
-                    level=50
-                )
+                    test_pokemon = PokemonBuild(
+                        name=pokemon_name,
+                        base_stats=base_stats,
+                        types=your_types,
+                        nature=nature_enum,
+                        evs=evs,
+                        level=50
+                    )
 
                 test_stats = calculate_all_stats(test_pokemon)
 
@@ -1059,8 +1178,103 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                 "max_achievable_survival": round(max_achievable_survival, 1),
                 "max_achievable_spread": max_achievable_spread,
                 "message": message,
-                "ruinous_ability_applied": ruinous_ability_applied
+                "ruinous_ability_applied": ruinous_ability_applied,
+                "format_system": "champions" if is_champions else "mainline",
+                "units": "Stat Points" if is_champions else "EVs",
             }
+        elif is_champions:
+            # Champions success branch: loop vars held SP units. Report SP-scale
+            # keys and an 'SPs:' paste; never emit 252/508 or EV-unit labels.
+            threshold_note = ""
+            if survival_threshold < 100:
+                threshold_note = f" (meets {survival_threshold}% threshold)"
+
+            ruinous_note = ""
+            if ruinous_ability_applied:
+                ruinous_note = f" (accounts for {ruinous_ability_applied})"
+
+            hp_sps = best_spread["hp_evs"]
+            def_sps = best_spread["def_evs"]
+            spd_sps = best_spread["spd_evs"]
+            total_sps = best_spread["total_evs"]
+
+            minimum_sps = {
+                "hp_sps": hp_sps,
+                "def_sps": def_sps,
+                "spd_sps": spd_sps,
+                "total_sps": total_sps,
+                "resulting_hp": best_spread["resulting_hp"],
+                "survival_percent": best_spread["survival_percent"],
+                "survival_rolls": best_spread["survival_rolls"],
+                "damage_taken": best_spread["damage_taken"],
+                "hp_remaining_percent": best_spread["hp_remaining_percent"],
+            }
+
+            survival_build = PokemonBuild(
+                name=pokemon_name,
+                base_stats=base_stats,
+                types=your_types,
+                nature=nature_enum,
+                format_system="champions",
+                sps=StatPointSpread(
+                    hp=hp_sps,
+                    defense=def_sps if move_is_physical else 0,
+                    special_defense=0 if move_is_physical else spd_sps,
+                ),
+                level=50
+            )
+
+            result = {
+                "pokemon": pokemon_name,
+                "nature": nature,
+                "threat": threat_pokemon,
+                "move": threat_move,
+                "threat_spread": threat_spread,
+                "threat_stats": threat_stats,
+                "move_type": move_data.type,
+                "move_category": "Physical" if move_is_physical else "Special",
+                "threshold_requested": survival_threshold,
+                "format_system": "champions",
+                "units": "Stat Points",
+                "minimum_sps": minimum_sps,
+                "ruinous_ability_applied": ruinous_ability_applied,
+                "showdown_paste": pokemon_build_to_showdown(survival_build),
+            }
+
+            # Build SP string showing only non-zero stats
+            sp_parts = []
+            if hp_sps: sp_parts.append(f"{hp_sps} HP")
+            if def_sps: sp_parts.append(f"{def_sps} Def")
+            if spd_sps: sp_parts.append(f"{spd_sps} SpD")
+            sp_str = " / ".join(sp_parts) if sp_parts else "0 SP"
+
+            result["analysis"] = (
+                f"Minimum {total_sps} total SP needed: "
+                f"{sp_str} "
+                f"to survive {best_spread['survival_percent']}% of rolls "
+                f"({best_spread['survival_rolls']}) from {threat_move} ({threat_spread_str}), "
+                f"left with {best_spread['hp_remaining_percent']} HP{threshold_note}{ruinous_note}"
+            )
+
+            table_lines = [
+                "| Stat                 | Value                                    |",
+                "|----------------------|------------------------------------------|",
+                f"| Pokemon              | {pokemon_name:<40} |",
+                f"| Nature               | {nature:<40} |",
+                f"| Threat               | {threat_pokemon}'s {threat_move:<20} |",
+                f"| HP SP                | {hp_sps:<40} |",
+                f"| Def SP               | {def_sps:<40} |",
+                f"| SpD SP               | {spd_sps:<40} |",
+                f"| Total SP             | {total_sps:<40} |",
+                f"| Resulting HP         | {best_spread['resulting_hp']:<40} |",
+                f"| Damage Taken         | {best_spread['damage_taken']:<40} |",
+                f"| HP Remaining         | {best_spread['hp_remaining_percent']:<40} |",
+                f"| Survival Rate        | {best_spread['survival_percent']}% ({best_spread['survival_rolls']}){' ':<20} |",
+            ]
+            if ruinous_ability_applied:
+                table_lines.append(f"| Ability Applied      | {ruinous_ability_applied:<40} |")
+            result["spread_table"] = "\n".join(table_lines)
+
         else:
             # Build analysis message with HP remaining for clarity
             threshold_note = ""

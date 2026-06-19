@@ -8,6 +8,7 @@ import httpx
 from .cache import APICache
 from ..config import settings, logger
 from ..rules.regulation_loader import get_regulation_config, RegulationConfig
+from ..utils.normalize import reorder_mega_prefix
 
 
 # Map form names to Smogon's naming convention
@@ -264,9 +265,11 @@ class SmogonStatsClient:
         """Get usage stats for a specific Pokemon."""
         stats = await self.get_usage_stats(format_name, rating)
 
-        # Apply form aliases (e.g., "landorus-incarnate" -> "landorus")
-        name_lower = pokemon_name.lower().replace(" ", "-")
-        pokemon_name = FORM_ALIASES.get(name_lower, pokemon_name)
+        # Reorder a leading "Mega X" into Smogon's "X-Mega" key order before
+        # applying form aliases / stripping hyphens. Without this, "Mega
+        # Manectric" never matches the dataset key "Manectric-Mega".
+        name_lower = reorder_mega_prefix(pokemon_name)
+        pokemon_name = FORM_ALIASES.get(name_lower, name_lower)
 
         # Normalize name for matching
         name_normalized = pokemon_name.lower().replace(" ", "").replace("-", "")
@@ -542,8 +545,13 @@ class SmogonStatsClient:
             for fmt in formats:
                 data = await self._try_fetch_stats(previous_month, fmt, rating)
                 if data:
-                    # Extract Pokemon data from previous month
-                    name_normalized = pokemon_name.lower().replace(" ", "").replace("-", "")
+                    # Extract Pokemon data from previous month. Reorder a
+                    # leading "Mega X" into Smogon's "X-Mega" key order first.
+                    name_normalized = (
+                        reorder_mega_prefix(pokemon_name)
+                        .replace(" ", "")
+                        .replace("-", "")
+                    )
 
                     for mon_name, mon_data in data.get("data", {}).items():
                         if mon_name.lower().replace(" ", "").replace("-", "") == name_normalized:

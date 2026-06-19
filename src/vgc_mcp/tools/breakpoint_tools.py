@@ -28,16 +28,38 @@ from vgc_mcp_core.api.smogon import SmogonStatsClient
 from vgc_mcp_core.calc.damage import calculate_damage
 from vgc_mcp_core.calc.modifiers import DamageModifiers
 from vgc_mcp_core.calc.stats import calculate_speed, calculate_stat
+from vgc_mcp_core.calc.stats_champions import (
+    SP_BREAKPOINTS_LV50,
+    calculate_speed_sp,
+)
+from vgc_mcp_core.calc.champions_optimization import (
+    SP_PER_STAT_MAX,
+    SP_TOTAL_MAX,
+    find_speed_sps_to_outspeed,
+)
 from vgc_mcp_core.models.pokemon import (
-    BaseStats, EVSpread, IVSpread, Nature, PokemonBuild, get_nature_modifier,
+    BaseStats, EVSpread, IVSpread, Nature, PokemonBuild, StatPointSpread,
+    get_nature_modifier,
 )
 from vgc_mcp_core.formats.showdown import pokemon_build_to_showdown
+from vgc_mcp_core.rules.regulation_loader import get_regulation_config
 from vgc_mcp_core.utils.errors import error_response, ErrorCodes
 from vgc_mcp_core.tools import get_common_spread
 from vgc_mcp_core.tools.ability_helpers import (
     resolve_ability,
     compute_intimidate_attack_stage,
 )
+
+
+def _session_is_champions(pokemon_name: Optional[str] = None) -> bool:
+    """Return True when the active session is the Champions (Reg MA) SP system.
+
+    Mirrors spread_tools._session_is_champions: optionally runs Pokemon-name
+    inference first so a Mega/Reg MA mention auto-selects Champions without the
+    user having to set it explicitly. The mainline path is taken when False.
+    """
+    from vgc_mcp_core.rules.format_detect import detect_champions_format
+    return detect_champions_format(pokemon_name)
 
 
 # Natures that boost / nerf each stat
@@ -138,25 +160,31 @@ def register_breakpoint_tools(
         if tgt_spread is not None and tgt_ability and not tgt_spread.get("ability"):
             tgt_spread["ability"] = tgt_ability
 
+        # Only the USER's subject Pokemon becomes a Champions (SP) build; the
+        # opposing target stays mainline (it's an opposing meta reference).
+        is_champions = _session_is_champions(pokemon_name)
+
         if benchmark_type == "outspeed":
             return _find_speed_breakpoint(me_base, tgt_base, tgt_spread,
                                           pokemon_name, target_pokemon,
-                                          target_stat or "speed")
+                                          target_stat or "speed",
+                                          is_champions=is_champions)
         if benchmark_type == "ko":
             return await _find_ko_breakpoint(
                 pokeapi, me_base, me_types, tgt_base, tgt_types, tgt_spread,
                 pokemon_name, target_pokemon, target_move,
-                me_ability=me_ability,
+                me_ability=me_ability, is_champions=is_champions,
             )
         return await _find_survival_breakpoint(
             pokeapi, me_base, me_types, tgt_base, tgt_types, tgt_spread,
             pokemon_name, target_pokemon, target_move, survival_chance,
-            me_ability=me_ability,
+            me_ability=me_ability, is_champions=is_champions,
         )
 
 
-def _find_speed_breakpoint(me_base, tgt_base, tgt_spread, me_name, tgt_name, stat):
-    """Find min EVs to outspeed a target's stat."""
+def _find_speed_breakpoint(me_base, tgt_base, tgt_spread, me_name, tgt_name, stat,
+                           is_champions=False):
+    """Find min EVs (or SP, for Champions) to outspeed a target's stat."""
     tgt_evs = (tgt_spread.get("evs") or {}).get(stat, 0)
     tgt_nature_str = tgt_spread.get("nature", "serious").lower()
     try:
@@ -166,6 +194,11 @@ def _find_speed_breakpoint(me_base, tgt_base, tgt_spread, me_name, tgt_name, sta
     tgt_speed = calculate_speed(getattr(tgt_base, stat),
                                 ev=tgt_evs, iv=31, nature=tgt_nature)
     target_min = tgt_speed + 1
+
+    if is_champions:
+        return _find_speed_breakpoint_champions(
+            me_base, tgt_speed, target_min, me_name, tgt_name, stat,
+        )
 
     options = []
     me_base_stat = getattr(me_base, stat)
@@ -226,6 +259,87 @@ def _find_speed_breakpoint(me_base, tgt_base, tgt_spread, me_name, tgt_name, sta
     }
 
 
+def _sp_paste_for(me_name, me_base, nature_str, sp_dict):
+    """Build a Champions PokemonBuild + 'SPs:' paste from a stat->SP dict."""
+    try:
+        nat = Nature((nature_str or "serious").lower())
+    except ValueError:
+        nat = Nature.SERIOUS
+    build = PokemonBuild(
+        name=me_name, base_stats=me_base, nature=nat,
+        format_system="champions",
+        sps=StatPointSpread(**sp_dict),
+    )
+    return pokemon_build_to_showdown(build)
+
+
+def _find_speed_breakpoint_champions(me_base, tgt_speed, target_min,
+                                     me_name, tgt_name, stat):
+    """SP-scale speed breakpoint (0-32 per stat, <=66 total)."""
+    me_base_stat = getattr(me_base, stat)
+    options = []
+
+    # Option 1: cheapest neutral nature
+    neutral_sp = find_speed_sps_to_outspeed(me_base_stat, tgt_speed, Nature.SERIOUS)
+    if neutral_sp is not None:
+        sp_dict = {stat: neutral_sp}
+        options.append({
+            "label": "cheapest (neutral nature)",
+            "nature": "serious",
+            "sps": sp_dict,
+            "result_stat": calculate_speed_sp(me_base_stat, 31, neutral_sp,
+                                              nature=Nature.SERIOUS),
+            "sp_cost": neutral_sp,
+            "showdown_paste": _sp_paste_for(me_name, me_base, "serious", sp_dict),
+        })
+
+    # Option 2: +nature (boosts the relevant stat — Jolly for speed)
+    plus_nat = _PLUS_NATURES.get(stat)
+    if plus_nat:
+        try:
+            plus_nature_enum = Nature(plus_nat)
+        except ValueError:
+            plus_nature_enum = Nature.SERIOUS
+        plus_sp = find_speed_sps_to_outspeed(me_base_stat, tgt_speed, plus_nature_enum)
+        if plus_sp is not None:
+            sp_dict = {stat: plus_sp}
+            options.append({
+                "label": f"+nature ({plus_nat})",
+                "nature": plus_nat,
+                "sps": sp_dict,
+                "result_stat": calculate_speed_sp(me_base_stat, 31, plus_sp,
+                                                 nature=plus_nature_enum),
+                "sp_cost": plus_sp,
+                "showdown_paste": _sp_paste_for(me_name, me_base, plus_nat, sp_dict),
+                "tradeoff": (
+                    f"costs {plus_sp} {stat} SP but {plus_nat} nature reduces "
+                    "the *other* stat 10% — pick this if you can afford the loss."
+                ),
+            })
+
+    if not options:
+        return error_response(
+            ErrorCodes.INVALID_PARAMETER,
+            f"Cannot outspeed {tgt_name} — its {stat} ({tgt_speed}) is unreachable "
+            f"by {me_name} even at 32 SP. Use Tailwind / Trick Room instead.",
+            target_stat=tgt_speed,
+        )
+
+    return {
+        "success": True,
+        "format_system": "champions",
+        "benchmark": f"outspeed {tgt_name} (stat: {stat})",
+        "target_stat_value": tgt_speed,
+        "options": options,
+        "agent_instruction": (
+            "Champions (Reg MA) SP units. Render `options` as a table: "
+            "Label | Nature | SP | Resulting stat. Highlight the cheapest option. "
+            "Show the showdown_paste (an 'SPs:' paste) for it in a code block. "
+            "Mention the tradeoff for the +nature row."
+        ),
+    }
+
+
 def _min_evs_to_reach(base: int, target: int, nature_mod: float, level: int = 50) -> Optional[int]:
     """Binary search for the minimum EVs needed to reach `target`."""
     for ev in range(0, 256, 4):
@@ -236,8 +350,9 @@ def _min_evs_to_reach(base: int, target: int, nature_mod: float, level: int = 50
 
 
 async def _find_ko_breakpoint(pokeapi, me_base, me_types, tgt_base, tgt_types, tgt_spread,
-                              me_name, tgt_name, move_name, me_ability=None):
-    """Find min Atk/SpA EVs to guarantee KO with `move_name`."""
+                              me_name, tgt_name, move_name, me_ability=None,
+                              is_champions=False):
+    """Find min Atk/SpA EVs (or SP, for Champions) to guarantee KO with `move_name`."""
     if not move_name:
         return error_response(ErrorCodes.INVALID_PARAMETER,
                               "target_move required for benchmark_type='ko'")
@@ -261,28 +376,44 @@ async def _find_ko_breakpoint(pokeapi, me_base, me_types, tgt_base, tgt_types, t
         ("cheapest (neutral)", "serious", 1.0),
         (f"+nature ({plus_nature})", plus_nature, 1.1),
     ]:
-        ev = _min_evs_for_ko(
+        cost = _min_invest_for_ko(
             me_base, me_types, me_name, offensive_stat,
             mod, move, tgt_build,
             me_ability=me_ability, intim_stage=intim_stage if is_physical else 0,
+            is_champions=is_champions,
         )
-        if ev is None:
+        if cost is None:
             options.append({"label": label, "nature": nature, "achievable": False})
             continue
-        # Build resulting Pokémon for paste
-        ev_dict = {offensive_stat: ev}
-        me_build = _build_from_spread(me_base, me_types, me_name,
-                                      {"nature": nature, "evs": ev_dict, "ability": me_ability})
-        options.append({
-            "label": label,
-            "nature": nature,
-            "evs": ev_dict,
-            "ev_cost": ev,
-            "achievable": True,
-            "showdown_paste": pokemon_build_to_showdown(me_build),
-        })
+        if is_champions:
+            sp_dict = {offensive_stat: cost}
+            me_build = _build_champions_subject(
+                me_base, me_types, me_name, nature, sp_dict, ability=me_ability,
+            )
+            options.append({
+                "label": label,
+                "nature": nature,
+                "sps": sp_dict,
+                "sp_cost": cost,
+                "achievable": True,
+                "showdown_paste": pokemon_build_to_showdown(me_build),
+            })
+        else:
+            # Build resulting Pokémon for paste
+            ev_dict = {offensive_stat: cost}
+            me_build = _build_from_spread(me_base, me_types, me_name,
+                                          {"nature": nature, "evs": ev_dict, "ability": me_ability})
+            options.append({
+                "label": label,
+                "nature": nature,
+                "evs": ev_dict,
+                "ev_cost": cost,
+                "achievable": True,
+                "showdown_paste": pokemon_build_to_showdown(me_build),
+            })
 
-    return {
+    unit = "SP" if is_champions else "EVs"
+    result_dict = {
         "success": True,
         "benchmark": f"guarantee KO on {tgt_name} with {move_name}",
         "attacker_ability": (me_ability.replace("-", " ").title() if me_ability else None),
@@ -290,17 +421,36 @@ async def _find_ko_breakpoint(pokeapi, me_base, me_types, tgt_base, tgt_types, t
         "intimidate_applied": intim_stage != 0,
         "options": options,
         "agent_instruction": (
-            "Render `options` as a Label | Nature | EVs | Cost table. "
+            f"Render `options` as a Label | Nature | {unit} | Cost table. "
             "Show the showdown_paste for the cheapest achievable option as a code block. "
             "If neither option is achievable, say so plainly and suggest item "
             "or Tera as alternatives. Mention the resolved attacker/defender abilities "
             "if they materially shift the calc (Multiscale, Sheer Force, Intimidate, etc.)."
         ),
     }
+    if is_champions:
+        result_dict["format_system"] = "champions"
+    return result_dict
 
 
-def _min_evs_for_ko(me_base, me_types, me_name, off_stat, nat_mod, move, tgt_build,
-                    me_ability=None, intim_stage: int = 0) -> Optional[int]:
+def _build_champions_subject(me_base, me_types, me_name, nature, sp_dict,
+                             ability=None, item=None):
+    """Construct a Champions (SP) PokemonBuild for the user's subject Pokemon."""
+    try:
+        nat = Nature((nature or "serious").lower()) if isinstance(nature, str) else nature
+    except ValueError:
+        nat = Nature.SERIOUS
+    return PokemonBuild(
+        name=me_name, base_stats=me_base, types=me_types,
+        nature=nat, format_system="champions",
+        sps=StatPointSpread(**sp_dict), ivs=IVSpread(),
+        ability=ability, item=item,
+    )
+
+
+def _min_invest_for_ko(me_base, me_types, me_name, off_stat, nat_mod, move, tgt_build,
+                       me_ability=None, intim_stage: int = 0,
+                       is_champions=False) -> Optional[int]:
     nature = Nature.SERIOUS
     if nat_mod > 1.0:
         if off_stat == "attack":
@@ -309,6 +459,25 @@ def _min_evs_for_ko(me_base, me_types, me_name, off_stat, nat_mod, move, tgt_bui
             nature = Nature.MODEST
 
     is_physical = off_stat == "attack"
+
+    if is_champions:
+        for sp in SP_BREAKPOINTS_LV50:
+            me_build = _build_champions_subject(
+                me_base, me_types, me_name, nature, {off_stat: sp},
+                ability=me_ability,
+            )
+            result = calculate_damage(
+                me_build, tgt_build, move,
+                DamageModifiers(
+                    is_doubles=True,
+                    attacker_ability=me_ability,
+                    attack_stage=intim_stage if is_physical else 0,
+                ),
+            )
+            if result.is_guaranteed_ohko:
+                return sp
+        return None
+
     for ev in range(0, 256, 4):
         evs = EVSpread(**{off_stat: ev})
         me_build = PokemonBuild(
@@ -331,8 +500,8 @@ def _min_evs_for_ko(me_base, me_types, me_name, off_stat, nat_mod, move, tgt_bui
 
 async def _find_survival_breakpoint(pokeapi, me_base, me_types, tgt_base, tgt_types, tgt_spread,
                                     me_name, tgt_name, move_name, survival_chance,
-                                    me_ability=None):
-    """Find min HP/Def or HP/SpD EVs to survive a target's attack at survival_chance."""
+                                    me_ability=None, is_champions=False):
+    """Find min HP/Def or HP/SpD EVs (or SP, for Champions) to survive at survival_chance."""
     if not move_name:
         return error_response(ErrorCodes.INVALID_PARAMETER,
                               "target_move required for benchmark_type='survive'")
@@ -351,35 +520,50 @@ async def _find_survival_breakpoint(pokeapi, me_base, me_types, tgt_base, tgt_ty
         is_physical=is_physical,
     )
 
-    # We sweep (HP, Def/SpD) jointly to minimize total EVs invested.
+    # We sweep (HP, Def/SpD) jointly to minimize total investment.
     options: list[dict] = []
     for label, nature, nat_mod in [
         ("cheapest (neutral)", "serious", 1.0),
         (f"+nature ({plus_nature})", plus_nature, 1.1),
     ]:
-        best = _min_total_evs_for_survival(
+        best = _min_total_invest_for_survival(
             me_base, me_types, me_name, def_stat,
             nat_mod, move, tgt_build, survival_chance,
             me_ability=me_ability,
             intim_stage=intim_stage if is_physical else 0,
+            is_champions=is_champions,
         )
         if best is None:
             options.append({"label": label, "nature": nature, "achievable": False})
             continue
-        hp_ev, def_ev = best
-        ev_dict = {"hp": hp_ev, def_stat: def_ev}
-        me_build = _build_from_spread(me_base, me_types, me_name,
-                                      {"nature": nature, "evs": ev_dict, "ability": me_ability})
-        options.append({
-            "label": label,
-            "nature": nature,
-            "evs": ev_dict,
-            "ev_cost": hp_ev + def_ev,
-            "achievable": True,
-            "showdown_paste": pokemon_build_to_showdown(me_build),
-        })
+        hp_inv, def_inv = best
+        if is_champions:
+            sp_dict = {"hp": hp_inv, def_stat: def_inv}
+            me_build = _build_champions_subject(
+                me_base, me_types, me_name, nature, sp_dict, ability=me_ability,
+            )
+            options.append({
+                "label": label,
+                "nature": nature,
+                "sps": sp_dict,
+                "sp_cost": hp_inv + def_inv,
+                "achievable": True,
+                "showdown_paste": pokemon_build_to_showdown(me_build),
+            })
+        else:
+            ev_dict = {"hp": hp_inv, def_stat: def_inv}
+            me_build = _build_from_spread(me_base, me_types, me_name,
+                                          {"nature": nature, "evs": ev_dict, "ability": me_ability})
+            options.append({
+                "label": label,
+                "nature": nature,
+                "evs": ev_dict,
+                "ev_cost": hp_inv + def_inv,
+                "achievable": True,
+                "showdown_paste": pokemon_build_to_showdown(me_build),
+            })
 
-    return {
+    result_dict = {
         "success": True,
         "benchmark": (f"survive {tgt_name}'s {move_name} at "
                       f"{survival_chance}%"),
@@ -395,6 +579,9 @@ async def _find_survival_breakpoint(pokeapi, me_base, me_types, tgt_base, tgt_ty
             "the calc (Multiscale halves damage, Intimidate drops Atk, etc.)."
         ),
     }
+    if is_champions:
+        result_dict["format_system"] = "champions"
+    return result_dict
 
 
 def _build_from_spread(base, types, name, spread):
@@ -416,16 +603,48 @@ def _build_from_spread(base, types, name, spread):
     )
 
 
-def _min_total_evs_for_survival(me_base, me_types, me_name, def_stat,
-                                nat_mod, move, tgt_build, survival_chance,
-                                me_ability=None, intim_stage: int = 0) -> Optional[tuple[int, int]]:
+def _min_total_invest_for_survival(me_base, me_types, me_name, def_stat,
+                                   nat_mod, move, tgt_build, survival_chance,
+                                   me_ability=None, intim_stage: int = 0,
+                                   is_champions=False) -> Optional[tuple[int, int]]:
     nature = Nature.SERIOUS
     if nat_mod > 1.0:
         nature = Nature((_PLUS_NATURES[def_stat]).upper().lower())
 
     is_physical = def_stat == "defense"
     threshold_rolls = round(survival_chance / 100 * 16)
-    best: Optional[tuple[int, int]] = None
+
+    if is_champions:
+        # Sweep (hp_sp, def_sp) on the SP grain (1), honouring 32/stat & 66/total.
+        best: Optional[tuple[int, int]] = None
+        best_total = 9999
+        for hp_sp in SP_BREAKPOINTS_LV50:
+            if hp_sp >= best_total:
+                break
+            for def_sp in SP_BREAKPOINTS_LV50:
+                total = hp_sp + def_sp
+                if total >= best_total or total > SP_TOTAL_MAX:
+                    break
+                me_build = _build_champions_subject(
+                    me_base, me_types, me_name, nature,
+                    {"hp": hp_sp, def_stat: def_sp}, ability=me_ability,
+                )
+                result = calculate_damage(
+                    tgt_build, me_build, move,
+                    DamageModifiers(is_doubles=True,
+                                    attacker_item=tgt_build.item,
+                                    attacker_ability=tgt_build.ability,
+                                    defender_ability=me_ability,
+                                    attack_stage=intim_stage if is_physical else 0),
+                )
+                survived = sum(1 for r in result.rolls if r < result.defender_hp)
+                if survived >= threshold_rolls:
+                    best = (hp_sp, def_sp)
+                    best_total = total
+                    break
+        return best
+
+    best = None
     best_total = 9999
     # Sweep coarse grid first (steps of 4 EVs to respect the breakpoint quantum)
     for hp_ev in range(0, 256, 4):

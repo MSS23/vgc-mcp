@@ -1217,14 +1217,22 @@ class TestEmbodyAspect:
             pp=10
         )
 
-        # Without Embody Aspect
-        mods_no_aspect = DamageModifiers(attacker_item="hearthflame-mask")
+        # Baseline: Terastallized (so STAB is identical in both runs) but WITHOUT
+        # the Embody Aspect ability — isolates the +1 Attack boost.
+        mods_no_aspect = DamageModifiers(
+            attacker_item="hearthflame-mask",
+            tera_active=True,
+            tera_type="fire",
+        )
         result_no_aspect = calculate_damage(ogerpon_hearthflame, defender, ivy_cudgel, mods_no_aspect)
 
-        # With Embody Aspect (+1 Attack = 1.5x)
+        # With Embody Aspect (+1 Attack = 1.5x). Embody Aspect only activates on
+        # Terastallization, so tera_active must be set (game-accurate).
         mods_aspect = DamageModifiers(
             attacker_ability="embody-aspect",
-            attacker_item="hearthflame-mask"
+            attacker_item="hearthflame-mask",
+            tera_active=True,
+            tera_type="fire",
         )
         result_aspect = calculate_damage(ogerpon_hearthflame, defender, ivy_cudgel, mods_aspect)
 

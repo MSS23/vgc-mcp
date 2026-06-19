@@ -7,7 +7,7 @@ from vgc_mcp_core.config import logger
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.calc.damage import calculate_damage
 from vgc_mcp_core.calc.modifiers import DamageModifiers
-from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, BaseStats
+from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, StatPointSpread, BaseStats
 from vgc_mcp_core.models.move import Move
 from vgc_mcp_core.tools.ability_helpers import (
     resolve_ability,
@@ -16,6 +16,20 @@ from vgc_mcp_core.tools.ability_helpers import (
 from vgc_mcp_core.utils.errors import pokemon_not_found_error, api_error, error_response, ErrorCodes
 from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name
 from vgc_mcp_core.config import EV_BREAKPOINTS_LV50
+from vgc_mcp_core.calc.stats_champions import SP_BREAKPOINTS_LV50
+from vgc_mcp_core.formats.showdown import pokemon_build_to_showdown
+from vgc_mcp_core.rules.regulation_loader import get_regulation_config
+
+
+def _detect_champions(pokemon_name: Optional[str] = None) -> bool:
+    """Return True when the active session is the Champions (Reg MA) SP system.
+
+    Mirrors spread_tools._detect_champions: reads the session regulation's
+    format system, optionally running Pokemon-name inference first so a Mega /
+    Reg MA mention auto-selects Champions. Mainline path is taken when False.
+    """
+    from vgc_mcp_core.rules.format_detect import detect_champions_format
+    return detect_champions_format(pokemon_name)
 
 
 def register_multi_threat_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon_client=None):
@@ -135,28 +149,51 @@ def register_multi_threat_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon_cli
                     logger.warning(f"Failed to build threat {threat['name']}: {e}")
                     return error_response(ErrorCodes.INTERNAL_ERROR, f"Failed to process threat {threat['name']}: {str(e)}")
             
-            # Try different EV combinations to find minimum that survives all threats
+            # Champions: the USER'S defender becomes a Champions SP build and we
+            # sweep the SP grain (0-32 per stat, 66 total). The threats above
+            # stay mainline (their user-supplied / Smogon EV spreads).
+            # calculate_damage reads each build's own format_system, so a
+            # champions defender vs mainline attackers is correct. Mainline keeps
+            # the EV sweep (0-252 per stat, 508 total) byte-for-byte. Loop vars
+            # stay named *_ev but hold SP units in the champions branch.
+            is_champions = _detect_champions(pokemon_name)
+            breakpoints = SP_BREAKPOINTS_LV50 if is_champions else EV_BREAKPOINTS_LV50
+            total_budget = 66 if is_champions else 508
+
+            # Try different EV/SP combinations to find minimum that survives all threats
             best_spread = None
             best_results = None
-            
-            # Try all valid EV breakpoint combinations
-            for hp_ev in EV_BREAKPOINTS_LV50:
-                for def_ev in EV_BREAKPOINTS_LV50:
-                    for spd_ev in EV_BREAKPOINTS_LV50:
+
+            # Try all valid breakpoint combinations
+            for hp_ev in breakpoints:
+                for def_ev in breakpoints:
+                    for spd_ev in breakpoints:
                         total_evs = hp_ev + def_ev + spd_ev
-                        if total_evs > 508:
+                        if total_evs > total_budget:
                             continue
-                        
+
                         # Create test defender build
-                        test_defender = PokemonBuild(
-                            name=pokemon_name,
-                            base_stats=def_base,
-                            types=def_types,
-                            nature=def_nature,
-                            evs=EVSpread(hp=hp_ev, defense=def_ev, special_defense=spd_ev),
-                            item=item,
-                            ability=ability
-                        )
+                        if is_champions:
+                            test_defender = PokemonBuild(
+                                name=pokemon_name,
+                                base_stats=def_base,
+                                types=def_types,
+                                nature=def_nature,
+                                format_system="champions",
+                                sps=StatPointSpread(hp=hp_ev, defense=def_ev, special_defense=spd_ev),
+                                item=item,
+                                ability=ability
+                            )
+                        else:
+                            test_defender = PokemonBuild(
+                                name=pokemon_name,
+                                base_stats=def_base,
+                                types=def_types,
+                                nature=def_nature,
+                                evs=EVSpread(hp=hp_ev, defense=def_ev, special_defense=spd_ev),
+                                item=item,
+                                ability=ability
+                            )
                         
                         # Test against all threats
                         threat_results = []
@@ -222,6 +259,52 @@ def register_multi_threat_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon_cli
             if best_spread is None:
                 return error_response(ErrorCodes.POKEMON_NOT_FOUND, 'Could not find a spread that survives all threats with the given constraints', threats=[t['name'] for t in parsed_threats])
             
+            # Recommended defender build for the showdown paste. Champions emits
+            # an 'SPs:' paste (32/stat, 66 total); mainline keeps the EVs paste.
+            if is_champions:
+                recommended_defender = PokemonBuild(
+                    name=pokemon_name,
+                    base_stats=def_base,
+                    types=def_types,
+                    nature=def_nature,
+                    format_system="champions",
+                    sps=StatPointSpread(
+                        hp=best_spread["hp_evs"],
+                        defense=best_spread["def_evs"],
+                        special_defense=best_spread["spd_evs"],
+                    ),
+                    item=item,
+                    ability=ability
+                )
+                recommended_spread = {
+                    "hp_sps": best_spread["hp_evs"],
+                    "def_sps": best_spread["def_evs"],
+                    "spd_sps": best_spread["spd_evs"],
+                    "total_sps": best_spread["total_evs"],
+                    "leftover_sps": 66 - best_spread["total_evs"],
+                }
+            else:
+                recommended_defender = PokemonBuild(
+                    name=pokemon_name,
+                    base_stats=def_base,
+                    types=def_types,
+                    nature=def_nature,
+                    evs=EVSpread(
+                        hp=best_spread["hp_evs"],
+                        defense=best_spread["def_evs"],
+                        special_defense=best_spread["spd_evs"],
+                    ),
+                    item=item,
+                    ability=ability
+                )
+                recommended_spread = {
+                    "hp_evs": best_spread["hp_evs"],
+                    "def_evs": best_spread["def_evs"],
+                    "spd_evs": best_spread["spd_evs"],
+                    "total_evs": best_spread["total_evs"],
+                    "leftover_evs": 508 - best_spread["total_evs"]
+                }
+
             # Format response
             response = {
                 "pokemon": pokemon_name,
@@ -229,16 +312,13 @@ def register_multi_threat_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon_cli
                 "item": item or "None",
                 "ability": ability.replace("-", " ").title() if ability else "None",
                 "ability_source": ability_source,
+                "format_system": "champions" if is_champions else "mainline",
+                "units": "Stat Points" if is_champions else "EVs",
                 "intimidate_active_against": [
                     t["name"] for t in threat_builds if t["intimidate_note"]
                 ],
-                "recommended_spread": {
-                    "hp_evs": best_spread["hp_evs"],
-                    "def_evs": best_spread["def_evs"],
-                    "spd_evs": best_spread["spd_evs"],
-                    "total_evs": best_spread["total_evs"],
-                    "leftover_evs": 508 - best_spread["total_evs"]
-                },
+                "recommended_spread": recommended_spread,
+                "showdown_paste": pokemon_build_to_showdown(recommended_defender),
                 "survival_results": best_results,
                 "all_survive": all(r["survives"] for r in best_results)
             }
@@ -281,12 +361,19 @@ def register_multi_threat_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon_cli
                     f"{result['damage_range']} | {checkmark} |"
                 )
             
-            markdown_lines.extend([
-                "",
-                f"**EVs Used:** {best_spread['total_evs']}/508",
-                f"**Leftover EVs:** {508 - best_spread['total_evs']}"
-            ])
-            
+            if is_champions:
+                markdown_lines.extend([
+                    "",
+                    f"**SP Used:** {best_spread['total_evs']}/66",
+                    f"**Leftover SP:** {66 - best_spread['total_evs']}"
+                ])
+            else:
+                markdown_lines.extend([
+                    "",
+                    f"**EVs Used:** {best_spread['total_evs']}/508",
+                    f"**Leftover EVs:** {508 - best_spread['total_evs']}"
+                ])
+
             response["markdown_summary"] = "\n".join(markdown_lines)
             
             return response

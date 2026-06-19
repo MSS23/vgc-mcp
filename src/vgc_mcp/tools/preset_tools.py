@@ -107,15 +107,7 @@ def register_preset_tools(mcp: FastMCP, smogon=None):
                 },
                 "spread_count": len(spreads),
                 "spreads": [
-                    {
-                        "rank": i + 1,
-                        "nature": s.get("nature", "Unknown"),
-                        "evs": s.get("evs", {}),
-                        "spread_string": s.get("spread_string", ""),
-                        "usage_percent": s.get("usage", 0),
-                        "common_ability": top_ability,
-                        "common_item": top_item
-                    }
+                    _format_smogon_spread(i, s, top_ability, top_item)
                     for i, s in enumerate(spreads)
                 ],
                 "all_abilities": list(abilities.items())[:3],
@@ -267,6 +259,34 @@ def register_preset_tools(mcp: FastMCP, smogon=None):
             "recommended": _format_preset(matches[0][0]),
             "alternatives": [_format_preset(m[0]) for m in matches[1:3]] if len(matches) > 1 else []
         }
+
+
+def _format_smogon_spread(i: int, s: dict, top_ability, top_item) -> dict:
+    """Format one Smogon spread row, preserving Champions Stat Point fields.
+
+    Mainline spreads carry an ``evs`` dict; Champions (Reg MA) spreads carry an
+    ``sps`` dict (Stat Points, 0-32 / 66) instead. Surface whichever is present
+    so a rendered table shows the real allocation rather than all-zeros.
+    """
+    format_system = s.get("format_system", "mainline")
+    row = {
+        "rank": i + 1,
+        "nature": s.get("nature", "Unknown"),
+        "format_system": format_system,
+        "spread_string": s.get("spread_string", ""),
+        "usage_percent": s.get("usage", 0),
+        "common_ability": top_ability,
+        "common_item": top_item,
+    }
+    if format_system == "champions":
+        sps = s.get("sps") or {}
+        row["sps"] = sps
+        row["stat_points"] = sps
+        row["evs"] = {}
+        row["allocation_label"] = "Stat Points"
+    else:
+        row["evs"] = s.get("evs", {})
+    return row
 
 
 def _format_preset(preset: SpreadPreset) -> dict:

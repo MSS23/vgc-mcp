@@ -33,12 +33,91 @@ import re
 from typing import Optional
 from dataclasses import dataclass, field
 
+import pydantic
+
 from ..models.pokemon import Nature, EVSpread, IVSpread, PokemonBuild, StatPointSpread
 
 
 class ShowdownParseError(Exception):
     """Error parsing Showdown paste."""
     pass
+
+
+# Base species that are written with SPACES (not hyphens) in valid Showdown
+# species names, but are stored internally in hyphenated form. For these we
+# must convert hyphens back to spaces; every other species keeps its hyphens
+# (which delimit forms, e.g. "Urshifu-Rapid-Strike", "Calyrex-Shadow").
+# Keyed by the internal hyphenated name -> Showdown display name.
+_SPACED_SPECIES = {
+    # Paradox Pokemon (past)
+    "great-tusk": "Great Tusk",
+    "scream-tail": "Scream Tail",
+    "brute-bonnet": "Brute Bonnet",
+    "flutter-mane": "Flutter Mane",
+    "slither-wing": "Slither Wing",
+    "sandy-shocks": "Sandy Shocks",
+    "roaring-moon": "Roaring Moon",
+    "walking-wake": "Walking Wake",
+    "gouging-fire": "Gouging Fire",
+    "raging-bolt": "Raging Bolt",
+    # Paradox Pokemon (future)
+    "iron-treads": "Iron Treads",
+    "iron-bundle": "Iron Bundle",
+    "iron-hands": "Iron Hands",
+    "iron-jugulis": "Iron Jugulis",
+    "iron-moth": "Iron Moth",
+    "iron-thorns": "Iron Thorns",
+    "iron-valiant": "Iron Valiant",
+    "iron-leaves": "Iron Leaves",
+    "iron-boulder": "Iron Boulder",
+    "iron-crown": "Iron Crown",
+    # Tapus
+    "tapu-koko": "Tapu Koko",
+    "tapu-lele": "Tapu Lele",
+    "tapu-bulu": "Tapu Bulu",
+    "tapu-fini": "Tapu Fini",
+    # Misc multi-word base species
+    "type-null": "Type: Null",
+    "mr-mime": "Mr. Mime",
+    "mr-rime": "Mr. Rime",
+    "mime-jr": "Mime Jr.",
+    "ho-oh": "Ho-Oh",
+    "porygon-z": "Porygon-Z",
+}
+
+# Hyphenated species whose final segment is a lowercase letter in valid Showdown
+# names (the generic per-segment capitalization would wrongly upper-case it).
+_SPECIES_EXACT_OVERRIDES = {
+    "kommo-o": "Kommo-o",
+    "jangmo-o": "Jangmo-o",
+    "hakamo-o": "Hakamo-o",
+}
+
+
+def format_showdown_species(name: str) -> str:
+    """Convert an internal hyphenated species name to a valid Showdown species.
+
+    Title-cases each hyphen-delimited segment while PRESERVING hyphens so form
+    suffixes survive (e.g. "charizard-mega-y" -> "Charizard-Mega-Y",
+    "urshifu-rapid-strike" -> "Urshifu-Rapid-Strike", "indeedee-f" -> "Indeedee-F").
+
+    Base species that Showdown writes with spaces (e.g. "flutter-mane" ->
+    "Flutter Mane", "tapu-koko" -> "Tapu Koko") are mapped explicitly.
+    """
+    if not name:
+        return name
+
+    # Normalize to the internal hyphenated key so this is IDEMPOTENT: an
+    # already-spaced display name ("Flutter Mane") maps the same as the stored
+    # "flutter-mane" instead of degrading to "Flutter mane".
+    key = name.strip().lower().replace(" ", "-")
+    if key in _SPACED_SPECIES:
+        return _SPACED_SPECIES[key]
+    if key in _SPECIES_EXACT_OVERRIDES:
+        return _SPECIES_EXACT_OVERRIDES[key]
+
+    # Hyphen-preserving title case: capitalize each segment individually.
+    return "-".join(segment.capitalize() for segment in key.split("-"))
 
 
 @dataclass
@@ -498,14 +577,39 @@ def parsed_to_sp_spread(parsed: ParsedPokemon) -> Optional[StatPointSpread]:
     """
     if parsed.sps is None:
         return None
-    return StatPointSpread(
-        hp=parsed.sps.get("hp", 0),
-        attack=parsed.sps.get("atk", 0),
-        defense=parsed.sps.get("def", 0),
-        special_attack=parsed.sps.get("spa", 0),
-        special_defense=parsed.sps.get("spd", 0),
-        speed=parsed.sps.get("spe", 0),
-    )
+
+    # Validate per-stat cap with a readable message before Pydantic raises a
+    # cryptic ValidationError. Champions caps each stat at 32 SP.
+    _SP_LABELS = {
+        "hp": "HP", "atk": "Atk", "def": "Def",
+        "spa": "SpA", "spd": "SpD", "spe": "Spe",
+    }
+    for stat, label in _SP_LABELS.items():
+        value = parsed.sps.get(stat, 0)
+        if value > 32:
+            raise ShowdownParseError(
+                f"{label} {value} exceeds Champions per-stat cap of 32"
+            )
+
+    # StatPointSpread enforces per-stat le=32 but not the 66-point total, so
+    # validate the budget here.
+    total = sum(parsed.sps.get(s, 0) for s in _SP_LABELS)
+    if total > 66:
+        raise ShowdownParseError(
+            f"Stat Point total ({total}) exceeds Champions budget of 66"
+        )
+
+    try:
+        return StatPointSpread(
+            hp=parsed.sps.get("hp", 0),
+            attack=parsed.sps.get("atk", 0),
+            defense=parsed.sps.get("def", 0),
+            special_attack=parsed.sps.get("spa", 0),
+            special_defense=parsed.sps.get("spd", 0),
+            speed=parsed.sps.get("spe", 0),
+        )
+    except pydantic.ValidationError as exc:
+        raise ShowdownParseError(f"Invalid Champions stat points: {exc}") from exc
 
 
 def parsed_to_iv_spread(parsed: ParsedPokemon) -> IVSpread:
@@ -518,6 +622,61 @@ def parsed_to_iv_spread(parsed: ParsedPokemon) -> IVSpread:
         special_defense=parsed.ivs.get("spd", 31),
         speed=parsed.ivs.get("spe", 31),
     )
+
+
+def parsed_to_pokemon_build(
+    parsed: ParsedPokemon,
+    base_stats,
+    types: list[str],
+    *,
+    extra_kwargs: Optional[dict] = None,
+) -> PokemonBuild:
+    """Build a PokemonBuild from a ParsedPokemon with the correct format.
+
+    If the paste declared a Champions SPs line (``parsed.sps`` non-empty), the
+    build is created with ``format_system="champions"`` and ``sps`` populated
+    (``evs`` left at the all-zero default). Otherwise it is a mainline build
+    with ``evs`` populated from the paste.
+
+    Args:
+        parsed: ParsedPokemon from ``parse_showdown_pokemon``.
+        base_stats: BaseStats for the species (fetched by the caller).
+        types: Type list for the species.
+        extra_kwargs: Optional dict of additional PokemonBuild kwargs to set
+            or override (e.g. a normalized ``name``/``species``).
+
+    Returns:
+        A validated PokemonBuild.
+
+    Raises:
+        ShowdownParseError: If the Champions SPs allocation is invalid.
+    """
+    kwargs: dict = {
+        "name": parsed.species,
+        "base_stats": base_stats,
+        "types": types,
+        "nature": parsed_to_nature(parsed),
+        "ivs": parsed_to_iv_spread(parsed),
+        "level": parsed.level,
+        "item": parsed.item,
+        "ability": parsed.ability,
+        "tera_type": parsed.tera_type,
+        "moves": list(parsed.moves),
+    }
+
+    if parsed.sps:
+        sps = parsed_to_sp_spread(parsed)
+        kwargs["format_system"] = "champions"
+        kwargs["sps"] = sps
+        kwargs["evs"] = EVSpread()
+    else:
+        kwargs["format_system"] = "mainline"
+        kwargs["evs"] = parsed_to_ev_spread(parsed)
+
+    if extra_kwargs:
+        kwargs.update(extra_kwargs)
+
+    return PokemonBuild(**kwargs)
 
 
 def parsed_to_nature(parsed: ParsedPokemon) -> Nature:
@@ -538,8 +697,9 @@ def pokemon_build_to_showdown(pokemon: PokemonBuild) -> str:
     Returns:
         Showdown paste format string
     """
-    # Convert PokemonBuild to dict format for export_pokemon_to_showdown
-    species = pokemon.name.replace("-", " ").title()
+    # Convert PokemonBuild to dict format for export_pokemon_to_showdown.
+    # Preserve hyphenated form suffixes (e.g. "Urshifu-Rapid-Strike").
+    species = format_showdown_species(pokemon.name)
 
     # Champions builds emit an SPs line and skip EVs
     sps_dict = None

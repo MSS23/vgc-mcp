@@ -74,3 +74,44 @@ def test_legal_pokemon_list_is_populated(cfg):
 def test_reg_ma_smogon_format(cfg):
     formats = cfg.get_smogon_formats("reg_ma_champs")
     assert "gen9championsvgc2026regma" in formats
+
+
+# --- Regression: allowlist legality fallbacks (F1-c) ---
+
+
+def test_reg_ma_mega_form_legal_via_base(cfg):
+    # 'manectric-mega' / 'Mega Manectric' resolve legal because base
+    # 'manectric' is allowlisted; do NOT require fake Mega entries in JSON.
+    assert cfg.is_pokemon_legal("manectric-mega", "reg_ma_champs")
+    assert cfg.is_pokemon_legal("Mega Manectric", "reg_ma_champs")
+
+
+def test_reg_ma_regional_and_rotom_forms_legal_via_base(cfg):
+    assert cfg.is_pokemon_legal("rotom-wash", "reg_ma_champs")
+    assert cfg.is_pokemon_legal("tauros-paldea-aqua", "reg_ma_champs")
+
+
+def test_reg_ma_absent_species_stay_illegal(cfg):
+    for name in ["urshifu", "ogerpon", "indeedee"]:
+        assert not cfg.is_pokemon_legal(name, "reg_ma_champs"), name
+
+
+# --- Regression: restricted.py allowlist awareness (F1-e) ---
+
+from vgc_mcp_core.rules.restricted import (
+    get_restricted_status,
+    get_pokemon_legality,
+)
+
+
+def test_restricted_status_offlist_mon_is_illegal():
+    # flutter-mane is NOT on the Reg MA allowlist -> 'illegal', not 'allowed'.
+    assert get_restricted_status("flutter-mane", "reg_ma_champs") == "illegal"
+    legality = get_pokemon_legality("flutter-mane", "reg_ma_champs")
+    assert legality["status"] == "illegal"
+    assert legality["can_use"] is False
+
+
+def test_restricted_status_onlist_mons_allowed():
+    assert get_restricted_status("incineroar", "reg_ma_champs") == "allowed"
+    assert get_restricted_status("pikachu", "reg_ma_champs") == "allowed"

@@ -58,6 +58,8 @@ async def get_common_spreads(
             "rank": i + 1,
             "nature": spread.get("nature", "Serious"),
             "evs": spread.get("evs", {}),
+            "sps": spread.get("sps"),
+            "format_system": spread.get("format_system", "mainline"),
             "usage": spread.get("usage", 0),
             "item": top_item,
             "item_usage": top_item_usage,

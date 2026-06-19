@@ -135,11 +135,14 @@ class TestHelpingHandDamageCalculation:
         min_ratio = result_with_hh.min_damage / result_no_hh.min_damage
         max_ratio = result_with_hh.max_damage / result_no_hh.max_damage
 
-        # Due to rounding, we allow a small tolerance (within 2%)
-        assert 1.47 <= min_ratio <= 1.53, (
+        # Due to rounding, we allow a small tolerance. Helping Hand is applied as
+        # a BASE-POWER modifier (Showdown gen789.ts), so the boost is exact at the
+        # base-power stage (90 -> 135); per-roll floor at small damage numbers can
+        # push the min-roll ratio slightly above 1.5 (e.g. 30 -> 46 = 1.533x).
+        assert 1.47 <= min_ratio <= 1.54, (
             f"Helping Hand min ratio should be ~1.5, got {min_ratio:.3f}"
         )
-        assert 1.47 <= max_ratio <= 1.53, (
+        assert 1.47 <= max_ratio <= 1.54, (
             f"Helping Hand max ratio should be ~1.5, got {max_ratio:.3f}"
         )
 

@@ -102,3 +102,24 @@ def test_session_set_via_phrasing(cfg):
     assert code == "reg_f"
     assert cfg.set_session_regulation(code) is True
     assert cfg.get_format_system() == "mainline"
+
+
+# --- Regression: base-form-aware restricted detection (F1-d) ---
+
+from vgc_mcp_core.rules.regulation_router import infer_format_from_pokemon
+
+
+def test_infer_short_form_restricteds_route_to_reg_i(cfg):
+    # 'Calyrex-Shadow' (short form) must match the restricted-list key
+    # 'calyrex-shadow-rider'. Two restricteds -> reg_i, not reg_g.
+    result = infer_format_from_pokemon(["Calyrex-Shadow", "Koraidon"], cfg)
+    assert result["regulation"] == "reg_i"
+    assert "calyrex-shadow" in result["restricted_seen"]
+    assert "koraidon" in result["restricted_seen"]
+    assert len(result["restricted_seen"]) == 2
+
+
+def test_infer_calyrex_ice_short_form_counted(cfg):
+    result = infer_format_from_pokemon(["Calyrex-Ice", "Miraidon"], cfg)
+    assert result["regulation"] == "reg_i"
+    assert len(result["restricted_seen"]) == 2

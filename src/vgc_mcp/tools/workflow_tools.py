@@ -604,12 +604,19 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
             - Reasoning for the suggested spread
             - Alternative options
         """
-        try:
-            # Get Pokemon data
-            pokemon_data = await pokeapi.get_pokemon(pokemon_name)
+        from vgc_mcp_core.rules.regulation_router import auto_detect_regulation
 
-            if not pokemon_data:
-                # Try fuzzy matching
+        try:
+            # Resolve base stats / types / abilities via the canonical helpers.
+            # The raw PokeAPI response exposes a `stats` array (not a
+            # `base_stats` dict), so indexing pokemon_data["base_stats"]
+            # directly used to raise KeyError against the real client. Mirror
+            # suggest_ev_spread and use the typed accessors instead.
+            try:
+                base_stats_model = await pokeapi.get_base_stats(pokemon_name)
+                types = await pokeapi.get_pokemon_types(pokemon_name)
+                abilities = await pokeapi.get_pokemon_abilities(pokemon_name)
+            except Exception:
                 suggestions = suggest_pokemon_name(pokemon_name)
                 if suggestions:
                     return error_response(
@@ -623,7 +630,32 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                     suggestions=["Check spelling (use hyphens for forms: 'flutter-mane')"]
                 )
 
-            base_stats = pokemon_data["base_stats"]
+            base_stats = {
+                "hp": base_stats_model.hp,
+                "attack": base_stats_model.attack,
+                "defense": base_stats_model.defense,
+                "special_attack": base_stats_model.special_attack,
+                "special_defense": base_stats_model.special_defense,
+                "speed": base_stats_model.speed,
+            }
+
+            # Detect Champions vs mainline from the Pokemon name (mirrors
+            # suggest_ev_spread ~lines 856-863). Explicit session regulation
+            # wins; otherwise inference may set it. We surface whatever the
+            # auto-detect resolved so the caller can tell the user.
+            cfg = get_regulation_config()
+            regulation_auto_detected = None
+            try:
+                detect = auto_detect_regulation([pokemon_name], cfg)
+                # Only surface when the server actually inferred/applied a
+                # regulation — a "skipped" action means the user already chose
+                # one explicitly, so there's nothing new to report.
+                if isinstance(detect, dict) and detect.get("action") != "skipped":
+                    regulation_auto_detected = detect
+            except Exception:
+                pass
+            format_system = cfg.get_format_system() or "mainline"
+            is_champions = format_system == "champions"
 
             # Auto-detect role based on stats
             if role == "auto":
@@ -687,39 +719,95 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
             build = role_builds.get(role, role_builds["mixed"])
 
             # Create the Pokemon build
-            from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, BaseStats
+            from vgc_mcp_core.models.pokemon import (
+                PokemonBuild, Nature, EVSpread, StatPointSpread, BaseStats,
+            )
+            from vgc_mcp_core.calc.conversion import evs_to_sps_spread
 
             ev_map = build["evs"]
-            evs = EVSpread(
-                hp=ev_map.get("hp", 0),
-                attack=ev_map.get("atk", 0),
-                defense=ev_map.get("def", 0),
-                special_attack=ev_map.get("spa", 0),
-                special_defense=ev_map.get("spd", 0),
-                speed=ev_map.get("spe", 0)
-            )
+            ability = abilities[0] if abilities else None
+            species_name = pokemon_name
 
             try:
                 nature = Nature(build["nature"].lower())
             except ValueError:
                 nature = Nature.serious
 
-            pokemon_build = PokemonBuild(
-                name=pokemon_data["name"],
-                base_stats=BaseStats(
-                    hp=base_stats["hp"],
-                    attack=base_stats["attack"],
-                    defense=base_stats["defense"],
-                    special_attack=base_stats["special_attack"],
-                    special_defense=base_stats["special_defense"],
-                    speed=base_stats["speed"]
-                ),
-                types=pokemon_data.get("types", []),
-                nature=nature,
-                evs=evs,
-                ability=pokemon_data["abilities"][0] if pokemon_data.get("abilities") else None,
-                level=50
+            base_stats_obj = BaseStats(
+                hp=base_stats["hp"],
+                attack=base_stats["attack"],
+                defense=base_stats["defense"],
+                special_attack=base_stats["special_attack"],
+                special_defense=base_stats["special_defense"],
+                speed=base_stats["speed"],
             )
+
+            # Champions branch: scale the role's EV spread to the SP grain.
+            # 252 EV saturates to 32 SP and 4 EV maps to 1 SP, so converting
+            # the mainline role template keeps the same final stats while
+            # honoring the 32-per-stat / 66-total caps. The build carries
+            # format_system='champions' + sps so all downstream calc/export
+            # dispatches correctly and the paste emits an `SPs:` line.
+            sp_map = None
+            if is_champions:
+                ev_obj = EVSpread(
+                    hp=ev_map.get("hp", 0),
+                    attack=ev_map.get("atk", 0),
+                    defense=ev_map.get("def", 0),
+                    special_attack=ev_map.get("spa", 0),
+                    special_defense=ev_map.get("spd", 0),
+                    speed=ev_map.get("spe", 0),
+                )
+                sp_obj = evs_to_sps_spread(ev_obj, round_mode="ceil")
+                sp_map = {
+                    "hp": sp_obj.hp,
+                    "atk": sp_obj.attack,
+                    "def": sp_obj.defense,
+                    "spa": sp_obj.special_attack,
+                    "spd": sp_obj.special_defense,
+                    "spe": sp_obj.speed,
+                }
+                pokemon_build = PokemonBuild(
+                    name=species_name,
+                    base_stats=base_stats_obj,
+                    types=types,
+                    nature=nature,
+                    format_system="champions",
+                    sps=sp_obj,
+                    ability=ability,
+                    level=50,
+                )
+            else:
+                evs = EVSpread(
+                    hp=ev_map.get("hp", 0),
+                    attack=ev_map.get("atk", 0),
+                    defense=ev_map.get("def", 0),
+                    special_attack=ev_map.get("spa", 0),
+                    special_defense=ev_map.get("spd", 0),
+                    speed=ev_map.get("spe", 0)
+                )
+                pokemon_build = PokemonBuild(
+                    name=species_name,
+                    base_stats=base_stats_obj,
+                    types=types,
+                    nature=nature,
+                    evs=evs,
+                    ability=ability,
+                    level=50
+                )
+
+            # Build payload reflects the active format's units.
+            build_payload = {
+                "nature": build["nature"],
+                "ability": pokemon_build.ability,
+                "reasoning": build["description"],
+            }
+            if is_champions:
+                build_payload["sps"] = sp_map
+                build_payload["stat_units"] = "Stat Points (SPs)"
+                build_payload["sp_budget_remaining"] = max(0, 66 - pokemon_build.sps.total)
+            else:
+                build_payload["evs"] = ev_map
 
             # Check team status
             if team_manager.is_full:
@@ -731,16 +819,14 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                         "Use 'swap_pokemon' to replace a specific slot"
                     ],
                     suggested_build={
-                        "pokemon": pokemon_data["name"],
+                        "pokemon": species_name,
                         "role": role,
-                        "nature": build["nature"],
-                        "evs": ev_map,
-                        "reasoning": build["description"]
+                        **build_payload,
                     }
                 )
 
             # Add to team
-            success, message, data = team_manager.add(pokemon_build)
+            success, message, data = team_manager.add_pokemon(pokemon_build)
 
             if not success:
                 return error_response(
@@ -749,19 +835,25 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                     suggestions=["This Pokemon or its variant may already be on the team"]
                 )
 
-            return success_response(
-                f"Added {pokemon_data['name']} to team",
-                pokemon=pokemon_data["name"],
+            from vgc_mcp_core.formats.showdown import pokemon_build_to_showdown
+
+            response_kwargs = dict(
+                pokemon=species_name,
                 slot=data.get("slot", team_manager.size),
                 role=role,
-                build={
-                    "nature": build["nature"],
-                    "evs": ev_map,
-                    "ability": pokemon_build.ability,
-                    "reasoning": build["description"]
-                },
+                build=build_payload,
                 team_size=team_manager.size,
-                tip=f"Use 'update_pokemon' to customize the build, or 'get_usage_stats' to see common competitive sets"
+                format_system=format_system,
+                showdown_paste=pokemon_build_to_showdown(pokemon_build),
+                tip="Use 'update_pokemon' to customize the build, or 'get_usage_stats' to see common competitive sets",
+            )
+            # Surface what the auto-detect resolved (documented contract).
+            if regulation_auto_detected is not None:
+                response_kwargs["regulation_auto_detected"] = regulation_auto_detected
+
+            return success_response(
+                f"Added {species_name} to team",
+                **response_kwargs,
             )
 
         except Exception as e:
@@ -1403,10 +1495,25 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                 },
             )
 
+            # In a champions session the top-level `spread` and `showdown_paste`
+            # must read in SP units (cap 32/stat, 66 total) so an LLM can't
+            # surface EV-scale numbers (e.g. spa:252, total:252) as the answer.
+            # We swap `spread` to the SP allocation and rename the mainline EV
+            # paste to `ev_equivalent_showdown_paste` (clearly secondary) rather
+            # than leaving `mainline_showdown_paste` to be mistaken for the
+            # primary answer. Mainline sessions are unchanged.
+            if champions_block:
+                top_spread = {
+                    **champions_block["spread_sps"],
+                    "stat_units": "Stat Points (SPs)",
+                }
+            else:
+                top_spread = spread
+
             response_kwargs = dict(
                 pokemon=pokemon_name,
                 nature=nature,
-                spread=spread,
+                spread=top_spread,
                 final_stats=final_stats,
                 benchmarks_met=benchmarks_met if benchmarks_met else ["No specific benchmarks requested"],
                 benchmarks_failed=benchmarks_failed if benchmarks_failed else [],
@@ -1414,10 +1521,14 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                 summary=summary,
                 format_system=format_system,
                 showdown_paste=(champions_block["showdown_paste"] if champions_block else mainline_paste),
-                mainline_showdown_paste=mainline_paste,
             )
             if champions_block:
                 response_kwargs["champions"] = champions_block
+                # Keep the EV-scale paste for reference but clearly tagged so it
+                # can't be mistaken for the SP answer.
+                response_kwargs["ev_equivalent_showdown_paste"] = mainline_paste
+            else:
+                response_kwargs["mainline_showdown_paste"] = mainline_paste
             return success_response(
                 f"Designed spread for {pokemon_name}",
                 **response_kwargs,

@@ -16,13 +16,65 @@ from vgc_mcp_core.calc.bulk_optimization import (
     calculate_optimal_bulk_distribution,
     analyze_diminishing_returns
 )
-from vgc_mcp_core.models.pokemon import Nature, get_nature_modifier, PokemonBuild, BaseStats, EVSpread
+from vgc_mcp_core.models.pokemon import Nature, get_nature_modifier, PokemonBuild, BaseStats, EVSpread, StatPointSpread
 from vgc_mcp_core.formats.showdown import pokemon_build_to_showdown
 from vgc_mcp_core.models.move import Move, MoveCategory
 from vgc_mcp_core.config import EV_BREAKPOINTS_LV50, normalize_evs
 from vgc_mcp_core.utils.synergies import get_synergy_ability
 from vgc_mcp_core.utils.errors import error_response, ErrorCodes
+from vgc_mcp_core.rules.regulation_loader import get_regulation_config
+from vgc_mcp_core.calc.stats_champions import (
+    calculate_hp_sp,
+    calculate_stat_sp,
+    calculate_speed_sp,
+)
+from vgc_mcp_core.calc.champions_optimization import (
+    find_speed_sps_to_outspeed,
+    find_optimal_hp_sps,
+    validate_sp_allocation,
+    SP_PER_STAT_MAX,
+    SP_TOTAL_MAX,
+)
 import math
+
+
+def _detect_champions(pokemon_name: Optional[str] = None) -> bool:
+    """Return True when the active session is the Champions (Reg MA) SP system.
+
+    Reads the session regulation's format system. Optionally runs Pokemon-name
+    inference first (mirroring workflow_tools.suggest_ev_spread) so a Mega/Reg MA
+    mention auto-selects Champions without the user having to set it explicitly.
+    The mainline path is taken whenever this returns False.
+    """
+    from vgc_mcp_core.rules.format_detect import detect_champions_format
+    return detect_champions_format(pokemon_name)
+
+
+def _champions_offensive_stat(base_stats: BaseStats) -> str:
+    """Pick the offensive stat ('attack' or 'special_attack') for an SP build."""
+    return "attack" if base_stats.attack >= base_stats.special_attack else "special_attack"
+
+
+def _build_champions_pokemon(
+    name: str,
+    base_stats: BaseStats,
+    types: list[str],
+    nature: Nature,
+    sps: StatPointSpread,
+    item: Optional[str] = None,
+    tera_type: Optional[str] = None,
+) -> PokemonBuild:
+    """Construct a format-aware Champions PokemonBuild (emits 'SPs:' pastes)."""
+    return PokemonBuild(
+        name=name,
+        base_stats=base_stats,
+        types=types,
+        nature=nature,
+        format_system="champions",
+        sps=sps,
+        item=item,
+        tera_type=tera_type,
+    )
 
 
 # Module-level Smogon client reference (set during registration)
@@ -575,6 +627,949 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
     global _smogon_client
     _smogon_client = smogon
 
+    # ======================================================================
+    # Champions (Reg MA) Stat-Point branch helpers
+    #
+    # These mirror the EV tools but emit SP-scale spreads (0-32/stat, <=66
+    # total) via StatPointSpread + format_system='champions', so any returned
+    # showdown_paste is an 'SPs:' paste. They are only reached when the active
+    # session is the Champions format (see _detect_champions); the mainline
+    # path is unchanged.
+    # ======================================================================
+
+    async def _suggest_spread_champions(
+        pokemon_name: str,
+        base_stats: BaseStats,
+        role: str,
+        speed_target: Optional[int],
+        item: Optional[str],
+    ) -> dict:
+        """SP-scale version of suggest_spread (cap 32/stat, 66 total)."""
+        is_physical = base_stats.attack >= base_stats.special_attack
+        off_stat = "attack" if is_physical else "special_attack"
+        offensive_label = "Attack" if is_physical else "Sp. Atk"
+
+        # SP role templates (full-budget allocations, <=66 total, <=32/stat).
+        if role == "offensive":
+            nature_name = "Jolly" if is_physical else "Timid"
+            sp_kwargs = {off_stat: SP_PER_STAT_MAX, "speed": SP_PER_STAT_MAX, "hp": 2}
+            description = f"Max {offensive_label} and Speed for maximum damage output"
+        elif role == "bulky":
+            nature_name = "Calm" if base_stats.special_defense > base_stats.defense else "Bold"
+            sp_kwargs = {"hp": SP_PER_STAT_MAX, "defense": 17, "special_defense": 17}
+            description = "Maximum HP with balanced defenses"
+        elif role == "bulky_offense":
+            nature_name = "Adamant" if is_physical else "Modest"
+            sp_kwargs = {"hp": SP_PER_STAT_MAX, off_stat: SP_PER_STAT_MAX, "special_defense": 2}
+            description = f"Some bulk while maintaining {offensive_label}"
+        elif role == "support":
+            nature_name = "Bold"
+            sp_kwargs = {"hp": SP_PER_STAT_MAX, "defense": SP_PER_STAT_MAX, "special_defense": 2}
+            description = "Maximum bulk for supporting the team"
+        else:
+            return error_response(
+                ErrorCodes.INTERNAL_ERROR,
+                f'Unknown role: {role}. Use: offensive, bulky, bulky_offense, support',
+            )
+
+        nature_enum = Nature(nature_name.lower())
+
+        # Speed target override (offensive role) — route through the SP solver.
+        if speed_target and role == "offensive":
+            needed = find_speed_sps_to_outspeed(
+                base_stats.speed, speed_target - 1, nature_enum
+            )
+            if needed is not None and needed < SP_PER_STAT_MAX:
+                leftover = SP_PER_STAT_MAX - needed
+                sp_kwargs["speed"] = needed
+                sp_kwargs["hp"] = sp_kwargs.get("hp", 0) + leftover
+                description += f" (Speed creep to {speed_target})"
+
+        # HP-number optimization for the held item, on the SP grain.
+        hp_optimization = None
+        if item and sp_kwargs.get("hp", 0) > 0:
+            from vgc_mcp_core.calc.hp_optimization import _get_item_category
+            if _get_item_category(item) is not None:
+                ranked = find_optimal_hp_sps(base_stats.hp, item)
+                # Pick the best-scoring option that does not exceed the planned HP SP.
+                cap = sp_kwargs["hp"]
+                viable = [o for o in ranked if o["sp"] <= cap]
+                if viable:
+                    best_hp = max(viable, key=lambda o: (o["score"], o["sp"]))
+                    if best_hp["sp"] != sp_kwargs["hp"]:
+                        hp_optimization = best_hp
+                        sp_kwargs["hp"] = best_hp["sp"]
+
+        # Enforce caps defensively.
+        validation = validate_sp_allocation(sp_kwargs)
+        if not validation["is_valid"]:
+            # Trim overflow from HP (least impactful) to respect the 66-cap.
+            overflow = validation["over_budget"]
+            sp_kwargs["hp"] = max(0, sp_kwargs.get("hp", 0) - overflow)
+
+        sps = StatPointSpread(**sp_kwargs)
+        types = await pokeapi.get_pokemon_types(pokemon_name)
+        suggested_pokemon = _build_champions_pokemon(
+            pokemon_name, base_stats, types, nature_enum, sps, item=item
+        )
+        showdown_paste = pokemon_build_to_showdown(suggested_pokemon)
+
+        spread = {
+            "description": description,
+            "nature": nature_name,
+            "sps": {
+                "hp": sps.hp,
+                "attack": sps.attack,
+                "defense": sps.defense,
+                "special_attack": sps.special_attack,
+                "special_defense": sps.special_defense,
+                "speed": sps.speed,
+            },
+            "total_sps": sps.total,
+        }
+
+        result = {
+            "pokemon": pokemon_name,
+            "role": role,
+            "format_system": "champions",
+            "suggestion": spread,
+            "base_stats": {
+                "hp": base_stats.hp,
+                "attack": base_stats.attack,
+                "defense": base_stats.defense,
+                "special_attack": base_stats.special_attack,
+                "special_defense": base_stats.special_defense,
+                "speed": base_stats.speed,
+            },
+            "showdown_paste": showdown_paste,
+        }
+        if hp_optimization:
+            result["hp_optimization"] = hp_optimization
+        return result
+
+    async def _optimize_bulk_champions(
+        pokemon_name: str,
+        base_stats: BaseStats,
+        parsed_nature: Nature,
+        total_bulk_sps: int,
+        defense_bias: float,
+        item: Optional[str],
+    ) -> dict:
+        """SP-scale version of optimize_bulk (cap 32/stat, 66 total)."""
+        total_bulk_sps = max(0, min(SP_TOTAL_MAX, total_bulk_sps))
+        def_mod = get_nature_modifier(parsed_nature, "defense")
+        spd_mod = get_nature_modifier(parsed_nature, "special_defense")
+
+        best_spread = None
+        best_bulk = -1.0
+        for hp_sp in range(0, min(SP_PER_STAT_MAX, total_bulk_sps) + 1):
+            remaining = total_bulk_sps - hp_sp
+            for def_sp in range(0, min(SP_PER_STAT_MAX, remaining) + 1):
+                spd_sp = remaining - def_sp
+                if spd_sp < 0 or spd_sp > SP_PER_STAT_MAX:
+                    continue
+                hp = calculate_hp_sp(base_stats.hp, 31, hp_sp, 50)
+                def_stat = calculate_stat_sp(base_stats.defense, 31, def_sp, 50, def_mod)
+                spd_stat = calculate_stat_sp(base_stats.special_defense, 31, spd_sp, 50, spd_mod)
+                phys_bulk = hp * def_stat
+                spec_bulk = hp * spd_stat
+                total_bulk = phys_bulk * defense_bias + spec_bulk * (1 - defense_bias)
+                if total_bulk > best_bulk:
+                    best_bulk = total_bulk
+                    best_spread = {
+                        "hp_sps": hp_sp,
+                        "def_sps": def_sp,
+                        "spd_sps": spd_sp,
+                        "final_hp": hp,
+                        "final_def": def_stat,
+                        "final_spd": spd_stat,
+                        "physical_bulk": phys_bulk,
+                        "special_bulk": spec_bulk,
+                    }
+
+        hp_optimization = None
+        if item and best_spread:
+            from vgc_mcp_core.calc.hp_optimization import _get_item_category
+            if _get_item_category(item) is not None:
+                ranked = find_optimal_hp_sps(base_stats.hp, item)
+                cap = best_spread["hp_sps"]
+                viable = [o for o in ranked if o["sp"] <= cap]
+                if viable:
+                    best_hp = max(viable, key=lambda o: (o["score"], o["sp"]))
+                    if best_hp["sp"] != best_spread["hp_sps"]:
+                        best_spread["hp_sps"] = best_hp["sp"]
+                        best_spread["final_hp"] = best_hp["hp_stat"]
+                        best_spread["physical_bulk"] = best_hp["hp_stat"] * best_spread["final_def"]
+                        best_spread["special_bulk"] = best_hp["hp_stat"] * best_spread["final_spd"]
+                        hp_optimization = best_hp
+
+        showdown_paste = None
+        if best_spread:
+            types = await pokeapi.get_pokemon_types(pokemon_name)
+            sps = StatPointSpread(
+                hp=best_spread["hp_sps"],
+                defense=best_spread["def_sps"],
+                special_defense=best_spread["spd_sps"],
+            )
+            optimized_pokemon = _build_champions_pokemon(
+                pokemon_name, base_stats, types, parsed_nature, sps, item=item
+            )
+            showdown_paste = pokemon_build_to_showdown(optimized_pokemon)
+            analysis_str = (
+                f"Optimal bulk: {best_spread['hp_sps']} HP / {best_spread['def_sps']} Def / "
+                f"{best_spread['spd_sps']} SpD SP for {pokemon_name}"
+            )
+        else:
+            analysis_str = f"No optimal spread found for {pokemon_name}"
+
+        result = {
+            "pokemon": pokemon_name,
+            "nature": parsed_nature.value,
+            "format_system": "champions",
+            "total_bulk_sps": total_bulk_sps,
+            "defense_bias": defense_bias,
+            "optimal_spread": best_spread,
+            "showdown_paste": showdown_paste,
+            "analysis": analysis_str,
+        }
+        if hp_optimization:
+            result["hp_optimization"] = hp_optimization
+        return result
+
+    def _min_sps_for_stat(base: int, target: int, nature_mod: float) -> int:
+        """Minimum SP (0-32) to reach target non-HP stat under given nature."""
+        for sp in range(0, SP_PER_STAT_MAX + 1):
+            if calculate_stat_sp(base, 31, sp, 50, nature_mod) >= target:
+                return sp
+        return SP_PER_STAT_MAX
+
+    def _min_sps_for_hp(base: int, target: int) -> int:
+        """Minimum SP (0-32) to reach target HP."""
+        for sp in range(0, SP_PER_STAT_MAX + 1):
+            if calculate_hp_sp(base, 31, sp, 50) >= target:
+                return sp
+        return SP_PER_STAT_MAX
+
+    async def _suggest_nature_optimization_champions(
+        pokemon_name: str,
+        base_stats: BaseStats,
+        current_nature: str,
+        current_nature_enum: Nature,
+        hp_sps: int,
+        atk_sps: int,
+        def_sps: int,
+        spa_sps: int,
+        spd_sps: int,
+        spe_sps: int,
+        moves: Optional[list[str]],
+    ) -> dict:
+        """SP-scale version of suggest_nature_optimization (cap 32/stat, 66 total)."""
+        current_stats = {
+            "hp": calculate_hp_sp(base_stats.hp, 31, hp_sps, 50),
+            "attack": calculate_stat_sp(base_stats.attack, 31, atk_sps, 50, get_nature_modifier(current_nature_enum, "attack")),
+            "defense": calculate_stat_sp(base_stats.defense, 31, def_sps, 50, get_nature_modifier(current_nature_enum, "defense")),
+            "special_attack": calculate_stat_sp(base_stats.special_attack, 31, spa_sps, 50, get_nature_modifier(current_nature_enum, "special_attack")),
+            "special_defense": calculate_stat_sp(base_stats.special_defense, 31, spd_sps, 50, get_nature_modifier(current_nature_enum, "special_defense")),
+            "speed": calculate_stat_sp(base_stats.speed, 31, spe_sps, 50, get_nature_modifier(current_nature_enum, "speed")),
+        }
+        current_total = hp_sps + atk_sps + def_sps + spa_sps + spd_sps + spe_sps
+
+        is_physical = False
+        is_special = False
+        if moves:
+            for move_name in moves:
+                try:
+                    move = await pokeapi.get_move(move_name)
+                    if move.category == MoveCategory.PHYSICAL:
+                        is_physical = True
+                    elif move.category == MoveCategory.SPECIAL:
+                        is_special = True
+                except Exception:
+                    continue
+
+        best_nature = None
+        best_sps = None
+        best_total = current_total
+        best_stats = None
+
+        for nature in Nature:
+            if nature == current_nature_enum:
+                continue
+            if is_physical and get_nature_modifier(nature, "attack") < 1.0:
+                continue
+            if is_special and get_nature_modifier(nature, "special_attack") < 1.0:
+                continue
+
+            new = {
+                "hp": _min_sps_for_hp(base_stats.hp, current_stats["hp"]),
+                "attack": _min_sps_for_stat(base_stats.attack, current_stats["attack"], get_nature_modifier(nature, "attack")),
+                "defense": _min_sps_for_stat(base_stats.defense, current_stats["defense"], get_nature_modifier(nature, "defense")),
+                "special_attack": _min_sps_for_stat(base_stats.special_attack, current_stats["special_attack"], get_nature_modifier(nature, "special_attack")),
+                "special_defense": _min_sps_for_stat(base_stats.special_defense, current_stats["special_defense"], get_nature_modifier(nature, "special_defense")),
+                "speed": _min_sps_for_stat(base_stats.speed, current_stats["speed"], get_nature_modifier(nature, "speed")),
+            }
+            new_total = sum(new.values())
+
+            new_stats = {
+                "hp": calculate_hp_sp(base_stats.hp, 31, new["hp"], 50),
+                "attack": calculate_stat_sp(base_stats.attack, 31, new["attack"], 50, get_nature_modifier(nature, "attack")),
+                "defense": calculate_stat_sp(base_stats.defense, 31, new["defense"], 50, get_nature_modifier(nature, "defense")),
+                "special_attack": calculate_stat_sp(base_stats.special_attack, 31, new["special_attack"], 50, get_nature_modifier(nature, "special_attack")),
+                "special_defense": calculate_stat_sp(base_stats.special_defense, 31, new["special_defense"], 50, get_nature_modifier(nature, "special_defense")),
+                "speed": calculate_stat_sp(base_stats.speed, 31, new["speed"], 50, get_nature_modifier(nature, "speed")),
+            }
+
+            stats_match = True
+            if new_stats["hp"] < current_stats["hp"]:
+                stats_match = False
+            if is_physical and new_stats["attack"] < current_stats["attack"]:
+                stats_match = False
+            if is_special and new_stats["special_attack"] < current_stats["special_attack"]:
+                stats_match = False
+            if new_stats["speed"] < current_stats["speed"]:
+                stats_match = False
+            if new_stats["defense"] < current_stats["defense"] - 2:
+                stats_match = False
+            if new_stats["special_defense"] < current_stats["special_defense"] - 2:
+                stats_match = False
+
+            if stats_match and new_total < best_total:
+                best_nature = nature
+                best_sps = new
+                best_total = new_total
+                best_stats = new_stats
+
+        types = await pokeapi.get_pokemon_types(pokemon_name)
+        current_pokemon = _build_champions_pokemon(
+            pokemon_name, base_stats, types, current_nature_enum,
+            StatPointSpread(hp=hp_sps, attack=atk_sps, defense=def_sps,
+                            special_attack=spa_sps, special_defense=spd_sps, speed=spe_sps),
+        )
+        current_showdown = pokemon_build_to_showdown(current_pokemon)
+
+        if best_nature is None:
+            return {
+                "pokemon": pokemon_name,
+                "current_nature": current_nature,
+                "format_system": "champions",
+                "optimization_found": False,
+                "current_showdown_paste": current_showdown,
+                "message": "Your nature is already optimal! No Stat Point savings possible.",
+            }
+
+        sp_savings = current_total - best_total
+        optimized_pokemon = _build_champions_pokemon(
+            pokemon_name, base_stats, types, best_nature,
+            StatPointSpread(**best_sps),
+        )
+        optimized_showdown = pokemon_build_to_showdown(optimized_pokemon)
+
+        return {
+            "pokemon": pokemon_name,
+            "current_nature": current_nature,
+            "format_system": "champions",
+            "current_sps": {
+                "hp": hp_sps, "attack": atk_sps, "defense": def_sps,
+                "special_attack": spa_sps, "special_defense": spd_sps, "speed": spe_sps,
+            },
+            "current_total_sps": current_total,
+            "current_stats": current_stats,
+            "current_showdown_paste": current_showdown,
+            "suggested_nature": best_nature.value,
+            "suggested_sps": best_sps,
+            "suggested_total_sps": best_total,
+            "suggested_stats": best_stats,
+            "optimized_showdown_paste": optimized_showdown,
+            "sp_savings": sp_savings,
+            "optimization_found": True,
+        }
+
+    async def _prepare_single_threat_build(
+        attacker_name: str,
+        move_name: str,
+        nature_str: Optional[str],
+        evs: Optional[int],
+        item: Optional[str],
+        ability: Optional[str],
+        tera_type: Optional[str],
+    ) -> dict:
+        """Fetch + build a mainline attacker for a champions survival search.
+
+        Returns dict with attacker PokemonBuild, Move, modifiers, is_physical.
+        Auto-fetches Smogon spread + meta synergies, same as the EV path.
+        """
+        atk_base = await pokeapi.get_base_stats(attacker_name)
+        atk_types = await pokeapi.get_pokemon_types(attacker_name)
+        move = await pokeapi.get_move(move_name, user_name=attacker_name)
+        is_physical = move.category == MoveCategory.PHYSICAL
+
+        smogon = await _get_common_spread(attacker_name)
+        if smogon:
+            if nature_str is None:
+                nature_str = smogon.get("nature")
+            if evs is None:
+                ev_dict = smogon.get("evs", {})
+                evs = ev_dict.get("attack" if is_physical else "special_attack", 252)
+            if item is None:
+                item = smogon.get("item")
+            if ability is None:
+                ability = smogon.get("ability")
+
+        key = attacker_name.lower().replace(" ", "-")
+        if key in META_SYNERGIES:
+            d_item, d_ability = META_SYNERGIES[key]
+            item = item or d_item
+            ability = ability or d_ability
+
+        nature_str = nature_str or ("adamant" if is_physical else "modest")
+        evs = evs if evs is not None else 252
+
+        sword_of_ruin = beads_of_ruin = tablets_of_ruin = vessel_of_ruin = False
+        if ability:
+            al = ability.lower().replace(" ", "-").replace("_", "-")
+            sword_of_ruin = al == "sword-of-ruin"
+            beads_of_ruin = al == "beads-of-ruin"
+            tablets_of_ruin = al == "tablets-of-ruin"
+            vessel_of_ruin = al == "vessel-of-ruin"
+
+        attacker = PokemonBuild(
+            name=attacker_name,
+            base_stats=atk_base,
+            types=atk_types,
+            nature=Nature(nature_str.lower()),
+            evs=EVSpread(
+                attack=evs if is_physical else 0,
+                special_attack=0 if is_physical else evs,
+            ),
+            item=item,
+            ability=ability,
+            tera_type=tera_type,
+        )
+        modifiers = DamageModifiers(
+            is_doubles=True,
+            attacker_item=item,
+            attacker_ability=ability,
+            tera_type=tera_type,
+            tera_active=tera_type is not None,
+            is_critical=move.always_crit,
+            sword_of_ruin=sword_of_ruin,
+            beads_of_ruin=beads_of_ruin,
+            tablets_of_ruin=tablets_of_ruin,
+            vessel_of_ruin=vessel_of_ruin,
+        )
+        return {
+            "attacker": attacker,
+            "move": move,
+            "modifiers": modifiers,
+            "is_physical": is_physical,
+            "nature": nature_str,
+            "evs": evs,
+            "item": item,
+            "ability": ability,
+            "tera_type": tera_type,
+        }
+
+    def _find_champions_survival_allocation(
+        defender_name: str,
+        my_base: BaseStats,
+        my_types: list[str],
+        parsed_nature: Nature,
+        threats: list[dict],
+        defender_item: Optional[str],
+        defender_ability: Optional[str],
+        defender_tera_type: Optional[str],
+        sp_budget: int,
+        offensive_sps: int = 0,
+        offensive_stat: Optional[str] = None,
+        target_survival: float = 93.75,
+    ) -> Optional[dict]:
+        """Search (hp_sp, def_sp, spd_sp) on the SP grain to survive all threats.
+
+        Performance: runs the real damage engine ONCE per threat (at zero
+        defensive SP) to capture the 16-roll spread, then scales each roll by the
+        defensive-stat ratio across candidate SP values — the same linear
+        approximation used by the EV/SP bulk solvers. This keeps the 33×33 grid
+        cheap (no engine call inside the loop) while preserving roll counts, so
+        `target_survival` tiers are respected.
+
+        Returns the minimum-total allocation that survives every threat at
+        `target_survival`, or None.
+        """
+        from math import floor
+
+        def_mod = get_nature_modifier(parsed_nature, "defense")
+        spd_mod = get_nature_modifier(parsed_nature, "special_defense")
+
+        need_def = any(t["is_physical"] for t in threats)
+        need_spd = any(not t["is_physical"] for t in threats)
+
+        # Baseline defensive stats at zero SP, and per-threat zero-SP rolls.
+        base_def_zero = calculate_stat_sp(my_base.defense, 31, 0, 50, def_mod)
+        base_spd_zero = calculate_stat_sp(my_base.special_defense, 31, 0, 50, spd_mod)
+
+        baseline_sp = {"hp": 0, "defense": 0, "special_defense": 0}
+        if offensive_sps and offensive_stat:
+            baseline_sp[offensive_stat] = offensive_sps
+        baseline_defender = PokemonBuild(
+            name=defender_name,
+            base_stats=my_base,
+            types=my_types,
+            nature=parsed_nature,
+            format_system="champions",
+            sps=StatPointSpread(**baseline_sp),
+            ability=defender_ability,
+            item=defender_item,
+            tera_type=defender_tera_type,
+        )
+        threat_rolls = []  # list of (is_physical, sorted rolls at zero def SP)
+        for t in threats:
+            res = calculate_damage(t["attacker"], baseline_defender, t["move"], t["modifiers"])
+            threat_rolls.append((t["is_physical"], sorted(res.rolls)))
+
+        # Precompute defensive stat per SP value (0-32).
+        def_stat_at = [calculate_stat_sp(my_base.defense, 31, s, 50, def_mod) for s in range(33)]
+        spd_stat_at = [calculate_stat_sp(my_base.special_defense, 31, s, 50, spd_mod) for s in range(33)]
+        hp_at = [calculate_hp_sp(my_base.hp, 31, s, 50) for s in range(33)]
+
+        def _survives(is_physical, rolls, hp, def_sp, spd_sp):
+            """Scale zero-SP rolls by the defensive-stat ratio and count survivals."""
+            if is_physical:
+                ratio_num, ratio_den = base_def_zero, def_stat_at[def_sp]
+            else:
+                ratio_num, ratio_den = base_spd_zero, spd_stat_at[spd_sp]
+            survive = 0
+            for r in rolls:
+                scaled = floor(r * ratio_num / ratio_den) if ratio_den else r
+                if scaled < hp:
+                    survive += 1
+            return (survive / 16) * 100
+
+        best = None
+        for hp_sp in range(0, min(SP_PER_STAT_MAX, sp_budget) + 1):
+            hp = hp_at[hp_sp]
+            def_range = range(0, SP_PER_STAT_MAX + 1) if need_def else [0]
+            for def_sp in def_range:
+                if hp_sp + def_sp + offensive_sps > sp_budget:
+                    break
+                spd_range = range(0, SP_PER_STAT_MAX + 1) if need_spd else [0]
+                for spd_sp in spd_range:
+                    total = hp_sp + def_sp + spd_sp + offensive_sps
+                    if total > sp_budget:
+                        break
+                    all_survive = True
+                    worst_max_roll = 0
+                    for is_physical, rolls in threat_rolls:
+                        pct = _survives(is_physical, rolls, hp, def_sp, spd_sp)
+                        if is_physical:
+                            scaled_max = floor(rolls[-1] * base_def_zero / def_stat_at[def_sp])
+                        else:
+                            scaled_max = floor(rolls[-1] * base_spd_zero / spd_stat_at[spd_sp])
+                        worst_max_roll = max(worst_max_roll, (scaled_max / hp) * 100 if hp else 100)
+                        if pct < target_survival:
+                            all_survive = False
+                            break
+                    if all_survive:
+                        cand = {
+                            "hp_sp": hp_sp,
+                            "def_sp": def_sp,
+                            "spd_sp": spd_sp,
+                            "total_sp": total,
+                            "max_percent": round(worst_max_roll, 1),
+                        }
+                        if best is None or cand["total_sp"] < best["total_sp"]:
+                            best = cand
+                        break  # cheapest spd at this (hp,def); try next def
+                if best is not None and need_spd is False:
+                    break
+        return best
+
+    async def _design_spread_with_benchmarks_champions(
+        **kw,
+    ) -> dict:
+        """SP-scale version of design_spread_with_benchmarks (cap 32/stat, 66)."""
+        pokemon_name = kw["pokemon_name"]
+        my_base = kw["my_base"]
+        my_types = kw["my_types"]
+        nature = kw.get("nature")
+        outspeed_pokemon = kw.get("outspeed_pokemon")
+        outspeed_pokemon_nature = kw.get("outspeed_pokemon_nature", "jolly")
+        outspeed_pokemon_evs = kw.get("outspeed_pokemon_evs", 252)
+        survive_pokemon = kw.get("survive_pokemon")
+        survive_move = kw.get("survive_move")
+        prioritize = kw.get("prioritize", "bulk")
+        offensive_evs = kw.get("offensive_evs", 0)
+        item = kw.get("item")
+        ability = kw.get("ability")
+        defender_tera_type = kw.get("defender_tera_type")
+
+        is_physical = my_base.attack >= my_base.special_attack
+        off_stat = "attack" if is_physical else "special_attack"
+        if nature is None:
+            if prioritize == "offense":
+                nature = "adamant" if is_physical else "modest"
+            else:
+                nature = "careful" if is_physical else "calm"
+        try:
+            parsed_nature = Nature(nature.lower())
+        except ValueError:
+            return error_response(ErrorCodes.INVALID_NATURE, f"Invalid nature: {nature}")
+
+        results: dict = {
+            "pokemon": pokemon_name,
+            "nature": nature,
+            "format_system": "champions",
+            "benchmarks": {},
+        }
+
+        # 1. Speed benchmark on the SP grain.
+        speed_sps = 0
+        if outspeed_pokemon:
+            try:
+                target_base = await pokeapi.get_base_stats(outspeed_pokemon)
+                target_nature = Nature(outspeed_pokemon_nature.lower())
+                target_speed = calculate_stat(
+                    target_base.speed, 31, outspeed_pokemon_evs, 50,
+                    get_nature_modifier(target_nature, "speed"),
+                )
+                needed = find_speed_sps_to_outspeed(my_base.speed, target_speed, parsed_nature)
+                if needed is None:
+                    speed_sps = SP_PER_STAT_MAX
+                    results["benchmarks"]["speed"] = {
+                        "target": outspeed_pokemon,
+                        "target_speed": target_speed,
+                        "sps_needed": SP_PER_STAT_MAX,
+                        "outspeeds": False,
+                    }
+                else:
+                    speed_sps = needed
+                    my_speed = calculate_speed_sp(my_base.speed, 31, needed, 50, parsed_nature)
+                    results["benchmarks"]["speed"] = {
+                        "target": outspeed_pokemon,
+                        "target_speed": target_speed,
+                        "sps_needed": needed,
+                        "my_speed": my_speed,
+                        "outspeeds": my_speed > target_speed,
+                    }
+            except Exception as e:
+                results["benchmarks"]["speed"] = {"error": str(e)}
+
+        # 2. Offensive SP allocation.
+        off_sps = 0
+        if prioritize == "offense":
+            off_sps = SP_PER_STAT_MAX
+
+        # 3. Survival.
+        remaining = SP_TOTAL_MAX - speed_sps - off_sps
+        hp_sp = def_sp = spd_sp = 0
+        if survive_pokemon and survive_move:
+            try:
+                spec = await _prepare_single_threat_build(
+                    survive_pokemon, survive_move,
+                    kw.get("survive_pokemon_nature"), kw.get("survive_pokemon_evs"),
+                    kw.get("survive_pokemon_item"), kw.get("survive_pokemon_ability"),
+                    kw.get("survive_pokemon_tera_type"),
+                )
+                from vgc_mcp_core.tools.ability_helpers import resolve_ability
+                resolved_ability, _ = await resolve_ability(
+                    pokemon_name, pokeapi=pokeapi, smogon_client=smogon,
+                    user_override=ability,
+                )
+                alloc = _find_champions_survival_allocation(
+                    defender_name=pokemon_name,
+                    my_base=my_base,
+                    my_types=my_types,
+                    parsed_nature=parsed_nature,
+                    threats=[spec],
+                    defender_item=item,
+                    defender_ability=resolved_ability,
+                    defender_tera_type=defender_tera_type,
+                    sp_budget=SP_TOTAL_MAX - speed_sps,
+                    offensive_sps=off_sps,
+                    offensive_stat=off_stat,
+                    target_survival=93.75,
+                )
+                if alloc is None:
+                    results["benchmarks"]["survival"] = {
+                        "attacker": survive_pokemon,
+                        "move": survive_move,
+                        "survives": False,
+                        "note": "No SP allocation within 66 survives this hit.",
+                    }
+                else:
+                    hp_sp = alloc["hp_sp"]
+                    def_sp = alloc["def_sp"]
+                    spd_sp = alloc["spd_sp"]
+                    results["benchmarks"]["survival"] = {
+                        "attacker": survive_pokemon,
+                        "move": survive_move,
+                        "attacker_nature": spec["nature"],
+                        "attacker_evs": spec["evs"],
+                        "attacker_item": spec["item"],
+                        "attacker_ability": spec["ability"],
+                        "max_percent": alloc["max_percent"],
+                        "survives": alloc["max_percent"] < 100,
+                        "hp_remaining": f"{100 - alloc['max_percent']:.1f}%",
+                    }
+            except Exception as e:
+                results["benchmarks"]["survival"] = {"error": str(e)}
+        else:
+            # No survival target — dump remaining into HP/defenses.
+            hp_sp = min(SP_PER_STAT_MAX, remaining)
+            leftover = remaining - hp_sp
+            def_sp = min(SP_PER_STAT_MAX, leftover // 2)
+            spd_sp = min(SP_PER_STAT_MAX, leftover - def_sp)
+
+        sp_kwargs = {"hp": hp_sp, "defense": def_sp, "special_defense": spd_sp, "speed": speed_sps}
+        if off_sps:
+            sp_kwargs[off_stat] = off_sps
+        # Final cap enforcement.
+        validation = validate_sp_allocation(sp_kwargs)
+        if not validation["is_valid"] and validation["over_budget"]:
+            sp_kwargs["hp"] = max(0, sp_kwargs["hp"] - validation["over_budget"])
+
+        sps = StatPointSpread(**sp_kwargs)
+        optimized_pokemon = _build_champions_pokemon(
+            pokemon_name, my_base, my_types, parsed_nature, sps,
+            item=item, tera_type=defender_tera_type,
+        )
+        final_stats = {
+            "hp": calculate_hp_sp(my_base.hp, 31, sps.hp, 50),
+            "attack": calculate_stat_sp(my_base.attack, 31, sps.attack, 50, get_nature_modifier(parsed_nature, "attack")),
+            "defense": calculate_stat_sp(my_base.defense, 31, sps.defense, 50, get_nature_modifier(parsed_nature, "defense")),
+            "special_attack": calculate_stat_sp(my_base.special_attack, 31, sps.special_attack, 50, get_nature_modifier(parsed_nature, "special_attack")),
+            "special_defense": calculate_stat_sp(my_base.special_defense, 31, sps.special_defense, 50, get_nature_modifier(parsed_nature, "special_defense")),
+            "speed": calculate_stat_sp(my_base.speed, 31, sps.speed, 50, get_nature_modifier(parsed_nature, "speed")),
+        }
+        results["spread"] = {
+            "hp_sps": sps.hp,
+            "atk_sps": sps.attack,
+            "def_sps": sps.defense,
+            "spa_sps": sps.special_attack,
+            "spd_sps": sps.special_defense,
+            "spe_sps": sps.speed,
+            "total": sps.total,
+        }
+        results["final_stats"] = final_stats
+        results["showdown_paste"] = pokemon_build_to_showdown(optimized_pokemon)
+        return results
+
+    async def _optimize_multi_survival_champions(
+        pokemon_name: str,
+        my_base: BaseStats,
+        my_types: list[str],
+        nature: Optional[str],
+        threats: list[dict],
+        outspeed_pokemon: Optional[str],
+        outspeed_pokemon_nature: str,
+        outspeed_pokemon_evs: int,
+        defender_tera_type: Optional[str],
+        target_survival: float,
+        item: Optional[str],
+        ability: Optional[str],
+    ) -> dict:
+        """SP-scale multi/dual survival optimizer (cap 32/stat, 66 total)."""
+        is_physical = my_base.attack >= my_base.special_attack
+        if nature is None:
+            nature = "careful" if is_physical else "calm"
+        try:
+            parsed_nature = Nature(nature.lower())
+        except ValueError:
+            return error_response(ErrorCodes.INVALID_NATURE, f"Invalid nature: {nature}")
+
+        # Speed benchmark.
+        speed_sps = 0
+        speed_info = None
+        if outspeed_pokemon:
+            try:
+                target_base = await pokeapi.get_base_stats(outspeed_pokemon)
+                target_speed = calculate_stat(
+                    target_base.speed, 31, outspeed_pokemon_evs, 50,
+                    get_nature_modifier(Nature(outspeed_pokemon_nature.lower()), "speed"),
+                )
+                needed = find_speed_sps_to_outspeed(my_base.speed, target_speed, parsed_nature)
+                speed_sps = needed if needed is not None else SP_PER_STAT_MAX
+                speed_info = {
+                    "target": outspeed_pokemon,
+                    "target_speed": target_speed,
+                    "sps_needed": speed_sps,
+                    "outspeeds": needed is not None,
+                }
+            except Exception as e:
+                speed_info = {"error": str(e)}
+
+        # Prepare threats (mainline attacker builds).
+        prepared = []
+        for t in threats:
+            spec = await _prepare_single_threat_build(
+                t["attacker"], t["move"], t.get("nature"), t.get("evs"),
+                t.get("item"), t.get("ability"), t.get("tera_type"),
+            )
+            prepared.append(spec)
+
+        from vgc_mcp_core.tools.ability_helpers import resolve_ability
+        resolved_ability, _ = await resolve_ability(
+            pokemon_name, pokeapi=pokeapi, smogon_client=smogon, user_override=ability,
+        )
+
+        alloc = _find_champions_survival_allocation(
+            defender_name=pokemon_name,
+            my_base=my_base,
+            my_types=my_types,
+            parsed_nature=parsed_nature,
+            threats=prepared,
+            defender_item=item,
+            defender_ability=resolved_ability,
+            defender_tera_type=defender_tera_type,
+            sp_budget=SP_TOTAL_MAX - speed_sps,
+            target_survival=target_survival,
+        )
+
+        if alloc is None:
+            return {
+                "pokemon": pokemon_name,
+                "format_system": "champions",
+                "verdict": "IMPOSSIBLE",
+                "message": (
+                    "No Stat Point allocation within the 66-point budget survives "
+                    "all threats at the requested survival rate."
+                ),
+                "speed_benchmark": speed_info,
+            }
+
+        sps = StatPointSpread(
+            hp=alloc["hp_sp"], defense=alloc["def_sp"],
+            special_defense=alloc["spd_sp"], speed=speed_sps,
+        )
+        optimized_pokemon = _build_champions_pokemon(
+            pokemon_name, my_base, my_types, parsed_nature, sps,
+            item=item, tera_type=defender_tera_type,
+        )
+
+        # Per-threat breakdown.
+        breakdown = []
+        for spec in prepared:
+            defender = optimized_pokemon
+            result = calculate_damage(spec["attacker"], defender, spec["move"], spec["modifiers"])
+            survive_rolls = sum(1 for r in result.rolls if r < result.defender_hp)
+            breakdown.append({
+                "attacker": spec["attacker"].name,
+                "move": spec["move"].name,
+                "damage_percent": f"{format_percent(result.min_percent)}-{format_percent(result.max_percent)}%",
+                "survival_pct": (survive_rolls / 16) * 100,
+                "survives": result.max_percent < 100,
+            })
+
+        final_stats = {
+            "hp": calculate_hp_sp(my_base.hp, 31, sps.hp, 50),
+            "defense": calculate_stat_sp(my_base.defense, 31, sps.defense, 50, get_nature_modifier(parsed_nature, "defense")),
+            "special_defense": calculate_stat_sp(my_base.special_defense, 31, sps.special_defense, 50, get_nature_modifier(parsed_nature, "special_defense")),
+            "speed": calculate_stat_sp(my_base.speed, 31, sps.speed, 50, get_nature_modifier(parsed_nature, "speed")),
+        }
+
+        return {
+            "pokemon": pokemon_name,
+            "nature": nature,
+            "format_system": "champions",
+            "verdict": "SUCCESS",
+            "spread": {
+                "hp_sps": sps.hp,
+                "def_sps": sps.defense,
+                "spd_sps": sps.special_defense,
+                "spe_sps": sps.speed,
+                "total": sps.total,
+            },
+            "final_stats": final_stats,
+            "speed_benchmark": speed_info,
+            "threat_breakdown": breakdown,
+            "showdown_paste": pokemon_build_to_showdown(optimized_pokemon),
+        }
+
+    async def _check_spread_efficiency_champions(
+        pokemon_name: str,
+        base_stats: BaseStats,
+        parsed_nature: Nature,
+        nature: str,
+        hp_sps: int,
+        atk_sps: int,
+        def_sps: int,
+        spa_sps: int,
+        spd_sps: int,
+        spe_sps: int,
+    ) -> dict:
+        """SP-scale version of check_spread_efficiency (cap 32/stat, 66 total)."""
+        allocation = {
+            "hp": hp_sps,
+            "attack": atk_sps,
+            "defense": def_sps,
+            "special_attack": spa_sps,
+            "special_defense": spd_sps,
+            "speed": spe_sps,
+        }
+        validation = validate_sp_allocation(allocation)
+        total = validation["total"]
+
+        issues: list[str] = list(validation["per_stat_violations"])
+        suggestions: list[str] = []
+        if validation["over_budget"]:
+            issues.append(
+                f"Total SP ({total}) exceeds maximum of {SP_TOTAL_MAX}"
+            )
+        elif total < SP_TOTAL_MAX:
+            suggestions.append(
+                f"You have {SP_TOTAL_MAX - total} Stat Points remaining to allocate"
+            )
+
+        nature_mods = {
+            "attack": get_nature_modifier(parsed_nature, "attack"),
+            "special_attack": get_nature_modifier(parsed_nature, "special_attack"),
+        }
+        if nature_mods["attack"] < 1.0 and atk_sps > 0:
+            suggestions.append(
+                f"Investing in Attack with -{nature} nature. Consider a neutral or +Atk nature."
+            )
+        if nature_mods["special_attack"] < 1.0 and spa_sps > 0:
+            suggestions.append(
+                f"Investing in Sp.Atk with -{nature} nature. Consider a neutral or +SpA nature."
+            )
+
+        final_stats = {
+            "hp": calculate_hp_sp(base_stats.hp, 31, hp_sps, 50),
+            "attack": calculate_stat_sp(base_stats.attack, 31, atk_sps, 50, get_nature_modifier(parsed_nature, "attack")),
+            "defense": calculate_stat_sp(base_stats.defense, 31, def_sps, 50, get_nature_modifier(parsed_nature, "defense")),
+            "special_attack": calculate_stat_sp(base_stats.special_attack, 31, spa_sps, 50, get_nature_modifier(parsed_nature, "special_attack")),
+            "special_defense": calculate_stat_sp(base_stats.special_defense, 31, spd_sps, 50, get_nature_modifier(parsed_nature, "special_defense")),
+            "speed": calculate_stat_sp(base_stats.speed, 31, spe_sps, 50, get_nature_modifier(parsed_nature, "speed")),
+        }
+
+        # Only emit a paste when the allocation is within caps — StatPointSpread
+        # rejects out-of-range values, so an invalid spread is reported via the
+        # issues list rather than a paste.
+        showdown_paste = None
+        if validation["is_valid"]:
+            types = await pokeapi.get_pokemon_types(pokemon_name)
+            sps = StatPointSpread(**allocation)
+            analyzed_pokemon = _build_champions_pokemon(
+                pokemon_name, base_stats, types, parsed_nature, sps
+            )
+            showdown_paste = pokemon_build_to_showdown(analyzed_pokemon)
+
+        return {
+            "pokemon": pokemon_name,
+            "nature": nature,
+            "format_system": "champions",
+            "total_sps": total,
+            "remaining_sps": validation["remaining"],
+            "final_stats": final_stats,
+            "issues": issues if issues else ["No issues found"],
+            "suggestions": suggestions if suggestions else ["Spread looks efficient!"],
+            "is_valid": validation["is_valid"],
+            "showdown_paste": showdown_paste,
+            "analysis": (
+                f"{pokemon_name}'s spread uses {total}/{SP_TOTAL_MAX} SP — "
+                f"{validation['remaining']} remaining"
+            ),
+        }
+
     @mcp.tool()
     async def check_spread_efficiency(
         pokemon_name: str,
@@ -604,6 +1599,15 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 parsed_nature = Nature(nature.lower())
             except ValueError:
                 return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {nature}')
+
+            # --- Champions (Reg MA) Stat-Point branch ---------------------------
+            # In a Champions session the *_evs args carry SP-scale numbers
+            # (0-32/stat, <=66 total). Validate on the SP grain instead of 508/4.
+            if _detect_champions(pokemon_name):
+                return await _check_spread_efficiency_champions(
+                    pokemon_name, base_stats, parsed_nature, nature,
+                    hp_evs, atk_evs, def_evs, spa_evs, spd_evs, spe_evs,
+                )
 
             total = hp_evs + atk_evs + def_evs + spa_evs + spd_evs + spe_evs
             issues = []
@@ -732,13 +1736,23 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         """
         try:
             base_stats = await pokeapi.get_base_stats(pokemon_name)
-            
+
             # Parse current nature
             try:
                 current_nature_enum = Nature(current_nature.lower())
             except ValueError:
                 return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {current_nature}')
-            
+
+            # --- Champions (Reg MA) Stat-Point branch ---------------------------
+            # In a Champions session the *_evs args carry SP-scale numbers
+            # (0-32/stat). Search for a nature that hits the same stats on the SP
+            # grain with fewer total Stat Points.
+            if _detect_champions(pokemon_name):
+                return await _suggest_nature_optimization_champions(
+                    pokemon_name, base_stats, current_nature, current_nature_enum,
+                    hp_evs, atk_evs, def_evs, spa_evs, spd_evs, spe_evs, moves,
+                )
+
             # Calculate current final stats
             current_stats = {
                 "hp": calculate_hp(base_stats.hp, 31, hp_evs, 50),
@@ -1024,6 +2038,15 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             except ValueError:
                 return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {nature}')
 
+            # --- Champions (Reg MA) Stat-Point branch ---------------------------
+            if _detect_champions(pokemon_name):
+                # Default EV budget (252) maps to the full SP bulk budget (66);
+                # an explicit smaller request is clamped onto the SP scale.
+                total_bulk_sps = SP_TOTAL_MAX if total_bulk_evs == 252 else min(SP_TOTAL_MAX, total_bulk_evs)
+                return await _optimize_bulk_champions(
+                    pokemon_name, base_stats, parsed_nature, total_bulk_sps, defense_bias, item
+                )
+
             # Simple optimization: balance HP with defenses based on bias
             # General rule: invest in HP until it's ~2x each defense stat
 
@@ -1166,6 +2189,12 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         """
         try:
             base_stats = await pokeapi.get_base_stats(pokemon_name)
+
+            # --- Champions (Reg MA) Stat-Point branch ---------------------------
+            if _detect_champions(pokemon_name):
+                return await _suggest_spread_champions(
+                    pokemon_name, base_stats, role, speed_target, item
+                )
 
             # Determine if physical or special attacker
             is_physical = base_stats.attack > base_stats.special_attack
@@ -1356,6 +2385,13 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 parsed_nature = Nature(nature.lower())
             except ValueError:
                 return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {nature}')
+
+            # --- Champions (Reg MA) Stat-Point branch ---------------------------
+            if _detect_champions(pokemon_name):
+                total_bulk_sps = SP_TOTAL_MAX if total_bulk_evs == 252 else min(SP_TOTAL_MAX, total_bulk_evs)
+                return await _optimize_bulk_champions(
+                    pokemon_name, base_stats, parsed_nature, total_bulk_sps, defense_weight, item
+                )
 
             # Use the mathematical optimizer
             result = calculate_optimal_bulk_distribution(
@@ -1583,12 +2619,36 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             # Fetch our Pokemon's data
             my_base = await pokeapi.get_base_stats(pokemon_name)
             my_types = await pokeapi.get_pokemon_types(pokemon_name)
-            
+
+            # --- Champions (Reg MA) Stat-Point branch ---------------------------
+            if _detect_champions(pokemon_name):
+                return await _design_spread_with_benchmarks_champions(
+                    pokemon_name=pokemon_name,
+                    my_base=my_base,
+                    my_types=my_types,
+                    nature=nature,
+                    outspeed_pokemon=outspeed_pokemon,
+                    outspeed_pokemon_nature=outspeed_pokemon_nature,
+                    outspeed_pokemon_evs=outspeed_pokemon_evs,
+                    survive_pokemon=survive_pokemon,
+                    survive_move=survive_move,
+                    survive_pokemon_nature=survive_pokemon_nature,
+                    survive_pokemon_evs=survive_pokemon_evs,
+                    survive_pokemon_ability=survive_pokemon_ability,
+                    survive_pokemon_item=survive_pokemon_item,
+                    survive_pokemon_tera_type=survive_pokemon_tera_type,
+                    defender_tera_type=defender_tera_type,
+                    prioritize=prioritize,
+                    offensive_evs=offensive_evs,
+                    item=item,
+                    ability=ability,
+                )
+
             # Auto-select nature if not provided
             nature_reasoning = None
             if nature is None:
                 from vgc_mcp_core.calc.nature_optimization import find_optimal_nature_for_benchmarks
-                
+
                 # Determine attack type and role
                 is_physical = offensive_evs > 0 and my_base.attack > my_base.special_attack
                 is_special = offensive_evs > 0 and my_base.special_attack > my_base.attack
@@ -2350,6 +3410,37 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             # Fetch defender data
             my_base = await pokeapi.get_base_stats(pokemon_name)
             my_types = await pokeapi.get_pokemon_types(pokemon_name)
+
+            # --- Champions (Reg MA) Stat-Point branch ---------------------------
+            if _detect_champions(pokemon_name):
+                threats = [
+                    {
+                        "attacker": survive_hit1_attacker, "move": survive_hit1_move,
+                        "nature": survive_hit1_nature, "evs": survive_hit1_evs,
+                        "item": survive_hit1_item, "ability": survive_hit1_ability,
+                        "tera_type": survive_hit1_tera_type,
+                    },
+                    {
+                        "attacker": survive_hit2_attacker, "move": survive_hit2_move,
+                        "nature": survive_hit2_nature, "evs": survive_hit2_evs,
+                        "item": survive_hit2_item, "ability": survive_hit2_ability,
+                        "tera_type": survive_hit2_tera_type,
+                    },
+                ]
+                return await _optimize_multi_survival_champions(
+                    pokemon_name=pokemon_name,
+                    my_base=my_base,
+                    my_types=my_types,
+                    nature=nature,
+                    threats=threats,
+                    outspeed_pokemon=outspeed_pokemon,
+                    outspeed_pokemon_nature=outspeed_pokemon_nature,
+                    outspeed_pokemon_evs=outspeed_pokemon_evs,
+                    defender_tera_type=defender_tera_type,
+                    target_survival=target_survival,
+                    item=item,
+                    ability=ability,
+                )
 
             # Track if nature was auto-selected
             nature_auto_selected = nature is None
@@ -3146,6 +4237,23 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             # Fetch defender data
             my_base = await pokeapi.get_base_stats(pokemon_name)
             my_types = await pokeapi.get_pokemon_types(pokemon_name)
+
+            # --- Champions (Reg MA) Stat-Point branch ---------------------------
+            if _detect_champions(pokemon_name):
+                return await _optimize_multi_survival_champions(
+                    pokemon_name=pokemon_name,
+                    my_base=my_base,
+                    my_types=my_types,
+                    nature=nature,
+                    threats=threats,
+                    outspeed_pokemon=outspeed_pokemon,
+                    outspeed_pokemon_nature=outspeed_pokemon_nature,
+                    outspeed_pokemon_evs=outspeed_pokemon_evs,
+                    defender_tera_type=defender_tera_type,
+                    target_survival=target_survival,
+                    item=item,
+                    ability=ability,
+                )
 
             # Resolve defender's ability so the engine auto-applies defensive
             # ability interactions (Multiscale, Ice Scales, Thick Fat, Filter,

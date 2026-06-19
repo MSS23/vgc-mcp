@@ -7,10 +7,22 @@ from vgc_mcp_core.config import logger
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.calc.damage import calculate_damage
 from vgc_mcp_core.calc.modifiers import DamageModifiers
-from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, BaseStats
+from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, StatPointSpread, BaseStats
 from vgc_mcp_core.models.move import Move
 from vgc_mcp_core.utils.errors import pokemon_not_found_error, api_error
 from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name
+from vgc_mcp_core.rules.regulation_loader import get_regulation_config
+
+
+def _detect_champions(pokemon_name: Optional[str] = None) -> bool:
+    """Return True when the active session is the Champions (Reg MA) SP system.
+
+    Optionally runs Pokemon-name inference first (mirroring the wave-2 tools)
+    so a Mega/Reg MA mention auto-selects Champions without an explicit set.
+    The mainline path is taken whenever this returns False.
+    """
+    from vgc_mcp_core.rules.format_detect import detect_champions_format
+    return detect_champions_format(pokemon_name)
 
 # All 18 Pokemon types
 ALL_TYPES = [
@@ -48,23 +60,51 @@ def register_tera_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             # Fetch Pokemon data
             base_stats = await pokeapi.get_base_stats(pokemon_name)
             types = await pokeapi.get_pokemon_types(pokemon_name)
-            
+
             # Parse spread
             nature = Nature(spread.get("nature", "serious").lower())
-            evs = EVSpread(**spread.get("evs", {}))
             item = spread.get("item")
             ability = spread.get("ability")
-            
-            # Build Pokemon
-            pokemon = PokemonBuild(
-                name=pokemon_name,
-                base_stats=base_stats,
-                types=types,
-                nature=nature,
-                evs=evs,
-                item=item,
-                ability=ability
-            )
+
+            # Build the SUBJECT Pokemon. For Champions the subject carries a
+            # StatPointSpread + format_system='champions' so stats and any
+            # returned paste use the SP scale (32/66, 'SPs:'); mainline keeps
+            # the EVSpread path byte-for-byte unchanged.
+            is_champions = _detect_champions(pokemon_name)
+            if is_champions:
+                # Accept either an explicit 'sps' dict or treat a passed 'evs'
+                # dict as SP-scale (capping each stat at 32) so callers in a
+                # Champions session always get an SP build.
+                sp_input = spread.get("sps")
+                if sp_input is None:
+                    sp_input = {
+                        k: min(int(v), 32)
+                        for k, v in (spread.get("evs") or {}).items()
+                    }
+                sps = StatPointSpread.from_sps_dict(sp_input) if any(
+                    short in sp_input for short in ("hp", "at", "df", "sa", "sd", "sp")
+                ) else StatPointSpread(**sp_input)
+                pokemon = PokemonBuild(
+                    name=pokemon_name,
+                    base_stats=base_stats,
+                    types=types,
+                    nature=nature,
+                    format_system="champions",
+                    sps=sps,
+                    item=item,
+                    ability=ability
+                )
+            else:
+                evs = EVSpread(**spread.get("evs", {}))
+                pokemon = PokemonBuild(
+                    name=pokemon_name,
+                    base_stats=base_stats,
+                    types=types,
+                    nature=nature,
+                    evs=evs,
+                    item=item,
+                    ability=ability
+                )
             
             # Score each Tera type
             tera_scores = []
@@ -126,18 +166,25 @@ def register_tera_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             # Sort by score
             tera_scores.sort(key=lambda x: x["score"], reverse=True)
             
-            # Build markdown output
+            # Build markdown output. For Champions the subject's allocation is
+            # SP-scale (read from the StatPointSpread); mainline reads EVs.
+            if is_champions:
+                _alloc = pokemon.sps
+                build_label = "SPs"
+            else:
+                _alloc = pokemon.evs
+                build_label = "EVs"
             markdown_lines = [
                 f"## Tera Type Analysis: {pokemon_name.title()}",
                 "",
                 "### Current Build",
                 f"{spread.get('nature', 'Serious').title()} | "
-                f"{spread.get('evs', {}).get('hp', 0)}/"
-                f"{spread.get('evs', {}).get('attack', 0)}/"
-                f"{spread.get('evs', {}).get('defense', 0)}/"
-                f"{spread.get('evs', {}).get('special_attack', 0)}/"
-                f"{spread.get('evs', {}).get('special_defense', 0)}/"
-                f"{spread.get('evs', {}).get('speed', 0)} | "
+                f"{_alloc.hp}/"
+                f"{_alloc.attack}/"
+                f"{_alloc.defense}/"
+                f"{_alloc.special_attack}/"
+                f"{_alloc.special_defense}/"
+                f"{_alloc.speed} {build_label} | "
                 f"{item or 'No item'}",
                 "",
                 "### Tera Rankings",
@@ -154,6 +201,7 @@ def register_tera_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             response = {
                 "pokemon": pokemon_name,
                 "role": role,
+                "format_system": "champions" if is_champions else "mainline",
                 "tera_rankings": tera_scores[:10],  # Top 10
                 "recommended": tera_scores[0]["type"] if tera_scores else None,
                 "markdown_summary": "\n".join(markdown_lines)

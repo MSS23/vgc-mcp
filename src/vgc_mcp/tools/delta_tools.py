@@ -19,11 +19,22 @@ from vgc_mcp_core.api.smogon import SmogonStatsClient
 from vgc_mcp_core.calc.damage import calculate_damage
 from vgc_mcp_core.calc.modifiers import DamageModifiers
 from vgc_mcp_core.models.pokemon import (
-    BaseStats, EVSpread, IVSpread, Nature, PokemonBuild,
+    BaseStats, EVSpread, IVSpread, Nature, PokemonBuild, StatPointSpread,
 )
+from vgc_mcp_core.rules.regulation_loader import get_regulation_config
 from vgc_mcp_core.utils.errors import error_response, ErrorCodes
 from vgc_mcp_core.utils.normalize import normalize_move
 from vgc_mcp_core.tools import get_common_spread
+
+
+def _session_is_champions(pokemon_name: Optional[str] = None) -> bool:
+    """Return True when the active session is the Champions (Reg MA) SP system.
+
+    Mirrors spread_tools._session_is_champions — runs name inference first so a
+    Mega/Reg MA mention auto-selects Champions without explicit user setup.
+    """
+    from vgc_mcp_core.rules.format_detect import detect_champions_format
+    return detect_champions_format(pokemon_name)
 
 
 def _verdict(min_pct: float, max_pct: float) -> str:
@@ -58,9 +69,39 @@ async def _build_from_overrides(
     ability: Optional[str] = None,
     tera_type: Optional[str] = None,
     evs: Optional[dict] = None,
+    sps: Optional[dict] = None,
+    is_champions: bool = False,
 ) -> PokemonBuild:
     base = await pokeapi.get_base_stats(name)
     types = await pokeapi.get_pokemon_types(name)
+
+    if is_champions:
+        # Champions subject: SP scale (32/stat, 66 total). Accept overrides under
+        # either "sps" or "evs" (the user may keep using the evs key by habit).
+        sp_src = sps if sps is not None else (evs or None)
+        sp_obj = StatPointSpread()
+        if sp_src:
+            sp_obj = StatPointSpread(
+                hp=sp_src.get("hp", 0),
+                attack=sp_src.get("attack", 0),
+                defense=sp_src.get("defense", 0),
+                special_attack=sp_src.get("special_attack", 0),
+                special_defense=sp_src.get("special_defense", 0),
+                speed=sp_src.get("speed", 0),
+            )
+        return PokemonBuild(
+            name=name,
+            base_stats=base,
+            types=types,
+            nature=Nature(nature.lower()) if nature else Nature.SERIOUS,
+            format_system="champions",
+            sps=sp_obj,
+            ivs=IVSpread(),
+            item=item,
+            ability=ability,
+            tera_type=tera_type,
+        )
+
     ev_obj = EVSpread()
     if evs:
         ev_obj = EVSpread(
@@ -125,6 +166,10 @@ def register_delta_tools(
         if len(threats) > 20:
             return error_response(ErrorCodes.INVALID_PARAMETER, "Maximum 20 threats per delta")
 
+        # Only the USER's subject (pokemon_name) becomes a Champions (SP) build;
+        # opposing threats stay mainline meta references.
+        is_champions = _session_is_champions(pokemon_name)
+
         try:
             me_before = await _build_from_overrides(
                 pokeapi, pokemon_name,
@@ -133,6 +178,8 @@ def register_delta_tools(
                 ability=before.get("ability"),
                 tera_type=before.get("tera_type"),
                 evs=before.get("evs"),
+                sps=before.get("sps"),
+                is_champions=is_champions,
             )
             me_after = await _build_from_overrides(
                 pokeapi, pokemon_name,
@@ -141,6 +188,8 @@ def register_delta_tools(
                 ability=after.get("ability"),
                 tera_type=after.get("tera_type"),
                 evs=after.get("evs"),
+                sps=after.get("sps"),
+                is_champions=is_champions,
             )
         except Exception as e:
             return error_response(ErrorCodes.POKEMON_NOT_FOUND, str(e))
@@ -250,7 +299,8 @@ def register_delta_tools(
                 "change": label,
             })
 
-        return {
+        from vgc_mcp_core.formats.showdown import pokemon_build_to_showdown
+        result = {
             "success": True,
             "pokemon": pokemon_name,
             "before": before,
@@ -258,12 +308,19 @@ def register_delta_tools(
             "as_attacker": as_attacker,
             "summary": {"gained": gained, "lost": lost, "unchanged": unchanged},
             "deltas": rows,
+            "before_showdown_paste": pokemon_build_to_showdown(me_before),
+            "after_showdown_paste": pokemon_build_to_showdown(me_after),
             "agent_instruction": (
                 "Render `deltas` as a 4-column table: Threat | Before | After | Change. "
                 "Color/highlight the Change column (✅ gained, ❌ lost, ⚖ no-change). "
-                "End with a 2-bullet 'Verdict' summarising what the change traded."
+                "End with a 2-bullet 'Verdict' summarising what the change traded. "
+                + ("This is a Champions (Reg MA) build — pastes use SP units ('SPs:'). "
+                   if is_champions else "")
             ),
         }
+        if is_champions:
+            result["format_system"] = "champions"
+        return result
 
 
 def _first_stab_move(build: PokemonBuild) -> str:

@@ -6,8 +6,27 @@ from mcp.server.fastmcp import FastMCP
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.team.manager import TeamManager
 from vgc_mcp_core.team.analysis import TeamAnalyzer
-from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, IVSpread
+from vgc_mcp_core.models.pokemon import (
+    PokemonBuild, Nature, EVSpread, IVSpread, StatPointSpread,
+)
 from vgc_mcp_core.utils.errors import error_response, ErrorCodes
+from vgc_mcp_core.rules.regulation_loader import get_regulation_config
+from vgc_mcp_core.rules.regulation_router import auto_detect_regulation
+from vgc_mcp_core.calc.champions_optimization import validate_sp_allocation
+
+
+def _detect_champions(pokemon_name: str) -> bool:
+    """Resolve session format, falling back to name-based inference.
+
+    Returns True when the active regulation uses the Champions (Reg MA)
+    Stat-Point system. Mainline behavior is unchanged.
+    """
+    cfg = get_regulation_config()
+    try:
+        auto_detect_regulation([pokemon_name], cfg)
+    except Exception:
+        pass
+    return (cfg.get_format_system() or "mainline") == "champions"
 
 
 def register_team_tools(
@@ -46,16 +65,34 @@ def register_team_tools(
             item: Held item
             tera_type: Tera type
             move1, move2, move3, move4: The four moves
-            hp_evs through spe_evs: EV spread (total max 508)
+            hp_evs through spe_evs: stat investment. Mainline interprets these as
+                EVs (total max 508, 252/stat). In a Champions (Reg MA) session
+                they are interpreted as Stat Points (total max 66, 32/stat).
 
         Returns:
             Success/failure status and current team state
         """
         try:
-            # Validate EVs
-            total_evs = hp_evs + atk_evs + def_evs + spa_evs + spd_evs + spe_evs
-            if total_evs > 508:
-                return error_response(ErrorCodes.INVALID_EVS, f'Total EVs ({total_evs}) exceed 508')
+            is_champions = _detect_champions(pokemon_name)
+
+            # Validate stat investment against the active format's caps.
+            if is_champions:
+                alloc = {
+                    "hp": hp_evs, "attack": atk_evs, "defense": def_evs,
+                    "special_attack": spa_evs, "special_defense": spd_evs,
+                    "speed": spe_evs,
+                }
+                validation = validate_sp_allocation(alloc)
+                if not validation["is_valid"]:
+                    detail = (
+                        "; ".join(validation["per_stat_violations"])
+                        or f"Total Stat Points ({validation['total']}) exceed 66"
+                    )
+                    return error_response(ErrorCodes.INVALID_EVS, detail)
+            else:
+                total_evs = hp_evs + atk_evs + def_evs + spa_evs + spd_evs + spe_evs
+                if total_evs > 508:
+                    return error_response(ErrorCodes.INVALID_EVS, f'Total EVs ({total_evs}) exceed 508')
 
             # Fetch Pokemon data
             base_stats = await pokeapi.get_base_stats(pokemon_name)
@@ -70,25 +107,46 @@ def register_team_tools(
             # Build moves list
             moves = [m for m in [move1, move2, move3, move4] if m]
 
-            # Create Pokemon build
-            pokemon = PokemonBuild(
-                name=pokemon_name,
-                base_stats=base_stats,
-                types=types,
-                nature=parsed_nature,
-                evs=EVSpread(
-                    hp=hp_evs,
-                    attack=atk_evs,
-                    defense=def_evs,
-                    special_attack=spa_evs,
-                    special_defense=spd_evs,
-                    speed=spe_evs
-                ),
-                ability=ability,
-                item=item,
-                tera_type=tera_type,
-                moves=moves
-            )
+            # Create Pokemon build (format-aware)
+            if is_champions:
+                pokemon = PokemonBuild(
+                    name=pokemon_name,
+                    base_stats=base_stats,
+                    types=types,
+                    nature=parsed_nature,
+                    format_system="champions",
+                    sps=StatPointSpread(
+                        hp=hp_evs,
+                        attack=atk_evs,
+                        defense=def_evs,
+                        special_attack=spa_evs,
+                        special_defense=spd_evs,
+                        speed=spe_evs
+                    ),
+                    ability=ability,
+                    item=item,
+                    tera_type=tera_type,
+                    moves=moves
+                )
+            else:
+                pokemon = PokemonBuild(
+                    name=pokemon_name,
+                    base_stats=base_stats,
+                    types=types,
+                    nature=parsed_nature,
+                    evs=EVSpread(
+                        hp=hp_evs,
+                        attack=atk_evs,
+                        defense=def_evs,
+                        special_attack=spa_evs,
+                        special_defense=spd_evs,
+                        speed=spe_evs
+                    ),
+                    ability=ability,
+                    item=item,
+                    tera_type=tera_type,
+                    moves=moves
+                )
 
             success, message, data = team_manager.add_pokemon(pokemon)
 
@@ -167,10 +225,26 @@ def register_team_tools(
             Success status with old and new Pokemon
         """
         try:
-            # Validate EVs
-            total_evs = hp_evs + atk_evs + def_evs + spa_evs + spd_evs + spe_evs
-            if total_evs > 508:
-                return error_response(ErrorCodes.INVALID_EVS, f'Total EVs ({total_evs}) exceed 508')
+            is_champions = _detect_champions(pokemon_name)
+
+            # Validate stat investment against the active format's caps.
+            if is_champions:
+                alloc = {
+                    "hp": hp_evs, "attack": atk_evs, "defense": def_evs,
+                    "special_attack": spa_evs, "special_defense": spd_evs,
+                    "speed": spe_evs,
+                }
+                validation = validate_sp_allocation(alloc)
+                if not validation["is_valid"]:
+                    detail = (
+                        "; ".join(validation["per_stat_violations"])
+                        or f"Total Stat Points ({validation['total']}) exceed 66"
+                    )
+                    return error_response(ErrorCodes.INVALID_EVS, detail)
+            else:
+                total_evs = hp_evs + atk_evs + def_evs + spa_evs + spd_evs + spe_evs
+                if total_evs > 508:
+                    return error_response(ErrorCodes.INVALID_EVS, f'Total EVs ({total_evs}) exceed 508')
 
             # Fetch Pokemon data
             base_stats = await pokeapi.get_base_stats(pokemon_name)
@@ -184,24 +258,45 @@ def register_team_tools(
 
             moves = [m for m in [move1, move2, move3, move4] if m]
 
-            pokemon = PokemonBuild(
-                name=pokemon_name,
-                base_stats=base_stats,
-                types=types,
-                nature=parsed_nature,
-                evs=EVSpread(
-                    hp=hp_evs,
-                    attack=atk_evs,
-                    defense=def_evs,
-                    special_attack=spa_evs,
-                    special_defense=spd_evs,
-                    speed=spe_evs
-                ),
-                ability=ability,
-                item=item,
-                tera_type=tera_type,
-                moves=moves
-            )
+            if is_champions:
+                pokemon = PokemonBuild(
+                    name=pokemon_name,
+                    base_stats=base_stats,
+                    types=types,
+                    nature=parsed_nature,
+                    format_system="champions",
+                    sps=StatPointSpread(
+                        hp=hp_evs,
+                        attack=atk_evs,
+                        defense=def_evs,
+                        special_attack=spa_evs,
+                        special_defense=spd_evs,
+                        speed=spe_evs
+                    ),
+                    ability=ability,
+                    item=item,
+                    tera_type=tera_type,
+                    moves=moves
+                )
+            else:
+                pokemon = PokemonBuild(
+                    name=pokemon_name,
+                    base_stats=base_stats,
+                    types=types,
+                    nature=parsed_nature,
+                    evs=EVSpread(
+                        hp=hp_evs,
+                        attack=atk_evs,
+                        defense=def_evs,
+                        special_attack=spa_evs,
+                        special_defense=spd_evs,
+                        speed=spe_evs
+                    ),
+                    ability=ability,
+                    item=item,
+                    tera_type=tera_type,
+                    moves=moves
+                )
 
             success, message, data = team_manager.swap_pokemon(slot - 1, pokemon)
             return {"success": success, "message": message, **data}

@@ -16,15 +16,153 @@ from vgc_mcp_core.calc.item_optimization import (
 )
 from vgc_mcp_core.calc.damage import calculate_damage, format_percent
 from vgc_mcp_core.calc.modifiers import DamageModifiers
-from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, IVSpread, BaseStats
+from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, StatPointSpread, IVSpread, BaseStats
 from vgc_mcp_core.models.move import Move, MoveCategory
 from vgc_mcp_core.formats.showdown import pokemon_build_to_showdown
 from vgc_mcp_core.utils.errors import pokemon_not_found_error, api_error, error_response, ErrorCodes
 from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name
 from vgc_mcp_core.utils.synergies import get_synergy_ability
+from vgc_mcp_core.rules.regulation_loader import get_regulation_config
 
 # Import META_SYNERGIES from spread_tools
 from .spread_tools import META_SYNERGIES
+
+
+def _detect_champions(pokemon_name: Optional[str] = None) -> bool:
+    """Return True when the active session is the Champions (Reg MA) SP system.
+
+    Optionally runs Pokemon-name inference first so a Mega/Reg MA mention
+    auto-selects Champions. The mainline path is taken when this is False.
+    """
+    from vgc_mcp_core.rules.format_detect import detect_champions_format
+    return detect_champions_format(pokemon_name)
+
+
+def _sps_from_smogon_spread(spread: Optional[dict]) -> Optional[StatPointSpread]:
+    """Build a StatPointSpread from a champions-tagged Smogon spread dict.
+
+    Returns None when the spread isn't tagged format_system=='champions' or
+    carries no `sps` data — callers then fall back to other SP sources.
+    """
+    if not spread or spread.get("format_system") != "champions":
+        return None
+    sps = spread.get("sps")
+    if not sps:
+        return None
+    return StatPointSpread.from_sps_dict(sps)
+
+
+def _sps_from_evs_dict(evs: Optional[dict]) -> StatPointSpread:
+    """Convert a passed EV-style dict to a Champions StatPointSpread.
+
+    EV values are mapped onto the SP grain (1 SP == 8 EVs) and trimmed to the
+    66-point budget via the canonical converter. Used when a Champions session
+    subject only has EV-named input (no explicit SP spread).
+    """
+    evs = evs or {}
+    from vgc_mcp_core.calc.conversion import evs_to_sps_spread
+    from vgc_mcp_core.models.pokemon import EVSpread
+    # Convert EV-scale values to the SP grain (1 SP == 8 EVs) and trim to the
+    # 66-point budget — NOT a naive min(ev, 32) clamp, which would massively
+    # over-state any intermediate investment (e.g. 100 EVs -> 13 SP, not 32).
+    return evs_to_sps_spread(
+        EVSpread(
+            hp=int(evs.get("hp", 0)),
+            attack=int(evs.get("attack", 0)),
+            defense=int(evs.get("defense", 0)),
+            special_attack=int(evs.get("special_attack", 0)),
+            special_defense=int(evs.get("special_defense", 0)),
+            speed=int(evs.get("speed", 0)),
+        )
+    )
+
+
+# SP-grain mirror of the mainline EV trade-off table. Choice items' 1.5x stat
+# multiplier means the subject reaches the same offensive number with fewer
+# Stat Points, freeing SP for bulk. ~88 EVs saved by choice items maps to
+# 88 / 8 = 11 SP (1 SP == "8 EVs of effectiveness").
+_CHOICE_OFFENSIVE_SP = 21   # 32 - 11 saved
+_CHOICE_SPARE_DEF_SP = 11   # freed SP routed to Defense
+_CHOICE_SP_SAVED = 11
+
+
+def _champions_ev_tradeoff(
+    pokemon_name: str,
+    base_stats: BaseStats,
+    types: list[str],
+    nature: Nature,
+    items_to_test: list[str],
+    offensive_stat: str,
+):
+    """SP-grain item/Stat-Point trade-off for a Champions subject.
+
+    Mirrors `calc.item_optimization.calculate_ev_tradeoff` but allocates Stat
+    Points (cap 32/stat, 66 total) and returns 'SPs:' pastes. Returns
+    `(analysis_list, best_entry)` sorted by total useful stats (desc).
+    """
+    from vgc_mcp_core.calc.stats_champions import calculate_all_stats_champions
+    from vgc_mcp_core.calc.champions_optimization import validate_sp_allocation
+
+    results = []
+    for item in items_to_test:
+        if item in ("choice-band", "choice-specs"):
+            sps = {
+                "hp": 0,
+                "attack": _CHOICE_OFFENSIVE_SP if offensive_stat == "attack" else 0,
+                "defense": _CHOICE_SPARE_DEF_SP,
+                "special_attack": _CHOICE_OFFENSIVE_SP if offensive_stat == "special_attack" else 0,
+                "special_defense": 0,
+                "speed": 32,
+            }
+            sps_saved = _CHOICE_SP_SAVED
+        else:  # life-orb and any other item: full offensive investment
+            sps = {
+                "hp": 0,
+                "attack": 32 if offensive_stat == "attack" else 0,
+                "defense": 0,
+                "special_attack": 32 if offensive_stat == "special_attack" else 0,
+                "special_defense": 0,
+                "speed": 32,
+            }
+            sps_saved = 0
+
+        # Enforce the 32/stat, 66-total budget defensively.
+        validate_sp_allocation(sps)
+
+        test_pokemon = PokemonBuild(
+            name=pokemon_name,
+            base_stats=base_stats,
+            types=types,
+            nature=nature,
+            format_system="champions",
+            sps=StatPointSpread(**sps),
+            item=item,
+        )
+
+        final_stats = calculate_all_stats_champions(test_pokemon)
+        total_useful = (
+            final_stats.get(offensive_stat, 0)
+            + final_stats.get("speed", 0)
+            + final_stats.get("hp", 0) // 2
+        )
+        showdown_paste = pokemon_build_to_showdown(test_pokemon)
+
+        results.append({
+            "item": item,
+            "sps": sps,
+            "sps_saved": sps_saved,
+            "total_useful_stats": total_useful,
+            "final_stats": final_stats,
+            "rank": 0,
+            "showdown_paste": showdown_paste,
+        })
+
+    results.sort(key=lambda x: x["total_useful_stats"], reverse=True)
+    for i, r in enumerate(results):
+        r["rank"] = i + 1
+
+    best_entry = results[0] if results else None
+    return results, best_entry
 
 
 # Module-level Smogon client reference
@@ -125,21 +263,41 @@ def register_item_optimization_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogo
                 if ability_normalized == "sheer-force":
                     has_sheer_force = True
 
-            attacker = PokemonBuild(
-                name=pokemon_name,
-                base_stats=attacker_base,
-                types=attacker_types,
-                nature=attacker_nature_enum,
-                evs=EVSpread(
-                    hp=attacker_evs_dict.get("hp", 0),
-                    attack=attacker_evs_dict.get("attack", 0),
-                    defense=attacker_evs_dict.get("defense", 0),
-                    special_attack=attacker_evs_dict.get("special_attack", 0),
-                    special_defense=attacker_evs_dict.get("special_defense", 0),
-                    speed=attacker_evs_dict.get("speed", 0)
-                ),
-                ability=attacker_ability
-            )
+            # The ATTACKER is the user's subject. In a Champions session build
+            # it on the SP scale (StatPointSpread + format_system='champions')
+            # so its stats and damage use the correct formula; mainline keeps
+            # the EVSpread path byte-for-byte. The defender (opposing target)
+            # below stays mainline unless its own fetched spread is champions.
+            is_champions = _detect_champions(pokemon_name)
+            if is_champions:
+                attacker_sps = _sps_from_smogon_spread(attacker_spread)
+                if attacker_sps is None:
+                    attacker_sps = _sps_from_evs_dict(attacker_evs_dict)
+                attacker = PokemonBuild(
+                    name=pokemon_name,
+                    base_stats=attacker_base,
+                    types=attacker_types,
+                    nature=attacker_nature_enum,
+                    format_system="champions",
+                    sps=attacker_sps,
+                    ability=attacker_ability
+                )
+            else:
+                attacker = PokemonBuild(
+                    name=pokemon_name,
+                    base_stats=attacker_base,
+                    types=attacker_types,
+                    nature=attacker_nature_enum,
+                    evs=EVSpread(
+                        hp=attacker_evs_dict.get("hp", 0),
+                        attack=attacker_evs_dict.get("attack", 0),
+                        defense=attacker_evs_dict.get("defense", 0),
+                        special_attack=attacker_evs_dict.get("special_attack", 0),
+                        special_defense=attacker_evs_dict.get("special_defense", 0),
+                        speed=attacker_evs_dict.get("speed", 0)
+                    ),
+                    ability=attacker_ability
+                )
 
             # Build defender
             if defender_spread and target_nature is None:
@@ -161,21 +319,35 @@ def register_item_optimization_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogo
                     target_name, pokeapi=pokeapi, smogon_client=_smogon_client,
                 )
 
-            defender = PokemonBuild(
-                name=target_name,
-                base_stats=defender_base,
-                types=defender_types,
-                nature=defender_nature_enum,
-                ability=defender_ability,
-                evs=EVSpread(
-                    hp=defender_evs_dict.get("hp", 0),
-                    attack=defender_evs_dict.get("attack", 0),
-                    defense=defender_evs_dict.get("defense", 0),
-                    special_attack=defender_evs_dict.get("special_attack", 0),
-                    special_defense=defender_evs_dict.get("special_defense", 0),
-                    speed=defender_evs_dict.get("speed", 0)
+            # Opposing target stays MAINLINE unless its own fetched Smogon
+            # spread is explicitly champions-tagged (then honour the SP scale).
+            defender_sps = _sps_from_smogon_spread(defender_spread)
+            if defender_sps is not None:
+                defender = PokemonBuild(
+                    name=target_name,
+                    base_stats=defender_base,
+                    types=defender_types,
+                    nature=defender_nature_enum,
+                    ability=defender_ability,
+                    format_system="champions",
+                    sps=defender_sps
                 )
-            )
+            else:
+                defender = PokemonBuild(
+                    name=target_name,
+                    base_stats=defender_base,
+                    types=defender_types,
+                    nature=defender_nature_enum,
+                    ability=defender_ability,
+                    evs=EVSpread(
+                        hp=defender_evs_dict.get("hp", 0),
+                        attack=defender_evs_dict.get("attack", 0),
+                        defense=defender_evs_dict.get("defense", 0),
+                        special_attack=defender_evs_dict.get("special_attack", 0),
+                        special_defense=defender_evs_dict.get("special_defense", 0),
+                        speed=defender_evs_dict.get("speed", 0)
+                    )
+                )
 
             # Create modifiers
             modifiers = DamageModifiers(is_doubles=True)
@@ -272,16 +444,23 @@ def register_item_optimization_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogo
             if use_smogon_spread:
                 smogon_spread = await _get_common_spread(pokemon_name)
 
-            # Determine HP EVs to test
+            # The SUBJECT is the user's Pokemon. In a Champions session reason
+            # on the SP grain (0 vs 32 / specific SP, capped at 32) instead of
+            # 0 vs 252 EVs; mainline keeps the EV grain byte-for-byte.
+            is_champions = _detect_champions(pokemon_name)
+
+            # Determine HP investment values to test (SP units for champions,
+            # EV units for mainline).
+            cap = 32 if is_champions else 252
             if hp_investment == "full":
-                hp_evs_to_test = [0, 252]
+                hp_units_to_test = [0, cap]
             elif hp_investment == "minimal":
-                hp_evs_to_test = [0]
+                hp_units_to_test = [0]
             else:
                 try:
-                    hp_evs_to_test = [int(hp_investment)]
+                    hp_units_to_test = [min(int(hp_investment), cap)]
                 except ValueError:
-                    hp_evs_to_test = [0, 252]
+                    hp_units_to_test = [0, cap]
 
             # Get nature and other EVs from Smogon if available
             if smogon_spread and nature is None:
@@ -290,42 +469,67 @@ def register_item_optimization_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogo
 
             # Analyze each HP investment
             sustainability_results = []
-            for hp_evs in hp_evs_to_test:
-                pokemon = PokemonBuild(
-                    name=pokemon_name,
-                    base_stats=base_stats,
-                    types=types,
-                    nature=nature_enum,
-                    evs=EVSpread(hp=hp_evs)
-                )
+            for hp_units in hp_units_to_test:
+                if is_champions:
+                    # Build the subject on the SP scale so any returned stats /
+                    # paste are SP-based. The shared calc takes an EV int and
+                    # divides it by 4 (EV/4) in the HP formula; 1 SP ==
+                    # "8 EVs of effectiveness" (EV slot SP*2), so pass SP*8 to
+                    # reproduce the champions HP number exactly.
+                    pokemon = PokemonBuild(
+                        name=pokemon_name,
+                        base_stats=base_stats,
+                        types=types,
+                        nature=nature_enum,
+                        format_system="champions",
+                        sps=StatPointSpread(hp=hp_units),
+                    )
+                    hp_ev_equiv = hp_units * 8
+                else:
+                    pokemon = PokemonBuild(
+                        name=pokemon_name,
+                        base_stats=base_stats,
+                        types=types,
+                        nature=nature_enum,
+                        evs=EVSpread(hp=hp_units)
+                    )
+                    hp_ev_equiv = hp_units
 
                 analysis = analyze_life_orb_sustainability(
-                    pokemon, hp_evs, recovery_sources, moves_per_game
+                    pokemon, hp_ev_equiv, recovery_sources, moves_per_game
                 )
 
-                sustainability_results.append({
-                    "hp_evs": analysis.hp_evs,
+                result_entry = {
+                    "hp_evs": hp_units,
                     "max_hp": analysis.max_hp,
                     "attacks_before_faint": analysis.attacks_before_faint,
                     "net_hp_after_attacks": analysis.net_hp_after_attacks,
                     "recommendation": analysis.recommendation
-                })
+                }
+                if is_champions:
+                    # Surface the SP grain explicitly for champions callers.
+                    result_entry["hp_sps"] = hp_units
+                sustainability_results.append(result_entry)
+
+            # Use SP terminology for champions, EV for mainline.
+            unit_label = "HP SPs" if is_champions else "HP EVs"
+            max_unit = 32 if is_champions else 252
 
             # Generate recommendation
             if len(sustainability_results) == 2:
                 zero_evs = sustainability_results[0]
                 max_evs = sustainability_results[1]
-                
+
                 if zero_evs["attacks_before_faint"] == max_evs["attacks_before_faint"]:
-                    recommendation = "Invest 0 HP EVs - same sustainability as 252 HP EVs"
+                    recommendation = f"Invest 0 {unit_label} - same sustainability as {max_unit} {unit_label}"
                 else:
-                    recommendation = f"252 HP EVs provides {max_evs['attacks_before_faint'] - zero_evs['attacks_before_faint']} more sustainable attacks"
+                    recommendation = f"{max_unit} {unit_label} provides {max_evs['attacks_before_faint'] - zero_evs['attacks_before_faint']} more sustainable attacks"
             else:
                 result = sustainability_results[0]
                 recommendation = result["recommendation"]
 
             # Generate sustainability table
-            table_lines = ["| HP EVs | Max HP | Attacks Before Faint |"]
+            table_lines = [f"| {unit_label} | Max HP | Attacks Before Faint |"]
             table_lines.append("|--------|--------|---------------------|")
             for result in sustainability_results:
                 table_lines.append(
@@ -335,6 +539,7 @@ def register_item_optimization_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogo
 
             return {
                 "pokemon": pokemon_name,
+                "format_system": "champions" if is_champions else "mainline",
                 "life_orb_analysis": {
                     "attacks_before_faint_0_evs": sustainability_results[0]["attacks_before_faint"],
                     "attacks_before_faint_252_evs": sustainability_results[-1]["attacks_before_faint"] if len(sustainability_results) > 1 else sustainability_results[0]["attacks_before_faint"],
@@ -392,19 +597,46 @@ def register_item_optimization_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogo
             if smogon_spread:
                 nature = smogon_spread.get("nature", "serious")
 
-            pokemon = PokemonBuild(
-                name=pokemon_name,
-                base_stats=base_stats,
-                types=types,
-                nature=Nature(nature.lower())
-            )
-
             # Determine offensive stat
             if offensive_stat == "auto":
                 if base_stats.attack > base_stats.special_attack:
                     offensive_stat = "attack"
                 else:
                     offensive_stat = "special_attack"
+
+            # The SUBJECT is the user's Pokemon. In a Champions session the
+            # EV-grain trade-off reasoning runs on the SP grain instead (32 per
+            # stat / 66 total, 'SPs:' pastes); mainline keeps the shared
+            # EV-grain calc byte-for-byte.
+            is_champions = _detect_champions(pokemon_name)
+
+            if is_champions:
+                tradeoff_analysis, best_entry = _champions_ev_tradeoff(
+                    pokemon_name, base_stats, types,
+                    Nature(nature.lower()), items_to_test, offensive_stat,
+                )
+                if not tradeoff_analysis:
+                    return error_response(ErrorCodes.INTERNAL_ERROR, 'No valid tradeoff results generated', pokemon=pokemon_name)
+
+                return {
+                    "pokemon": pokemon_name,
+                    "format_system": "champions",
+                    "offensive_stat": offensive_stat,
+                    "tradeoff_analysis": tradeoff_analysis,
+                    "recommendation": {
+                        "best_item": best_entry["item"],
+                        "sps_saved": best_entry["sps_saved"],
+                        "showdown_paste": best_entry["showdown_paste"],
+                        "final_stats": best_entry["final_stats"],
+                    },
+                }
+
+            pokemon = PokemonBuild(
+                name=pokemon_name,
+                base_stats=base_stats,
+                types=types,
+                nature=Nature(nature.lower())
+            )
 
             # Calculate trade-offs
             tradeoff_results = calculate_ev_tradeoff(
@@ -427,11 +659,12 @@ def register_item_optimization_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogo
             # Get best item
             if not tradeoff_results:
                 return error_response(ErrorCodes.INTERNAL_ERROR, 'No valid tradeoff results generated', pokemon=pokemon_name)
-            
+
             best_result = tradeoff_results[0]
 
             return {
                 "pokemon": pokemon_name,
+                "format_system": "mainline",
                 "offensive_stat": offensive_stat,
                 "tradeoff_analysis": tradeoff_analysis,
                 "recommendation": {

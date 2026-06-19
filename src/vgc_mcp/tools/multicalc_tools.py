@@ -18,7 +18,7 @@ from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
 from vgc_mcp_core.calc.damage import calculate_damage, format_percent
 from vgc_mcp_core.calc.modifiers import DamageModifiers
-from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, IVSpread, BaseStats
+from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, IVSpread, StatPointSpread, BaseStats
 from vgc_mcp_core.models.move import Move, MoveCategory
 from vgc_mcp_core.formats.showdown import pokemon_build_to_showdown
 from vgc_mcp_core.utils.errors import pokemon_not_found_error, api_error, error_response, ErrorCodes
@@ -26,8 +26,8 @@ from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name
 from vgc_mcp_core.utils.synergies import get_synergy_ability
 from vgc_mcp_core.utils.normalize import normalize_smogon_name as _normalize_smogon_name
 
-# Import helper functions from damage_tools
-from .damage_tools import _get_common_spread
+# Import helper functions from damage_tools (do NOT edit that module — reuse only)
+from .damage_tools import _get_common_spread, _detect_champions, _sps_from_smogon_spread
 
 # Module-level Smogon client reference
 _smogon_client: Optional[SmogonStatsClient] = None
@@ -39,7 +39,10 @@ async def _build_pokemon_from_smogon(
     nature: Optional[str] = None,
     evs: Optional[dict] = None,
     item: Optional[str] = None,
-    ability: Optional[str] = None
+    ability: Optional[str] = None,
+    *,
+    subject_is_champions: bool = False,
+    sps: Optional[dict] = None,
 ) -> PokemonBuild:
     """Build a PokemonBuild from Smogon data or provided values.
 
@@ -48,10 +51,26 @@ async def _build_pokemon_from_smogon(
     so the damage engine auto-applies offensive (Sheer Force, Tough Claws,
     Adaptability, Aerilate, etc.) AND defensive (Multiscale, Ice Scales, Thick
     Fat, Filter, Levitate, type absorption, etc.) interactions.
+
+    Champions (Reg MA) dispatch — two independent triggers:
+      * The fetched/returned Smogon spread is itself tagged
+        ``format_system == 'champions'`` (Wave-1 passthrough), in which case the
+        build is SP-scale regardless of who it represents. This is how an
+        OPPOSING reference mon legitimately becomes champions.
+      * ``subject_is_champions=True`` — the caller knows this is the USER'S
+        subject (attacker / team member) in a champions session, so it must use
+        the SP system even when Smogon only has a mainline spread. The subject's
+        SP allocation comes from the explicit ``sps`` arg (or the fetched
+        spread's ``sps``); EVs are never applied to a champions subject.
+
+    Opposing reference mons left at ``subject_is_champions=False`` stay MAINLINE
+    unless their own fetched spread is champions-tagged — exactly the nuance
+    required so a champions defender and a mainline attacker can be compared.
     """
     base_stats = await pokeapi.get_base_stats(pokemon_name)
     types = await pokeapi.get_pokemon_types(pokemon_name)
 
+    smogon_spread: Optional[dict] = None
     # Auto-fetch from Smogon if not provided
     if nature is None or evs is None:
         smogon_spread = await _get_common_spread(pokemon_name)
@@ -73,6 +92,40 @@ async def _build_pokemon_from_smogon(
         )
 
     nature_enum = Nature(nature.lower() if nature else "serious")
+
+    # A fetched spread that is itself champions-tagged forces SP scale even for
+    # an opposing reference mon (matches the calc's per-build format_system read).
+    fetched_sp_spread = (
+        _sps_from_smogon_spread(smogon_spread) if smogon_spread else None
+    )
+    use_champions = subject_is_champions or fetched_sp_spread is not None
+
+    if use_champions:
+        # Subject SP input wins; else fall back to the fetched champions sps;
+        # else an empty StatPointSpread (subject with no SP data yet).
+        if sps is not None:
+            sp_spread = StatPointSpread(
+                hp=sps.get("hp", 0),
+                attack=sps.get("attack", 0),
+                defense=sps.get("defense", 0),
+                special_attack=sps.get("special_attack", 0),
+                special_defense=sps.get("special_defense", 0),
+                speed=sps.get("speed", 0),
+            )
+        else:
+            sp_spread = fetched_sp_spread or StatPointSpread()
+
+        return PokemonBuild(
+            name=pokemon_name,
+            base_stats=base_stats,
+            types=types,
+            nature=nature_enum,
+            format_system="champions",
+            sps=sp_spread,
+            item=item,
+            ability=ability,
+        )
+
     evs_dict = evs or {}
 
     return PokemonBuild(
@@ -108,6 +161,7 @@ def register_multicalc_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
         attacker_evs: Optional[dict] = None,
         attacker_item: Optional[str] = None,
         attacker_ability: Optional[str] = None,
+        attacker_sps: Optional[dict] = None,
         weather: Optional[str] = None,
         terrain: Optional[str] = None,
         attacker_tera_type: Optional[str] = None
@@ -127,6 +181,7 @@ def register_multicalc_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
             attacker_evs: Attacker's EVs dict (auto-fetched if not specified)
             attacker_item: Attacker's item (auto-fetched if not specified)
             attacker_ability: Attacker's ability (auto-fetched if not specified)
+            attacker_sps: Attacker's Stat Points dict for Champions (Reg MA) sessions
             weather: "sun", "rain", "sand", or "snow"
             terrain: "electric", "grassy", "psychic", or "misty"
             attacker_tera_type: Attacker's Tera type if Terastallized
@@ -138,14 +193,20 @@ def register_multicalc_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
             if len(defender_names) > 10:
                 return error_response(ErrorCodes.INVALID_PARAMETER, 'Maximum 10 defenders supported. Please reduce the list.')
 
+            # Champions (Reg MA) detection — only the user's subject (the
+            # attacker) becomes SP-scale. Opposing defenders stay mainline
+            # unless their own fetched Smogon spread is champions-tagged.
+            is_champions = _detect_champions(attacker_name)
+
             # Fetch attacker data
             attacker_base = await pokeapi.get_base_stats(attacker_name)
             attacker_types = await pokeapi.get_pokemon_types(attacker_name)
             move = await pokeapi.get_move(attacker_move, user_name=attacker_name)
 
-            # Build attacker
+            # Build attacker (subject — SP-scale in a champions session)
             attacker = await _build_pokemon_from_smogon(
-                attacker_name, pokeapi, attacker_nature, attacker_evs, attacker_item, attacker_ability
+                attacker_name, pokeapi, attacker_nature, attacker_evs, attacker_item, attacker_ability,
+                subject_is_champions=is_champions, sps=attacker_sps,
             )
 
             # Build all defenders in parallel
@@ -242,10 +303,11 @@ def register_multicalc_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
 
             markdown_table = "\n".join(table_lines)
 
+            atk_alloc = attacker.sps if attacker.is_champions() else attacker.evs
             return {
                 "attacker": {
                     "name": attacker_name,
-                    "spread": f"{attacker.nature.value.title()} {attacker.evs.attack}/{attacker.evs.special_attack}/{attacker.evs.speed}",
+                    "spread": f"{attacker.nature.value.title()} {atk_alloc.attack}/{atk_alloc.special_attack}/{atk_alloc.speed}",
                     "showdown_paste": attacker_paste
                 },
                 "move": attacker_move,
@@ -271,6 +333,7 @@ def register_multicalc_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
         defender_item: Optional[str] = None,
         defender_ability: Optional[str] = None,
         defender_tera_type: Optional[str] = None,
+        defender_sps: Optional[dict] = None,
         use_smogon_spreads: bool = True
     ) -> dict:
         """
@@ -287,6 +350,7 @@ def register_multicalc_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
             defender_item: Defender's item (auto-fetched if not specified)
             defender_ability: Defender's ability (auto-fetched if not specified)
             defender_tera_type: Defender's Tera type if Terastallizing
+            defender_sps: Defender's Stat Points dict for Champions (Reg MA) sessions
             use_smogon_spreads: Auto-fetch spreads from Smogon (default: True)
 
         Returns:
@@ -296,9 +360,15 @@ def register_multicalc_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
             if len(attacker_configs) > 10:
                 return error_response(ErrorCodes.INVALID_PARAMETER, 'Maximum 10 attackers supported. Please reduce the list.')
 
-            # Build defender
+            # Champions (Reg MA) detection — only the user's subject (the
+            # defender) becomes SP-scale. Opposing attacker threats stay mainline
+            # unless their own fetched Smogon spread is champions-tagged.
+            is_champions = _detect_champions(defender_name)
+
+            # Build defender (subject — SP-scale in a champions session)
             defender = await _build_pokemon_from_smogon(
-                defender_name, pokeapi, defender_nature, defender_evs, defender_item, defender_ability
+                defender_name, pokeapi, defender_nature, defender_evs, defender_item, defender_ability,
+                subject_is_champions=is_champions, sps=defender_sps,
             )
             defender.tera_type = defender_tera_type
 
@@ -395,10 +465,11 @@ def register_multicalc_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
             # Generate defender Showdown paste
             defender_paste = pokemon_build_to_showdown(defender)
 
+            def_alloc = defender.sps if defender.is_champions() else defender.evs
             return {
                 "defender": {
                     "name": defender_name,
-                    "spread": f"{defender.nature.value.title()} {defender.evs.hp}/{defender.evs.defense}/{defender.evs.special_defense}",
+                    "spread": f"{defender.nature.value.title()} {def_alloc.hp}/{def_alloc.defense}/{def_alloc.special_defense}",
                     "showdown_paste": defender_paste
                 },
                 "threats": threats,
@@ -425,7 +496,9 @@ def register_multicalc_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
 
         Args:
             team_pokemon: List of team member configs, each with:
-                {"name": "landorus", "move": "earthquake", ...}
+                {"name": "landorus", "move": "earthquake", ...}.
+                In a Champions (Reg MA) session a member may carry an "sps" dict
+                (Stat Points) instead of "evs".
             meta_threats: List of meta threats to test against (default: top 15 from Smogon)
             use_smogon_spreads: Auto-fetch spreads from Smogon (default: True)
 
@@ -435,6 +508,14 @@ def register_multicalc_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
         try:
             if len(team_pokemon) > 6:
                 return error_response(ErrorCodes.INVALID_PARAMETER, 'Maximum 6 team members supported.')
+
+            # Champions (Reg MA) detection — only the user's team members (the
+            # subjects) become SP-scale. Meta threats stay mainline unless their
+            # own fetched Smogon spread is champions-tagged. Infer from the full
+            # set of team-member names so any Mega/Champions signal is caught.
+            is_champions = _detect_champions(
+                *[c.get("name") for c in team_pokemon if c.get("name")]
+            )
 
             # Get meta threats if not provided
             if meta_threats is None:
@@ -456,7 +537,8 @@ def register_multicalc_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
                 pokemon = await _build_pokemon_from_smogon(
                     config["name"], pokeapi,
                     config.get("nature"), config.get("evs"),
-                    config.get("item"), config.get("ability")
+                    config.get("item"), config.get("ability"),
+                    subject_is_champions=is_champions, sps=config.get("sps"),
                 )
                 move = await pokeapi.get_move(config["move"], user_name=config["name"])
                 return {"name": config["name"], "pokemon": pokemon, "move": move, "move_name": config["move"]}

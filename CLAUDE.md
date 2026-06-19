@@ -138,9 +138,11 @@ as 252 EV (Flutter Mane Timid 32 SP = 205 Speed, identical to mainline).
 - `calc/stats.py::calculate_all_stats(pokemon)` — automatic, reads `pokemon.format_system`
 - `calc/damage.py::calculate_damage(...)` — automatic via `calculate_all_stats`
 - Showdown paste: parser detects `SPs:` vs `EVs:`; exporter emits `SPs:` for champions builds
-- Smogon usage: `SmogonStatsClient` auto-falls-back to rating 1500 when format string
-  contains "champions"; spreads tagged with `format_system: "champions"` and stored
-  under `sps` key
+- Smogon usage: `SmogonStatsClient` collects each format's declared
+  `default_smogon_rating` from `regulations.json` and always falls back to rating
+  1500 then 0. (Every regulation, including `reg_ma_champs`, currently declares
+  1500, so Champions usage resolves at 1500.) Champions spreads are tagged with
+  `format_system: "champions"` and stored under the `sps` key
 
 **Champions optimization primitives** live in `calc/champions_optimization.py`
 (parallel to mainline `bulk_optimization.py` / `hp_optimization.py`):
@@ -151,7 +153,7 @@ as 252 EV (Flutter Mane Timid 32 SP = 205 Speed, identical to mainline).
 - `validate_sp_allocation(dict)` → 32/66 cap enforcement
 
 **Reg MA legality**: `regulations.json::reg_ma_champs` uses an explicit
-`legal_pokemon` allowlist (168 species from Serebii). Use
+`legal_pokemon` allowlist (186 species from Serebii). Use
 `RegulationConfig.is_pokemon_legal(name, "reg_ma_champs")` rather than
 `is_pokemon_banned`, since banlist mode doesn't apply to allowlist regulations.
 

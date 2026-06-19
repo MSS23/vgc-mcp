@@ -18,6 +18,7 @@ import re
 from typing import Optional
 
 from .regulation_loader import RegulationConfig, get_regulation_config
+from .restricted import is_banned, is_restricted
 
 # Canonical aliases: every key is a normalized phrase (lowercase, hyphens and
 # spaces collapsed to underscores) -> regulation code in regulations.json.
@@ -231,10 +232,12 @@ def infer_format_from_pokemon(
             "illegal_seen": [],
         }
 
-    restricted_set = cfg.get_restricted_pokemon(mainline_codes[0])
-    banned_set = cfg.get_banned_pokemon(mainline_codes[0])
-    restricteds_seen = [n for n in norm_names if n in restricted_set]
-    illegal_seen = [n for n in norm_names if n in banned_set]
+    # Use the base-form-aware helpers so short form names ("calyrex-shadow")
+    # match the full restricted-list keys ("calyrex-shadow-rider"). Plain set
+    # membership would miss them and mis-route the team.
+    reg_code = mainline_codes[0]
+    restricteds_seen = [n for n in norm_names if is_restricted(n, reg_code)]
+    illegal_seen = [n for n in norm_names if is_banned(n, reg_code)]
 
     if illegal_seen:
         reasons.append(
@@ -283,8 +286,12 @@ def infer_format_from_pokemon(
         and "reg_ma_champs" not in alternatives
         and primary != "reg_ma_champs"
     ):
-        champ_legal = cfg.get_legal_pokemon("reg_ma_champs")
-        if norm_names and all(n in champ_legal for n in norm_names):
+        # Use is_pokemon_legal (base-form / mega-suffix aware) instead of raw
+        # set membership so legal Champions form names ("rotom-wash",
+        # "manectric-mega") don't drop reg_ma_champs as an alternative.
+        if norm_names and all(
+            cfg.is_pokemon_legal(n, "reg_ma_champs") for n in norm_names
+        ):
             alternatives.append("reg_ma_champs")
             reasons.append(
                 "All mentioned Pokemon are also legal in Champions Reg MA — "

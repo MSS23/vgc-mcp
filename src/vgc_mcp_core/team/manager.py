@@ -2,7 +2,7 @@
 
 from typing import Optional
 
-from ..models.pokemon import PokemonBuild
+from ..models.pokemon import PokemonBuild, StatPointSpread
 from ..models.team import Team, TeamSlot
 
 
@@ -294,7 +294,7 @@ class TeamManager:
         pokemon_list = []
         for slot in self._team.slots:
             p = slot.pokemon
-            pokemon_list.append({
+            entry = {
                 "slot": slot.slot_index + 1,
                 "name": p.name,
                 "types": p.types,
@@ -302,16 +302,32 @@ class TeamManager:
                 "item": p.item,
                 "tera_type": p.tera_type,
                 "nature": p.nature.value,
-                "evs": {
+                "moves": p.moves
+            }
+            # Champions builds use Stat Points — surface `sps` so callers render
+            # an 'SPs:' line instead of an all-zero EV dict. Mainline output is
+            # unchanged (still an 'evs' key).
+            if p.format_system == "champions":
+                sps = p.sps or StatPointSpread()
+                entry["format_system"] = "champions"
+                entry["sps"] = {
+                    "hp": sps.hp,
+                    "attack": sps.attack,
+                    "defense": sps.defense,
+                    "special_attack": sps.special_attack,
+                    "special_defense": sps.special_defense,
+                    "speed": sps.speed,
+                }
+            else:
+                entry["evs"] = {
                     "hp": p.evs.hp,
                     "attack": p.evs.attack,
                     "defense": p.evs.defense,
                     "special_attack": p.evs.special_attack,
                     "special_defense": p.evs.special_defense,
                     "speed": p.evs.speed,
-                },
-                "moves": p.moves
-            })
+                }
+            pokemon_list.append(entry)
 
         return {
             "name": self._team.name,
@@ -412,20 +428,34 @@ class TeamManager:
         """
         result = []
         for key, pokemon in self._pokemon_context.items():
-            result.append({
+            entry = {
                 "reference": key,
                 "name": pokemon.name,
                 "nature": pokemon.nature.value,
-                "evs": {
+                "is_active": key == self._active_pokemon
+            }
+            # Champions builds surface `sps` (Stat Points); mainline keeps `evs`.
+            if pokemon.format_system == "champions":
+                sps = pokemon.sps or StatPointSpread()
+                entry["format_system"] = "champions"
+                entry["sps"] = {
+                    "hp": sps.hp,
+                    "attack": sps.attack,
+                    "defense": sps.defense,
+                    "special_attack": sps.special_attack,
+                    "special_defense": sps.special_defense,
+                    "speed": sps.speed,
+                }
+            else:
+                entry["evs"] = {
                     "hp": pokemon.evs.hp,
                     "attack": pokemon.evs.attack,
                     "defense": pokemon.evs.defense,
                     "special_attack": pokemon.evs.special_attack,
                     "special_defense": pokemon.evs.special_defense,
                     "speed": pokemon.evs.speed,
-                },
-                "is_active": key == self._active_pokemon
-            })
+                }
+            result.append(entry)
         return result
 
     def clear_pokemon_context(self, reference: Optional[str] = None) -> tuple[bool, str]:

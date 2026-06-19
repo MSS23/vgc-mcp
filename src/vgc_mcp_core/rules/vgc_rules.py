@@ -114,6 +114,10 @@ def validate_team_rules(team, regulation_code: str = None) -> dict:
             "error": f"Unknown regulation: {regulation_code}"
         }
 
+    config = get_regulation_config()
+    reg_code = regulation.code
+    legality_mode = config.get_legality_mode(reg_code)
+
     violations = []
     warnings = []
 
@@ -125,20 +129,36 @@ def validate_team_rules(team, regulation_code: str = None) -> dict:
     if len(team.slots) > regulation.pokemon_limit:
         violations.append(f"Team has {len(team.slots)} Pokemon (max {regulation.pokemon_limit})")
 
-    # Check for banned Pokemon
-    banned = find_banned(pokemon_names)
-    if banned:
-        violations.append(f"Banned Pokemon on team: {', '.join(banned)}")
+    if legality_mode == "allowlist":
+        # Allowlist formats (e.g. Champions Reg MA): a species is legal only if
+        # it's on the allowlist. The mainline banlist/restricted-limit logic does
+        # not apply (restricted_limit is 0 / restricted list empty here), so
+        # running it would be misleading.
+        not_legal = [
+            name for name in pokemon_names
+            if not config.is_pokemon_legal(name, reg_code)
+        ]
+        if not_legal:
+            violations.append(
+                f"Not legal in {regulation.name}: {', '.join(not_legal)}"
+            )
+        restricted_count = 0
+        restricted_pokemon = []
+    else:
+        # Check for banned Pokemon
+        banned = find_banned(pokemon_names)
+        if banned:
+            violations.append(f"Banned Pokemon on team: {', '.join(banned)}")
 
-    # Check restricted count
-    restricted_count = count_restricted(pokemon_names)
-    restricted_pokemon = [name for name in pokemon_names if get_restricted_status(name) == "restricted"]
+        # Check restricted count
+        restricted_count = count_restricted(pokemon_names)
+        restricted_pokemon = [name for name in pokemon_names if get_restricted_status(name) == "restricted"]
 
-    if restricted_count > regulation.restricted_limit:
-        violations.append(
-            f"Too many restricted Pokemon: {restricted_count}/{regulation.restricted_limit} "
-            f"({', '.join(restricted_pokemon)})"
-        )
+        if restricted_count > regulation.restricted_limit:
+            violations.append(
+                f"Too many restricted Pokemon: {restricted_count}/{regulation.restricted_limit} "
+                f"({', '.join(restricted_pokemon)})"
+            )
 
     # Check item clause
     if regulation.item_clause:

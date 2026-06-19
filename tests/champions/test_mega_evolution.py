@@ -59,3 +59,35 @@ def test_lookup_table_is_complete():
     for form, ability in MEGA_FORM_ABILITY.items():
         assert form.endswith("-mega") or form.endswith("-mega-x") or form.endswith("-mega-y"), form
         assert ability and isinstance(ability, str), form
+
+
+# --- Regression: mega-prefix slug resolution (F1-a / F1-b) ---
+
+from vgc_mcp_core.utils.normalize import reorder_mega_prefix
+from vgc_mcp_core.api.pokeapi import PokeAPIClient
+
+
+def test_reorder_mega_prefix_basic():
+    assert reorder_mega_prefix("mega-manectric") == "manectric-mega"
+    assert reorder_mega_prefix("Mega Manectric") == "manectric-mega"
+    assert reorder_mega_prefix("mega-charizard-y") == "charizard-mega-y"
+    assert reorder_mega_prefix("Mega Charizard X") == "charizard-mega-x"
+
+
+def test_reorder_mega_prefix_passthrough():
+    # Already canonical or non-mega names are unchanged.
+    assert reorder_mega_prefix("manectric-mega") == "manectric-mega"
+    assert reorder_mega_prefix("manectric") == "manectric"
+    assert reorder_mega_prefix("flutter-mane") == "flutter-mane"
+    assert reorder_mega_prefix("") == ""
+
+
+def test_pokeapi_normalize_resolves_champions_era_mega():
+    # Regression for F1-a: "Mega Delphox" (not in the old hardcoded allowlist)
+    # must resolve to the PokeAPI key 'delphox-mega', not 'mega-delphox'.
+    c = PokeAPIClient()
+    assert c._normalize_name("Mega Delphox") == "delphox-mega"
+    assert c._normalize_name("Mega Manectric") == "manectric-mega"
+    # Explicit X/Y aliases still win.
+    assert c._normalize_name("Mega Charizard Y") == "charizard-mega-y"
+    assert c._normalize_name("Mega Charizard X") == "charizard-mega-x"

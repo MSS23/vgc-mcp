@@ -5,7 +5,12 @@ from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp_core.api.pokepaste import PokePasteClient, PokePasteError
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
-from vgc_mcp_core.formats.showdown import parse_showdown_team, parse_showdown_pokemon, ShowdownParseError
+from vgc_mcp_core.formats.showdown import (
+    parse_showdown_team,
+    parse_showdown_pokemon,
+    parsed_to_pokemon_build,
+    ShowdownParseError,
+)
 from vgc_mcp_core.api.smogon import SmogonStatsClient
 from vgc_mcp_core.calc.stats import calculate_all_stats
 from vgc_mcp_core.calc.damage import calculate_damage
@@ -17,7 +22,7 @@ from vgc_mcp_core.calc.team_matchup import (
     score_1v1_matchup,
 )
 from vgc_mcp_core.models.pokemon import (
-    PokemonBuild, BaseStats, Nature, EVSpread, IVSpread
+    PokemonBuild, Nature, EVSpread
 )
 from vgc_mcp_core.models.move import Move, MoveCategory
 from vgc_mcp_core.utils.errors import error_response, ErrorCodes
@@ -158,48 +163,20 @@ def _create_move(move_name: str, pokemon_types: list[str], is_physical: bool) ->
 
 
 async def _parsed_to_build(parsed_mon, pokeapi: PokeAPIClient) -> Optional[PokemonBuild]:
-    """Convert a ParsedPokemon to a PokemonBuild."""
+    """Convert a ParsedPokemon to a PokemonBuild.
+
+    Routes through the format-aware ``parsed_to_pokemon_build`` so Champions
+    pastes (``SPs:`` lines) import as ``format_system="champions"`` builds with
+    a ``StatPointSpread`` while mainline pastes (``EVs:``) keep the classic EV
+    path byte-for-byte.
+    """
     try:
         # Get base stats from PokeAPI
         base_stats = await pokeapi.get_base_stats(parsed_mon.species)
         types = await pokeapi.get_pokemon_types(parsed_mon.species)
 
-        # Convert EVs dict to EVSpread
-        evs = EVSpread(
-            hp=parsed_mon.evs.get("hp", 0),
-            attack=parsed_mon.evs.get("atk", 0),
-            defense=parsed_mon.evs.get("def", 0),
-            special_attack=parsed_mon.evs.get("spa", 0),
-            special_defense=parsed_mon.evs.get("spd", 0),
-            speed=parsed_mon.evs.get("spe", 0)
-        )
-
-        # Convert IVs dict to IVSpread
-        ivs = IVSpread(
-            hp=parsed_mon.ivs.get("hp", 31),
-            attack=parsed_mon.ivs.get("atk", 31),
-            defense=parsed_mon.ivs.get("def", 31),
-            special_attack=parsed_mon.ivs.get("spa", 31),
-            special_defense=parsed_mon.ivs.get("spd", 31),
-            speed=parsed_mon.ivs.get("spe", 31)
-        )
-
-        nature = _parse_nature(parsed_mon.nature)
-
-        return PokemonBuild(
-            name=parsed_mon.species,
-            base_stats=base_stats,
-            nature=nature,
-            evs=evs,
-            ivs=ivs,
-            types=types,
-            level=parsed_mon.level or 50,
-            item=parsed_mon.item,
-            ability=parsed_mon.ability,
-            tera_type=parsed_mon.tera_type,
-            moves=parsed_mon.moves
-        )
-    except Exception as e:
+        return parsed_to_pokemon_build(parsed_mon, base_stats, types)
+    except Exception:
         return None
 
 
@@ -637,36 +614,28 @@ def register_tournament_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi:
             base_stats = await pokeapi.get_base_stats(parsed.species)
             pokemon_types = await pokeapi.get_pokemon_types(parsed.species)
 
-            # Build the Pokemon
-            evs = EVSpread(
-                hp=parsed.evs.get("hp", 0),
-                attack=parsed.evs.get("atk", 0),
-                defense=parsed.evs.get("def", 0),
-                special_attack=parsed.evs.get("spa", 0),
-                special_defense=parsed.evs.get("spd", 0),
-                speed=parsed.evs.get("spe", 0)
-            )
-            ivs = IVSpread(
-                hp=parsed.ivs.get("hp", 31),
-                attack=parsed.ivs.get("atk", 31),
-                defense=parsed.ivs.get("def", 31),
-                special_attack=parsed.ivs.get("spa", 31),
-                special_defense=parsed.ivs.get("spd", 31),
-                speed=parsed.ivs.get("spe", 31)
-            )
-            nature = _parse_nature(parsed.nature)
+            # Build the Pokemon (format-aware: Champions SPs paste -> champions build)
+            your_pokemon = parsed_to_pokemon_build(parsed, base_stats, pokemon_types)
+            is_champions_subject = your_pokemon.format_system == "champions"
+            nature = your_pokemon.nature
 
-            your_pokemon = PokemonBuild(
-                name=parsed.species,
-                base_stats=base_stats,
-                nature=nature,
-                evs=evs,
-                ivs=ivs,
-                types=pokemon_types,
-                level=parsed.level or 50,
-                item=parsed.item,
-                ability=parsed.ability
-            )
+            # Spread values for the report (EV or SP grain depending on format)
+            if is_champions_subject:
+                sps_dict = your_pokemon.sps.to_sps_dict() if your_pokemon.sps else {}
+                spread_hp = sps_dict.get("hp", 0)
+                spread_atk = sps_dict.get("at", 0)
+                spread_def = sps_dict.get("df", 0)
+                spread_spa = sps_dict.get("sa", 0)
+                spread_spd = sps_dict.get("sd", 0)
+                spread_spe = sps_dict.get("sp", 0)
+            else:
+                evs = your_pokemon.evs
+                spread_hp = evs.hp
+                spread_atk = evs.attack
+                spread_def = evs.defense
+                spread_spa = evs.special_attack
+                spread_spd = evs.special_defense
+                spread_spe = evs.speed
 
             your_stats = calculate_all_stats(your_pokemon)
             final_hp = your_stats["hp"]
@@ -865,27 +834,29 @@ def register_tournament_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi:
             lines.append(f"## {parsed.species} Bulk Analysis")
             lines.append("")
 
-            # Your spread summary - show ALL non-zero EVs
+            # Your spread summary - show ALL non-zero EVs/SPs
+            none_label = "No SPs" if is_champions_subject else "No EVs"
             ev_parts = []
-            if evs.hp: ev_parts.append(f"{evs.hp} HP")
-            if evs.attack: ev_parts.append(f"{evs.attack} Atk")
-            if evs.defense: ev_parts.append(f"{evs.defense} Def")
-            if evs.special_attack: ev_parts.append(f"{evs.special_attack} SpA")
-            if evs.special_defense: ev_parts.append(f"{evs.special_defense} SpD")
-            if evs.speed: ev_parts.append(f"{evs.speed} Spe")
-            ev_str = " / ".join(ev_parts) if ev_parts else "No EVs"
+            if spread_hp: ev_parts.append(f"{spread_hp} HP")
+            if spread_atk: ev_parts.append(f"{spread_atk} Atk")
+            if spread_def: ev_parts.append(f"{spread_def} Def")
+            if spread_spa: ev_parts.append(f"{spread_spa} SpA")
+            if spread_spd: ev_parts.append(f"{spread_spd} SpD")
+            if spread_spe: ev_parts.append(f"{spread_spe} Spe")
+            ev_str = " / ".join(ev_parts) if ev_parts else none_label
             ability_str = f" | {parsed.ability}" if parsed.ability else ""
             item_str = f" | {parsed.item}" if parsed.item else ""
             lines.append(f"**Your Spread:** {nature.name.title()} {ev_str}{ability_str}{item_str}")
             lines.append("")
 
             # Stats table
+            stat_col = "SPs" if is_champions_subject else "EVs"
             lines.append("### Stats")
-            lines.append("| Stat | Base | EVs | Final |")
+            lines.append(f"| Stat | Base | {stat_col} | Final |")
             lines.append("|------|------|-----|-------|")
-            lines.append(f"| HP   | {base_stats.hp} | {evs.hp} | {final_hp} |")
-            lines.append(f"| Def  | {base_stats.defense} | {evs.defense} | {final_def} |")
-            lines.append(f"| SpD  | {base_stats.special_defense} | {evs.special_defense} | {final_spd} |")
+            lines.append(f"| HP   | {base_stats.hp} | {spread_hp} | {final_hp} |")
+            lines.append(f"| Def  | {base_stats.defense} | {spread_def} | {final_def} |")
+            lines.append(f"| SpD  | {base_stats.special_defense} | {spread_spd} | {final_spd} |")
             lines.append("")
             lines.append(f"**Physical Bulk:** {physical_bulk:,} (HP x Def)")
             lines.append(f"**Special Bulk:** {special_bulk:,} (HP x SpD)")
@@ -929,10 +900,11 @@ def register_tournament_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi:
                 "success": True,
                 "pokemon": parsed.species,
                 "nature": parsed.nature,
-                "evs": {
-                    "hp": evs.hp,
-                    "def": evs.defense,
-                    "spd": evs.special_defense
+                "format_system": your_pokemon.format_system,
+                ("sps" if is_champions_subject else "evs"): {
+                    "hp": spread_hp,
+                    "def": spread_def,
+                    "spd": spread_spd
                 },
                 "final_stats": {
                     "hp": final_hp,

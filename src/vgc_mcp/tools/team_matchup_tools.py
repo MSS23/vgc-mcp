@@ -9,6 +9,17 @@ from vgc_mcp_core.api.smogon import SmogonStatsClient
 from vgc_mcp_core.team.manager import TeamManager
 from vgc_mcp_core.calc.matchup import COMMON_THREATS, analyze_threat_matchup
 from vgc_mcp_core.utils.errors import api_error, error_response, ErrorCodes
+from vgc_mcp_core.rules.regulation_loader import get_regulation_config
+
+
+def _detect_champions(pokemon_names: Optional[List[str]] = None) -> bool:
+    """Return True when the active session is the Champions (Reg MA) SP system.
+
+    Optionally runs Pokemon-name inference first so a Mega/Reg MA team
+    auto-selects Champions without the user having to set it explicitly.
+    """
+    from vgc_mcp_core.rules.format_detect import detect_champions_format
+    return detect_champions_format(*(pokemon_names or []))
 
 
 def register_team_matchup_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[SmogonStatsClient], team_manager: TeamManager):
@@ -36,26 +47,43 @@ def register_team_matchup_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Op
         try:
             if len(team_pokemon) != 6:
                 return error_response(ErrorCodes.INVALID_PARAMETER, 'Team must have exactly 6 Pokemon')
-            
+
+            # Detect format once. Champions team members use the SP system so
+            # matchup stats/speed are correct; meta threats stay mainline.
+            is_champions = _detect_champions(team_pokemon)
+
             # Analyze against meta threats if requested
             threat_coverage = {}
             weaknesses = []
             strengths = []
-            
+
             if vs_meta:
-                # Analyze against top meta threats
-                top_threats = list(COMMON_THREATS.keys())[:20]
-                
-                for threat_name in top_threats:
-                    # Build a temporary team for analysis
-                    from vgc_mcp_core.models.team import Team, TeamSlot
-                    from vgc_mcp_core.models.pokemon import PokemonBuild, BaseStats, EVSpread, Nature
-                    
-                    team_slots = []
-                    for pokemon_name in team_pokemon:
-                        try:
-                            base_stats = await pokeapi.get_base_stats(pokemon_name)
-                            types = await pokeapi.get_pokemon_types(pokemon_name)
+                from vgc_mcp_core.models.team import Team, TeamSlot
+                from vgc_mcp_core.models.pokemon import PokemonBuild, EVSpread, StatPointSpread, Nature
+
+                team_slots = []
+                for pokemon_name in team_pokemon:
+                    # Prefer a stored build (carries the user's real spread/sps).
+                    try:
+                        stored = team_manager.get_pokemon_by_name(pokemon_name)
+                    except Exception:
+                        stored = None
+                    if isinstance(stored, PokemonBuild):
+                        team_slots.append(stored)
+                        continue
+                    try:
+                        base_stats = await pokeapi.get_base_stats(pokemon_name)
+                        types = await pokeapi.get_pokemon_types(pokemon_name)
+                        if is_champions:
+                            team_slots.append(PokemonBuild(
+                                name=pokemon_name,
+                                base_stats=base_stats,
+                                types=types,
+                                nature=Nature.SERIOUS,
+                                format_system="champions",
+                                sps=StatPointSpread(),
+                            ))
+                        else:
                             team_slots.append(PokemonBuild(
                                 name=pokemon_name,
                                 base_stats=base_stats,
@@ -63,14 +91,18 @@ def register_team_matchup_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Op
                                 nature=Nature.SERIOUS,
                                 evs=EVSpread()
                             ))
-                        except Exception:
-                            continue
-                    
-                    if len(team_slots) < 6:
-                        return error_response(ErrorCodes.API_ERROR, f'Failed to fetch data for some Pokemon: {team_pokemon}')
-                    
-                    temp_team = Team(slots=[TeamSlot(pokemon=p, slot_index=i) for i, p in enumerate(team_slots)])
-                    
+                    except Exception:
+                        continue
+
+                if len(team_slots) < 6:
+                    return error_response(ErrorCodes.API_ERROR, f'Failed to fetch data for some Pokemon: {team_pokemon}')
+
+                temp_team = Team(slots=[TeamSlot(pokemon=p, slot_index=i) for i, p in enumerate(team_slots)])
+
+                # Analyze against top meta threats
+                top_threats = list(COMMON_THREATS.keys())[:20]
+
+                for threat_name in top_threats:
                     try:
                         analysis = analyze_threat_matchup(temp_team, threat_name)
                         
@@ -148,7 +180,9 @@ def register_team_matchup_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Op
                 "unfavorable_matchups": unfavorable_count,
                 "markdown_summary": "\n".join(markdown_lines)
             }
-            
+            if is_champions:
+                response["format_system"] = "champions"
+
             return response
             
         except Exception as e:

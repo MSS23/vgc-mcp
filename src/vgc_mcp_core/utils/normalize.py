@@ -313,6 +313,36 @@ ABILITY_ALIASES: dict[str, str] = {
 }
 
 
+@lru_cache(maxsize=512)
+def reorder_mega_prefix(name: str) -> str:
+    """Rewrite a leading 'mega-<species>' into PokeAPI/Smogon's '<species>-mega'.
+
+    PokeAPI keys and Smogon usage keys both order Mega forms with the 'Mega'
+    suffix LAST ('manectric-mega', 'charizard-mega-y'), but users (and many
+    tools) write the natural prefix order ('Mega Manectric', 'mega-charizard-y').
+    This collapses that prefix order to the canonical suffix order, preserving a
+    trailing '-x'/'-y' variant suffix. Names without a leading 'mega-' (including
+    those already in '<species>-mega' order) pass through unchanged.
+
+    Examples:
+        "mega-manectric"   -> "manectric-mega"
+        "mega-charizard-y" -> "charizard-mega-y"
+        "manectric-mega"   -> "manectric-mega"  (unchanged)
+        "manectric"        -> "manectric"       (unchanged)
+    """
+    if not name:
+        return ""
+    lower = name.lower().replace(" ", "-").replace("'", "").strip()
+    if not lower.startswith("mega-"):
+        return lower
+    rest = lower[len("mega-"):]
+    base = rest
+    suffix = ""
+    if rest.endswith(("-x", "-y")):
+        base, suffix = rest[:-2], rest[-2:]
+    return f"{base}-mega{suffix}"
+
+
 @lru_cache(maxsize=1024)
 def normalize_name(name: str) -> str:
     """Normalize any Pokemon-related name to lowercase hyphenated format.

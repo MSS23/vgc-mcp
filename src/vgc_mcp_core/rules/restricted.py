@@ -122,12 +122,19 @@ def get_restricted_status(pokemon_name: str, regulation: Optional[str] = None) -
         regulation: Regulation code (e.g., "reg_f"). Uses current if None.
 
     Returns:
-        "banned", "restricted", or "allowed"
+        "banned", "restricted", "illegal", or "allowed"
     """
     if is_banned(pokemon_name, regulation):
         return "banned"
     if is_restricted(pokemon_name, regulation):
         return "restricted"
+    # Allowlist regulations (e.g. Reg MA Champions) must consult the allowlist:
+    # an off-list mon is illegal, not "allowed" by default.
+    config = get_regulation_config()
+    if config.get_legality_mode(regulation) == "allowlist":
+        if config.is_pokemon_legal(pokemon_name, regulation):
+            return "allowed"
+        return "illegal"
     return "allowed"
 
 
@@ -166,6 +173,18 @@ def get_pokemon_legality(pokemon_name: str, regulation: Optional[str] = None) ->
             "reason": f"Box Legend - counts toward restricted limit ({limit} allowed)",
             "regulation": reg
         }
+
+    # Allowlist regulations (e.g. Reg MA Champions): an off-list mon is illegal.
+    if config.get_legality_mode(reg) == "allowlist":
+        if not config.is_pokemon_legal(normalized, reg):
+            return {
+                "pokemon": pokemon_name,
+                "status": "illegal",
+                "can_use": False,
+                "counts_as_restricted": False,
+                "reason": "Not on the Reg MA Champions allowlist",
+                "regulation": reg
+            }
 
     return {
         "pokemon": pokemon_name,

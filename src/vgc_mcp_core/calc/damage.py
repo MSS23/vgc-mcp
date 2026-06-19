@@ -58,6 +58,26 @@ def poke_round(num: float) -> int:
     return math.floor(num)
 
 
+def apply_stat_stage(stat: int, stage: int) -> int:
+    """Apply a stat stage multiplier using Showdown's exact integer math.
+
+    Showdown does NOT use rounded 4096 fractions for stat stages; it uses exact
+    integer fractions with FLOOR (gen789.ts `modifyStat` / boost table):
+        stage > 0:  floor(stat * (2 + stage) / 2)
+        stage < 0:  floor(stat * 2 / (2 - stage))
+        stage == 0: unchanged
+
+    Example: 100 Attack at -1 stage = floor(100 * 2 / 3) = 66 (NOT 67).
+    """
+    if stage == 0:
+        return stat
+    if stage > 0:
+        stage = min(stage, 6)
+        return (stat * (2 + stage)) // 2
+    stage = max(stage, -6)
+    return (stat * 2) // (2 - stage)
+
+
 def apply_mod(value: int, modifier: int) -> int:
     """
     Apply a 4096-based modifier to a value with pokeRound.
@@ -285,8 +305,9 @@ MOD_FUR_COAT = 2048         # 0.5x (Fur Coat - physical damage)
 MOD_PUNK_ROCK_DEF = 2048    # 0.5x (Punk Rock - sound damage taken)
 
 # New item modifiers
-MOD_MUSCLE_BAND = 4506      # ~1.1x (Muscle Band - physical moves)
-MOD_WISE_GLASSES = 4506     # ~1.1x (Wise Glasses - special moves)
+MOD_MUSCLE_BAND = 4505      # ~1.1x (Muscle Band - physical moves)
+MOD_WISE_GLASSES = 4505     # ~1.1x (Wise Glasses - special moves)
+MOD_SHEER_FORCE = 5325      # ~1.3x (Sheer Force - moves with secondary effect)
 MOD_NORMAL_GEM = 6144       # 1.5x (Normal Gem - first Normal move, one-time use)
 
 # Resistance berries - reduce super-effective damage by 50%
@@ -557,16 +578,11 @@ def calculate_damage(
     # always activates them; sun activates Protosynthesis; electric terrain
     # activates Quark Drive. Speed wins ties (Game-mechanic accurate).
     def _highest_non_hp_stat(p: PokemonBuild) -> str:
-        from .stats import calculate_stat, calculate_speed
-        from ..models.pokemon import get_nature_modifier
-        evs = p.evs
-        stats = {
-            "attack": calculate_stat(p.base_stats.attack, 31, evs.attack, 50, get_nature_modifier(p.nature, "attack")),
-            "defense": calculate_stat(p.base_stats.defense, 31, evs.defense, 50, get_nature_modifier(p.nature, "defense")),
-            "special_attack": calculate_stat(p.base_stats.special_attack, 31, evs.special_attack, 50, get_nature_modifier(p.nature, "special_attack")),
-            "special_defense": calculate_stat(p.base_stats.special_defense, 31, evs.special_defense, 50, get_nature_modifier(p.nature, "special_defense")),
-            "speed": calculate_speed(p.base_stats.speed, 31, evs.speed, 50, get_nature_modifier(p.nature, "speed")),
-        }
+        # Format-aware: delegate to calculate_all_stats so Champions builds
+        # (which carry SPs, not EVs) pick the actually-invested stat rather
+        # than the highest base stat. Speed wins ties (game-accurate).
+        from .stats import calculate_all_stats
+        stats = {k: v for k, v in calculate_all_stats(p).items() if k != "hp"}
         max_value = max(stats.values())
         tied = [s for s, v in stats.items() if v == max_value]
         return "speed" if "speed" in tied else tied[0]
@@ -828,19 +844,19 @@ def calculate_damage(
         if modifiers.is_critical and modifiers.attack_stage < 0:
             pass  # Don't apply negative attack stage on crit
         else:
-            attack_stat = apply_mod(attack_stat, STAT_STAGE_MODS.get(modifiers.attack_stage, 4096))
+            attack_stat = apply_stat_stage(attack_stat, modifiers.attack_stage)
         # Crits ignore positive defense stages
         if not modifiers.is_critical or modifiers.defense_stage < 0:
-            defense_stat = apply_mod(defense_stat, STAT_STAGE_MODS.get(modifiers.defense_stage, 4096))
+            defense_stat = apply_stat_stage(defense_stat, modifiers.defense_stage)
     else:
         # Crits ignore negative special attack stages
         if modifiers.is_critical and modifiers.special_attack_stage < 0:
             pass  # Don't apply negative SpA stage on crit
         else:
-            attack_stat = apply_mod(attack_stat, STAT_STAGE_MODS.get(modifiers.special_attack_stage, 4096))
+            attack_stat = apply_stat_stage(attack_stat, modifiers.special_attack_stage)
         # Crits ignore positive special defense stages
         if not modifiers.is_critical or modifiers.special_defense_stage < 0:
-            defense_stat = apply_mod(defense_stat, STAT_STAGE_MODS.get(modifiers.special_defense_stage, 4096))
+            defense_stat = apply_stat_stage(defense_stat, modifiers.special_defense_stage)
 
     # Apply Choice Band/Specs (to stat, not damage)
     if modifiers.attacker_item:
@@ -884,24 +900,22 @@ def calculate_damage(
     # - Hearthflame Mask: +1 Attack
     # - Wellspring Mask: +1 Special Defense
     # - Cornerstone Mask: +1 Defense
-    if modifiers.attacker_ability:
-        ability = normalize_ability(modifiers.attacker_ability)
-        if ability == "embody-aspect":
-            item = normalize_item(modifiers.attacker_item or "")
-            if item == "hearthflame-mask" and is_physical:
-                # +1 Attack stage = 1.5x
-                attack_stat = apply_mod(attack_stat, MOD_EMBODY_ASPECT)
-
+    #
+    # NOTE: Hearthflame's +1 Attack is applied EXACTLY ONCE via the automatic
+    # attack_stage bump near the top of this function (see "Embody Aspect" stage
+    # bump). It must NOT also be applied here, or it would be double-counted
+    # (~2.24x instead of 1.5x). Only the defender-side masks (Wellspring SpD /
+    # Cornerstone Def) are applied here, since there is no stage bump for those.
     if modifiers.defender_ability:
         def_ability = normalize_ability(modifiers.defender_ability)
         if def_ability == "embody-aspect":
             def_item = normalize_item(modifiers.defender_item or "")
             if def_item == "wellspring-mask" and not is_physical:
-                # +1 Special Defense stage = 1.5x
-                defense_stat = apply_mod(defense_stat, MOD_EMBODY_ASPECT)
+                # +1 Special Defense stage = floor(stat * 3 / 2)
+                defense_stat = apply_stat_stage(defense_stat, 1)
             elif def_item == "cornerstone-mask" and is_physical:
-                # +1 Defense stage = 1.5x
-                defense_stat = apply_mod(defense_stat, MOD_EMBODY_ASPECT)
+                # +1 Defense stage = floor(stat * 3 / 2)
+                defense_stat = apply_stat_stage(defense_stat, 1)
 
     # Commander ability (Dondozo + Tatsugiri combo)
     # When Commander is active, Dondozo's Attack, Defense, SpA, SpD, and Speed are doubled
@@ -978,76 +992,107 @@ def calculate_damage(
             modifiers,
         )
 
+    # Pre-compute type effectiveness here (before the base-power chain) because
+    # Collision Course / Electro Drift's 1.3333x super-effective boost is a
+    # BASE-POWER modifier in Showdown and needs type_eff available now.
+    defender_types = defender.types
+    if modifiers.defender_tera_active and modifiers.defender_tera_type:
+        defender_types = [modifiers.defender_tera_type]
+    type_eff = get_type_effectiveness(effective_move_type, defender_types)
+
+    # Tera Shell (all hits not very effective at full HP) - Terapagos
+    if modifiers.defender_ability:
+        def_ability_pre = normalize_ability(modifiers.defender_ability)
+        if def_ability_pre == "tera-shell" and modifiers.defender_at_full_hp:
+            if type_eff > 0:
+                type_eff = 0.5
+
+    # Mind's Eye / Scrappy: Normal and Fighting hit Ghost types
+    if modifiers.attacker_ability:
+        att_ability_pre = normalize_ability(modifiers.attacker_ability)
+        if att_ability_pre in ("minds-eye", "scrappy") and type_eff == 0:
+            if effective_move_type in ("Normal", "Fighting") and "Ghost" in defender_types:
+                type_eff = 1.0
+
+    # Collect BASE-POWER modifiers into a list. Per Showdown (gen789.ts) all
+    # base-power mods are chained together and applied to `power` exactly ONCE
+    # via poke_round, BEFORE the base-damage formula. Applying them per-step
+    # (each with its own poke_round) produces off-by-one errors when several
+    # stack (e.g. Tough Claws + type-boost item).
+    bp_mods: list[int] = []
+
     # Apply power modifiers from abilities (Technician, etc.)
     if modifiers.attacker_ability:
         ability = normalize_ability(modifiers.attacker_ability)
         if ability == "technician" and power <= 60:
-            power = apply_mod(power, MOD_CHOICE_BOOST)  # 1.5x
+            bp_mods.append(MOD_CHOICE_BOOST)  # 1.5x
         elif ability == "sheer-force" and move.effect_chance:
-            power = apply_mod(power, MOD_LIFE_ORB)  # 1.3x (~5324/4096)
+            bp_mods.append(MOD_SHEER_FORCE)  # 1.3x (5325/4096)
         elif ability == "tough-claws" and move.makes_contact:
-            power = apply_mod(power, MOD_TOUGH_CLAWS)
+            bp_mods.append(MOD_TOUGH_CLAWS)
         elif ability == "iron-fist" and normalize_move(move.name) in PUNCH_MOVES:
-            power = apply_mod(power, MOD_IRON_FIST)
+            bp_mods.append(MOD_IRON_FIST)
         # Rocky Payload (1.5x Rock damage) - Ogerpon-Cornerstone
         elif ability == "rocky-payload" and effective_move_type == "Rock":
-            power = apply_mod(power, MOD_ROCKY_PAYLOAD)
+            bp_mods.append(MOD_ROCKY_PAYLOAD)
         # Sharpness (1.5x slicing moves) - Gallade, Kartana, Samurott-Hisui
         elif ability == "sharpness" and normalize_move(move.name) in SLICING_MOVES:
-            power = apply_mod(power, MOD_SHARPNESS)
+            bp_mods.append(MOD_SHARPNESS)
         # Strong Jaw (1.5x biting moves) - Dracovish, Tyrantrum, Boltund
         elif ability == "strong-jaw" and normalize_move(move.name) in BITING_MOVES:
-            power = apply_mod(power, MOD_STRONG_JAW)
+            bp_mods.append(MOD_STRONG_JAW)
         # Supreme Overlord (+10% per fainted ally, up to +50%) - Kingambit
         elif ability == "supreme-overlord" and modifiers.supreme_overlord_count > 0:
             # +10% per ally = 410/4096 per ally
             boost = 4096 + (410 * min(5, modifiers.supreme_overlord_count))
-            power = apply_mod(power, boost)
-        # Tinted Lens (2x damage on resisted hits) - Yanmega, Butterfree
+            bp_mods.append(boost)
+        # Tinted Lens (2x damage on resisted hits) - handled in final modifiers
         elif ability == "tinted-lens":
-            # Mark for later application after type effectiveness is calculated
-            pass  # Handled in final modifiers section
+            pass  # Applied as a FINAL modifier after type effectiveness
         # Mega Launcher (1.5x pulse moves) - Blastoise, Clawitzer
         elif ability == "mega-launcher" and move_name_normalized in PULSE_MOVES:
-            power = apply_mod(power, MOD_MEGA_LAUNCHER)
+            bp_mods.append(MOD_MEGA_LAUNCHER)
         # Reckless (1.2x recoil moves) - Bouffalant, Staraptor
         elif ability == "reckless" and move_name_normalized in RECOIL_MOVES:
-            power = apply_mod(power, MOD_RECKLESS)
+            bp_mods.append(MOD_RECKLESS)
         # Sand Force (1.3x Ground/Rock/Steel in sand) - Excadrill, Landorus
         elif ability == "sand-force" and modifiers.weather == "sand":
             if effective_move_type in ("Ground", "Rock", "Steel"):
-                power = apply_mod(power, MOD_SAND_FORCE)
+                bp_mods.append(MOD_SAND_FORCE)
         # Steely Spirit (1.5x Steel moves) - Perrserker, Duraludon
         elif ability == "steely-spirit" and effective_move_type == "Steel":
-            power = apply_mod(power, MOD_STEELY_SPIRIT)
+            bp_mods.append(MOD_STEELY_SPIRIT)
         # Transistor (1.5x Electric in Gen 9) - Regieleki
         elif ability == "transistor" and effective_move_type == "Electric":
-            power = apply_mod(power, MOD_TRANSISTOR)
+            bp_mods.append(MOD_TRANSISTOR)
         # Dragon's Maw (1.5x Dragon) - Regidrago
         elif ability == "dragons-maw" and effective_move_type == "Dragon":
-            power = apply_mod(power, MOD_DRAGONS_MAW)
+            bp_mods.append(MOD_DRAGONS_MAW)
         # Water Bubble (2x Water moves) - Araquanid
         elif ability == "water-bubble" and effective_move_type == "Water":
-            power = apply_mod(power, MOD_WATER_BUBBLE_ATK)
+            bp_mods.append(MOD_WATER_BUBBLE_ATK)
         # Punk Rock (1.3x sound moves) - Toxtricity
         elif ability == "punk-rock" and move_name_normalized in SOUND_MOVES:
-            power = apply_mod(power, MOD_PUNK_ROCK_ATK)
+            bp_mods.append(MOD_PUNK_ROCK_ATK)
         # Analytic (1.3x when moving last) - Magnezone, Porygon-Z
         elif ability == "analytic" and modifiers.moving_last:
-            power = apply_mod(power, MOD_ANALYTIC)
+            bp_mods.append(MOD_ANALYTIC)
 
     # Ally Steely Spirit boost (1.5x Steel if ally has Steely Spirit)
     if modifiers.ally_steely_spirit and effective_move_type == "Steel":
-        power = apply_mod(power, MOD_STEELY_SPIRIT)
+        bp_mods.append(MOD_STEELY_SPIRIT)
 
     # Apply -ate ability boost (1.2x) if Normal move was converted
     if ate_ability_boost:
-        power = apply_mod(power, MOD_ATE_ABILITY)
+        bp_mods.append(MOD_ATE_ABILITY)
 
-    # Tera BP boost: Tera-type moves with base power < 60 are boosted to 60
-    # This is checked AFTER Technician but does NOT apply to:
-    # - Multi-hit moves (like Bone Rush, Icicle Spear)
-    # - Increased priority moves (like Quick Attack, Aqua Jet)
+    # Helping Hand (1.5x) is a BASE-POWER modifier in Showdown.
+    if modifiers.helping_hand:
+        bp_mods.append(MOD_HELPING_HAND)
+
+    # Tera BP boost: Tera-type moves with base power < 60 are boosted to 60.
+    # This is a flat floor on the raw base power (read before bp mods are
+    # chained, matching the existing behaviour and Showdown's basePower edit).
     if modifiers.tera_active and modifiers.tera_type:
         tera_type = modifiers.tera_type.capitalize()
         if effective_move_type == tera_type:
@@ -1056,19 +1101,52 @@ def calculate_damage(
             if power < 60 and not is_multi_hit and not is_priority:
                 power = 60
 
-    # Apply type-boosting item to base power (NOT final damage)
-    # This matches Showdown's behavior where items like Charcoal go into bpMods
-    # Use effective_move_type to account for type-changing abilities
+    # Type-boosting items (Charcoal, plates) are base-power mods in Showdown.
     bp_item_mod_4096 = _get_type_boost_item_mod_4096(modifiers.attacker_item, effective_move_type)
     if bp_item_mod_4096 != MOD_NEUTRAL:
-        power = apply_mod(power, bp_item_mod_4096)
+        bp_mods.append(bp_item_mod_4096)
 
-    # Apply Ogerpon mask boost (1.2x to ALL moves, not just type-matching)
-    # Only Hearthflame/Wellspring/Cornerstone masks provide this boost (not Teal Mask)
+    # Ogerpon mask boost (1.2x to ALL moves, not just type-matching).
     attacker_name = attacker.name if attacker else None
     ogerpon_mask_mod_4096 = _get_ogerpon_mask_boost_4096(modifiers.attacker_item, attacker_name)
     if ogerpon_mask_mod_4096 != MOD_NEUTRAL:
-        power = apply_mod(power, ogerpon_mask_mod_4096)
+        bp_mods.append(ogerpon_mask_mod_4096)
+
+    # Muscle Band (1.1x physical) / Wise Glasses (1.1x special) / Punching Glove
+    # (1.1x punch) are base-power mods in Showdown, NOT final-damage mods.
+    if modifiers.attacker_item:
+        att_item_bp = normalize_item(modifiers.attacker_item)
+        if att_item_bp == "muscle-band" and is_physical:
+            bp_mods.append(MOD_MUSCLE_BAND)
+        elif att_item_bp == "wise-glasses" and not is_physical:
+            bp_mods.append(MOD_WISE_GLASSES)
+        if att_item_bp == "punching-glove" and move_name_normalized in PUNCH_MOVES:
+            bp_mods.append(MOD_PUNCHING_GLOVE)
+
+    # Terrain boost / Misty nerf / Psyblade override are ALL base-power mods in
+    # Showdown (gen789.ts) — they must multiply `power` before the base-damage
+    # formula, not the post-formula base_damage.
+    terrain_mod_4096 = _get_terrain_mod_4096(
+        modifiers.terrain,
+        effective_move_type,
+        modifiers.attacker_grounded,
+        modifiers.defender_grounded,
+    )
+    # Psyblade: 1.5x in Psychic Terrain (overrides the standard ~1.3x boost)
+    if move_name_normalized == "psyblade" and modifiers.terrain == "psychic":
+        terrain_mod_4096 = 6144  # 1.5x
+    if terrain_mod_4096 != MOD_NEUTRAL:
+        bp_mods.append(terrain_mod_4096)
+
+    # Collision Course / Electro Drift: 1.3333x on super-effective hits is a
+    # base-power mod in Showdown.
+    if move_name_normalized in ("collision-course", "electro-drift") and type_eff > 1.0:
+        bp_mods.append(5461)  # ~1.3333x
+
+    # Apply ALL collected base-power mods at once (chain, then poke_round once).
+    if bp_mods:
+        chained_bp = chain_mods(bp_mods)
+        power = max(1, poke_round(power * chained_bp / 4096))
 
     # Level constant for level 50: floor(2*50/5+2) = 22
     level_factor = 22
@@ -1096,24 +1174,8 @@ def calculate_damage(
         weather_mult = weather_mod_4096 / 4096
         applied_mods.append(f"Weather ({weather_mult:.1f}x)")
 
-    # 2.5. Terrain modifier (applied after weather, before crit)
-    terrain_mod_4096 = _get_terrain_mod_4096(
-        modifiers.terrain,
-        effective_move_type,
-        modifiers.attacker_grounded,
-        modifiers.defender_grounded
-    )
-
-    # Psyblade: 1.5x in Psychic Terrain (overrides the standard 1.3x boost)
-    # This applies regardless of whether attacker is grounded
-    if move_name_normalized == "psyblade" and modifiers.terrain == "psychic":
-        terrain_mod_4096 = 6144  # 1.5x
-
-    if terrain_mod_4096 != MOD_NEUTRAL:
-        base_damage = apply_mod(base_damage, terrain_mod_4096)
-        terrain_name = modifiers.terrain.capitalize() if modifiers.terrain else "Terrain"
-        terrain_mult = terrain_mod_4096 / 4096
-        applied_mods.append(f"{terrain_name} Terrain ({terrain_mult:.2f}x)")
+    # NOTE: Terrain (boost / Misty nerf / Psyblade override) is now applied as a
+    # BASE-POWER modifier earlier in this function (Showdown gen789.ts), not here.
 
     # 3. Critical hit (6144/4096 = 1.5x in Gen 9)
     if modifiers.is_critical:
@@ -1124,46 +1186,29 @@ def calculate_damage(
     # Pass effective_move_type to account for type-changing abilities
     stab_mod_4096 = _get_stab_mod_4096(attacker, move, modifiers, effective_move_type)
 
-    # Pre-calculate type effectiveness using effective move type
-    defender_types = defender.types
-    if modifiers.defender_tera_active and modifiers.defender_tera_type:
-        defender_types = [modifiers.defender_tera_type]
-    type_eff = get_type_effectiveness(effective_move_type, defender_types)
+    # type_eff (and Tera Shell / Mind's Eye adjustments) were computed earlier,
+    # before the base-power chain (needed for Collision Course). Reuse it here.
 
-    # Tera Shell (all hits not very effective at full HP) - Terapagos
-    # This forces type effectiveness to 0.5x (unless already immune)
-    if modifiers.defender_ability:
-        def_ability = normalize_ability(modifiers.defender_ability)
-        if def_ability == "tera-shell" and modifiers.defender_at_full_hp:
-            if type_eff > 0:  # Don't override immunity
-                type_eff = 0.5
-
-    # Mind's Eye (Ursaluna-Bloodmoon) / Scrappy: Normal and Fighting moves hit Ghost types
-    # This bypasses the Ghost immunity to Normal and Fighting
-    if modifiers.attacker_ability:
-        att_ability = normalize_ability(modifiers.attacker_ability)
-        if att_ability in ("minds-eye", "scrappy") and type_eff == 0:
-            # Check if this is a Ghost-type immunity to Normal or Fighting
-            if effective_move_type in ("Normal", "Fighting") and "Ghost" in defender_types:
-                type_eff = 1.0  # Bypass immunity, deal neutral damage
-
-    # Pre-calculate final modifier chain (screens, items, abilities)
-    final_mods = []
-
-    # Burn (2048/4096 = 0.5x on physical unless Guts/Facade)
+    # Burn must be applied as a DISCRETE floor(d/2) step (NOT in the final-mods
+    # chain) — Showdown applies it as its own integer halving after type
+    # effectiveness, distinct from the chained final modifiers.
+    burn_applies = False
     if modifiers.attacker_burned and is_physical:
-        # Check for Guts ability which negates burn penalty
         has_guts_ability = (
             modifiers.attacker_ability and
             normalize_ability(modifiers.attacker_ability) == "guts"
         )
         if not modifiers.has_guts and not has_guts_ability and move.name.lower() != "facade":
-            final_mods.append(MOD_BURN)
+            burn_applies = True
 
-    # Screens
-    screen_mod_4096 = _get_screen_mod_4096(modifiers, is_physical)
-    if screen_mod_4096 != MOD_NEUTRAL:
-        final_mods.append(screen_mod_4096)
+    # Pre-calculate final modifier chain (screens, items, abilities)
+    final_mods = []
+
+    # Screens — IGNORED on a critical hit (Reflect/Light Screen/Aurora Veil).
+    if not modifiers.is_critical:
+        screen_mod_4096 = _get_screen_mod_4096(modifiers, is_physical)
+        if screen_mod_4096 != MOD_NEUTRAL:
+            final_mods.append(screen_mod_4096)
 
     # Item modifiers (Life Orb, type-boosting items)
     item_mod_4096 = _get_item_mod_4096(modifiers.attacker_item, effective_move_type)
@@ -1175,9 +1220,14 @@ def calculate_damage(
         if type_eff >= 2.0:
             final_mods.append(MOD_EXPERT_BELT)
 
-    # Helping Hand (6144/4096 = 1.5x)
-    if modifiers.helping_hand:
-        final_mods.append(MOD_HELPING_HAND)
+    # Tinted Lens (2x on RESISTED hits, not immunities) - Yanmega, Butterfree.
+    # This is a final-damage modifier applied after type effectiveness.
+    if modifiers.attacker_ability:
+        if normalize_ability(modifiers.attacker_ability) == "tinted-lens":
+            if 0 < type_eff < 1.0:
+                final_mods.append(MOD_TINTED_LENS)
+
+    # Helping Hand is now applied as a base-power modifier earlier (Showdown).
 
     # Friend Guard (3072/4096 = 0.75x)
     if modifiers.friend_guard:
@@ -1242,20 +1292,10 @@ def calculate_damage(
             final_mods.append(MOD_NEUROFORCE)
 
     # Attacker item effects (final damage modifiers)
+    # NOTE: Punching Glove / Muscle Band / Wise Glasses are now base-power mods
+    # (applied earlier), matching Showdown — they are no longer final mods.
     if modifiers.attacker_item:
         att_item = normalize_item(modifiers.attacker_item)
-
-        # Punching Glove (1.1x punch moves) - Iron Hands, etc.
-        if att_item == "punching-glove" and move_name_normalized in PUNCH_MOVES:
-            final_mods.append(MOD_PUNCHING_GLOVE)
-
-        # Muscle Band (1.1x physical moves)
-        if att_item == "muscle-band" and is_physical:
-            final_mods.append(MOD_MUSCLE_BAND)
-
-        # Wise Glasses (1.1x special moves)
-        if att_item == "wise-glasses" and not is_physical:
-            final_mods.append(MOD_WISE_GLASSES)
 
         # Normal Gem (1.5x first Normal move - one-time use)
         if att_item == "normal-gem" and effective_move_type == "Normal":
@@ -1300,12 +1340,13 @@ def calculate_damage(
                 # Type effectiveness uses floor, not pokeRound
                 damage = int(damage * type_eff)
 
-            # Collision Course / Electro Drift: 1.33x damage on super effective hits
-            if move_name_normalized in ("collision-course", "electro-drift") and type_eff > 1.0:
-                # 5461/4096 = 1.333x
-                damage = apply_mod(damage, 5461)
+            # Burn: discrete floor(d/2) step, AFTER type effectiveness and
+            # BEFORE the chained final modifiers (Showdown applies it as its own
+            # integer halving, not as part of the final-mod chain).
+            if burn_applies:
+                damage = damage // 2
 
-            # 7-10. Apply chained final modifiers (burn, screens, items, etc.)
+            # 7-10. Apply chained final modifiers (screens, items, etc.)
             if final_mod_4096 != MOD_NEUTRAL:
                 damage = apply_mod(damage, final_mod_4096)
 
@@ -1334,12 +1375,11 @@ def calculate_damage(
                 # Type effectiveness uses floor, not pokeRound
                 damage_this_roll = int(damage_this_roll * type_eff)
 
-            # Collision Course / Electro Drift: 1.33x damage on super effective hits
-            if move_name_normalized in ("collision-course", "electro-drift") and type_eff > 1.0:
-                # 5461/4096 = 1.333x
-                damage_this_roll = apply_mod(damage_this_roll, 5461)
+            # Burn: discrete floor(d/2) step (see single-hit loop above).
+            if burn_applies:
+                damage_this_roll = damage_this_roll // 2
 
-            # 7-10. Apply chained final modifiers (burn, screens, items, etc.)
+            # 7-10. Apply chained final modifiers (screens, items, etc.)
             if final_mod_4096 != MOD_NEUTRAL:
                 damage_this_roll = apply_mod(damage_this_roll, final_mod_4096)
 
@@ -1388,7 +1428,9 @@ def calculate_damage(
     # Add STAB to applied mods
     if stab_mod_4096 != MOD_NEUTRAL:
         stab_mult = stab_mod_4096 / 4096
-        if stab_mod_4096 == MOD_STAB_BOOSTED:
+        if stab_mod_4096 == MOD_STAB_TERA_ADAPT:  # 9216 = 2.25x
+            applied_mods.append("STAB (2.25x - Tera+Adaptability)")
+        elif stab_mod_4096 == MOD_STAB_BOOSTED:
             applied_mods.append("STAB (2.0x - Tera/Adaptability)")
         else:
             applied_mods.append("STAB (1.5x)")
@@ -1750,10 +1792,41 @@ def calculate_ko_threshold(
     Returns:
         Dict with required EVs and resulting calc, or None if impossible
     """
-    from ..models.pokemon import EVSpread
+    from ..models.pokemon import EVSpread, StatPointSpread
+    from .stats_champions import SP_BREAKPOINTS_LV50
 
     is_physical = move.category == MoveCategory.PHYSICAL
     stat_name = "attack" if is_physical else "special_attack"
+
+    # Champions (Reg MA) builds invest Stat Points (0-32 per stat / 66 total),
+    # not EVs. calculate_all_stats ignores evs for champions, so sweeping EVs
+    # would yield identical damage every iteration. Sweep SP breakpoints and
+    # return the result in SP units instead.
+    if attacker.format_system == "champions":
+        for sp in SP_BREAKPOINTS_LV50:
+            test_sps = StatPointSpread()
+            if is_physical:
+                test_sps.attack = sp
+            else:
+                test_sps.special_attack = sp
+
+            test_attacker = attacker.model_copy()
+            test_attacker.sps = test_sps
+
+            result = calculate_damage(test_attacker, defender, move, modifiers)
+
+            kos = sum(1 for r in result.rolls if r >= result.defender_hp)
+            ko_pct = (kos / 16) * 100
+
+            if ko_pct >= target_ko_chance:
+                return {
+                    "sps_needed": sp,
+                    "stat_name": stat_name,
+                    "ko_chance": ko_pct,
+                    "damage_range": result.damage_range,
+                    "result": result,
+                }
+        return None  # Cannot achieve target KO within the 32 SP cap
 
     # Use valid level 50 EV breakpoints (0, 4, 12, 20, 28...)
     for ev in EV_BREAKPOINTS_LV50:
@@ -1805,10 +1878,54 @@ def calculate_bulk_threshold(
     Returns:
         Dict with required HP/Def EVs and resulting calc (minimum total EVs)
     """
-    from ..models.pokemon import EVSpread
+    from ..models.pokemon import EVSpread, StatPointSpread
+    from .stats_champions import SP_BREAKPOINTS_LV50
 
     is_physical = move.category == MoveCategory.PHYSICAL
     def_stat_name = "defense" if is_physical else "special_defense"
+
+    # Champions (Reg MA) defenders invest Stat Points (0-32 per stat / 66
+    # total), not EVs. Sweep SP breakpoints and return the result in SP units.
+    if defender.format_system == "champions":
+        best_sp_result = None
+        best_total_sps = float("inf")
+        for hp_sp in SP_BREAKPOINTS_LV50:
+            for def_sp in SP_BREAKPOINTS_LV50:
+                total = hp_sp + def_sp
+                if total > 66:
+                    continue
+                if total > best_total_sps:
+                    continue
+
+                test_sps = StatPointSpread(hp=hp_sp)
+                if is_physical:
+                    test_sps.defense = def_sp
+                else:
+                    test_sps.special_defense = def_sp
+
+                test_defender = defender.model_copy()
+                test_defender.sps = test_sps
+
+                result = calculate_damage(attacker, test_defender, move, modifiers)
+
+                survives = sum(1 for r in result.rolls if r < result.defender_hp)
+                survival_pct = (survives / 16) * 100
+
+                if survival_pct >= target_survival_chance:
+                    # Prefer lower total SP, or higher HP when totals are equal.
+                    if total < best_total_sps or (
+                        total == best_total_sps and hp_sp > best_sp_result["hp_sps"]
+                    ):
+                        best_total_sps = total
+                        best_sp_result = {
+                            "hp_sps": hp_sp,
+                            "def_sps": def_sp,
+                            "def_stat_name": def_stat_name,
+                            "survival_chance": survival_pct,
+                            "damage_range": result.damage_range,
+                            "result": result,
+                        }
+        return best_sp_result  # None if no SP combination achieves survival
 
     best_result = None
     best_total_evs = float('inf')

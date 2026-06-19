@@ -61,6 +61,11 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
 
         Returns:
             Speed comparison with who outspeeds whom
+
+        In a Pokemon Champions (Reg MA) session the ``*_speed_evs`` arguments are
+        interpreted as Speed Stat Points (0-32, 66-point budget) and Speed uses
+        the SP formula (e.g. Flutter Mane Timid 32 Spe SP -> 205). The per-mon
+        investment field is labelled ``sps`` instead of ``evs`` in that case.
         """
         try:
             # Fetch base stats
@@ -74,9 +79,23 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
             except ValueError as e:
                 return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {e}')
 
-            # Calculate speeds
-            speed1 = calculate_speed(base1.speed, 31, pokemon1_speed_evs, 50, nature1)
-            speed2 = calculate_speed(base2.speed, 31, pokemon2_speed_evs, 50, nature2)
+            # Detect Champions vs mainline. In a Champions session the Speed
+            # investment is Stat Points (0-32, 66 budget) and uses the SP path;
+            # otherwise it's EVs and the mainline path is byte-for-byte unchanged.
+            from vgc_mcp_core.rules.format_detect import detect_champions_format
+            is_champions = detect_champions_format(pokemon1_name, pokemon2_name)
+
+            if is_champions:
+                from vgc_mcp_core.calc.stats_champions import calculate_speed_sp
+                speed1 = calculate_speed_sp(base1.speed, 31, pokemon1_speed_evs, 50, nature1)
+                speed2 = calculate_speed_sp(base2.speed, 31, pokemon2_speed_evs, 50, nature2)
+                invest_key = "sps"
+                stat_units = "Stat Points (SPs)"
+            else:
+                speed1 = calculate_speed(base1.speed, 31, pokemon1_speed_evs, 50, nature1)
+                speed2 = calculate_speed(base2.speed, 31, pokemon2_speed_evs, 50, nature2)
+                invest_key = "evs"
+                stat_units = None
 
             # Determine result
             if speed1 > speed2:
@@ -110,19 +129,19 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
                 slower_speed = min(speed1, speed2)
                 analysis_str = f"{faster} outspeeds ({faster_speed} vs {slower_speed})"
 
-            return {
+            response = {
                 "pokemon1": {
                     "name": pokemon1_name,
                     "base_speed": base1.speed,
                     "nature": pokemon1_nature,
-                    "evs": pokemon1_speed_evs,
+                    invest_key: pokemon1_speed_evs,
                     "final_speed": speed1
                 },
                 "pokemon2": {
                     "name": pokemon2_name,
                     "base_speed": base2.speed,
                     "nature": pokemon2_nature,
-                    "evs": pokemon2_speed_evs,
+                    invest_key: pokemon2_speed_evs,
                     "final_speed": speed2
                 },
                 "difference": diff,
@@ -131,6 +150,16 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
                 "summary_table": "\n".join(table_lines),
                 "analysis": analysis_str
             }
+
+            if is_champions:
+                response["format_system"] = "champions"
+                response["stat_units"] = stat_units
+                response["note"] = (
+                    "Champions Reg MA Stat Points (0-32 per stat, 66 total); "
+                    "32 SP saturates to the same stat as 252 EVs"
+                )
+
+            return response
 
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
@@ -159,6 +188,75 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
                 parsed_nature = Nature(nature.lower())
             except ValueError:
                 return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {nature}')
+
+            # Detect Champions vs mainline. In a Champions session we report on
+            # the Stat-Point grain (0-32 per stat, 66-point budget) instead of
+            # EVs (0-252, 508 budget). Mainline path is byte-for-byte unchanged.
+            from vgc_mcp_core.rules.format_detect import detect_champions_format
+            is_champions = detect_champions_format(pokemon_name)
+
+            if is_champions:
+                from vgc_mcp_core.calc.champions_optimization import (
+                    find_speed_sps_to_outspeed,
+                )
+                from vgc_mcp_core.calc.stats_champions import calculate_speed_sp
+
+                # find_speed_sps_to_outspeed targets target_speed + 1 (strict
+                # outspeed). To "reach OR exceed" the target stat we pass
+                # target_speed - 1 so the helper's +1 lands on target_speed.
+                sps_needed = find_speed_sps_to_outspeed(
+                    base_stats.speed, target_speed - 1, parsed_nature, 31, 50
+                )
+
+                if sps_needed is None:
+                    max_speed = calculate_speed_sp(base_stats.speed, 31, 32, 50, parsed_nature)
+                    table_lines = [
+                        "| Metric           | Value                                      |",
+                        "|------------------|---------------------------------------------|",
+                        f"| Pokemon          | {pokemon_name}                             |",
+                        f"| Target Speed     | {target_speed}                             |",
+                        f"| Max with 32 SPs  | {max_speed}                                |",
+                        f"| Result           | Cannot reach target                        |",
+                    ]
+                    return {
+                        "pokemon": pokemon_name,
+                        "target_speed": target_speed,
+                        "achievable": False,
+                        "format_system": "champions",
+                        "stat_units": "Stat Points (SPs)",
+                        "max_speed_with_32_sps": max_speed,
+                        "suggestion": "Try a +Speed nature (Timid/Jolly) or lower your target",
+                        "summary_table": "\n".join(table_lines),
+                    }
+
+                actual_speed = calculate_speed_sp(base_stats.speed, 31, sps_needed, 50, parsed_nature)
+                sps_remaining = max(0, 66 - sps_needed)
+                table_lines = [
+                    "| Metric           | Value                                      |",
+                    "|------------------|---------------------------------------------|",
+                    f"| Pokemon          | {pokemon_name}                             |",
+                    f"| Target Speed     | {target_speed}                             |",
+                    f"| Required SPs     | {sps_needed} Speed                         |",
+                    f"| Resulting Speed  | {actual_speed}                             |",
+                    f"| Nature           | {nature}                                   |",
+                    f"| SPs Remaining    | {sps_remaining}                            |",
+                ]
+                return {
+                    "pokemon": pokemon_name,
+                    "target_speed": target_speed,
+                    "achievable": True,
+                    "format_system": "champions",
+                    "stat_units": "Stat Points (SPs)",
+                    "sps_needed": sps_needed,
+                    "actual_speed": actual_speed,
+                    "sps_remaining": sps_remaining,
+                    "summary_table": "\n".join(table_lines),
+                    "analysis": (
+                        f"Need {sps_needed} Speed SP ({sps_needed} SP, "
+                        f"{sps_remaining} remaining of 66) to reach {actual_speed}, "
+                        f"outspeeding target speed {target_speed}"
+                    ),
+                }
 
             evs_needed = find_speed_evs(
                 base_stats.speed,

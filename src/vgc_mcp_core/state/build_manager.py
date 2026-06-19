@@ -37,7 +37,9 @@ class BuildStateManager:
         build_id = f"build_{self._counter}"
         self._counter += 1
 
-        self._builds[build_id] = {
+        format_system = pokemon_data.get("format_system", "mainline")
+
+        record = {
             "build_id": build_id,
             "pokemon": pokemon_name,
             "base_stats": pokemon_data.get("base_stats", {}),
@@ -57,7 +59,19 @@ class BuildStateManager:
             "moves": pokemon_data.get("moves", []),
             "abilities": pokemon_data.get("abilities", []),  # Available abilities
             "all_moves": pokemon_data.get("all_moves", []),  # Available moves
+            "format_system": format_system,
         }
+
+        # Champions builds carry a Stat-Point spread (32/stat, 66 total)
+        # alongside the (unused) EV spread, so the reconstructed PokemonBuild
+        # dispatches stat calc correctly.
+        if format_system == "champions":
+            record["sps"] = pokemon_data.get("sps", {
+                "hp": 0, "attack": 0, "defense": 0,
+                "special_attack": 0, "special_defense": 0, "speed": 0
+            })
+
+        self._builds[build_id] = record
 
         # Track name -> id mapping (lowercase for fuzzy matching)
         self._name_to_id[pokemon_name.lower()] = build_id
@@ -75,6 +89,91 @@ class BuildStateManager:
             Build dict or None if not found
         """
         return self._builds.get(build_id)
+
+    def to_pokemon_build(self, build_id: str):
+        """Reconstruct a format-aware PokemonBuild from a stored build dict.
+
+        For champions builds (`format_system == "champions"`) this attaches a
+        StatPointSpread and sets `format_system="champions"` so that
+        `calculate_all_stats` dispatches to the Stat-Point formula. Mainline
+        builds are reconstructed with their EVSpread exactly as before.
+
+        Returns None if the build is not found.
+        """
+        # Imported here to avoid a circular import at module load time.
+        from ..models.pokemon import (
+            PokemonBuild, BaseStats, EVSpread, IVSpread, Nature, StatPointSpread,
+        )
+
+        build = self._builds.get(build_id)
+        if not build:
+            return None
+
+        bs = build.get("base_stats", {})
+        base_stats = BaseStats(
+            hp=bs.get("hp", 0),
+            attack=bs.get("attack", 0),
+            defense=bs.get("defense", 0),
+            special_attack=bs.get("special_attack", 0),
+            special_defense=bs.get("special_defense", 0),
+            speed=bs.get("speed", 0),
+        )
+
+        nature_raw = build.get("nature", "Serious")
+        try:
+            nature = Nature(str(nature_raw).lower())
+        except ValueError:
+            nature = Nature.SERIOUS
+
+        iv = build.get("ivs", {})
+        ivs = IVSpread(
+            hp=iv.get("hp", 31),
+            attack=iv.get("attack", 31),
+            defense=iv.get("defense", 31),
+            special_attack=iv.get("special_attack", 31),
+            special_defense=iv.get("special_defense", 31),
+            speed=iv.get("speed", 31),
+        )
+
+        common = dict(
+            name=build["pokemon"],
+            base_stats=base_stats,
+            types=build.get("types", []),
+            nature=nature,
+            ivs=ivs,
+            ability=build.get("ability"),
+            item=build.get("item"),
+            tera_type=build.get("tera_type"),
+            moves=build.get("moves", []),
+        )
+
+        if build.get("format_system") == "champions":
+            sps = build.get("sps", {})
+            return PokemonBuild(
+                format_system="champions",
+                sps=StatPointSpread(
+                    hp=sps.get("hp", 0),
+                    attack=sps.get("attack", 0),
+                    defense=sps.get("defense", 0),
+                    special_attack=sps.get("special_attack", 0),
+                    special_defense=sps.get("special_defense", 0),
+                    speed=sps.get("speed", 0),
+                ),
+                **common,
+            )
+
+        evs = build.get("evs", {})
+        return PokemonBuild(
+            evs=EVSpread(
+                hp=evs.get("hp", 0),
+                attack=evs.get("attack", 0),
+                defense=evs.get("defense", 0),
+                special_attack=evs.get("special_attack", 0),
+                special_defense=evs.get("special_defense", 0),
+                speed=evs.get("speed", 0),
+            ),
+            **common,
+        )
 
     def get_build_by_name(self, pokemon_name: str) -> Optional[dict]:
         """Get a build by Pokemon name (fuzzy matching).
@@ -132,8 +231,13 @@ class BuildStateManager:
         build = self._builds[build_id]
 
         for field, value in changes.items():
-            if field in ["evs", "ivs"] and isinstance(value, dict):
+            if field in ["evs", "ivs", "sps"] and isinstance(value, dict):
                 # Merge nested dict updates
+                if field == "sps" and not isinstance(build.get("sps"), dict):
+                    build["sps"] = {
+                        "hp": 0, "attack": 0, "defense": 0,
+                        "special_attack": 0, "special_defense": 0, "speed": 0
+                    }
                 build[field].update(value)
             elif field == "moves" and isinstance(value, list):
                 # Replace moves list entirely
@@ -234,6 +338,7 @@ class BuildStateManager:
                 "pokemon": b["pokemon"],
                 "item": b.get("item", "None"),
                 "nature": b.get("nature", "Serious"),
+                "format_system": b.get("format_system", "mainline"),
             }
             for b in self._builds.values()
         ]

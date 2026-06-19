@@ -341,10 +341,33 @@ class RegulationConfig:
         For allowlist regulations (e.g., reg_ma_champs), only Pokemon in
         `legal_pokemon` are legal.
         """
-        name_normalized = pokemon_name.lower().replace(" ", "-")
+        # Normalize consistently (strip apostrophes/spaces) via the shared helper.
+        from .restricted import normalize_pokemon_name
+
+        name_normalized = normalize_pokemon_name(pokemon_name)
         mode = self.get_legality_mode(regulation)
         if mode == "allowlist":
-            return name_normalized in self.get_legal_pokemon(regulation)
+            allowlist = self.get_legal_pokemon(regulation)
+            if name_normalized in allowlist:
+                return True
+            # Fall back to the base species (e.g. "rotom-wash" -> "rotom",
+            # "tauros-paldea-aqua" -> "tauros"). Allowlists store base forms.
+            base = name_normalized.split("-")[0]
+            if base in allowlist:
+                return True
+            # Fall back to stripping a Mega suffix/prefix to the base species
+            # (e.g. "manectric-mega"/"mega-manectric" -> "manectric"). Megas are
+            # legal in Reg MA when their base species is allowlisted.
+            if "-mega" in name_normalized or name_normalized.startswith("mega-"):
+                mega_base = (
+                    name_normalized.replace("mega-", "", 1)
+                    if name_normalized.startswith("mega-")
+                    else name_normalized.split("-mega")[0]
+                )
+                mega_base = mega_base.split("-")[0]
+                if mega_base in allowlist:
+                    return True
+            return False
         # Banlist mode
         if name_normalized in self.get_banned_pokemon(regulation):
             return False

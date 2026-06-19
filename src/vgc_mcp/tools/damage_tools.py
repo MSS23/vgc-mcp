@@ -9,9 +9,13 @@ logger = logging.getLogger(__name__)
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
 from vgc_mcp_core.calc.damage import calculate_damage, calculate_ko_threshold, calculate_bulk_threshold, format_percent
+from vgc_mcp_core.calc.conversion import ev_to_sp, evs_to_sps_spread
 from vgc_mcp_core.calc.modifiers import DamageModifiers
-from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, IVSpread, get_nature_modifier
+from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, IVSpread, StatPointSpread, get_nature_modifier
 from vgc_mcp_core.formats.showdown import pokemon_build_to_showdown
+from vgc_mcp_core.rules.regulation_loader import get_regulation_config
+from vgc_mcp_core.rules.regulation_router import auto_detect_regulation
+from vgc_mcp_core.rules.format_detect import detect_champions_format
 from vgc_mcp_core.calc.stats import calculate_stat, calculate_hp
 from vgc_mcp_core.utils.errors import error_response, ErrorCodes, pokemon_not_found_error, invalid_nature_error, api_error
 from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name, suggest_nature
@@ -41,6 +45,31 @@ async def _get_common_spreads(pokemon_name: str, limit: int = 3) -> list[dict]:
 async def _get_common_spread(pokemon_name: str) -> Optional[dict]:
     """Module-local wrapper — passes the registered Smogon client through."""
     return await _shared_get_common_spread(_smogon_client, pokemon_name)
+
+
+def _detect_champions(*pokemon_names: str) -> bool:
+    """Return True when the active format resolves to Champions (Reg MA).
+
+    Read-only: an explicit session regulation wins, otherwise the format is
+    INFERRED from the mentioned Pokemon without mutating session state (a plain
+    damage calc must not silently rewrite a mainline user's session).
+    """
+    return detect_champions_format(*pokemon_names)
+
+
+def _sps_from_smogon_spread(spread: dict) -> Optional[StatPointSpread]:
+    """Build a StatPointSpread from a Champions Smogon spread dict.
+
+    Wave-1's smogon helper carries `sps` (canonical-stat-name dict) +
+    `format_system` alongside `evs`. Returns None when the spread isn't a
+    champions spread or has no SP data.
+    """
+    if spread.get("format_system") != "champions":
+        return None
+    sps = spread.get("sps")
+    if not sps:
+        return None
+    return StatPointSpread.from_sps_dict(sps)
 
 
 def format_transparent_output(
@@ -102,20 +131,21 @@ def format_transparent_output(
         base_line += f" {attacker.base_stats.__dict__[stat]} |"
     lines.append(base_line)
     
-    # EVs
-    ev_line = "| EVs  |"
+    # EVs / SPs (Champions builds invest Stat Points, not EVs)
+    atk_alloc = attacker.sps if attacker.is_champions() else attacker.evs
+    ev_line = ("| SPs  |" if attacker.is_champions() else "| EVs  |")
     for stat in ["hp", "attack", "defense", "special_attack", "special_defense", "speed"]:
-        ev_value = attacker.evs.__dict__.get(stat, 0)
+        ev_value = (atk_alloc.__dict__.get(stat, 0) if atk_alloc else 0)
         ev_line += f" {ev_value} |"
     lines.append(ev_line)
-    
+
     # Final stats
     final_line = "| Final|"
     for stat in ["hp", "attack", "defense", "special_attack", "special_defense", "speed"]:
         final_line += f" {attacker_stats[stat]} |"
     lines.append(final_line)
     lines.append("")
-    
+
     # Attacker details
     lines.append(f"**Nature:** {format_nature(attacker.nature)}")
     lines.append(f"**Item:** {attacker.item or 'None'}")
@@ -139,13 +169,14 @@ def format_transparent_output(
         base_line += f" {defender.base_stats.__dict__[stat]} |"
     lines.append(base_line)
     
-    # EVs
-    ev_line = "| EVs  |"
+    # EVs / SPs (Champions builds invest Stat Points, not EVs)
+    def_alloc = defender.sps if defender.is_champions() else defender.evs
+    ev_line = ("| SPs  |" if defender.is_champions() else "| EVs  |")
     for stat in ["hp", "attack", "defense", "special_attack", "special_defense", "speed"]:
-        ev_value = defender.evs.__dict__.get(stat, 0)
+        ev_value = (def_alloc.__dict__.get(stat, 0) if def_alloc else 0)
         ev_line += f" {ev_value} |"
     lines.append(ev_line)
-    
+
     # Final stats
     final_line = "| Final|"
     for stat in ["hp", "attack", "defense", "special_attack", "special_defense", "speed"]:
@@ -232,6 +263,8 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         defender_hp_evs: Optional[int] = None,
         defender_def_evs: Optional[int] = None,
         defender_spd_evs: Optional[int] = None,
+        attacker_sps: Optional[str] = None,
+        defender_sps: Optional[str] = None,
         use_smogon_spreads: bool = True,
         num_defender_spreads: int = 3,
         is_spread: bool = False,
@@ -307,6 +340,14 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             defender_hp_evs: Defender's HP EVs. If None and use_smogon_spreads=True, uses most common.
             defender_def_evs: Defender's Defense EVs. If None and use_smogon_spreads=True, uses most common.
             defender_spd_evs: Defender's Sp. Def EVs. If None and use_smogon_spreads=True, uses most common.
+            attacker_sps: Champions (Reg MA) only. Attacker Stat Points as
+                "HP/Atk/Def/SpA/SpD/Spe" (0-32 per stat, 66 total). Ignored in
+                mainline sessions. When the session is Champions and this is None,
+                falls back to the attacker's EV params (treated as SP) or a
+                Champions Smogon spread.
+            defender_sps: Champions (Reg MA) only. Defender Stat Points as
+                "HP/Atk/Def/SpA/SpD/Spe" (0-32 per stat, 66 total). Ignored in
+                mainline sessions.
             use_smogon_spreads: If True (default), auto-fetch common spreads from Smogon usage data
             num_defender_spreads: Number of top defender spreads to calculate against (default 3). Set to 1 for single spread.
             is_spread: True if move is hitting multiple targets (0.75x damage)
@@ -399,6 +440,36 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 if inferred_mask and attacker_item is None:
                     attacker_item = inferred_mask
 
+            # Champions (Reg MA) detection. When the session resolves to the
+            # Stat-Point format we build PokemonBuilds with format_system=
+            # 'champions' + a StatPointSpread (32/stat, 66 total) instead of EVs.
+            is_champions = _detect_champions(attacker_name, defender_name)
+
+            # Parse explicit SP inputs ("HP/Atk/Def/SpA/SpD/Spe"). These win over
+            # any EV params / Smogon fetch when the session is Champions.
+            def _parse_sp_string(s: Optional[str]) -> Optional[StatPointSpread]:
+                if not s:
+                    return None
+                parts = [p.strip() for p in s.replace(",", "/").split("/")]
+                if len(parts) != 6:
+                    raise ValueError(
+                        "Stat Points must be 'HP/Atk/Def/SpA/SpD/Spe' (six values)"
+                    )
+                vals = [int(p) for p in parts]
+                return StatPointSpread(
+                    hp=vals[0], attack=vals[1], defense=vals[2],
+                    special_attack=vals[3], special_defense=vals[4], speed=vals[5],
+                )
+
+            attacker_sp_spread: Optional[StatPointSpread] = None
+            defender_sp_spread: Optional[StatPointSpread] = None
+            if is_champions:
+                try:
+                    attacker_sp_spread = _parse_sp_string(attacker_sps)
+                    defender_sp_spread = _parse_sp_string(defender_sps)
+                except ValueError as ve:
+                    return error_response(ErrorCodes.INVALID_INPUT, str(ve))
+
             # Track what spreads we used for the response
             attacker_spread_source = "custom"
             defender_spread_source = "custom"
@@ -434,6 +505,11 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                             attacker_atk_evs = evs.get("attack", 0)
                         if attacker_spa_evs is None:
                             attacker_spa_evs = evs.get("special_attack", 0)
+                        # Champions: pull the Stat-Point allocation (smogon helper
+                        # carries 'sps' + format_system) rather than the empty
+                        # 'evs' dict.
+                        if is_champions and attacker_sp_spread is None:
+                            attacker_sp_spread = _sps_from_smogon_spread(atk_spread)
                         # Also use common item/ability if not specified
                         if attacker_item is None and atk_spread.get("item"):
                             attacker_item = _normalize_smogon_name(atk_spread["item"])
@@ -469,6 +545,8 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                             defender_def_evs = evs.get("defense", 0)
                         if defender_spd_evs is None:
                             defender_spd_evs = evs.get("special_defense", 0)
+                        if is_champions and defender_sp_spread is None:
+                            defender_sp_spread = _sps_from_smogon_spread(def_spread)
                         if defender_ability is None and def_spread.get("ability"):
                             defender_ability = _normalize_smogon_name(def_spread["ability"])
                         # Also get defender item from Smogon if not specified
@@ -483,6 +561,23 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             defender_hp_evs = defender_hp_evs if defender_hp_evs is not None else 0
             defender_def_evs = defender_def_evs if defender_def_evs is not None else 0
             defender_spd_evs = defender_spd_evs if defender_spd_evs is not None else 0
+
+            # Champions fallback: if no SP spread was supplied or fetched, treat
+            # the (possibly user-supplied) offensive/defensive EV integers as
+            # Stat Points so callers who pass attacker_atk_evs etc. in a
+            # Champions session still get an SP-scale build (capped at 32).
+            if is_champions:
+                if attacker_sp_spread is None:
+                    attacker_sp_spread = StatPointSpread(
+                        attack=ev_to_sp(attacker_atk_evs, round_mode="floor"),
+                        special_attack=ev_to_sp(attacker_spa_evs, round_mode="floor"),
+                    )
+                if defender_sp_spread is None:
+                    defender_sp_spread = StatPointSpread(
+                        hp=ev_to_sp(defender_hp_evs, round_mode="ceil"),
+                        defense=ev_to_sp(defender_def_evs, round_mode="ceil"),
+                        special_defense=ev_to_sp(defender_spd_evs, round_mode="ceil"),
+                    )
 
             # Auto-fetch abilities if not specified — use Smogon-aware resolver
             # (Mega-form > Smogon's most-used > pokeapi first-listed) so VGC
@@ -581,34 +676,59 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 suggestions = suggest_nature(defender_nature)
                 return invalid_nature_error(defender_nature, suggestions if suggestions else [n.value for n in Nature])
 
-            # Create Pokemon builds
-            attacker = PokemonBuild(
-                name=attacker_name,
-                base_stats=atk_base,
-                types=atk_types,
-                nature=atk_nature,
-                evs=EVSpread(
-                    attack=attacker_atk_evs,
-                    special_attack=attacker_spa_evs
-                ),
-                item=attacker_item,
-                ability=attacker_ability,
-                tera_type=attacker_tera_type
-            )
+            # Create Pokemon builds. For Champions we attach a StatPointSpread +
+            # format_system='champions'; mainline keeps the EVSpread path
+            # byte-for-byte unchanged.
+            if is_champions:
+                attacker = PokemonBuild(
+                    name=attacker_name,
+                    base_stats=atk_base,
+                    types=atk_types,
+                    nature=atk_nature,
+                    format_system="champions",
+                    sps=attacker_sp_spread or StatPointSpread(),
+                    item=attacker_item,
+                    ability=attacker_ability,
+                    tera_type=attacker_tera_type
+                )
+                defender = PokemonBuild(
+                    name=defender_name,
+                    base_stats=def_base,
+                    types=def_types,
+                    nature=def_nature,
+                    format_system="champions",
+                    sps=defender_sp_spread or StatPointSpread(),
+                    ability=defender_ability,
+                    tera_type=defender_tera_type
+                )
+            else:
+                attacker = PokemonBuild(
+                    name=attacker_name,
+                    base_stats=atk_base,
+                    types=atk_types,
+                    nature=atk_nature,
+                    evs=EVSpread(
+                        attack=attacker_atk_evs,
+                        special_attack=attacker_spa_evs
+                    ),
+                    item=attacker_item,
+                    ability=attacker_ability,
+                    tera_type=attacker_tera_type
+                )
 
-            defender = PokemonBuild(
-                name=defender_name,
-                base_stats=def_base,
-                types=def_types,
-                nature=def_nature,
-                evs=EVSpread(
-                    hp=defender_hp_evs,
-                    defense=defender_def_evs,
-                    special_defense=defender_spd_evs
-                ),
-                ability=defender_ability,
-                tera_type=defender_tera_type
-            )
+                defender = PokemonBuild(
+                    name=defender_name,
+                    base_stats=def_base,
+                    types=def_types,
+                    nature=def_nature,
+                    evs=EVSpread(
+                        hp=defender_hp_evs,
+                        defense=defender_def_evs,
+                        special_defense=defender_spd_evs
+                    ),
+                    ability=defender_ability,
+                    tera_type=defender_tera_type
+                )
 
             # Determine Protosynthesis/Quark Drive boost stats
             attacker_proto_boost = None
@@ -616,37 +736,42 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             defender_proto_boost = None
             defender_quark_boost = None
 
-            # Check if attacker has Protosynthesis and conditions are met
-            if attacker_ability == "protosynthesis":
-                if weather == "sun" or attacker_booster_energy:
-                    attacker_proto_boost = get_paradox_boost_stat(
-                        atk_base, atk_nature,
-                        {"attack": attacker_atk_evs, "special_attack": attacker_spa_evs}
-                    )
+            # Mainline: pre-compute the Paradox boost stat from EVs. Champions
+            # builds let calculate_damage auto-detect the boost from the
+            # format-aware stats (the EV ints are SP-scale here, so the mainline
+            # formula would mis-pick) — leave the *_boost vars None.
+            if not is_champions:
+                # Check if attacker has Protosynthesis and conditions are met
+                if attacker_ability == "protosynthesis":
+                    if weather == "sun" or attacker_booster_energy:
+                        attacker_proto_boost = get_paradox_boost_stat(
+                            atk_base, atk_nature,
+                            {"attack": attacker_atk_evs, "special_attack": attacker_spa_evs}
+                        )
 
-            # Check if attacker has Quark Drive and conditions are met
-            if attacker_ability == "quark-drive":
-                if terrain == "electric" or attacker_booster_energy:
-                    attacker_quark_boost = get_paradox_boost_stat(
-                        atk_base, atk_nature,
-                        {"attack": attacker_atk_evs, "special_attack": attacker_spa_evs}
-                    )
+                # Check if attacker has Quark Drive and conditions are met
+                if attacker_ability == "quark-drive":
+                    if terrain == "electric" or attacker_booster_energy:
+                        attacker_quark_boost = get_paradox_boost_stat(
+                            atk_base, atk_nature,
+                            {"attack": attacker_atk_evs, "special_attack": attacker_spa_evs}
+                        )
 
-            # Check if defender has Protosynthesis and conditions are met
-            if defender_ability == "protosynthesis":
-                if weather == "sun" or defender_booster_energy:
-                    defender_proto_boost = get_paradox_boost_stat(
-                        def_base, def_nature,
-                        {"hp": defender_hp_evs, "defense": defender_def_evs, "special_defense": defender_spd_evs}
-                    )
+                # Check if defender has Protosynthesis and conditions are met
+                if defender_ability == "protosynthesis":
+                    if weather == "sun" or defender_booster_energy:
+                        defender_proto_boost = get_paradox_boost_stat(
+                            def_base, def_nature,
+                            {"hp": defender_hp_evs, "defense": defender_def_evs, "special_defense": defender_spd_evs}
+                        )
 
-            # Check if defender has Quark Drive and conditions are met
-            if defender_ability == "quark-drive":
-                if terrain == "electric" or defender_booster_energy:
-                    defender_quark_boost = get_paradox_boost_stat(
-                        def_base, def_nature,
-                        {"hp": defender_hp_evs, "defense": defender_def_evs, "special_defense": defender_spd_evs}
-                    )
+                # Check if defender has Quark Drive and conditions are met
+                if defender_ability == "quark-drive":
+                    if terrain == "electric" or defender_booster_energy:
+                        defender_quark_boost = get_paradox_boost_stat(
+                            def_base, def_nature,
+                            {"hp": defender_hp_evs, "defense": defender_def_evs, "special_defense": defender_spd_evs}
+                        )
 
             # Set up modifiers
             modifiers = DamageModifiers(
@@ -700,21 +825,43 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     except ValueError:
                         spread_nature_enum = def_nature
 
-                    # Create defender build for this spread
-                    spread_defender = PokemonBuild(
-                        name=defender_name,
-                        base_stats=def_base,
-                        types=def_types,
-                        nature=spread_nature_enum,
-                        evs=EVSpread(
-                            hp=spread_evs.get("hp", 0),
-                            defense=spread_evs.get("defense", 0),
-                            special_defense=spread_evs.get("special_defense", 0)
-                        ),
-                        item=spread_item,
-                        ability=spread_ability,
-                        tera_type=defender_tera_type
-                    )
+                    # Create defender build for this spread (SP-aware in Champions)
+                    if is_champions:
+                        spread_defender = PokemonBuild(
+                            name=defender_name,
+                            base_stats=def_base,
+                            types=def_types,
+                            nature=spread_nature_enum,
+                            format_system="champions",
+                            # Prefer the threat's champions-tagged SP spread; otherwise
+                            # convert its real mainline Smogon EVs to the SP grain so its
+                            # bulk is preserved (NOT zeroed out).
+                            sps=_sps_from_smogon_spread(spread_data) or evs_to_sps_spread(
+                                EVSpread(
+                                    hp=spread_evs.get("hp", 0),
+                                    defense=spread_evs.get("defense", 0),
+                                    special_defense=spread_evs.get("special_defense", 0),
+                                )
+                            ),
+                            item=spread_item,
+                            ability=spread_ability,
+                            tera_type=defender_tera_type
+                        )
+                    else:
+                        spread_defender = PokemonBuild(
+                            name=defender_name,
+                            base_stats=def_base,
+                            types=def_types,
+                            nature=spread_nature_enum,
+                            evs=EVSpread(
+                                hp=spread_evs.get("hp", 0),
+                                defense=spread_evs.get("defense", 0),
+                                special_defense=spread_evs.get("special_defense", 0)
+                            ),
+                            item=spread_item,
+                            ability=spread_ability,
+                            tera_type=defender_tera_type
+                        )
 
                     # Update modifiers with this spread's item and ability
                     spread_modifiers = DamageModifiers(
@@ -800,18 +947,29 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     "notes": f"{'Def' if move.category.value == 'physical' else 'SpD'} stat"
                 })
 
-            # Build attacker EV string for top-level visibility
-            atk_evs_for_string = attacker_spread_info.get("evs", {}) if attacker_spread_info else {
-                "hp": 0, "attack": attacker_atk_evs, "defense": 0,
-                "special_attack": attacker_spa_evs, "special_defense": 0, "speed": 0
-            }
-            ev_parts = []
-            for stat, abbrev in [("hp", "HP"), ("attack", "Atk"), ("defense", "Def"),
-                                  ("special_attack", "SpA"), ("special_defense", "SpD"), ("speed", "Spe")]:
-                ev_val = atk_evs_for_string.get(stat, 0)
-                if ev_val > 0:
-                    ev_parts.append(f"{ev_val} {abbrev}")
-            attacker_ev_string = " / ".join(ev_parts) if ev_parts else "0 EVs"
+            # Build attacker EV string for top-level visibility. In a Champions
+            # session the attacker carries a StatPointSpread (not EVs), so read
+            # the real SP allocation instead of the empty EV spread.
+            stat_abbrevs = [("hp", "HP"), ("attack", "Atk"), ("defense", "Def"),
+                            ("special_attack", "SpA"), ("special_defense", "SpD"),
+                            ("speed", "Spe")]
+            if is_champions:
+                atk_sps_dict = attacker.sps.model_dump() if attacker.sps else {}
+                sp_parts = [f"{atk_sps_dict.get(stat, 0)} {abbrev}"
+                            for stat, abbrev in stat_abbrevs
+                            if atk_sps_dict.get(stat, 0) > 0]
+                attacker_ev_string = ("SPs: " + " / ".join(sp_parts)) if sp_parts else "0 SPs"
+            else:
+                atk_evs_for_string = attacker_spread_info.get("evs", {}) if attacker_spread_info else {
+                    "hp": 0, "attack": attacker_atk_evs, "defense": 0,
+                    "special_attack": attacker_spa_evs, "special_defense": 0, "speed": 0
+                }
+                ev_parts = []
+                for stat, abbrev in stat_abbrevs:
+                    ev_val = atk_evs_for_string.get(stat, 0)
+                    if ev_val > 0:
+                        ev_parts.append(f"{ev_val} {abbrev}")
+                attacker_ev_string = " / ".join(ev_parts) if ev_parts else "0 EVs"
 
             # Build response
             response = {
@@ -944,15 +1102,26 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 """Format EVs as HP/Atk/Def/SpA/SpD/Spe string."""
                 return f"{evs_dict.get('hp', 0)}/{evs_dict.get('attack', 0)}/{evs_dict.get('defense', 0)}/{evs_dict.get('special_attack', 0)}/{evs_dict.get('special_defense', 0)}/{evs_dict.get('speed', 0)}"
 
-            atk_evs_dict = attacker_spread_info.get("evs", {}) if attacker_spread_info else {"attack": attacker_atk_evs, "special_attack": attacker_spa_evs}
             def_evs_dict = {"hp": defender_hp_evs, "defense": defender_def_evs, "special_defense": defender_spd_evs}
 
             atk_tera_str = f" [Tera {attacker_tera_type.title()}]" if attacker_tera_type else ""
             def_tera_str = f" [Tera {defender_tera_type.title()}]" if defender_tera_type else ""
 
+            # In Champions, show the SP allocation (e.g. "0/0/0/32/0/32 SP")
+            # for both lines; mainline keeps the EV HP/Atk/Def/SpA/SpD/Spe form.
+            if is_champions:
+                atk_sp = attacker.sps.model_dump() if attacker.sps else {}
+                def_sp = defender.sps.model_dump() if defender.sps else {}
+                attacker_alloc_str = f"{_format_evs(atk_sp)} SP"
+                defender_alloc_str = f"{_format_evs(def_sp)} SP"
+            else:
+                atk_evs_dict = attacker_spread_info.get("evs", {}) if attacker_spread_info else {"attack": attacker_atk_evs, "special_attack": attacker_spa_evs}
+                attacker_alloc_str = _format_evs(atk_evs_dict)
+                defender_alloc_str = _format_evs(def_evs_dict)
+
             response["condensed_summary"] = {
-                "attacker_line": f"{attacker_name} ({attacker_nature.title()} {_format_evs(atk_evs_dict)}) @ {attacker_item or 'No item'} [{attacker_ability}]{atk_tera_str}",
-                "defender_line": f"{defender_name} ({defender_nature.title()} {_format_evs(def_evs_dict)}) @ {defender_item or 'No item'} [{defender_ability}]{def_tera_str}",
+                "attacker_line": f"{attacker_name} ({attacker_nature.title()} {attacker_alloc_str}) @ {attacker_item or 'No item'} [{attacker_ability}]{atk_tera_str}",
+                "defender_line": f"{defender_name} ({defender_nature.title()} {defender_alloc_str}) @ {defender_item or 'No item'} [{defender_ability}]{def_tera_str}",
                 "move_line": f"{move_name} ({move.power} BP, {move.type.title()}, {move.category.value.title()})",
             }
 
@@ -981,10 +1150,23 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
 
             response["summary_table"] = "\n".join(table_lines)
 
-            # Build descriptive spread strings for analysis (Showdown format)
+            # Build descriptive spread strings for analysis (Showdown format).
+            # In Champions, read the real SP allocation (and label it "SP") so the
+            # analysis text doesn't claim "0 SpA" for a Pokemon with SP invested.
             is_physical = move.category.value == "physical"
-            relevant_atk_evs = attacker_atk_evs if is_physical else attacker_spa_evs
             stat_name = "Atk" if is_physical else "SpA"
+            if is_champions:
+                atk_sp = attacker.sps.model_dump() if attacker.sps else {}
+                def_sp = defender.sps.model_dump() if defender.sps else {}
+                relevant_atk_evs = atk_sp.get("attack", 0) if is_physical else atk_sp.get("special_attack", 0)
+                stat_unit = " SP"
+                def_hp_disp = def_sp.get("hp", 0)
+                relevant_def_evs = def_sp.get("defense", 0) if is_physical else def_sp.get("special_defense", 0)
+            else:
+                relevant_atk_evs = attacker_atk_evs if is_physical else attacker_spa_evs
+                stat_unit = ""
+                def_hp_disp = defender_hp_evs
+                relevant_def_evs = defender_def_evs if is_physical else defender_spd_evs
 
             # Get nature modifiers for attacker
             atk_nature_mod = get_nature_modifier(atk_nature, "attack")
@@ -995,12 +1177,11 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             nature_penalty = "-" if (is_physical and atk_nature_mod < 1.0) or (not is_physical and spa_nature_mod < 1.0) else ""
             nature_indicator = nature_boost or nature_penalty
             item_str = f" {attacker_item.replace('-', ' ').title()}" if attacker_item else ""
-            attacker_spread_str = f"{relevant_atk_evs}{nature_indicator} {stat_name}{item_str} {attacker_name}"
+            attacker_spread_str = f"{relevant_atk_evs}{stat_unit}{nature_indicator} {stat_name}{item_str} {attacker_name}"
 
             # Build defender spread string (e.g., "Impish 132 HP / 196 Def")
-            relevant_def_evs = defender_def_evs if is_physical else defender_spd_evs
             def_stat_name = "Def" if is_physical else "SpD"
-            defender_spread_str = f"{defender_nature.title()} {defender_hp_evs} HP / {relevant_def_evs} {def_stat_name} {defender_name}"
+            defender_spread_str = f"{defender_nature.title()} {def_hp_disp} HP{stat_unit} / {relevant_def_evs} {def_stat_name}{stat_unit} {defender_name}"
 
             response["analysis"] = f"{attacker_spread_str}'s {move_name} vs {defender_spread_str}: {min_pct}-{max_pct}% ({hp_remain_min_pct}-{hp_remain_max_pct}% remaining). {result.ko_chance}."
 
@@ -1131,6 +1312,12 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             atk_nature = Nature(attacker_nature.lower())
             def_nature = Nature(defender_nature.lower())
 
+            # Champions (Reg MA) detection — when active the attacker sweeps Stat
+            # Points (0-32) and calculate_ko_threshold returns 'sps_needed'.
+            # Detect from the SUBJECT (the attacker being optimized), not the
+            # opposing defender, so a Mega/Reg-MA opponent can't flip the format.
+            is_champions = _detect_champions(attacker_name)
+
             # Auto-fill signature items
             if attacker_item is None:
                 from vgc_mcp_core.calc.items import get_signature_item
@@ -1139,28 +1326,55 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     attacker_item = sig_item
 
             # Create builds — abilities stamped so the engine auto-applies them.
-            attacker = PokemonBuild(
-                name=attacker_name,
-                base_stats=atk_base,
-                types=atk_types,
-                nature=atk_nature,
-                evs=EVSpread(),
-                item=attacker_item,
-                ability=attacker_ability,
-            )
+            # The attacker's offensive allocation is what the threshold solver
+            # sweeps, so it starts empty (EVSpread / StatPointSpread).
+            if is_champions:
+                attacker = PokemonBuild(
+                    name=attacker_name,
+                    base_stats=atk_base,
+                    types=atk_types,
+                    nature=atk_nature,
+                    format_system="champions",
+                    sps=StatPointSpread(),
+                    item=attacker_item,
+                    ability=attacker_ability,
+                )
+                defender = PokemonBuild(
+                    name=defender_name,
+                    base_stats=def_base,
+                    types=def_types,
+                    nature=def_nature,
+                    format_system="champions",
+                    sps=StatPointSpread(
+                        hp=ev_to_sp(defender_hp_evs, round_mode="ceil"),
+                        defense=ev_to_sp(defender_def_evs, round_mode="ceil") if move.category.value == "physical" else 0,
+                        special_defense=ev_to_sp(defender_def_evs, round_mode="ceil") if move.category.value == "special" else 0,
+                    ),
+                    ability=defender_ability,
+                )
+            else:
+                attacker = PokemonBuild(
+                    name=attacker_name,
+                    base_stats=atk_base,
+                    types=atk_types,
+                    nature=atk_nature,
+                    evs=EVSpread(),
+                    item=attacker_item,
+                    ability=attacker_ability,
+                )
 
-            defender = PokemonBuild(
-                name=defender_name,
-                base_stats=def_base,
-                types=def_types,
-                nature=def_nature,
-                evs=EVSpread(
-                    hp=defender_hp_evs,
-                    defense=defender_def_evs if move.category.value == "physical" else 0,
-                    special_defense=defender_def_evs if move.category.value == "special" else 0
-                ),
-                ability=defender_ability,
-            )
+                defender = PokemonBuild(
+                    name=defender_name,
+                    base_stats=def_base,
+                    types=def_types,
+                    nature=def_nature,
+                    evs=EVSpread(
+                        hp=defender_hp_evs,
+                        defense=defender_def_evs if move.category.value == "physical" else 0,
+                        special_defense=defender_def_evs if move.category.value == "special" else 0
+                    ),
+                    ability=defender_ability,
+                )
 
             # Create modifiers with Ruinous abilities + ability/item bridge
             modifiers = DamageModifiers(
@@ -1177,6 +1391,10 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 target_ko_chance=target_ko_chance
             )
 
+            # Unit label: Champions invests Stat Points (cap 32), mainline EVs.
+            units_label = "Stat Points" if is_champions else "EVs"
+            cap_text = "32 SP" if is_champions else "252 EVs"
+
             if result is None:
                 table_lines = [
                     "| Metric           | Value                                      |",
@@ -1185,16 +1403,22 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     f"| Defender         | {defender_name}                            |",
                     f"| Move             | {move_name}                                |",
                     f"| Target KO        | {target_ko_chance}%                        |",
-                    f"| Result           | Not achievable with 252 EVs                |",
+                    f"| Result           | Not achievable with {cap_text}             |",
                 ]
                 return {
                     "attacker": attacker_name,
                     "defender": defender_name,
                     "move": move_name,
                     "achievable": False,
-                    "message": f"Cannot achieve {target_ko_chance}% OHKO with 252 EVs. Consider items, Tera, or different move.",
+                    "message": f"Cannot achieve {target_ko_chance}% OHKO with {cap_text}. Consider items, Tera, or different move.",
                     "summary_table": "\n".join(table_lines)
                 }
+
+            # Wave-1 calc returns 'sps_needed' for champions, 'evs_needed' otherwise.
+            units_needed = result.get("sps_needed", result.get("evs_needed"))
+            # calculate_ko_threshold's stat_name is the full canonical name.
+            is_atk_stat = result["stat_name"] == "attack"
+            short_stat = "Atk" if is_atk_stat else "SpA"
 
             # Build defender spread string
             is_physical = move.category.value == "physical"
@@ -1209,40 +1433,43 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 f"| Attacker         | {attacker_name}                            |",
                 f"| Defender         | {defender_spread_str}                      |",
                 f"| Move             | {move_name}                                |",
-                f"| Required EVs     | {result['evs_needed']} {result['stat_name']} |",
+                f"| Required {units_label:<9}| {units_needed} {short_stat} |",
                 f"| Damage Range     | {result['damage_range']}                   |",
                 f"| KO Chance        | {result['ko_chance']:.2f}%                 |",
             ]
 
-            # Generate Showdown paste for attacker with required EVs
-            attacker_evs_dict = {
-                "hp": 0,
-                "attack": result["evs_needed"] if result["stat_name"] == "Atk" else 0,
-                "defense": 0,
-                "special_attack": result["evs_needed"] if result["stat_name"] == "SpA" else 0,
-                "special_defense": 0,
-                "speed": 0
-            }
-
-            attacker_pokemon = PokemonBuild(
-                name=attacker_name,
-                base_stats=atk_base,
-                types=atk_types,
-                nature=atk_nature,
-                evs=EVSpread(
-                    hp=attacker_evs_dict["hp"],
-                    attack=attacker_evs_dict["attack"],
-                    defense=attacker_evs_dict["defense"],
-                    special_attack=attacker_evs_dict["special_attack"],
-                    special_defense=attacker_evs_dict["special_defense"],
-                    speed=attacker_evs_dict["speed"]
-                ),
-                ability=attacker_ability,
-                item=attacker_item,
-            )
+            # Generate Showdown paste for attacker with the required allocation.
+            if is_champions:
+                ko_sps = StatPointSpread(
+                    attack=units_needed if is_atk_stat else 0,
+                    special_attack=0 if is_atk_stat else units_needed,
+                )
+                attacker_pokemon = PokemonBuild(
+                    name=attacker_name,
+                    base_stats=atk_base,
+                    types=atk_types,
+                    nature=atk_nature,
+                    format_system="champions",
+                    sps=ko_sps,
+                    ability=attacker_ability,
+                    item=attacker_item,
+                )
+            else:
+                attacker_pokemon = PokemonBuild(
+                    name=attacker_name,
+                    base_stats=atk_base,
+                    types=atk_types,
+                    nature=atk_nature,
+                    evs=EVSpread(
+                        attack=units_needed if is_atk_stat else 0,
+                        special_attack=0 if is_atk_stat else units_needed,
+                    ),
+                    ability=attacker_ability,
+                    item=attacker_item,
+                )
             attacker_showdown = pokemon_build_to_showdown(attacker_pokemon)
 
-            return {
+            response = {
                 "attacker": attacker_name,
                 "attacker_ability": attacker_ability.replace("-", " ").title() if attacker_ability else None,
                 "attacker_ability_source": attacker_ability_source,
@@ -1252,14 +1479,20 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "defender_spread": defender_spread_str,
                 "move": move_name,
                 "achievable": True,
-                "evs_needed": result["evs_needed"],
                 "stat": result["stat_name"],
+                "units": units_label,
                 "ko_chance": f"{result['ko_chance']:.2f}%",
                 "damage_range": result["damage_range"],
                 "attacker_showdown_paste": attacker_showdown,
                 "summary_table": "\n".join(table_lines),
-                "analysis": f"Need {result['evs_needed']} {result['stat_name']} EVs to {result['ko_chance']:.0f}% OHKO {defender_spread_str} with {move_name}"
+                "analysis": f"Need {units_needed} {short_stat} {units_label} to {result['ko_chance']:.0f}% OHKO {defender_spread_str} with {move_name}"
             }
+            # Preserve the original unit-specific key (mainline) and add the SP key.
+            if is_champions:
+                response["sps_needed"] = units_needed
+            else:
+                response["evs_needed"] = units_needed
+            return response
 
         except Exception as e:
             error_str = str(e).lower()
@@ -1338,6 +1571,12 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
 
             is_physical = move.category.value == "physical"
 
+            # Champions (Reg MA) detection — defender invests Stat Points, and
+            # calculate_bulk_threshold returns 'hp_sps'/'def_sps'. Detect from the
+            # SUBJECT (the defender being optimized), not the attacking threat.
+            is_champions = _detect_champions(defender_name)
+            attacker_sp_spread: Optional[StatPointSpread] = None
+
             # Track attacker spread info for output
             attacker_spread_info = {
                 "pokemon": attacker_name,
@@ -1365,6 +1604,11 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     if attacker_evs is None:
                         # Use the relevant offensive stat EVs
                         attacker_evs = evs.get("attack", 0) if is_physical else evs.get("special_attack", 0)
+
+                    # Champions: capture the attacker's Stat-Point allocation so
+                    # the threat's damage is computed on the real SP investment.
+                    if is_champions:
+                        attacker_sp_spread = _sps_from_smogon_spread(atk_spread)
 
                     if attacker_item is None and atk_spread.get("item"):
                         attacker_item = _normalize_smogon_name(atk_spread["item"])
@@ -1469,31 +1713,61 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
 
             # Create builds — stamp abilities so the damage engine auto-applies
             # every offensive AND defensive ability interaction generically.
-            attacker = PokemonBuild(
-                name=attacker_name,
-                base_stats=atk_base,
-                types=atk_types,
-                nature=atk_nature,
-                evs=EVSpread(
-                    hp=attacker_full_evs.get("hp", 0),
-                    attack=attacker_full_evs.get("attack", attacker_evs if is_physical else 0),
-                    defense=attacker_full_evs.get("defense", 0),
-                    special_attack=attacker_full_evs.get("special_attack", 0 if is_physical else attacker_evs),
-                    special_defense=attacker_full_evs.get("special_defense", 0),
-                    speed=attacker_full_evs.get("speed", 0)
-                ),
-                item=attacker_item,
-                ability=attacker_ability_name,
-            )
+            # Champions builds use Stat Points; the defender starts empty so the
+            # SP solver can sweep its allocation.
+            if is_champions:
+                if attacker_sp_spread is None:
+                    # No Champions Smogon spread — fall back to treating the
+                    # resolved offensive EV count as Stat Points (capped 32).
+                    attacker_sp_spread = StatPointSpread(
+                        attack=ev_to_sp(attacker_evs, round_mode="floor") if is_physical else 0,
+                        special_attack=0 if is_physical else ev_to_sp(attacker_evs, round_mode="floor"),
+                    )
+                attacker = PokemonBuild(
+                    name=attacker_name,
+                    base_stats=atk_base,
+                    types=atk_types,
+                    nature=atk_nature,
+                    format_system="champions",
+                    sps=attacker_sp_spread,
+                    item=attacker_item,
+                    ability=attacker_ability_name,
+                )
+                defender = PokemonBuild(
+                    name=defender_name,
+                    base_stats=def_base,
+                    types=def_types,
+                    nature=def_nature,
+                    format_system="champions",
+                    sps=StatPointSpread(),
+                    ability=defender_ability,
+                )
+            else:
+                attacker = PokemonBuild(
+                    name=attacker_name,
+                    base_stats=atk_base,
+                    types=atk_types,
+                    nature=atk_nature,
+                    evs=EVSpread(
+                        hp=attacker_full_evs.get("hp", 0),
+                        attack=attacker_full_evs.get("attack", attacker_evs if is_physical else 0),
+                        defense=attacker_full_evs.get("defense", 0),
+                        special_attack=attacker_full_evs.get("special_attack", 0 if is_physical else attacker_evs),
+                        special_defense=attacker_full_evs.get("special_defense", 0),
+                        speed=attacker_full_evs.get("speed", 0)
+                    ),
+                    item=attacker_item,
+                    ability=attacker_ability_name,
+                )
 
-            defender = PokemonBuild(
-                name=defender_name,
-                base_stats=def_base,
-                types=def_types,
-                nature=def_nature,
-                evs=EVSpread(),
-                ability=defender_ability,
-            )
+                defender = PokemonBuild(
+                    name=defender_name,
+                    base_stats=def_base,
+                    types=def_types,
+                    nature=def_nature,
+                    evs=EVSpread(),
+                    ability=defender_ability,
+                )
 
             from vgc_mcp_core.tools.ability_helpers import compute_intimidate_attack_stage
             attack_stage, intimidate_note = compute_intimidate_attack_stage(
@@ -1580,8 +1854,26 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     "summary_table": "\n".join(table_lines)
                 }
 
+            # Normalize the solver result into format-agnostic locals. Wave-1's
+            # calculate_bulk_threshold returns 'hp_sps'/'def_sps' for champions
+            # defenders, 'hp_evs'/'def_evs' for mainline. Mainline output is kept
+            # byte-for-byte: it still labels with the raw calc def_stat_name + "EVs".
+            if is_champions:
+                hp_units = result["hp_sps"]
+                def_units = result["def_sps"]
+                units_label = "Stat Points"
+                units_short = "SP"
+                # Champions uses the canonical short label for clarity.
+                def_stat_table_label = "Def" if result["def_stat_name"] == "defense" else "SpD"
+            else:
+                hp_units = result["hp_evs"]
+                def_units = result["def_evs"]
+                units_label = "EVs"
+                units_short = "EVs"
+                def_stat_table_label = result["def_stat_name"]
+
             # Build summary table with full attacker info
-            total_evs = result["hp_evs"] + result["def_evs"]
+            total_units = hp_units + def_units
             table_lines = [
                 "| Metric           | Value                                      |",
                 "|------------------|---------------------------------------------|",
@@ -1592,9 +1884,9 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 f"| Attacker Ability | {attacker_ability_name.replace('-', ' ').title() if attacker_ability_name else 'Unknown'} |",
                 f"| Move             | {move_name}                                |",
                 f"| Your Pokemon     | {defender_name}                            |",
-                f"| HP EVs Needed    | {result['hp_evs']}                         |",
-                f"| {result['def_stat_name']} EVs Needed   | {result['def_evs']}                         |",
-                f"| Total EVs        | {total_evs}                                |",
+                f"| HP {units_short} Needed    | {hp_units}                         |",
+                f"| {def_stat_table_label} {units_short} Needed   | {def_units}                         |",
+                f"| Total {units_short}        | {total_units}                                |",
                 f"| Damage Range     | {result['damage_range']}                   |",
                 f"| Survival Rate    | {result['survival_chance']:.2f}%           |",
             ]
@@ -1614,26 +1906,46 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             if intimidate_note:
                 table_lines.append(f"| Intimidate       | {intimidate_note}                          |")
 
-            # Build analysis string with explicit attacker and defender info
+            # Build analysis string with explicit attacker and defender info.
             item_str = f" with {attacker_item.replace('-', ' ').title()}" if attacker_item else ""
-            defender_ev_str = f"{result['hp_evs']} HP / {result['def_evs']} {result['def_stat_name']}"
 
-            # Create defender PokemonBuild with recommended EVs for Showdown export
-            defender_evs_dict = {
-                "hp": result["hp_evs"],
-                "defense": result["def_evs"] if result["def_stat_name"] == "Def" else 0,
-                "special_defense": result["def_evs"] if result["def_stat_name"] == "SpD" else 0,
-            }
-            recommended_defender = PokemonBuild(
-                name=defender_name,
-                base_stats=def_base,
-                types=def_types,
-                nature=def_nature,
-                evs=EVSpread(**defender_evs_dict),
-                ability=defender.ability,
-                item=defender.item,
-                tera_type=defender.tera_type
-            )
+            # Recommended defender export. Champions builds emit a StatPointSpread
+            # ('SPs:' paste); mainline keeps the EVSpread path byte-for-byte.
+            is_def_physical = result["def_stat_name"] == "defense"
+            if is_champions:
+                defender_ev_str = f"{hp_units} HP / {def_units} {def_stat_table_label} SP"
+                recommended_defender = PokemonBuild(
+                    name=defender_name,
+                    base_stats=def_base,
+                    types=def_types,
+                    nature=def_nature,
+                    format_system="champions",
+                    sps=StatPointSpread(
+                        hp=hp_units,
+                        defense=def_units if is_def_physical else 0,
+                        special_defense=0 if is_def_physical else def_units,
+                    ),
+                    ability=defender.ability,
+                    item=defender.item,
+                    tera_type=defender.tera_type
+                )
+            else:
+                defender_ev_str = f"{result['hp_evs']} HP / {result['def_evs']} {result['def_stat_name']}"
+                defender_evs_dict = {
+                    "hp": result["hp_evs"],
+                    "defense": result["def_evs"] if result["def_stat_name"] == "Def" else 0,
+                    "special_defense": result["def_evs"] if result["def_stat_name"] == "SpD" else 0,
+                }
+                recommended_defender = PokemonBuild(
+                    name=defender_name,
+                    base_stats=def_base,
+                    types=def_types,
+                    nature=def_nature,
+                    evs=EVSpread(**defender_evs_dict),
+                    ability=defender.ability,
+                    item=defender.item,
+                    tera_type=defender.tera_type
+                )
             defender_showdown_paste = pokemon_build_to_showdown(recommended_defender)
 
             response = {
@@ -1655,9 +1967,8 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "intimidate_note": intimidate_note,
                 "move": move_name,
                 "achievable": True,
-                "hp_evs_needed": result["hp_evs"],
-                "def_evs_needed": result["def_evs"],
                 "def_stat": result["def_stat_name"],
+                "units": units_label,
                 "survival_chance": f"{result['survival_chance']:.2f}%",
                 "damage_range": result["damage_range"],
                 "summary_table": "\n".join(table_lines),
@@ -1666,8 +1977,20 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     f"{attacker_nature.title()} {ev_string}{item_str} {attacker_name} — takes {result['damage_range']} "
                     f"({result['survival_chance']:.1f}% survival = {int(result['survival_chance'] * 16 / 100)}/16 rolls). "
                     f"{'This is the MINIMUM EVs to survive max damage roll.' if result['survival_chance'] < 95 else 'Guaranteed survival against all damage rolls.'}"
+                ) if not is_champions else (
+                    f"{defender_name} needs {defender_ev_str} ({defender_nature.title()}) to survive {move_name} from "
+                    f"{attacker_nature.title()} {ev_string}{item_str} {attacker_name} — takes {result['damage_range']} "
+                    f"({result['survival_chance']:.1f}% survival = {int(result['survival_chance'] * 16 / 100)}/16 rolls). "
+                    f"{'This is the MINIMUM Stat Points to survive max damage roll.' if result['survival_chance'] < 95 else 'Guaranteed survival against all damage rolls.'}"
                 )
             }
+            # Preserve original mainline unit-specific keys; add SP keys for champions.
+            if is_champions:
+                response["hp_sps_needed"] = hp_units
+                response["def_sps_needed"] = def_units
+            else:
+                response["hp_evs_needed"] = hp_units
+                response["def_evs_needed"] = def_units
 
             # Add regulation to top-level response for visibility
             if attacker_spread_info.get("regulation"):
