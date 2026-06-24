@@ -85,7 +85,9 @@ class TestCheckRestrictedCount:
         ]
         mock_team_manager.get_current_team.return_value = team
         fn = tools["check_restricted_count"].fn
-        result = await fn()
+        # "Restricted" is a mainline concept; check against a mainline reg
+        # (the global default is now the Champions allowlist).
+        result = await fn(regulation="reg_f")
         # Koraidon and Miraidon are restricted
         assert result["count"] >= 1  # At least one restricted
 

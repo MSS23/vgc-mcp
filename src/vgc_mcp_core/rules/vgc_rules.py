@@ -145,14 +145,18 @@ def validate_team_rules(team, regulation_code: str = None) -> dict:
         restricted_count = 0
         restricted_pokemon = []
     else:
-        # Check for banned Pokemon
-        banned = find_banned(pokemon_names)
+        # Check for banned Pokemon (validate against this regulation, not the
+        # global session default — those can differ, e.g. a Champions default).
+        banned = find_banned(pokemon_names, reg_code)
         if banned:
             violations.append(f"Banned Pokemon on team: {', '.join(banned)}")
 
         # Check restricted count
-        restricted_count = count_restricted(pokemon_names)
-        restricted_pokemon = [name for name in pokemon_names if get_restricted_status(name) == "restricted"]
+        restricted_count = count_restricted(pokemon_names, reg_code)
+        restricted_pokemon = [
+            name for name in pokemon_names
+            if get_restricted_status(name, reg_code) == "restricted"
+        ]
 
         if restricted_count > regulation.restricted_limit:
             violations.append(

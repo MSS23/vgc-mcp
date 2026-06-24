@@ -2,7 +2,7 @@
 
 These exercise the user-supplied examples directly so the heuristic is
 locked to the intended behavior:
-- "Mega Kangaskhan" -> Reg MA Champions
+- "Mega Kangaskhan" -> Reg MB Champions (current default)
 - "Kyogre" only restricted -> Reg G (1-restrict)
 - "Calyrex-Shadow-Rider + Koraidon" -> Reg I (2-restrict)
 - 0 restricteds, no megas -> Reg F (0-restrict)
@@ -21,14 +21,14 @@ def cfg():
 
 def test_mega_kangaskhan_routes_to_champions(cfg):
     result = infer_format_from_pokemon(["Kangaskhan-Mega"], cfg)
-    assert result["regulation"] == "reg_ma_champs"
+    assert result["regulation"] == "reg_mb_champs"
     assert result["confidence"] == "high"
     assert any("Mega" in r for r in result["reasons"])
 
 
 def test_mega_charizard_y_routes_to_champions(cfg):
     result = infer_format_from_pokemon(["Charizard-Mega-Y"], cfg)
-    assert result["regulation"] == "reg_ma_champs"
+    assert result["regulation"] == "reg_mb_champs"
 
 
 def test_single_restricted_kyogre_routes_to_reg_g(cfg):

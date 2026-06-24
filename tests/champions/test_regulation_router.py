@@ -36,23 +36,44 @@ def test_reg_h_phrasings(cfg, phrase):
 
 
 @pytest.mark.parametrize("phrase", [
+    # Generic Champions phrasing now resolves to the current default reg (MB).
     "Champions",
     "champions",
     "Pokemon Champions",
     "pokemon champions",
+    "champs",
+    "NCP",
+    "gen 10",
+])
+def test_generic_champions_phrasings_default_to_mb(cfg, phrase):
+    assert resolve_regulation(phrase, cfg) == "reg_mb_champs"
+
+
+@pytest.mark.parametrize("phrase", [
     "Reg MA",
     "regulation MA",
     "regulation M-A",
     "MA",
     "M-A",
     "ma",
-    "champs",
     "Champions Reg MA",
-    "NCP",
-    "gen 10",
 ])
-def test_champions_phrasings(cfg, phrase):
+def test_reg_ma_explicit_phrasings(cfg, phrase):
+    # MA stays reachable only via explicit MA wording.
     assert resolve_regulation(phrase, cfg) == "reg_ma_champs"
+
+
+@pytest.mark.parametrize("phrase", [
+    "Reg MB",
+    "regulation MB",
+    "regulation M-B",
+    "MB",
+    "M-B",
+    "mb",
+    "Champions Reg MB",
+])
+def test_reg_mb_explicit_phrasings(cfg, phrase):
+    assert resolve_regulation(phrase, cfg) == "reg_mb_champs"
 
 
 def test_unknown_phrasing_returns_none(cfg):
@@ -89,12 +110,33 @@ def test_describe_champions(cfg):
     assert "gen9championsvgc2026regma" in info["smogon_formats"]
 
 
+def test_describe_champions_mb(cfg):
+    info = describe_regulation("reg_mb_champs", cfg)
+    assert info["format_system"] == "champions"
+    assert info["stat_units"] == "Stat Points (SPs)"
+    assert info["max_per_stat"] == 32
+    assert info["max_total"] == 66
+    assert info["legality_mode"] == "allowlist"
+    assert info["default_smogon_rating"] == 1500
+    assert "gen9championsvgc2026regmb" in info["smogon_formats"]
+
+
+def test_mb_is_superset_of_ma(cfg):
+    ma = set(cfg.get_legal_pokemon("reg_ma_champs"))
+    mb = set(cfg.get_legal_pokemon("reg_mb_champs"))
+    assert ma.issubset(mb)
+    # MB adds the Reg MB species (e.g. Gholdengo, Annihilape, Metagross).
+    assert {"gholdengo", "annihilape", "metagross"}.issubset(mb)
+    assert not ({"gholdengo", "annihilape", "metagross"} & ma)
+
+
 def test_session_set_via_phrasing(cfg):
     # End-to-end: phrase -> resolve -> set_session_regulation -> verify.
+    # Generic "Champions" now defaults to MB.
     code = resolve_regulation("Pokemon Champions", cfg)
-    assert code == "reg_ma_champs"
+    assert code == "reg_mb_champs"
     assert cfg.set_session_regulation(code) is True
-    assert cfg.current_regulation == "reg_ma_champs"
+    assert cfg.current_regulation == "reg_mb_champs"
     assert cfg.get_format_system() == "champions"
 
     cfg.clear_session_override()

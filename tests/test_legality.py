@@ -89,7 +89,13 @@ class TestVGCRegulations:
 
 
 class TestRestrictedPokemon:
-    """Test restricted Pokemon checking."""
+    """Test restricted Pokemon checking (mainline restricted-list semantics)."""
+
+    @pytest.fixture(autouse=True)
+    def _mainline_default(self):
+        # "Restricted" is a mainline concept; the global default is now the
+        # Champions allowlist (no restricted list), so pin a mainline reg.
+        get_regulation_config().set_session_regulation("reg_f", by_user=True)
 
     def test_koraidon_is_restricted(self):
         """Koraidon should be restricted."""
@@ -137,7 +143,13 @@ class TestRestrictedPokemon:
 
 
 class TestBannedPokemon:
-    """Test banned Pokemon checking."""
+    """Test banned Pokemon checking (mainline banlist semantics)."""
+
+    @pytest.fixture(autouse=True)
+    def _mainline_default(self):
+        # The global default is now the Champions allowlist (empty banlist);
+        # banned-mythical checks are a mainline concept, so pin a mainline reg.
+        get_regulation_config().set_session_regulation("reg_f", by_user=True)
 
     def test_mew_is_banned(self):
         """Mew should be banned."""

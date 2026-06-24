@@ -22,8 +22,8 @@ def test_mega_mention_auto_sets_champions(cfg):
     assert not cfg.session_set_explicitly
     result = auto_detect_regulation(["Mega Manectric", "Garchomp"], cfg)
     assert result["action"] == "set"
-    assert result["regulation"] == "reg_ma_champs"
-    assert cfg.current_regulation == "reg_ma_champs"
+    assert result["regulation"] == "reg_mb_champs"
+    assert cfg.current_regulation == "reg_mb_champs"
     assert cfg.get_format_system() == "champions"
 
 
@@ -73,7 +73,7 @@ def test_team_manager_auto_detects_on_add():
     assert success
     auto = data.get("regulation_auto_detected")
     assert auto is not None, "TeamManager should surface auto-detected regulation"
-    assert auto["regulation"] == "reg_ma_champs"
+    assert auto["regulation"] == "reg_mb_champs"
     assert auto["format_system"] == "champions"
     assert auto["stat_units"] == "Stat Points (SPs)"
     assert auto["confidence"] == "high"
@@ -83,7 +83,7 @@ def test_auto_detect_records_result_on_config(cfg):
     auto_detect_regulation(["Mega Salamence"], cfg)
     last = cfg.last_auto_detection
     assert last is not None
-    assert last["regulation"] == "reg_ma_champs"
+    assert last["regulation"] == "reg_mb_champs"
     assert last["action"] == "set"
 
 

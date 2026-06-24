@@ -52,24 +52,54 @@ _ALIASES: dict[str, str] = {
     "reg_i": "reg_i",
     "regulation_i": "reg_i",
 
-    # Reg MA — Pokemon Champions
+    # Reg MA — Pokemon Champions (original roster; reachable via explicit MA wording)
     "ma": "reg_ma_champs",
     "m_a": "reg_ma_champs",
     "reg_ma": "reg_ma_champs",
     "reg_m_a": "reg_ma_champs",
     "regulation_ma": "reg_ma_champs",
     "regulation_m_a": "reg_ma_champs",
-    "champions": "reg_ma_champs",
-    "pokemon_champions": "reg_ma_champs",
-    "champs": "reg_ma_champs",
     "champions_ma": "reg_ma_champs",
     "champions_reg_ma": "reg_ma_champs",
     "champions_regulation_ma": "reg_ma_champs",
-    "ncp": "reg_ma_champs",
     "ncp_ma": "reg_ma_champs",
-    "gen10": "reg_ma_champs",
-    "gen_10": "reg_ma_champs",
+
+    # Reg MB — Pokemon Champions (current default; superset of MA's roster)
+    "mb": "reg_mb_champs",
+    "m_b": "reg_mb_champs",
+    "reg_mb": "reg_mb_champs",
+    "reg_m_b": "reg_mb_champs",
+    "regulation_mb": "reg_mb_champs",
+    "regulation_m_b": "reg_mb_champs",
+    "champions_mb": "reg_mb_champs",
+    "champions_reg_mb": "reg_mb_champs",
+    "champions_regulation_mb": "reg_mb_champs",
+    "ncp_mb": "reg_mb_champs",
+
+    # Generic Champions phrasing -> current default regulation (MB)
+    "champions": "reg_mb_champs",
+    "pokemon_champions": "reg_mb_champs",
+    "champs": "reg_mb_champs",
+    "ncp": "reg_mb_champs",
+    "gen10": "reg_mb_champs",
+    "gen_10": "reg_mb_champs",
 }
+
+# Champions ships as two regulations: MA (original) and MB (a superset of MA's
+# roster, currently the default). Generic "champions" phrasing and Pokemon-based
+# detection resolve to MB; MA stays reachable only via explicit "reg ma" / "MA".
+_CHAMPIONS_DEFAULT = "reg_mb_champs"
+_CHAMPIONS_FALLBACK = "reg_ma_champs"
+
+
+def _champions_code(cfg: RegulationConfig) -> Optional[str]:
+    """Return the active Champions regulation code (MB if present, else MA)."""
+    available = set(cfg.list_regulation_codes())
+    if _CHAMPIONS_DEFAULT in available:
+        return _CHAMPIONS_DEFAULT
+    if _CHAMPIONS_FALLBACK in available:
+        return _CHAMPIONS_FALLBACK
+    return None
 
 
 def _normalize(phrase: str) -> str:
@@ -151,9 +181,9 @@ def infer_format_from_pokemon(
     """Guess which regulation a team belongs to from the Pokemon mentioned.
 
     Heuristics, in order:
-    1. Any Mega form -> `reg_ma_champs` (Megas are Champions-only).
+    1. Any Mega form -> the default Champions reg (MB; Megas are Champions-only).
     2. Any name in the Champions allowlist BUT illegal in mainline (e.g. an
-       NCP-only mon) -> `reg_ma_champs`.
+       NCP-only mon) -> the default Champions reg (MB).
     3. Count Pokemon that are restricted in mainline regs:
        - 0 restricteds -> the active 0-restrict reg (`reg_f` first, then `reg_h`)
        - 1 restricted  -> `reg_g`
@@ -178,12 +208,16 @@ def infer_format_from_pokemon(
     reasons: list[str] = []
     illegal_seen: list[str] = []
 
-    # 1. Mega forms => Champions
+    champ_code = _champions_code(cfg)
+
+    # 1. Mega forms => Champions (current default regulation)
     megas = [n for n in norm_names if _is_mega_form(n)]
-    if megas and "reg_ma_champs" in available:
-        reasons.append(f"Mega form(s) detected ({', '.join(megas)}) — Megas are only legal in Champions Reg MA.")
+    if megas and champ_code:
+        reasons.append(
+            f"Mega form(s) detected ({', '.join(megas)}) — Megas are Champions-only."
+        )
         return {
-            "regulation": "reg_ma_champs",
+            "regulation": champ_code,
             "confidence": "high",
             "reasons": reasons,
             "alternatives": [],
@@ -195,8 +229,8 @@ def infer_format_from_pokemon(
     # We approximate "absent from mainline" by checking the union of all
     # mainline regs' banned + restricted lists; if the mon isn't legal in any
     # mainline format and IS in Champions, it must be Champions.
-    if "reg_ma_champs" in available:
-        champ_legal = cfg.get_legal_pokemon("reg_ma_champs")
+    if champ_code:
+        champ_legal = cfg.get_legal_pokemon(champ_code)
         mainline_codes = [c for c in available if cfg.get_format_system(c) == "mainline"]
         # A Pokemon is "mainline-legal" if it's NOT banned and NOT in any reg's
         # banned list. Banned lists are uniform across regs, so it's enough to
@@ -211,7 +245,7 @@ def infer_format_from_pokemon(
                         f"{n!r} is in the Champions allowlist but banned in mainline — Champions only."
                     )
                     return {
-                        "regulation": "reg_ma_champs",
+                        "regulation": champ_code,
                         "confidence": "high",
                         "reasons": reasons,
                         "alternatives": [],
@@ -282,19 +316,19 @@ def infer_format_from_pokemon(
     if (
         bucket == 0
         and not illegal_seen
-        and "reg_ma_champs" in available
-        and "reg_ma_champs" not in alternatives
-        and primary != "reg_ma_champs"
+        and champ_code
+        and champ_code not in alternatives
+        and primary != champ_code
     ):
         # Use is_pokemon_legal (base-form / mega-suffix aware) instead of raw
         # set membership so legal Champions form names ("rotom-wash",
-        # "manectric-mega") don't drop reg_ma_champs as an alternative.
+        # "manectric-mega") don't drop the Champions code as an alternative.
         if norm_names and all(
-            cfg.is_pokemon_legal(n, "reg_ma_champs") for n in norm_names
+            cfg.is_pokemon_legal(n, champ_code) for n in norm_names
         ):
-            alternatives.append("reg_ma_champs")
+            alternatives.append(champ_code)
             reasons.append(
-                "All mentioned Pokemon are also legal in Champions Reg MA — "
+                "All mentioned Pokemon are also legal in Pokemon Champions — "
                 "consider it if this is a recent team (Champions is the most "
                 "popular current format from June 2026 onward)."
             )

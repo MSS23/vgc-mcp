@@ -399,13 +399,15 @@ def register_legality_tools(mcp: FastMCP, team_manager):
         - "Reg G" / "G" -> reg_g (mainline EVs)
         - "Reg H" / "H" -> reg_h (mainline EVs)
         - "Reg I" / "I" -> reg_i (mainline EVs, when defined)
-        - "Champions" / "Pokemon Champions" / "Reg MA" / "MA" -> reg_ma_champs
-          (Stat Points, 32/66)
+        - "Champions" / "Pokemon Champions" / "Reg MB" / "MB" -> reg_mb_champs
+          (Stat Points, 32/66; current default Champions roster)
+        - "Reg MA" / "MA" -> reg_ma_champs (original Champions roster, subset of MB)
 
-        Champions formats automatically use the gen9championsvgc2026regma
-        Smogon JSON files; mainline regulations use the gen9vgc2025/2026
-        regulation-specific JSON files. The format system flag flips
-        downstream stat / damage calcs to the correct math.
+        Champions formats automatically use the matching gen9championsvgc2026regm*
+        Smogon JSON files (MB -> gen9championsvgc2026regmb, MA -> ...regma);
+        mainline regulations use the gen9vgc2025/2026 regulation-specific JSON
+        files. The format system flag flips downstream stat / damage calcs to
+        the correct math.
 
         Args:
             regulation: Any reasonable phrasing — see examples above.

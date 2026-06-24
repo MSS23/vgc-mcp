@@ -107,8 +107,8 @@ class TestImportChampions:
             )
         )
         assert "regulation_auto_detected" in res
-        # Mega form -> Champions Reg MA.
-        assert res["regulation_auto_detected"].get("regulation") == "reg_ma_champs"
+        # Mega form -> Champions (current default reg, MB).
+        assert res["regulation_auto_detected"].get("regulation") == "reg_mb_champs"
 
     @pytest.mark.asyncio
     async def test_import_response_includes_parsed_sps(self):

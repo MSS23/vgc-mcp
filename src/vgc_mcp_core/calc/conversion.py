@@ -153,4 +153,8 @@ def regulation_uses_champions(regulation_code: Optional[str]) -> bool:
     if not regulation_code:
         return False
     code = regulation_code.lower()
-    return code in {"reg_ma_champs", "reg_ma", "ma", "champions"} or "champ" in code
+    return code in {
+        "reg_ma_champs", "reg_ma", "ma",
+        "reg_mb_champs", "reg_mb", "mb",
+        "champions",
+    } or "champ" in code

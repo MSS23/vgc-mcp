@@ -107,7 +107,7 @@ class TestAddPokemonSmartChampions:
         assert r["format_system"] == "champions"
         detected = r.get("regulation_auto_detected")
         assert detected is not None
-        assert detected.get("regulation") == "reg_ma_champs"
+        assert detected.get("regulation") == "reg_mb_champs"
         assert detected.get("action") == "set"
         assert "SPs:" in r["showdown_paste"]
         # Species line normalized to a valid Showdown name.

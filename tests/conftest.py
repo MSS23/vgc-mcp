@@ -7,6 +7,26 @@ from vgc_mcp_core.api.cache import APICache
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.team.manager import TeamManager
 from vgc_mcp_core.models.pokemon import BaseStats
+from vgc_mcp_core.rules.regulation_loader import get_regulation_config
+
+
+@pytest.fixture(autouse=True)
+def _isolate_regulation_config():
+    """Clear any leaked session regulation around every test.
+
+    Tools mutate shared session state (auto-detect side effects, explicit
+    `set_session_regulation`). Without isolation that state leaks between
+    tests and makes outcomes order-dependent — e.g. a Champions test pinning
+    the session would make a later mainline build tool reject EV input.
+
+    We clear the session override (resetting to the JSON default) rather than
+    nulling the whole singleton, so cached clients/spreads built during the
+    run survive — rebuilding the singleton perturbs async client lifecycles
+    that some non-hermetic tests depend on.
+    """
+    get_regulation_config().clear_session_override()
+    yield
+    get_regulation_config().clear_session_override()
 
 
 @pytest.fixture
