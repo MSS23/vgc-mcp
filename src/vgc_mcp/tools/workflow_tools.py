@@ -298,9 +298,9 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                         )
 
                         try:
-                            nature = Nature(pokemon.nature.lower()) if pokemon.nature else Nature.serious
+                            nature = Nature(pokemon.nature.lower()) if pokemon.nature else Nature.SERIOUS
                         except ValueError:
-                            nature = Nature.serious
+                            nature = Nature.SERIOUS
 
                         build = PokemonBuild(
                             name=pokemon_data["name"],
@@ -731,7 +731,7 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
             try:
                 nature = Nature(build["nature"].lower())
             except ValueError:
-                nature = Nature.serious
+                nature = Nature.SERIOUS
 
             base_stats_obj = BaseStats(
                 hp=base_stats["hp"],
@@ -1598,7 +1598,7 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                     attacker_ability = abilities[0].lower().replace(" ", "-")
 
             # Create attacker with competitive defaults
-            atk_nature = Nature.adamant if is_physical else Nature.modest
+            atk_nature = Nature.ADAMANT if is_physical else Nature.MODEST
             atk_build = PokemonBuild(
                 name=attacker,
                 base_stats=BaseStats(**atk_data["base_stats"]),
@@ -1617,7 +1617,7 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                 name=defender,
                 base_stats=BaseStats(**def_data["base_stats"]),
                 types=def_data.get("types", []),
-                nature=Nature.serious,
+                nature=Nature.SERIOUS,
                 evs=EVSpread(
                     hp=defender_hp_evs,
                     defense=defender_def_evs if is_physical else 0,
@@ -1886,7 +1886,7 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
             try:
                 threat_nat = Nature(threat_nature.lower())
             except ValueError:
-                threat_nat = Nature.modest
+                threat_nat = Nature.MODEST
 
             is_physical = threat_data["base_stats"]["attack"] > threat_data["base_stats"]["special_attack"]
 
@@ -2158,7 +2158,7 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
             try:
                 parsed_nature = Nature(template["nature"].lower())
             except ValueError:
-                parsed_nature = Nature.serious
+                parsed_nature = Nature.SERIOUS
 
             hp_evs = evs.get("hp", 0)
             atk_evs = evs.get("atk", 0)
@@ -2442,7 +2442,7 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                 try:
                     spread_nature = Nature(spread_nature_str.lower())
                 except ValueError:
-                    spread_nature = Nature.serious
+                    spread_nature = Nature.SERIOUS
 
                 # Build opponent with this spread
                 opp_build = PokemonBuild(
