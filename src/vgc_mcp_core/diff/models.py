@@ -1,8 +1,8 @@
 """Data models for team diff functionality."""
 
 from dataclasses import dataclass, field
-from typing import Any, Optional
 from enum import Enum
+from typing import Any, Optional
 
 
 class ChangeType(str, Enum):

@@ -6,8 +6,6 @@ from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 
-logger = logging.getLogger(__name__)
-
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
 from vgc_mcp_core.calc.bulk_calc import (
@@ -18,11 +16,12 @@ from vgc_mcp_core.calc.bulk_calc import (
 from vgc_mcp_core.calc.damage import format_percent
 from vgc_mcp_core.formats.showdown import pokemon_build_to_showdown
 from vgc_mcp_core.models.pokemon import Nature, PokemonBuild, StatPointSpread
-from vgc_mcp_core.rules.regulation_loader import get_regulation_config
-from vgc_mcp_core.utils.errors import error_response, ErrorCodes
+from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
-from .multicalc_tools import _build_pokemon_from_smogon
 from .damage_tools import _get_common_spread
+from .multicalc_tools import _build_pokemon_from_smogon
+
+logger = logging.getLogger(__name__)
 
 # Module-level Smogon client reference
 _smogon_client: Optional[SmogonStatsClient] = None

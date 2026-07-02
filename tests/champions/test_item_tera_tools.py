@@ -19,13 +19,12 @@ untagged), so its paste must NOT be SP-scale.
 import pytest
 from mcp.server.fastmcp import FastMCP
 
-from vgc_mcp.tools.tera_tools import register_tera_tools
 from vgc_mcp.tools.item_optimization_tools import register_item_optimization_tools
-from vgc_mcp_core.models.pokemon import BaseStats
-from vgc_mcp_core.models.move import Move, MoveCategory
+from vgc_mcp.tools.tera_tools import register_tera_tools
 from vgc_mcp_core.calc.stats_champions import calculate_hp_sp
+from vgc_mcp_core.models.move import Move, MoveCategory
+from vgc_mcp_core.models.pokemon import BaseStats
 from vgc_mcp_core.rules.regulation_loader import get_regulation_config
-
 
 # --- Fakes (no network) ---------------------------------------------------
 

@@ -1,14 +1,13 @@
 """Tests for import/export tools."""
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
+import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.import_export_tools import register_import_export_tools
-from vgc_mcp_core.models.pokemon import BaseStats, PokemonBuild, Nature, EVSpread, IVSpread
+from vgc_mcp_core.models.pokemon import BaseStats
 from vgc_mcp_core.team.manager import TeamManager
-
 
 SINGLE_POKEMON_PASTE = """Urshifu-Rapid-Strike @ Choice Scarf
 Ability: Unseen Fist

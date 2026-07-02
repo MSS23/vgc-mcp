@@ -8,20 +8,20 @@ Tools for calculating passive damage and healing over time:
 - Multi-turn survival calculations
 """
 
-from mcp.server.fastmcp import FastMCP
-from typing import Optional
 
+from mcp.server.fastmcp import FastMCP
+
+from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.calc.chip_damage import (
-    calculate_weather_chip,
+    HAIL_IMMUNE_TYPES,
+    SANDSTORM_IMMUNE_TYPES,
+    calculate_leftovers_recovery,
     calculate_status_damage,
     calculate_terrain_healing,
-    calculate_leftovers_recovery,
     calculate_total_chip_damage,
-    SANDSTORM_IMMUNE_TYPES,
-    HAIL_IMMUNE_TYPES,
+    calculate_weather_chip,
 )
-from vgc_mcp_core.api.pokeapi import PokeAPIClient
-from vgc_mcp_core.utils.errors import error_response, success_response, ErrorCodes
+from vgc_mcp_core.utils.errors import error_response
 
 
 def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):

@@ -15,7 +15,6 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.meta_threat_tools import register_meta_threat_tools
@@ -23,7 +22,6 @@ from vgc_mcp.tools.multi_threat_tools import register_multi_threat_tools
 from vgc_mcp_core.models.move import Move, MoveCategory
 from vgc_mcp_core.models.pokemon import BaseStats
 from vgc_mcp_core.rules.regulation_loader import get_regulation_config
-
 
 _BASE = {
     "garchomp": BaseStats(hp=108, attack=130, defense=95,

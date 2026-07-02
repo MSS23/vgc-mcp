@@ -17,10 +17,9 @@ from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 
-from vgc_mcp_core.formats.showdown import parse_showdown_team, ShowdownParseError
+from vgc_mcp_core.formats.showdown import ShowdownParseError, parse_showdown_team
 from vgc_mcp_core.team.manager import TeamManager
-from vgc_mcp_core.utils.errors import error_response, ErrorCodes
-
+from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 # Archetype signature pieces (lowercase, hyphenated names)
 TRICK_ROOM_SETTERS = {

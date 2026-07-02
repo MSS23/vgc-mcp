@@ -158,3 +158,60 @@ def regulation_uses_champions(regulation_code: Optional[str]) -> bool:
         "reg_mb_champs", "reg_mb", "mb",
         "champions",
     } or "champ" in code
+
+
+def coerce_champions_allocation(allocation: dict[str, int]) -> tuple[dict[str, int], Optional[dict]]:
+    """Interpret a user-supplied stat allocation for a Champions session.
+
+    Tools with EV-named parameters (`hp_evs`, `spa_evs`, ...) interpret those
+    values as Stat Points in a Champions session. Users porting mainline sets
+    routinely pass EV-scale numbers (252 SpA, 196 HP, ...) which would fail
+    the 32/stat cap. This helper detects the unambiguous case and converts.
+
+    Rule:
+    - If ANY stat exceeds the 32 SP per-stat cap, the input can only be an
+      EV-scale spread -> convert every stat with `ev_to_sp` (round up, so
+      defensive benchmarks are preserved) and trim to the 66 total via
+      `evs_to_sps_spread`.
+    - If every stat fits in 0-32, the values are taken as native SPs
+      unchanged - even if the total overflows 66, because e.g. 30/30/30
+      is more plausibly an over-budget SP attempt than a 12-EV spread,
+      and the downstream validator gives a clear "total exceeds 66" error.
+
+    Args:
+        allocation: dict with full stat names (hp/attack/defense/
+            special_attack/special_defense/speed) -> requested investment.
+
+    Returns:
+        (sp_allocation, conversion_note) - `conversion_note` is None when the
+        input was already SP-scale, else a dict describing what was converted
+        (include it in the tool response so the caller sees the translation).
+    """
+    if not any(v > SP_MAX_PER_STAT for v in allocation.values()):
+        return dict(allocation), None
+
+    ev_spread = EVSpread(
+        hp=min(EV_MAX_PER_STAT, max(0, allocation.get("hp", 0))),
+        attack=min(EV_MAX_PER_STAT, max(0, allocation.get("attack", 0))),
+        defense=min(EV_MAX_PER_STAT, max(0, allocation.get("defense", 0))),
+        special_attack=min(EV_MAX_PER_STAT, max(0, allocation.get("special_attack", 0))),
+        special_defense=min(EV_MAX_PER_STAT, max(0, allocation.get("special_defense", 0))),
+        speed=min(EV_MAX_PER_STAT, max(0, allocation.get("speed", 0))),
+    )
+    sp_spread = evs_to_sps_spread(ev_spread, round_mode="ceil")
+    converted = {
+        "hp": sp_spread.hp,
+        "attack": sp_spread.attack,
+        "defense": sp_spread.defense,
+        "special_attack": sp_spread.special_attack,
+        "special_defense": sp_spread.special_defense,
+        "speed": sp_spread.speed,
+    }
+    note = {
+        "detected_input": "EVs (mainline scale)",
+        "interpreted_as": "Stat Points (Champions scale)",
+        "original_evs": {k: v for k, v in allocation.items() if v},
+        "converted_sps": {k: v for k, v in converted.items() if v},
+        "rule": "1 SP = 8 EVs (252 EV saturates to 32 SP); rounded up, trimmed to the 66 SP budget",
+    }
+    return converted, note

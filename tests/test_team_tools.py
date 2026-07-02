@@ -1,8 +1,8 @@
 """Tests for team management tools."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.team_tools import register_team_tools

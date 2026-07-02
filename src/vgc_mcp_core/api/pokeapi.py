@@ -5,12 +5,18 @@ from typing import Optional
 
 import httpx
 
-from ..config import settings, logger
+from ..config import logger, settings
+from ..models.move import (
+    MOVE_SECONDARY_EFFECTS,
+    Move,
+    MoveCategory,
+    get_move_type_for_user,
+    get_multi_hit_info,
+    is_always_crit_move,
+)
 from ..models.pokemon import BaseStats
 from ..utils.normalize import reorder_mega_prefix
-from ..models.move import Move, MoveCategory, SPREAD_TARGETS, get_multi_hit_info, is_always_crit_move, get_move_type_for_user, MOVE_SECONDARY_EFFECTS
 from .cache import APICache
-
 
 # Map base form names to PokeAPI's explicit form naming
 # PokeAPI requires the explicit form suffix (e.g., "landorus-incarnate")

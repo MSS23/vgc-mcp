@@ -1,8 +1,8 @@
 """Priority move and turn order analysis for VGC."""
 
 from dataclasses import dataclass
-from typing import Optional
 from enum import IntEnum
+from typing import Optional
 
 from ..utils.normalize import normalize_move_name  # noqa: F401  (re-export for back-compat)
 
@@ -363,7 +363,7 @@ def categorize_priority_move(move: str) -> PriorityMoveInfo:
         description = f"Priority {priority} attacking move"
     elif priority < 0:
         category = "delayed"
-        description = f"Negative priority move (moves later)"
+        description = "Negative priority move (moves later)"
     else:
         category = "normal"
         description = "Standard priority"

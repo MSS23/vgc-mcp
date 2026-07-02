@@ -1,10 +1,11 @@
 """MCP tools for team building wizard."""
 
-from typing import Optional, Dict
+from typing import Dict, Optional
+
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp_core.config import logger
-from vgc_mcp_core.utils.errors import api_error, error_response, ErrorCodes
+from vgc_mcp_core.utils.errors import ErrorCodes, api_error, error_response
 
 
 def register_wizard_tools(mcp: FastMCP):
@@ -17,18 +18,18 @@ def register_wizard_tools(mcp: FastMCP):
     ) -> dict:
         """
         Interactive step-by-step team building guide for beginners.
-        
+
         Args:
             step: Current step (1-5)
             previous_choices: Dict with previous step choices
-            
+
         Returns:
             Current step instructions and options
         """
         try:
             if previous_choices is None:
                 previous_choices = {}
-            
+
             if step == 1:
                 # Step 1: Choose playstyle
                 markdown_lines = [
@@ -48,7 +49,7 @@ def register_wizard_tools(mcp: FastMCP):
                     "",
                     "Reply with A, B, C, D, or E to continue."
                 ]
-                
+
                 response = {
                     "step": 1,
                     "total_steps": 5,
@@ -62,11 +63,11 @@ def register_wizard_tools(mcp: FastMCP):
                     },
                     "markdown_summary": "\n".join(markdown_lines)
                 }
-                
+
             elif step == 2:
                 # Step 2: Choose core Pokemon
                 playstyle = previous_choices.get("playstyle", "Hyper Offense")
-                
+
                 if playstyle == "Hyper Offense":
                     suggestions = [
                         "Flutter Mane (Fast special attacker)",
@@ -90,25 +91,25 @@ def register_wizard_tools(mcp: FastMCP):
                         "Your favorite Pokemon",
                         "A Pokemon you want to build around"
                     ]
-                
+
                 markdown_lines = [
                     "## Team Building Wizard - Step 2 of 5",
                     "",
-                    f"### Step 2: Choose Your Core Pokemon",
+                    "### Step 2: Choose Your Core Pokemon",
                     f"Based on your choice of {playstyle}...",
                     "",
                     "Which Pokemon do you want to build around?",
                     ""
                 ]
-                
+
                 for i, suggestion in enumerate(suggestions, 1):
                     markdown_lines.append(f"- {suggestion}")
-                
+
                 markdown_lines.extend([
                     "",
                     "Or tell me your favorite Pokemon and I'll help you build around it!"
                 ])
-                
+
                 response = {
                     "step": 2,
                     "total_steps": 5,
@@ -116,7 +117,7 @@ def register_wizard_tools(mcp: FastMCP):
                     "suggestions": suggestions,
                     "markdown_summary": "\n".join(markdown_lines)
                 }
-                
+
             elif step == 3:
                 # Step 3: Add support
                 markdown_lines = [
@@ -132,14 +133,14 @@ def register_wizard_tools(mcp: FastMCP):
                     "",
                     "Which support Pokemon do you want to add?"
                 ]
-                
+
                 response = {
                     "step": 3,
                     "total_steps": 5,
                     "question": "Add support Pokemon",
                     "markdown_summary": "\n".join(markdown_lines)
                 }
-                
+
             elif step == 4:
                 # Step 4: Add counters
                 markdown_lines = [
@@ -155,14 +156,14 @@ def register_wizard_tools(mcp: FastMCP):
                     "",
                     "What threats do you need to counter?"
                 ]
-                
+
                 response = {
                     "step": 4,
                     "total_steps": 5,
                     "question": "Add counters",
                     "markdown_summary": "\n".join(markdown_lines)
                 }
-                
+
             elif step == 5:
                 # Step 5: Finalize
                 markdown_lines = [
@@ -178,7 +179,7 @@ def register_wizard_tools(mcp: FastMCP):
                     "",
                     "Your team is ready! Use `analyze_team_matchup()` to check for weaknesses."
                 ]
-                
+
                 response = {
                     "step": 5,
                     "total_steps": 5,
@@ -186,12 +187,12 @@ def register_wizard_tools(mcp: FastMCP):
                     "markdown_summary": "\n".join(markdown_lines),
                     "complete": True
                 }
-                
+
             else:
                 return error_response(ErrorCodes.INVALID_PARAMETER, f'Invalid step: {step}. Must be 1-5.')
-            
+
             return response
-            
+
         except Exception as e:
             logger.error(f"Error in team_building_wizard: {e}", exc_info=True)
             return api_error(str(e))

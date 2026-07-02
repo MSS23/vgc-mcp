@@ -2,8 +2,8 @@
 
 from enum import Enum
 from typing import Literal, Optional
-from pydantic import BaseModel, Field, field_validator
 
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # Format systems determine how a Pokemon's stat allocation is interpreted.
 # - "mainline": classic VGC EV system (0-252/stat, 508 total) — Reg F/G/H/I.
@@ -110,8 +110,7 @@ class BaseStats(BaseModel):
     special_defense: int = Field(ge=1, le=255)
     speed: int = Field(ge=1, le=255)
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class EVSpread(BaseModel):

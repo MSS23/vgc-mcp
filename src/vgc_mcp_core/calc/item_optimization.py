@@ -4,14 +4,13 @@ This module provides core logic for comparing items (Life Orb vs Choice items)
 and analyzing EV-item trade-offs for competitive optimization.
 """
 
-from typing import Optional
 from dataclasses import dataclass, replace
 
-from ..calc.items import calculate_life_orb_effect, get_item_damage_modifier
-from ..calc.damage import calculate_damage, DamageResult
-from ..models.pokemon import PokemonBuild, BaseStats, Nature, EVSpread
-from ..models.move import Move, MoveCategory
+from ..calc.damage import calculate_damage
+from ..calc.items import calculate_life_orb_effect
 from ..calc.modifiers import DamageModifiers
+from ..models.move import Move
+from ..models.pokemon import EVSpread, PokemonBuild
 
 
 @dataclass
@@ -101,7 +100,7 @@ def compare_items_damage(
             life_orb_data = calculate_life_orb_effect(damage_result.max_damage, max_hp)
             recoil = life_orb_data["recoil"]
             recoil_percent = life_orb_data["recoil_percent"]
-            
+
             # Sheer Force negates recoil
             if has_sheer_force:
                 recoil = 0
@@ -123,7 +122,7 @@ def compare_items_damage(
         # Generate recommendation
         recommendation = ""
         notes = []
-        
+
         if item == "life-orb" and has_sheer_force:
             recommendation = "BEST - Sheer Force negates recoil"
             notes.append("Life Orb + Sheer Force = no recoil, 1.3x damage")
@@ -192,7 +191,7 @@ def analyze_life_orb_sustainability(
     for turn in range(1, 21):  # Max 20 turns
         # Take recoil
         current_hp -= recoil_per_attack
-        
+
         # Apply recovery
         current_hp += recovery_per_turn
         current_hp = min(max_hp, current_hp)  # Cap at max HP
@@ -255,7 +254,7 @@ def calculate_ev_tradeoff(
     for item in items_to_test:
         # Calculate required EVs for this item to meet benchmark
         # This is simplified - actual implementation would calculate based on benchmark
-        
+
         # For now, use example calculation
         if item in ["choice-band", "choice-specs"]:
             # Choice items give 1.5x stat boost, so need fewer EVs
@@ -316,7 +315,7 @@ def calculate_ev_tradeoff(
 
     # Sort by total useful stats (descending)
     results.sort(key=lambda x: x.total_useful_stats, reverse=True)
-    
+
     # Assign ranks
     for i, result in enumerate(results):
         result.rank = i + 1

@@ -1,9 +1,10 @@
 """Tests for minimum survival EV calculation."""
 
 import pytest
-from vgc_mcp_core.calc.damage import calculate_bulk_threshold, calculate_damage
-from vgc_mcp_core.models.pokemon import PokemonBuild, BaseStats, Nature, EVSpread
+
+from vgc_mcp_core.calc.damage import calculate_bulk_threshold
 from vgc_mcp_core.models.move import Move, MoveCategory
+from vgc_mcp_core.models.pokemon import BaseStats, EVSpread, Nature, PokemonBuild
 
 
 def make_pokemon(name: str, hp: int, atk: int, defense: int, spa: int, spd: int, spe: int,

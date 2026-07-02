@@ -5,7 +5,6 @@ from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.diff_tools import register_diff_tools
 
-
 TEAM_V1 = """Flutter Mane @ Choice Specs
 Ability: Protosynthesis
 Level: 50

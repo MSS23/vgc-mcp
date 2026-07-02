@@ -10,24 +10,26 @@ import asyncio
 import logging
 import time
 from typing import Optional
-from mcp.server.fastmcp import FastMCP
 
-logger = logging.getLogger(__name__)
+from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
 from vgc_mcp_core.calc.damage import calculate_damage, format_percent
 from vgc_mcp_core.calc.modifiers import DamageModifiers
-from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, IVSpread, StatPointSpread, BaseStats
-from vgc_mcp_core.models.move import Move, MoveCategory
 from vgc_mcp_core.formats.showdown import pokemon_build_to_showdown
-from vgc_mcp_core.utils.errors import pokemon_not_found_error, api_error, error_response, ErrorCodes
-from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name
-from vgc_mcp_core.utils.synergies import get_synergy_ability
-from vgc_mcp_core.utils.normalize import normalize_smogon_name as _normalize_smogon_name
+from vgc_mcp_core.models.pokemon import (
+    EVSpread,
+    Nature,
+    PokemonBuild,
+    StatPointSpread,
+)
+from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 # Import helper functions from damage_tools (do NOT edit that module — reuse only)
-from .damage_tools import _get_common_spread, _detect_champions, _sps_from_smogon_spread
+from .damage_tools import _detect_champions, _get_common_spread, _sps_from_smogon_spread
+
+logger = logging.getLogger(__name__)
 
 # Module-level Smogon client reference
 _smogon_client: Optional[SmogonStatsClient] = None
@@ -199,8 +201,8 @@ def register_multicalc_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
             is_champions = _detect_champions(attacker_name)
 
             # Fetch attacker data
-            attacker_base = await pokeapi.get_base_stats(attacker_name)
-            attacker_types = await pokeapi.get_pokemon_types(attacker_name)
+            await pokeapi.get_base_stats(attacker_name)
+            await pokeapi.get_pokemon_types(attacker_name)
             move = await pokeapi.get_move(attacker_move, user_name=attacker_name)
 
             # Build attacker (subject — SP-scale in a champions session)
@@ -575,7 +577,7 @@ def register_multicalc_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
                     if isinstance(threat_or_err, Exception):
                         raise threat_or_err
                     threat = threat_or_err
-                    
+
                     threat_row = []
                     threat_ohkos = []
 
@@ -585,7 +587,9 @@ def register_multicalc_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
                             continue
 
                         try:
-                            from vgc_mcp_core.tools.ability_helpers import compute_intimidate_attack_stage
+                            from vgc_mcp_core.tools.ability_helpers import (
+                                compute_intimidate_attack_stage,
+                            )
                             is_phys = member["move"].category.value == "physical"
                             intim, _ = compute_intimidate_attack_stage(
                                 defender_ability=threat.ability,
@@ -635,7 +639,7 @@ def register_multicalc_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
             # Generate markdown table
             table_lines = ["| Team Member | " + " | ".join([t.title() for t in meta_threats]) + " |"]
             table_lines.append("|-------------|" + "|".join(["---"] * (len(meta_threats) + 1)) + "|")
-            
+
             for i, member in enumerate(team_members):
                 member_name = member.get("name", "Unknown")
                 row = [member_name] + [coverage_matrix[j][i] for j in range(len(meta_threats))]

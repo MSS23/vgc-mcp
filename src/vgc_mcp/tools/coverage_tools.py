@@ -2,20 +2,21 @@
 
 import logging
 from typing import Optional
+
 from mcp.server.fastmcp import FastMCP
 
-logger = logging.getLogger(__name__)
-
 from vgc_mcp_core.calc.coverage import (
-    analyze_move_coverage,
-    find_coverage_holes,
-    check_quad_weaknesses,
-    check_coverage_vs_pokemon,
-    suggest_coverage_moves,
-    get_coverage_summary,
     ALL_TYPES,
     COVERAGE_MOVES,
+    analyze_move_coverage,
+    check_coverage_vs_pokemon,
+    check_quad_weaknesses,
+    find_coverage_holes,
+    get_coverage_summary,
+    suggest_coverage_moves,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def register_coverage_tools(mcp: FastMCP, team_manager, pokeapi):

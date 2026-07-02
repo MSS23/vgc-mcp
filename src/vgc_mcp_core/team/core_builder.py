@@ -3,10 +3,9 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from ..models.team import Team
-from ..models.pokemon import PokemonBuild
 from ..api.smogon import SmogonStatsClient
 from ..calc.modifiers import get_type_effectiveness
+from ..models.team import Team
 
 
 @dataclass
@@ -123,9 +122,6 @@ async def suggest_partners(
 
     if not teammates_data:
         return []
-
-    # Get types for the input Pokemon
-    usage_data = await smogon_client.get_pokemon_usage(pokemon_name)
 
     suggestions = []
     existing_names = []
@@ -272,7 +268,6 @@ def analyze_core_synergy(team: Team) -> CoreAnalysis:
         CoreAnalysis with synergy score and recommendations
     """
     pokemon_names = team.get_pokemon_names()
-    pokemon_types = {slot.pokemon.name: slot.pokemon.types for slot in team.slots}
 
     strengths = []
     weaknesses = []

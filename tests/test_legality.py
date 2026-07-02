@@ -1,25 +1,26 @@
 """Tests for VGC format legality checking."""
 
 import pytest
-from vgc_mcp_core.rules.regulation_loader import get_regulation_config, reset_regulation_config
-from vgc_mcp_core.rules.vgc_rules import (
-    get_regulation,
-    list_regulations,
-    VGCRegulation,
-)
-from vgc_mcp_core.rules.restricted import (
-    is_restricted,
-    is_banned,
-    get_restricted_status,
-    count_restricted,
-    find_banned,
-    find_restricted,
-)
+
 from vgc_mcp_core.rules.item_clause import (
     check_item_clause,
     get_duplicate_items,
-    suggest_alternative_items,
     normalize_item_name,
+    suggest_alternative_items,
+)
+from vgc_mcp_core.rules.regulation_loader import get_regulation_config, reset_regulation_config
+from vgc_mcp_core.rules.restricted import (
+    count_restricted,
+    find_banned,
+    find_restricted,
+    get_restricted_status,
+    is_banned,
+    is_restricted,
+)
+from vgc_mcp_core.rules.vgc_rules import (
+    VGCRegulation,
+    get_regulation,
+    list_regulations,
 )
 
 

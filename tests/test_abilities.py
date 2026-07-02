@@ -1,23 +1,22 @@
 """Tests for ability synergy and interaction analysis."""
 
 import pytest
+
 from vgc_mcp_core.calc.abilities import (
-    analyze_intimidate_matchup,
-    analyze_weather_synergy,
-    analyze_terrain_synergy,
-    find_redirect_abilities,
-    find_partner_abilities,
-    find_ability_conflicts,
-    analyze_full_ability_synergy,
-    get_speed_ability_effect,
-    suggest_ability_additions,
-    normalize_ability_name,
     INTIMIDATE_BLOCKERS,
     INTIMIDATE_PUNISHERS,
-    WEATHER_SETTERS,
     WEATHER_ABUSERS,
-    TERRAIN_SETTERS,
-    REDIRECT_ABILITIES,
+    WEATHER_SETTERS,
+    analyze_full_ability_synergy,
+    analyze_intimidate_matchup,
+    analyze_terrain_synergy,
+    analyze_weather_synergy,
+    find_ability_conflicts,
+    find_partner_abilities,
+    find_redirect_abilities,
+    get_speed_ability_effect,
+    normalize_ability_name,
+    suggest_ability_additions,
 )
 
 

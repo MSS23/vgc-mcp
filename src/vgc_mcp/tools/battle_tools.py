@@ -25,9 +25,9 @@ from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 
-from vgc_mcp_core.state import BattleStateManager
-from vgc_mcp_core.utils.errors import error_response, ErrorCodes
 from vgc_mcp_core.calc.priority import normalize_move_name
+from vgc_mcp_core.state import BattleStateManager
+from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 logger = logging.getLogger(__name__)
 
@@ -373,7 +373,7 @@ def register_battle_tools(mcp: FastMCP, battle_manager: BattleStateManager):
                 "No active battle.",
             )
         snapshot = battle_manager.serialize()
-        b = battle_manager.end()
+        battle_manager.end()
         return {
             "success": True,
             "outcome": outcome,

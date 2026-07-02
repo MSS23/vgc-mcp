@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `optimize_dual_survival_spread`: the HP-item-optimization branch crashed with
+  `NameError` (undefined `mods1`/`mods2`) whenever a defender item triggered an
+  HP EV adjustment. Damage modifiers are now rebuilt for the re-verification
+  pass, and regression tests cover the path.
+- `compare_speed` / team-template speed benchmarks in workflow tools crashed with
+  `NameError: EV_BREAKPOINTS_LV50` when the slower Pokemon needed EV suggestions
+  (missing module-level import).
+- Restored Python 3.11 compatibility: `check_build_for_mistakes` used 3.12-only
+  nested f-string quoting; the full test suite now passes on 3.11, 3.12 and 3.13,
+  matching `requires-python >= 3.11`.
+- `calculate_damage`: removed a local `dataclasses.replace` import that shadowed
+  the module-level import.
+- Pydantic v2 deprecation: `BaseStats` now uses `ConfigDict` instead of
+  class-based `Config`.
+
+### Added
+- Champions EV->SP auto-conversion at tool entry points: `add_to_team`,
+  `swap_team_pokemon`, `create_build` and `modify_build` now detect EV-scale
+  input (any stat > 32) in a Champions (Reg MA/MB) session and convert it to
+  Stat Points (1 SP = 8 EVs, rounded up, trimmed to the 66 budget) instead of
+  rejecting it with "exceeds per-stat max (32)". Responses include an
+  `sp_conversion` note showing the translation. Native SP input (all stats
+  0-32) passes through unchanged; mainline sessions are unaffected.
+  (`coerce_champions_allocation` in `vgc_mcp_core.calc.conversion`.)
+
+### Changed
+- Lint: cleaned up the entire historical ruff backlog (~1,900 findings — unused
+  imports, unsorted imports, dead assignments, misplaced module-level imports,
+  one-line `if` statements, ambiguous names). `ruff check src/ tests/` is now
+  clean and CI enforces it as a hard gate.
+- CI matrix now tests Python 3.11, 3.12 and 3.13.
+- README/smithery badges updated to the real counts (208 tools, 1,417 tests).
+- Deduplicated setup documentation (SETUP_GUIDE.md, LOCAL_SETUP.md)
+- Simplified README.md with focus on quick start
+- Updated USER_GUIDE.md to focus on usage rather than setup
+- Improved documentation cross-linking
+- Prioritized free Claude Desktop local setup in all docs
+
 ### Added
 - Comprehensive production documentation:
   - `docs/technical-guide.md` - MCP architecture explained for beginners
@@ -19,13 +58,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Beginner-friendly MCP protocol explanations with analogies
 - Complete API reference documenting all 157+ tools
 - Deployment guides for multiple platforms
-
-### Changed
-- Deduplicated setup documentation (SETUP_GUIDE.md, LOCAL_SETUP.md)
-- Simplified README.md with focus on quick start
-- Updated USER_GUIDE.md to focus on usage rather than setup
-- Improved documentation cross-linking
-- Prioritized free Claude Desktop local setup in all docs
 
 ### Removed
 - Build artifacts (`dist/` directory) from repository

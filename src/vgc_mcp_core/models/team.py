@@ -1,6 +1,7 @@
 """Team data models with VGC validation."""
 
 from typing import Optional
+
 from pydantic import BaseModel, Field, model_validator
 
 from .pokemon import PokemonBuild

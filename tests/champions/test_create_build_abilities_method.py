@@ -16,21 +16,20 @@ Champions assertions: 32 Speed SP -> Speed 205 after round-trip; >32 / >66 are
 rejected. Mainline assertions: EVs stored, 32 EV Speed -> 174, >508 rejected.
 """
 
-import pytest
 from unittest.mock import AsyncMock
 
+import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.build_tools import register_build_tools
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
-from vgc_mcp_core.models.pokemon import BaseStats
-from vgc_mcp_core.state.build_manager import BuildStateManager
 from vgc_mcp_core.calc.stats import calculate_all_stats
+from vgc_mcp_core.models.pokemon import BaseStats
 from vgc_mcp_core.rules.regulation_loader import (
     get_regulation_config,
     reset_regulation_config,
 )
-
+from vgc_mcp_core.state.build_manager import BuildStateManager
 
 FLUTTER_MANE_BASE = BaseStats(
     hp=55, attack=55, defense=55,
@@ -112,13 +111,16 @@ class TestCreateBuildChampions:
         assert rebuilt.format_system == "champions"
         assert calculate_all_stats(rebuilt)["speed"] == 205
 
-    async def test_per_stat_cap_enforced(self, champions_session, build_tools):
+    async def test_ev_scale_input_coerced_to_sps(self, champions_session, build_tools):
+        # A stat > 32 is unambiguously EV-scale input: it now converts to SPs
+        # (100 EV -> 13 SP) instead of failing the per-stat cap.
         tools, _, _ = build_tools
         result = await tools["create_build"].fn(
-            pokemon_name="flutter-mane", spe_evs=100,  # > 32/stat
+            pokemon_name="flutter-mane", spe_evs=100,
         )
-        assert result["success"] is False
-        assert result["error"] == "invalid_evs"
+        assert result["success"] is True
+        assert result["build"]["sps"]["speed"] == 13
+        assert result["sp_conversion"]["converted_sps"] == {"speed": 13}
 
     async def test_total_cap_enforced(self, champions_session, build_tools):
         tools, _, _ = build_tools

@@ -6,20 +6,18 @@ distribution of spreads used by players in the meta.
 """
 
 from typing import Optional
+
 from mcp.server.fastmcp import FastMCP
 
-from vgc_mcp_core.calc.stats import calculate_speed
 from vgc_mcp_core.calc.speed_probability import (
-    calculate_outspeed_probability,
-    calculate_outspeed_from_distribution,
     calculate_meta_outspeed_rate,
+    calculate_outspeed_from_distribution,
+    calculate_outspeed_probability,
     calculate_speed_creep_evs,
-    parse_spread_to_speed,
-    build_speed_distribution_data,
-    calculate_speed_stat,
 )
+from vgc_mcp_core.calc.stats import calculate_speed
 from vgc_mcp_core.models.pokemon import Nature
-from vgc_mcp_core.utils.errors import error_response, ErrorCodes
+from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 
 def register_speed_probability_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
@@ -80,7 +78,6 @@ def register_speed_probability_tools(mcp: FastMCP, smogon, pokeapi, team_manager
         if speed_dist and speed_dist.get("distribution"):
             # Use the new optimized path with pre-calculated speeds
             distribution = speed_dist["distribution"]
-            speed_stats = speed_dist.get("stats", {})
 
             result = calculate_outspeed_from_distribution(
                 your_speed,

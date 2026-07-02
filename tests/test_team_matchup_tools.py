@@ -1,8 +1,8 @@
 """Tests for comprehensive team matchup analysis tools."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.team_matchup_tools import register_team_matchup_tools

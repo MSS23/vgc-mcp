@@ -10,17 +10,15 @@ These call the ACTUAL @mcp.tool handlers (and the underlying rule function),
 not just the pure helpers, asserting allowlist behavior end-to-end.
 """
 
-import pytest
 from unittest.mock import MagicMock
 
+import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.legality_tools import register_legality_tools
-from vgc_mcp_core.rules.regulation_loader import get_regulation_config
-from vgc_mcp_core.rules.vgc_rules import validate_team_rules
-from vgc_mcp_core.models.pokemon import PokemonBuild, BaseStats, Nature
+from vgc_mcp_core.models.pokemon import BaseStats, Nature, PokemonBuild
 from vgc_mcp_core.models.team import Team, TeamSlot
-
+from vgc_mcp_core.rules.vgc_rules import validate_team_rules
 
 REG_MA = "reg_ma_champs"
 

@@ -1,15 +1,15 @@
 """MCP tools for comprehensive team matchup analysis."""
 
-from typing import Optional, List
+from typing import List, Optional
+
 from mcp.server.fastmcp import FastMCP
 
-from vgc_mcp_core.config import logger
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
-from vgc_mcp_core.team.manager import TeamManager
 from vgc_mcp_core.calc.matchup import COMMON_THREATS, analyze_threat_matchup
-from vgc_mcp_core.utils.errors import api_error, error_response, ErrorCodes
-from vgc_mcp_core.rules.regulation_loader import get_regulation_config
+from vgc_mcp_core.config import logger
+from vgc_mcp_core.team.manager import TeamManager
+from vgc_mcp_core.utils.errors import ErrorCodes, api_error, error_response
 
 
 def _detect_champions(pokemon_names: Optional[List[str]] = None) -> bool:
@@ -34,13 +34,13 @@ def register_team_matchup_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Op
     ) -> dict:
         """
         Analyze how your full team matches up against opponents.
-        
+
         Args:
             team_pokemon: List of your 6 Pokemon names
             opponent_pokemon: Optional specific opponent team (6 Pokemon)
             vs_meta: If True, compare against top 20 meta threats
             format: VGC format (default: "reg_h")
-            
+
         Returns:
             Comprehensive matchup analysis with ratings and recommendations
         """
@@ -54,12 +54,15 @@ def register_team_matchup_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Op
 
             # Analyze against meta threats if requested
             threat_coverage = {}
-            weaknesses = []
-            strengths = []
 
             if vs_meta:
+                from vgc_mcp_core.models.pokemon import (
+                    EVSpread,
+                    Nature,
+                    PokemonBuild,
+                    StatPointSpread,
+                )
                 from vgc_mcp_core.models.team import Team, TeamSlot
-                from vgc_mcp_core.models.pokemon import PokemonBuild, EVSpread, StatPointSpread, Nature
 
                 team_slots = []
                 for pokemon_name in team_pokemon:
@@ -105,7 +108,7 @@ def register_team_matchup_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Op
                 for threat_name in top_threats:
                     try:
                         analysis = analyze_threat_matchup(temp_team, threat_name)
-                        
+
                         # Determine matchup quality
                         if len(analysis.counters) >= 2:
                             matchup = "Favorable"
@@ -115,7 +118,7 @@ def register_team_matchup_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Op
                             matchup = "Unfavorable"
                         else:
                             matchup = "Neutral"
-                        
+
                         threat_coverage[threat_name] = {
                             "matchup": matchup,
                             "best_answer": analysis.counters[0] if analysis.counters else (analysis.checks[0] if analysis.checks else "None"),
@@ -124,11 +127,11 @@ def register_team_matchup_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Op
                     except Exception as e:
                         logger.warning(f"Failed to analyze {threat_name}: {e}")
                         continue
-            
+
             # Calculate overall rating
             favorable_count = sum(1 for t in threat_coverage.values() if t["matchup"] == "Favorable")
             unfavorable_count = sum(1 for t in threat_coverage.values() if t["matchup"] == "Unfavorable")
-            
+
             if favorable_count > unfavorable_count * 2:
                 overall_rating = "A"
             elif favorable_count > unfavorable_count:
@@ -139,7 +142,7 @@ def register_team_matchup_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Op
                 overall_rating = "C+"
             else:
                 overall_rating = "C"
-            
+
             # Build markdown summary
             markdown_lines = [
                 "## Team Matchup Analysis",
@@ -156,12 +159,12 @@ def register_team_matchup_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Op
                 "| Meta Threat | Best Answer | Matchup |",
                 "|-------------|-------------|---------|"
             ]
-            
+
             for threat_name, data in list(threat_coverage.items())[:10]:  # Top 10
                 markdown_lines.append(
                     f"| {threat_name.title()} | {data['best_answer']} | {data['matchup']} |"
                 )
-            
+
             # Identify weaknesses
             if unfavorable_count > 0:
                 markdown_lines.extend([
@@ -171,7 +174,7 @@ def register_team_matchup_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Op
                 weak_threats = [t for t, d in threat_coverage.items() if d["matchup"] == "Unfavorable"]
                 for i, threat in enumerate(weak_threats[:3], 1):
                     markdown_lines.append(f"{i}. **{threat.title()} problematic** - Consider adding checks")
-            
+
             response = {
                 "team": team_pokemon,
                 "overall_rating": overall_rating,
@@ -184,7 +187,7 @@ def register_team_matchup_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Op
                 response["format_system"] = "champions"
 
             return response
-            
+
         except Exception as e:
             logger.error(f"Error in analyze_team_matchup: {e}", exc_info=True)
             return api_error(str(e))

@@ -8,9 +8,9 @@ Skip with: pytest tests/test_pokeapi_forms.py -v -m "not integration"
 """
 
 import pytest
-from vgc_mcp_core.api.pokeapi import PokeAPIClient, POKEAPI_FORM_ALIASES
-from vgc_mcp_core.utils.fuzzy import COMMON_POKEMON
 
+from vgc_mcp_core.api.pokeapi import POKEAPI_FORM_ALIASES, PokeAPIClient
+from vgc_mcp_core.utils.fuzzy import COMMON_POKEMON
 
 # Pokemon that require form aliases (short name -> PokeAPI name)
 ALIASED_POKEMON = [

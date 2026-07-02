@@ -10,6 +10,6 @@ __version__ = "1.0.0"
 
 # Re-export commonly used items for convenience
 from .config import logger, settings
-from .models.pokemon import PokemonBuild, Nature, EVSpread, IVSpread, BaseStats
 from .models.move import Move, MoveCategory
+from .models.pokemon import BaseStats, EVSpread, IVSpread, Nature, PokemonBuild
 from .models.team import Team

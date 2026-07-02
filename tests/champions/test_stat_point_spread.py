@@ -4,11 +4,11 @@ import pytest
 from pydantic import ValidationError
 
 from vgc_mcp_core.models.pokemon import (
-    StatPointSpread,
-    PokemonBuild,
     BaseStats,
     EVSpread,
     Nature,
+    PokemonBuild,
+    StatPointSpread,
 )
 
 

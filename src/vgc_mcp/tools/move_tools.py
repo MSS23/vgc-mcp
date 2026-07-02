@@ -1,14 +1,15 @@
 """MCP tools for move legality and learnset validation."""
 
 from typing import Optional
+
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp_core.validation.learnset import (
+    categorize_learn_method,
     get_learnable_moves,
+    suggest_legal_moves,
     validate_moveset,
     validate_team_movesets,
-    suggest_legal_moves,
-    categorize_learn_method
 )
 
 

@@ -1,8 +1,8 @@
 """Tests for EV spread optimization tools."""
 
-import pytest
 from unittest.mock import AsyncMock
 
+import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.spread_tools import register_spread_tools
@@ -187,3 +187,85 @@ class TestAnalyzeHpNumber:
             current_hp_evs=4
         )
         assert isinstance(result, dict)
+
+
+class TestOptimizeDualSurvivalHpItemPath:
+    """Regression tests for the HP-item-optimization branch of
+    optimize_dual_survival_spread, which previously crashed with
+    NameError (undefined `mods1`/`mods2`) whenever a defender item
+    triggered an HP EV adjustment."""
+
+    @pytest.fixture
+    def dual_tools(self, mock_pokeapi, monkeypatch):
+        """Spread tools with move support and Smogon lookups silenced."""
+        from vgc_mcp_core.models.move import Move, MoveCategory
+
+        moves = {
+            "moonblast": Move(name="moonblast", type="fairy", category=MoveCategory.SPECIAL, power=95),
+            "flare-blitz": Move(name="flare-blitz", type="fire", category=MoveCategory.PHYSICAL, power=120),
+        }
+
+        async def _get_move(name, user_name=None):
+            return moves[name.lower()]
+
+        mock_pokeapi.get_move = AsyncMock(side_effect=_get_move)
+
+        import vgc_mcp.tools.spread_tools as st
+
+        async def _no_spread(name):
+            return None
+
+        monkeypatch.setattr(st, "_get_common_spread", _no_spread)
+
+        mcp = FastMCP("test")
+        register_spread_tools(mcp, mock_pokeapi)
+        return {t.name: t for t in mcp._tool_manager._tools.values()}
+
+    async def test_item_hp_adjustment_does_not_crash(self, dual_tools, monkeypatch):
+        """Force the HP adjustment branch and verify no NameError/error response."""
+        import vgc_mcp_core.calc.hp_optimization as hp_opt
+
+        def _force_adjust(base_hp, current_evs, item, max_adjustment=12):
+            # Always propose a different HP EV count so the re-verify
+            # branch (the previously broken code path) executes.
+            adjusted = current_evs - 8 if current_evs >= 8 else current_evs + 8
+            return {"adjusted_evs": adjusted, "reason": "forced for regression test"}
+
+        monkeypatch.setattr(hp_opt, "adjust_hp_evs_for_item", _force_adjust)
+
+        fn = dual_tools["optimize_dual_survival_spread"].fn
+        result = await fn(
+            pokemon_name="incineroar",
+            survive_hit1_attacker="flutter-mane",
+            survive_hit1_move="moonblast",
+            survive_hit1_nature="timid",
+            survive_hit1_evs=252,
+            survive_hit2_attacker="incineroar",
+            survive_hit2_move="flare-blitz",
+            survive_hit2_nature="adamant",
+            survive_hit2_evs=252,
+            nature="careful",
+            item="leftovers",
+        )
+        assert isinstance(result, dict)
+        # Before the fix this returned {"error": ..., "message": "name 'mods1' is not defined"}
+        assert "error" not in result, f"unexpected error: {result.get('message')}"
+
+    async def test_item_no_adjustment_still_works(self, dual_tools):
+        """Sanity: the tool works end-to-end with an item and real adjuster."""
+        fn = dual_tools["optimize_dual_survival_spread"].fn
+        result = await fn(
+            pokemon_name="incineroar",
+            survive_hit1_attacker="flutter-mane",
+            survive_hit1_move="moonblast",
+            survive_hit1_nature="timid",
+            survive_hit1_evs=252,
+            survive_hit2_attacker="incineroar",
+            survive_hit2_move="flare-blitz",
+            survive_hit2_nature="adamant",
+            survive_hit2_evs=252,
+            nature="careful",
+            item="leftovers",
+        )
+        assert isinstance(result, dict)
+        assert "error" not in result, f"unexpected error: {result.get('message')}"

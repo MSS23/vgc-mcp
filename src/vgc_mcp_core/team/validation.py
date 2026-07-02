@@ -2,7 +2,7 @@
 
 from typing import Optional
 
-from ..models.pokemon import PokemonBuild, EVSpread
+from ..models.pokemon import EVSpread, PokemonBuild
 from ..models.team import Team
 
 

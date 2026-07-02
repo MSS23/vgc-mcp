@@ -1,10 +1,9 @@
 """Damage modifiers including type effectiveness, weather, terrain, etc."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 from ..utils.normalize import normalize_item
-
 
 # Complete Gen 9 Type Chart
 # Source: Pokemon Showdown (https://github.com/smogon/pokemon-showdown)

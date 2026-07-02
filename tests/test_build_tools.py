@@ -1,8 +1,8 @@
 """Tests for build state management tools."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.build_tools import register_build_tools

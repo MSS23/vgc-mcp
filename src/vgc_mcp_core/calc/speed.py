@@ -1,11 +1,11 @@
 """Speed comparison and tier utilities."""
 
 from dataclasses import dataclass
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
-from ..models.pokemon import Nature, PokemonBuild
-from .stats import calculate_speed, calculate_all_stats, find_speed_evs
 from ..config import EV_BREAKPOINTS_LV50
+from ..models.pokemon import Nature, PokemonBuild
+from .stats import calculate_all_stats, calculate_speed, find_speed_evs
 
 if TYPE_CHECKING:
     from ..api.smogon import SmogonStatsClient
@@ -195,7 +195,7 @@ SPEED_BENCHMARKS = {
 def get_speed_benchmark(pokemon_name: str, benchmark_type: str = "max_positive") -> Optional[int]:
     """
     Get a speed benchmark for a Pokemon, calculated dynamically.
-    
+
     Args:
         pokemon_name: Pokemon name (normalized, e.g., "rillaboom")
         benchmark_type: Type of benchmark:
@@ -203,16 +203,16 @@ def get_speed_benchmark(pokemon_name: str, benchmark_type: str = "max_positive")
             - "max_neutral": Max speed with neutral nature, 252 EVs, 31 IV
             - "neutral_0ev": Speed with neutral nature, 0 EVs, 31 IV
             - "min_negative": Min speed with -Speed nature (Brave/Quiet), 0 EVs, 0 IV
-    
+
     Returns:
         Speed stat value or None if Pokemon not found
     """
     data = SPEED_BENCHMARKS.get(pokemon_name.lower().replace(" ", "-"))
     if not data:
         return None
-    
+
     base = data["base"]
-    
+
     if benchmark_type == "max_positive":
         # Use Jolly for physical attackers, Timid for special - default to Jolly
         return calculate_speed(base, 31, 252, 50, Nature.JOLLY)
@@ -222,7 +222,7 @@ def get_speed_benchmark(pokemon_name: str, benchmark_type: str = "max_positive")
         return calculate_speed(base, 31, 0, 50, Nature.SERIOUS)
     elif benchmark_type == "min_negative":
         return calculate_speed(base, 0, 0, 50, Nature.BRAVE)
-    
+
     return None
 
 
@@ -790,14 +790,14 @@ META_SPEED_TIERS = {
 def get_speed_tier_info(pokemon_name: str) -> Optional[dict]:
     """
     Get speed benchmark info for a Pokemon with dynamically calculated values.
-    
+
     Returns dict with base speed and calculated benchmarks.
     """
     name = pokemon_name.lower().replace(" ", "-")
     data = SPEED_BENCHMARKS.get(name)
     if not data:
         return None
-    
+
     base = data["base"]
     return {
         "base": base,
@@ -811,7 +811,7 @@ def get_speed_tier_info(pokemon_name: str) -> Optional[dict]:
 def get_meta_speed_tier(pokemon_name: str) -> Optional[dict]:
     """
     Get VGC meta speed tier info for a Pokemon with dynamically calculated speeds.
-    
+
     Calculates common_speeds from spreads data instead of using hardcoded values.
     """
     name = pokemon_name.lower().replace(" ", "-")
@@ -823,13 +823,13 @@ def get_meta_speed_tier(pokemon_name: str) -> Optional[dict]:
     data = META_SPEED_TIERS.get(name)
     if not data:
         return None
-    
+
     # Calculate common_speeds dynamically from spreads if available
     if "spreads" in data and "base" in data:
         base = data["base"]
         calculated_speeds = []
         speed_set = set()
-        
+
         # Nature name -> Nature enum mapping
         NATURE_MAP = {
             "adamant": Nature.ADAMANT, "bashful": Nature.BASHFUL, "bold": Nature.BOLD,
@@ -842,7 +842,7 @@ def get_meta_speed_tier(pokemon_name: str) -> Optional[dict]:
             "relaxed": Nature.RELAXED, "sassy": Nature.SASSY, "serious": Nature.SERIOUS,
             "timid": Nature.TIMID,
         }
-        
+
         for spread in data["spreads"]:
             nature_str = spread.get("nature", "Serious").lower()
             speed_evs = spread.get("evs", 0)
@@ -851,13 +851,13 @@ def get_meta_speed_tier(pokemon_name: str) -> Optional[dict]:
             if speed not in speed_set:
                 speed_set.add(speed)
                 calculated_speeds.append(speed)
-        
+
         # Sort descending and return copy with calculated speeds
         calculated_speeds.sort(reverse=True)
         result = data.copy()
         result["common_speeds"] = calculated_speeds
         return result
-    
+
     return data
 
 
@@ -1051,7 +1051,6 @@ def calculate_speed_tier(
     else:
         # Fallback to theoretical benchmarks
         for mon, data in SPEED_BENCHMARKS.items():
-            base = data["base"]
             max_positive = get_speed_benchmark(mon, "max_positive")
             max_neutral = get_speed_benchmark(mon, "max_neutral")
             neutral_0ev = get_speed_benchmark(mon, "neutral_0ev")

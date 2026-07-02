@@ -1,8 +1,8 @@
 """Tests for priority move and turn order analysis tools."""
 
-import pytest
 from unittest.mock import MagicMock
 
+import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.priority_tools import register_priority_tools

@@ -1,41 +1,47 @@
 """MCP tools for EV spread optimization."""
 
-from typing import Optional
-from mcp.server.fastmcp import FastMCP
-from dataclasses import dataclass
-import itertools
 import time
+from dataclasses import dataclass
+from typing import Optional
 
-from vgc_mcp_core.config import logger
+from mcp.server.fastmcp import FastMCP
+
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
-from vgc_mcp_core.calc.stats import calculate_speed, calculate_stat, calculate_hp, find_speed_evs
-from vgc_mcp_core.calc.damage import calculate_damage, DamageResult, format_percent
-from vgc_mcp_core.calc.modifiers import DamageModifiers
 from vgc_mcp_core.calc.bulk_optimization import (
+    analyze_diminishing_returns,
     calculate_optimal_bulk_distribution,
-    analyze_diminishing_returns
-)
-from vgc_mcp_core.models.pokemon import Nature, get_nature_modifier, PokemonBuild, BaseStats, EVSpread, StatPointSpread
-from vgc_mcp_core.formats.showdown import pokemon_build_to_showdown
-from vgc_mcp_core.models.move import Move, MoveCategory
-from vgc_mcp_core.config import EV_BREAKPOINTS_LV50, normalize_evs
-from vgc_mcp_core.utils.synergies import get_synergy_ability
-from vgc_mcp_core.utils.errors import error_response, ErrorCodes
-from vgc_mcp_core.rules.regulation_loader import get_regulation_config
-from vgc_mcp_core.calc.stats_champions import (
-    calculate_hp_sp,
-    calculate_stat_sp,
-    calculate_speed_sp,
 )
 from vgc_mcp_core.calc.champions_optimization import (
-    find_speed_sps_to_outspeed,
-    find_optimal_hp_sps,
-    validate_sp_allocation,
     SP_PER_STAT_MAX,
     SP_TOTAL_MAX,
+    find_optimal_hp_sps,
+    find_speed_sps_to_outspeed,
+    validate_sp_allocation,
 )
-import math
+from vgc_mcp_core.calc.damage import DamageResult, calculate_damage, format_percent
+from vgc_mcp_core.calc.modifiers import DamageModifiers
+from vgc_mcp_core.calc.stats import calculate_hp, calculate_stat, find_speed_evs
+from vgc_mcp_core.calc.stats_champions import (
+    calculate_hp_sp,
+    calculate_speed_sp,
+    calculate_stat_sp,
+)
+from vgc_mcp_core.config import EV_BREAKPOINTS_LV50, logger, normalize_evs
+from vgc_mcp_core.formats.showdown import pokemon_build_to_showdown
+from vgc_mcp_core.models.move import Move, MoveCategory
+from vgc_mcp_core.models.pokemon import (
+    BaseStats,
+    EVSpread,
+    Nature,
+    PokemonBuild,
+    StatPointSpread,
+    get_nature_modifier,
+)
+from vgc_mcp_core.tools.smogon_helpers import (
+    get_common_spread as _shared_get_common_spread,
+)
+from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 
 def _detect_champions(pokemon_name: Optional[str] = None) -> bool:
@@ -161,8 +167,6 @@ def _find_min_evs_for_hp(base: int, iv: int, target_hp: int, level: int = 50) ->
     # If we can't reach it even with 252 EVs, optimize 252
     return optimize_ev_efficiency(base, iv, 252, level, 1.0, "hp")
 
-
-from vgc_mcp_core.tools.smogon_helpers import get_common_spread as _shared_get_common_spread
 
 
 async def _get_common_spread(pokemon_name: str) -> Optional[dict]:
@@ -1197,7 +1201,6 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         survive_pokemon = kw.get("survive_pokemon")
         survive_move = kw.get("survive_move")
         prioritize = kw.get("prioritize", "bulk")
-        offensive_evs = kw.get("offensive_evs", 0)
         item = kw.get("item")
         ability = kw.get("ability")
         defender_tera_type = kw.get("defender_tera_type")
@@ -1724,13 +1727,13 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         """
         Suggest a nature change that achieves same stats with fewer EVs.
         Like Showdown's "Use a different nature to save X EVs" feature.
-        
+
         Args:
             pokemon_name: Pokemon name
             current_nature: Current nature (e.g., "serious", "timid")
             hp_evs through spe_evs: Current EV spread
             moves: Optional list of moves to determine physical/special preference
-            
+
         Returns:
             Nature optimization suggestion with EV savings
         """
@@ -1762,9 +1765,9 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "special_defense": calculate_stat(base_stats.special_defense, 31, spd_evs, 50, get_nature_modifier(current_nature_enum, "special_defense")),
                 "speed": calculate_stat(base_stats.speed, 31, spe_evs, 50, get_nature_modifier(current_nature_enum, "speed"))
             }
-            
+
             current_total_evs = hp_evs + atk_evs + def_evs + spa_evs + spd_evs + spe_evs
-            
+
             # Determine if Pokemon is physical or special attacker
             is_physical = False
             is_special = False
@@ -1778,26 +1781,26 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                             is_special = True
                     except Exception:
                         continue
-            
+
             # Try all natures and find the one that uses fewest EVs
             best_nature = None
             best_evs = None
             best_total_evs = current_total_evs
             best_stats = None
-            
+
             for nature in Nature:
                 # Skip current nature
                 if nature == current_nature_enum:
                     continue
-                
+
                 # Don't suggest -Atk for physical attackers
                 if is_physical and get_nature_modifier(nature, "attack") < 1.0:
                     continue
-                
+
                 # Don't suggest -SpA for special attackers
                 if is_special and get_nature_modifier(nature, "special_attack") < 1.0:
                     continue
-                
+
                 # Calculate minimum EVs needed to reach same stats
                 new_hp_evs = _find_min_evs_for_hp(base_stats.hp, 31, current_stats["hp"], 50)
                 new_atk_evs = _find_min_evs_for_stat(base_stats.attack, 31, current_stats["attack"], get_nature_modifier(nature, "attack"), 50)
@@ -1805,9 +1808,9 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 new_spa_evs = _find_min_evs_for_stat(base_stats.special_attack, 31, current_stats["special_attack"], get_nature_modifier(nature, "special_attack"), 50)
                 new_spd_evs = _find_min_evs_for_stat(base_stats.special_defense, 31, current_stats["special_defense"], get_nature_modifier(nature, "special_defense"), 50)
                 new_spe_evs = _find_min_evs_for_stat(base_stats.speed, 31, current_stats["speed"], get_nature_modifier(nature, "speed"), 50)
-                
+
                 new_total_evs = new_hp_evs + new_atk_evs + new_def_evs + new_spa_evs + new_spd_evs + new_spe_evs
-                
+
                 # Verify stats match (should be same or better)
                 new_stats = {
                     "hp": calculate_hp(base_stats.hp, 31, new_hp_evs, 50),
@@ -1817,36 +1820,36 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     "special_defense": calculate_stat(base_stats.special_defense, 31, new_spd_evs, 50, get_nature_modifier(nature, "special_defense")),
                     "speed": calculate_stat(base_stats.speed, 31, new_spe_evs, 50, get_nature_modifier(nature, "speed"))
                 }
-                
+
                 # Check if stats are same or better in important stats
                 # For physical attackers, Attack and Speed must be same or better
                 # For special attackers, SpA and Speed must be same or better
                 # HP and defenses should generally be same or better
                 stats_match = True
-                
+
                 # HP should be same or better
                 if new_stats["hp"] < current_stats["hp"]:
                     stats_match = False
-                
+
                 # Attack must be same or better for physical attackers
                 if is_physical and new_stats["attack"] < current_stats["attack"]:
                     stats_match = False
-                
+
                 # Special Attack must be same or better for special attackers
                 if is_special and new_stats["special_attack"] < current_stats["special_attack"]:
                     stats_match = False
-                
+
                 # Speed should generally be same or better (unless Trick Room)
                 if new_stats["speed"] < current_stats["speed"]:
                     stats_match = False
-                
+
                 # Defenses can be slightly worse if it saves significant EVs
                 # But only if the loss is minimal (1-2 points)
                 if new_stats["defense"] < current_stats["defense"] - 2:
                     stats_match = False
                 if new_stats["special_defense"] < current_stats["special_defense"] - 2:
                     stats_match = False
-                
+
                 if stats_match and new_total_evs < best_total_evs:
                     best_nature = nature
                     best_evs = {
@@ -1859,7 +1862,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     }
                     best_total_evs = new_total_evs
                     best_stats = new_stats
-            
+
             # If no better nature found
             if best_nature is None:
                 return {
@@ -1869,9 +1872,9 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     "message": "Your nature is already optimal! No EV savings possible.",
                     "markdown_summary": f"## Nature Optimization: {pokemon_name.title()}\n\n### Result\nYour current nature ({current_nature.title()}) is already optimal. No EV savings possible with a different nature."
                 }
-            
+
             ev_savings = current_total_evs - best_total_evs
-            
+
             # Build markdown output
             markdown_lines = [
                 f"## Nature Optimization: {pokemon_name.title()}",
@@ -1907,41 +1910,41 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "",
                 "### What Changed"
             ]
-            
+
             # Show what changed
             if best_stats['attack'] != current_stats['attack']:
                 diff = best_stats['attack'] - current_stats['attack']
                 markdown_lines.append(f"- Attack: {current_stats['attack']} → {best_stats['attack']} ({'+' if diff > 0 else ''}{diff}) - Nature boost compensates for fewer EVs")
-            
+
             if best_stats['special_attack'] != current_stats['special_attack']:
                 diff = best_stats['special_attack'] - current_stats['special_attack']
                 spa_reason = "Not used for special moves" if is_physical else "Nature adjustment"
                 markdown_lines.append(f"- Sp.Atk: {current_stats['special_attack']} → {best_stats['special_attack']} ({'+' if diff > 0 else ''}{diff}) - {spa_reason}")
-            
+
             if best_stats['speed'] != current_stats['speed']:
                 diff = best_stats['speed'] - current_stats['speed']
                 markdown_lines.append(f"- Speed: {current_stats['speed']} → {best_stats['speed']} ({'+' if diff > 0 else ''}{diff}) - Nature adjustment")
-            
+
             markdown_lines.extend([
                 f"- **{ev_savings} EVs freed up** for other stats!",
                 "",
                 "### Where to Invest Saved EVs",
                 f"With {ev_savings} extra EVs, you could:"
             ])
-            
+
             # Suggest where to invest saved EVs
             if best_stats['hp'] < 400:  # Reasonable HP cap
                 hp_gain = calculate_hp(base_stats.hp, 31, best_evs['hp'] + ev_savings, 50) - best_stats['hp']
                 markdown_lines.append(f"- Add {ev_savings} to HP ({best_stats['hp']} → {best_stats['hp'] + hp_gain}) for more bulk")
-            
+
             if best_stats['defense'] < 300:
                 def_gain = calculate_stat(base_stats.defense, 31, best_evs['defense'] + ev_savings, 50, get_nature_modifier(best_nature, "defense")) - best_stats['defense']
                 markdown_lines.append(f"- Add {ev_savings} to Def ({best_stats['defense']} → {best_stats['defense'] + def_gain}) to survive physical hits")
-            
+
             if best_stats['special_defense'] < 300:
                 spd_gain = calculate_stat(base_stats.special_defense, 31, best_evs['special_defense'] + ev_savings, 50, get_nature_modifier(best_nature, "special_defense")) - best_stats['special_defense']
                 markdown_lines.append(f"- Add {ev_savings} to SpD ({best_stats['special_defense']} → {best_stats['special_defense'] + spd_gain}) to survive special hits")
-            
+
             # Generate Showdown pastes for both current and optimized spreads
             types = await pokeapi.get_pokemon_types(pokemon_name)
 
@@ -2004,7 +2007,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             }
 
             return response
-            
+
         except Exception as e:
             logger.error(f"Error in suggest_nature_optimization: {e}", exc_info=True)
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
@@ -2204,17 +2207,17 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             # Use intelligent nature selection for offensive role
             nature_name = "Jolly" if is_physical else "Timid"  # Default fallback
             nature_reasoning = None
-            
+
             if role == "offensive":
                 from vgc_mcp_core.calc.nature_optimization import find_optimal_nature_for_benchmarks
-                
+
                 benchmarks = {
                     "speed_target": speed_target,
                     "prioritize": "offense",
                     "offensive_evs": 252,
                     "speed_evs": 252
                 }
-                
+
                 nature_result = find_optimal_nature_for_benchmarks(
                     base_stats=base_stats,
                     benchmarks=benchmarks,
@@ -2222,7 +2225,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     is_special=is_special,
                     role="offensive"
                 )
-                
+
                 if nature_result:
                     nature_name = nature_result.best_nature.value.title()
                     nature_reasoning = nature_result.reasoning
@@ -2338,7 +2341,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 },
                 "showdown_paste": showdown_paste
             }
-            
+
             if nature_reasoning:
                 result["nature_selection_reasoning"] = nature_reasoning
             if hp_optimization:
@@ -2492,7 +2495,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             base_stats = await pokeapi.get_base_stats(pokemon_name)
 
             try:
-                parsed_nature = Nature(nature.lower())
+                Nature(nature.lower())
             except ValueError:
                 return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {nature}')
 
@@ -2653,7 +2656,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 is_physical = offensive_evs > 0 and my_base.attack > my_base.special_attack
                 is_special = offensive_evs > 0 and my_base.special_attack > my_base.attack
                 role = "offensive" if prioritize == "offense" else "bulk"
-                
+
                 # Calculate speed target first (needed for benchmarks)
                 target_speed = 0
                 if outspeed_pokemon:
@@ -2673,14 +2676,14 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                             target_speed = int(target_speed * 2)
                     except Exception:
                         pass
-                
+
                 # Build benchmarks dict
                 benchmarks = {
                     "speed_target": target_speed if outspeed_pokemon else None,
                     "prioritize": prioritize,
                     "offensive_evs": offensive_evs if prioritize == "offense" else None,
                 }
-                
+
                 # Find optimal nature
                 nature_result = find_optimal_nature_for_benchmarks(
                     base_stats=my_base,
@@ -2689,7 +2692,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     is_special=is_special,
                     role=role
                 )
-                
+
                 if nature_result:
                     nature = nature_result.best_nature.value
                     nature_reasoning = nature_result.reasoning
@@ -2697,7 +2700,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     # Fallback to neutral if optimization fails
                     nature = "serious"
                     nature_reasoning = "Could not optimize nature, using neutral nature"
-            
+
             parsed_nature = Nature(nature.lower())
 
             results = {
@@ -2705,7 +2708,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "nature": nature,
                 "benchmarks": {}
             }
-            
+
             if nature_reasoning:
                 results["nature_selection_reasoning"] = nature_reasoning
 
@@ -2857,10 +2860,6 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                             survive_pokemon_ability = default_ability
 
                     atk_nature = Nature(survive_pokemon_nature.lower())
-                    atk_nature_mod = get_nature_modifier(
-                        atk_nature,
-                        "attack" if is_physical else "special_attack"
-                    )
 
                     # Auto-detect Unseen Fist for Urshifu forms
                     normalized_attacker = survive_pokemon.lower().replace(" ", "-")
@@ -2923,8 +2922,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     # defensive ability interactions auto-apply, and pre-compute
                     # the Intimidate stage event for this physical/special move.
                     from vgc_mcp_core.tools.ability_helpers import (
-                        resolve_ability,
                         compute_intimidate_attack_stage,
+                        resolve_ability,
                     )
                     ability, _ability_source = await resolve_ability(
                         pokemon_name, pokeapi=pokeapi, smogon_client=smogon,
@@ -3583,8 +3582,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
 
             # Resolve defender ability and pre-compute Intimidate stages once.
             from vgc_mcp_core.tools.ability_helpers import (
-                resolve_ability,
                 compute_intimidate_attack_stage,
+                resolve_ability,
             )
             ability, _ability_source = await resolve_ability(
                 pokemon_name, pokeapi=pokeapi, smogon_client=smogon,
@@ -4141,8 +4140,32 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         item=item,
                         tera_type=defender_tera_type,
                     )
-                    adj_r1 = calculate_damage(attacker1, adj_defender, move1, mods1)
-                    adj_r2 = calculate_damage(attacker2, adj_defender, move2, mods2)
+                    adj_mods1 = DamageModifiers(
+                        is_doubles=True, attacker_item=survive_hit1_item,
+                        attacker_ability=survive_hit1_ability, tera_type=survive_hit1_tera_type,
+                        tera_active=survive_hit1_tera_type is not None,
+                        defender_tera_type=defender_tera_type,
+                        defender_tera_active=defender_tera_type is not None,
+                        is_critical=move1.always_crit,
+                        sword_of_ruin=sword_of_ruin1,
+                        beads_of_ruin=beads_of_ruin1,
+                        defender_ability=ability,
+                        attack_stage=intim1_stage if is_physical1 else 0,
+                    )
+                    adj_mods2 = DamageModifiers(
+                        is_doubles=True, attacker_item=survive_hit2_item,
+                        attacker_ability=survive_hit2_ability, tera_type=survive_hit2_tera_type,
+                        tera_active=survive_hit2_tera_type is not None,
+                        defender_tera_type=defender_tera_type,
+                        defender_tera_active=defender_tera_type is not None,
+                        is_critical=move2.always_crit,
+                        sword_of_ruin=sword_of_ruin2,
+                        beads_of_ruin=beads_of_ruin2,
+                        defender_ability=ability,
+                        attack_stage=intim2_stage if is_physical2 else 0,
+                    )
+                    adj_r1 = calculate_damage(attacker1, adj_defender, move1, adj_mods1)
+                    adj_r2 = calculate_damage(attacker2, adj_defender, move2, adj_mods2)
                     if adj_r1.max_percent < 100 and adj_r2.max_percent < 100:
                         dual_result["hp_optimization"] = hp_adj
 
@@ -4580,7 +4603,6 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
 
                     # Format attacker spread
                     atk_ev_str = f"{threat.evs}"
-                    nature_boost = "+" if threat.nature.lower() in ("adamant", "jolly", "modest", "timid", "brave", "quiet") else ""
                     atk_spread = f"{threat.nature.title()} {atk_ev_str} {'Atk' if threat.is_physical else 'SpA'}"
 
                     threat_analysis.append({

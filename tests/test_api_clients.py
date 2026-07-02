@@ -1,13 +1,13 @@
 """Tests for API clients with mocked responses."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from vgc_mcp_core.api.pokeapi import PokeAPIClient, PokeAPIError
-from vgc_mcp_core.api.cache import APICache
-from vgc_mcp_core.models.pokemon import BaseStats
-from vgc_mcp_core.models.move import Move, MoveCategory
+import pytest
 
+from vgc_mcp_core.api.cache import APICache
+from vgc_mcp_core.api.pokeapi import PokeAPIClient, PokeAPIError
+from vgc_mcp_core.models.move import Move, MoveCategory
+from vgc_mcp_core.models.pokemon import BaseStats
 
 # Sample PokeAPI responses
 FLUTTER_MANE_RESPONSE = {
@@ -189,7 +189,6 @@ class TestPokeAPIClient:
     @pytest.mark.asyncio
     async def test_404_raises_error(self, client, mock_cache):
         """Test that 404 responses raise PokeAPIError."""
-        import httpx
 
         with patch.object(client, '_fetch', new_callable=AsyncMock) as mock_fetch:
             mock_fetch.side_effect = PokeAPIError("Not found: pokemon/not-a-pokemon")

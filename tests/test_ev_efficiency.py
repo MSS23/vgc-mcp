@@ -1,20 +1,15 @@
 """Tests for EV efficiency optimization."""
 
 import pytest
+
 from vgc_mcp_core.calc.stats import (
+    calculate_hp,
+    calculate_stat,
     optimize_ev_efficiency,
     optimize_spread_efficiency,
     validate_ev_efficiency,
-    calculate_stat,
-    calculate_hp
 )
-from vgc_mcp_core.models.pokemon import (
-    PokemonBuild,
-    BaseStats,
-    EVSpread,
-    IVSpread,
-    Nature
-)
+from vgc_mcp_core.models.pokemon import BaseStats, EVSpread, IVSpread, Nature, PokemonBuild
 
 
 class TestOptimizeEVEfficiency:

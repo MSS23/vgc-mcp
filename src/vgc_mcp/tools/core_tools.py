@@ -2,17 +2,17 @@
 
 from mcp.server.fastmcp import FastMCP
 
-from vgc_mcp_core.team.manager import TeamManager
 from vgc_mcp_core.api.smogon import SmogonStatsClient
 from vgc_mcp_core.team.core_builder import (
-    suggest_partners,
-    find_popular_cores,
+    POKEMON_ROLES,
     analyze_core_synergy,
     complete_team,
+    find_popular_cores,
     get_pokemon_role,
-    POKEMON_ROLES,
+    suggest_partners,
 )
-from vgc_mcp_core.utils.errors import error_response, ErrorCodes
+from vgc_mcp_core.team.manager import TeamManager
+from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 
 def register_core_tools(

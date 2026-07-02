@@ -30,15 +30,15 @@ Usage:
 
 from mcp.server.fastmcp import FastMCP
 
-from vgc_mcp_core.config import logger
-from vgc_mcp_core.presentation import PRESENTATION_INSTRUCTIONS
 from vgc_mcp_core.api.cache import APICache
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
-from vgc_mcp_core.api.smogon import SmogonStatsClient
 from vgc_mcp_core.api.pokepaste import PokePasteClient
-from vgc_mcp_core.team.manager import TeamManager
+from vgc_mcp_core.api.smogon import SmogonStatsClient
+from vgc_mcp_core.config import logger
+from vgc_mcp_core.presentation import PRESENTATION_INSTRUCTIONS
+from vgc_mcp_core.state import BattleStateManager, BuildStateManager
 from vgc_mcp_core.team.analysis import TeamAnalyzer
-from vgc_mcp_core.state import BuildStateManager, BattleStateManager
+from vgc_mcp_core.team.manager import TeamManager
 
 from .tools import register_all as register_all_tools
 
@@ -216,6 +216,7 @@ def main_http(host: str = "0.0.0.0", port: int = None):
     Note: Reads PORT from environment variable (for Render/Heroku deployment).
     """
     import os
+
     import uvicorn
 
     # Use PORT env var (Render sets this), fallback to 8000
@@ -223,10 +224,10 @@ def main_http(host: str = "0.0.0.0", port: int = None):
         port = int(os.environ.get("PORT", 8000))
     from mcp.server.sse import SseServerTransport
     from starlette.applications import Starlette
-    from starlette.routing import Mount, Route
-    from starlette.responses import JSONResponse, Response
     from starlette.middleware import Middleware
     from starlette.middleware.cors import CORSMiddleware
+    from starlette.responses import JSONResponse, Response
+    from starlette.routing import Mount, Route
 
     # Create SSE transport - note the trailing slash for Mount compatibility
     sse = SseServerTransport("/messages/")

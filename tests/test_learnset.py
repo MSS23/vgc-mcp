@@ -1,11 +1,12 @@
 """Tests for move legality and learnset validation."""
 
 import pytest
+
 from vgc_mcp_core.validation.learnset import (
-    normalize_move_name,
-    categorize_learn_method,
-    MoveValidationResult,
     MovesetValidationResult,
+    MoveValidationResult,
+    categorize_learn_method,
+    normalize_move_name,
 )
 
 

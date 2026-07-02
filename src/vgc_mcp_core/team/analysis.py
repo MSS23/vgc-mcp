@@ -1,13 +1,11 @@
 """Team analysis for type coverage, weaknesses, and speed tiers."""
 
 from collections import defaultdict
-from typing import Optional
 
-from ..models.team import Team
-from ..models.pokemon import PokemonBuild
 from ..calc.modifiers import TYPE_CHART, get_type_effectiveness
 from ..calc.stats import calculate_all_stats
-
+from ..models.pokemon import PokemonBuild
+from ..models.team import Team
 
 ALL_TYPES = [
     "Normal", "Fire", "Water", "Electric", "Grass", "Ice",

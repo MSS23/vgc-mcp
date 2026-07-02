@@ -12,17 +12,21 @@ from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
+from vgc_mcp_core.calc.team_matchup import (
+    PokemonProfile,
+    build_pokemon_profile,
+    generate_full_game_plan,
+)
+from vgc_mcp_core.models.move import Move
 from vgc_mcp_core.models.pokemon import (
-    PokemonBuild, Nature, EVSpread, BaseStats, StatPointSpread,
+    EVSpread,
+    Nature,
+    PokemonBuild,
+    StatPointSpread,
 )
 from vgc_mcp_core.rules.regulation_loader import get_regulation_config
-from vgc_mcp_core.models.move import Move, MoveCategory
-from vgc_mcp_core.calc.team_matchup import (
-    build_pokemon_profile, generate_full_game_plan, PokemonProfile,
-)
-from vgc_mcp_core.calc.priority import normalize_move_name
 from vgc_mcp_core.team.manager import TeamManager
-from vgc_mcp_core.utils.errors import pokemon_not_found_error, api_error, error_response, ErrorCodes
+from vgc_mcp_core.utils.errors import ErrorCodes, api_error, error_response, pokemon_not_found_error
 from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name
 from vgc_mcp_core.utils.normalize import normalize_smogon_name as _normalize_smogon_name
 

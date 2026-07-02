@@ -1,8 +1,8 @@
 """Tests for matchup analysis tools."""
 
-import pytest
 from unittest.mock import MagicMock
 
+import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.matchup_tools import register_matchup_tools

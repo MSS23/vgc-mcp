@@ -1,24 +1,25 @@
 """Team vs team matchup analysis with scoring algorithm and game plan generation."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
-from ..models.pokemon import PokemonBuild, BaseStats, Nature, EVSpread, IVSpread
 from ..models.move import Move, MoveCategory
-from ..models.team import Team
-from .damage import calculate_damage, DamageResult
-from .stats import calculate_all_stats
+from ..models.pokemon import PokemonBuild
+from .abilities import (
+    INTIMIDATE_BLOCKERS,
+    INTIMIDATE_PUNISHERS,
+    TERRAIN_SETTERS,
+    WEATHER_SETTERS,
+)
+from .damage import calculate_damage
 from .modifiers import DamageModifiers, get_type_effectiveness
 from .priority import (
-    get_move_priority, determine_turn_order, check_prankster_immunity,
-    FAKE_OUT_POKEMON, PRANKSTER_POKEMON, PRIORITY_MOVES, normalize_move_name,
-    TurnOrderResult,
+    FAKE_OUT_POKEMON,
+    PRIORITY_MOVES,
+    get_move_priority,
+    normalize_move_name,
 )
-from .abilities import (
-    WEATHER_SETTERS, INTIMIDATE_POKEMON,
-    INTIMIDATE_BLOCKERS, INTIMIDATE_PUNISHERS,
-    TERRAIN_SETTERS,
-)
+from .stats import calculate_all_stats
 
 # ============================================================================
 # VGC BATTLE MECHANIC CONSTANTS
@@ -362,13 +363,6 @@ def calculate_team_advantage(
         total_weighted_advantage += best_matchup * weight
         total_weight += weight
 
-    # Also factor in opponent's best matchups against us (defensive consideration)
-    for j, p2 in enumerate(team2):
-        # Opponent's best matchup = our worst defensive matchup
-        opponent_best = max(matrix[i][j] for i in range(len(team1)))
-        # This is actually from team1's perspective, so negative opponent advantage
-        # Skip this for now to keep it simpler
-
     # Normalize to 0-100% scale
     if total_weight == 0:
         return 50.0
@@ -490,7 +484,7 @@ def analyze_lead_matchups(
             ))
 
     # Sort by advantage and mark top N as recommended
-    leads.sort(key=lambda l: l.advantage_score, reverse=True)
+    leads.sort(key=lambda lead: lead.advantage_score, reverse=True)
     for i in range(min(top_n, len(leads))):
         leads[i].recommended = True
 
@@ -567,12 +561,12 @@ def generate_game_plan(
     # Key threats to address
     high_threats = [t for t in threats if t.danger_level == "HIGH"]
     if high_threats:
-        lines.append(f"\nPRIORITY TARGETS:")
+        lines.append("\nPRIORITY TARGETS:")
         for t in high_threats[:2]:
             lines.append(f"  - KO {t.pokemon_name} with {t.your_best_answer} ({t.answer_damage})")
 
     # Pokemon to preserve
-    lines.append(f"\nKEEP ALIVE: Your answers to their biggest threats")
+    lines.append("\nKEEP ALIVE: Your answers to their biggest threats")
 
     return "\n".join(lines)
 
@@ -1100,7 +1094,7 @@ def _score_lead_pair(
             reasoning.append("Fake Out blocked by Ghost-type leads")
         elif opp_psychic_terrain and all(p.is_grounded for p in predicted_opp_leads):
             fake_out_note = (
-                f"Opponent has Psychic Terrain - blocks Fake Out on grounded targets"
+                "Opponent has Psychic Terrain - blocks Fake Out on grounded targets"
             )
             reasoning.append("Psychic Terrain blocks Fake Out")
         elif opp_quick_guard:
@@ -1212,11 +1206,6 @@ def _score_lead_pair(
                 1 for tp in their_profiles
                 if tp.build.base_stats.attack > tp.build.base_stats.special_attack
                 and tp.intimidate_reaction != "blocked"
-            )
-            blocked_count = sum(
-                1 for tp in their_profiles
-                if tp.build.base_stats.attack > tp.build.base_stats.special_attack
-                and tp.intimidate_reaction == "blocked"
             )
 
             if physical_threats >= 3:
@@ -1616,7 +1605,6 @@ def _determine_win_condition(
     your_tw = any(p.is_tailwind_setter for p in your_profiles)
     their_tw = any(p.is_tailwind_setter for p in their_profiles)
     your_tr = any(p.is_trick_room_setter for p in your_profiles)
-    their_tr = any(p.is_trick_room_setter for p in their_profiles)
     your_prankster_tw = any(p.is_prankster and p.is_tailwind_setter for p in your_profiles)
 
     # Fast team with Tailwind
@@ -1925,8 +1913,6 @@ def generate_full_game_plan(
     their_builds = [p.build for p in their_profiles]
 
     # Use existing moves if available for more accurate scoring
-    your_moves_map = {p.name: p.moves for p in your_profiles}
-    their_moves_map = {p.name: p.moves for p in their_profiles}
 
     matrix, detailed = build_matchup_matrix(your_builds, their_builds)
     overall_score = calculate_team_advantage(your_builds, their_builds)

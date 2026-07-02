@@ -1,12 +1,11 @@
 """Tests for type effectiveness education tools."""
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
+import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.type_tools import register_type_tools
-from vgc_mcp_core.calc.modifiers import TYPE_CHART
 
 
 @pytest.fixture

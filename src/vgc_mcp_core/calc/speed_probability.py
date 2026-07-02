@@ -4,12 +4,11 @@ This module calculates the probability of outspeeding opponents based on
 their actual usage spread distributions from Smogon stats.
 """
 
-from dataclasses import dataclass
-from typing import Optional
 import math
+from dataclasses import dataclass
 
-from ..models.pokemon import Nature, NATURE_MODIFIERS
 from ..config import EV_BREAKPOINTS_LV50
+from ..models.pokemon import NATURE_MODIFIERS, Nature
 
 
 @dataclass
@@ -434,7 +433,6 @@ def calculate_speed_creep_evs(
             break
 
     # Find minimum EVs to reach threshold speed (level 50 breakpoints)
-    nature_mod = get_nature_speed_modifier(your_nature)
 
     for evs in EV_BREAKPOINTS_LV50:
         your_speed = calculate_speed_stat(your_base_speed, your_nature, evs)

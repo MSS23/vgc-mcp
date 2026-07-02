@@ -30,12 +30,12 @@ Jolly Nature
 """
 
 import re
-from typing import Optional
 from dataclasses import dataclass, field
+from typing import Optional
 
 import pydantic
 
-from ..models.pokemon import Nature, EVSpread, IVSpread, PokemonBuild, StatPointSpread
+from ..models.pokemon import EVSpread, IVSpread, Nature, PokemonBuild, StatPointSpread
 
 
 class ShowdownParseError(Exception):
@@ -722,7 +722,7 @@ def pokemon_build_to_showdown(pokemon: PokemonBuild) -> str:
         "spd": pokemon.evs.special_defense,
         "spe": pokemon.evs.speed,
     }
-    
+
     # Convert IVSpread to dict (only include non-31 values)
     ivs_dict = {}
     if pokemon.ivs.hp != 31:
@@ -737,19 +737,19 @@ def pokemon_build_to_showdown(pokemon: PokemonBuild) -> str:
         ivs_dict["spd"] = pokemon.ivs.special_defense
     if pokemon.ivs.speed != 31:
         ivs_dict["spe"] = pokemon.ivs.speed
-    
+
     # Convert item name (hyphenated to spaced title case)
     item = pokemon.item.replace("-", " ").title() if pokemon.item else None
-    
+
     # Convert ability name
     ability = pokemon.ability.replace("-", " ").title() if pokemon.ability else None
-    
+
     # Convert tera type
     tera_type = pokemon.tera_type.replace("-", " ").title() if pokemon.tera_type else None
-    
+
     # Convert nature
     nature = pokemon.nature.value.title()
-    
+
     return export_pokemon_to_showdown(
         species=species,
         item=item,

@@ -1,13 +1,13 @@
 """Tests for build checker tools."""
 
-import pytest
 from unittest.mock import AsyncMock
 
+import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.build_checker_tools import register_build_checker_tools
-from vgc_mcp_core.models.pokemon import BaseStats
 from vgc_mcp_core.models.move import Move, MoveCategory
+from vgc_mcp_core.models.pokemon import BaseStats
 
 
 @pytest.fixture

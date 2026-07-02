@@ -1,12 +1,12 @@
 """MCP tools for tournament readiness checking."""
 
-from typing import Optional, List, Dict
+from typing import Dict, List
+
 from mcp.server.fastmcp import FastMCP
 
-from vgc_mcp_core.config import logger
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
-from vgc_mcp_core.calc.matchup import COMMON_THREATS
-from vgc_mcp_core.utils.errors import api_error, error_response, ErrorCodes
+from vgc_mcp_core.config import logger
+from vgc_mcp_core.utils.errors import ErrorCodes, api_error, error_response
 
 
 def register_readiness_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
@@ -19,18 +19,18 @@ def register_readiness_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
     ) -> dict:
         """
         Comprehensive tournament readiness assessment.
-        
+
         Args:
             team_pokemon: List of dicts with Pokemon builds (name, nature, evs, item, ability, moves)
             format: VGC format
-            
+
         Returns:
             Readiness report with scores and recommendations
         """
         try:
             if len(team_pokemon) != 6:
                 return error_response(ErrorCodes.INVALID_PARAMETER, 'Team must have exactly 6 Pokemon')
-            
+
             scores = {
                 "legality": 100,
                 "type_coverage": 0,
@@ -38,10 +38,10 @@ def register_readiness_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 "meta_coverage": 0,
                 "synergy": 0
             }
-            
+
             issues = []
             recommendations = []
-            
+
             # Check type coverage
             all_types = set()
             for pokemon_data in team_pokemon:
@@ -50,7 +50,7 @@ def register_readiness_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                     all_types.update(types)
                 except Exception:
                     continue
-            
+
             if len(all_types) >= 8:
                 scores["type_coverage"] = 85
             elif len(all_types) >= 6:
@@ -58,12 +58,12 @@ def register_readiness_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             else:
                 scores["type_coverage"] = 50
                 issues.append("Limited type diversity")
-            
+
             # Check speed control
             has_tailwind = False
             has_trick_room = False
             has_priority = False
-            
+
             for pokemon_data in team_pokemon:
                 moves = pokemon_data.get("moves", [])
                 if any("tailwind" in m.lower() for m in moves):
@@ -72,7 +72,7 @@ def register_readiness_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                     has_trick_room = True
                 if any("fake-out" in m.lower() or "extreme-speed" in m.lower() for m in moves):
                     has_priority = True
-            
+
             if has_tailwind or has_trick_room:
                 scores["speed_control"] = 80
             elif has_priority:
@@ -80,16 +80,16 @@ def register_readiness_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             else:
                 scores["speed_control"] = 40
                 issues.append("No Trick Room answer - Add Imprison or fast Taunt user")
-            
+
             # Check meta coverage (simplified)
             scores["meta_coverage"] = 75  # Placeholder
-            
+
             # Check synergy
             scores["synergy"] = 80  # Placeholder
-            
+
             # Calculate overall score
             overall_score = sum(scores.values()) / len(scores)
-            
+
             # Determine rating
             if overall_score >= 90:
                 rating = "A"
@@ -101,7 +101,7 @@ def register_readiness_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 rating = "C+"
             else:
                 rating = "C"
-            
+
             # Build markdown output
             markdown_lines = [
                 "## Tournament Readiness Report",
@@ -112,11 +112,11 @@ def register_readiness_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 "| Category | Status | Score |",
                 "|----------|--------|-------|"
             ]
-            
+
             for category, score in scores.items():
                 status = "✓ Pass" if score >= 70 else "⚠ Weak"
                 markdown_lines.append(f"| {category.title().replace('_', ' ')} | {status} | {score}% |")
-            
+
             if issues:
                 markdown_lines.extend([
                     "",
@@ -124,7 +124,7 @@ def register_readiness_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 ])
                 for i, issue in enumerate(issues[:3], 1):
                     markdown_lines.append(f"{i}. **{issue}**")
-            
+
             if recommendations:
                 markdown_lines.extend([
                     "",
@@ -132,7 +132,7 @@ def register_readiness_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 ])
                 for i, rec in enumerate(recommendations[:3], 1):
                     markdown_lines.append(f"{i}. {rec}")
-            
+
             response = {
                 "overall_score": overall_score,
                 "rating": rating,
@@ -141,9 +141,9 @@ def register_readiness_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 "recommendations": recommendations,
                 "markdown_summary": "\n".join(markdown_lines)
             }
-            
+
             return response
-            
+
         except Exception as e:
             logger.error(f"Error in check_tournament_readiness: {e}", exc_info=True)
             return api_error(str(e))

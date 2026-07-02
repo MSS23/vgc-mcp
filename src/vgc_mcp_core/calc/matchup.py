@@ -3,13 +3,12 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from ..models.pokemon import PokemonBuild, BaseStats, Nature, EVSpread, IVSpread
 from ..models.move import Move, MoveCategory
+from ..models.pokemon import BaseStats, EVSpread, IVSpread, Nature, PokemonBuild
 from ..models.team import Team
-from .damage import calculate_damage, DamageResult
-from .stats import calculate_all_stats
-from .speed import SPEED_BENCHMARKS
+from .damage import calculate_damage
 from .modifiers import DamageModifiers, get_type_effectiveness
+from .stats import calculate_all_stats
 
 
 @dataclass
@@ -395,7 +394,6 @@ def analyze_single_matchup(
     can_ohko = best_result.is_possible_ohko
     # Guaranteed 2HKO requires min damage >= 50% (two min rolls = 100%+)
     # Possible 2HKO requires max damage >= 50% (two max rolls = 100%+)
-    guaranteed_2hko = best_result.min_percent >= 50
     can_2hko = best_result.max_percent >= 50  # Possible but not guaranteed
 
     # Check if attacker survives defender's best attack
@@ -480,9 +478,6 @@ def analyze_threat_matchup(
 
     for slot in team.slots:
         pokemon = slot.pokemon
-        pokemon_stats = calculate_all_stats(pokemon)
-        pokemon_speed = pokemon_stats["speed"]
-
         # Create moves for this Pokemon if not provided
         if team_moves and pokemon.name in team_moves:
             pokemon_moves = team_moves[pokemon.name]

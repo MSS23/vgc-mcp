@@ -4,10 +4,10 @@ import pytest
 
 from vgc_mcp_core.calc.stats import calculate_all_stats
 from vgc_mcp_core.calc.stats_champions import (
+    calculate_all_stats_champions,
     calculate_hp_sp,
     calculate_speed_sp,
     calculate_stat_sp,
-    calculate_all_stats_champions,
     find_speed_sps,
 )
 from vgc_mcp_core.models.pokemon import (

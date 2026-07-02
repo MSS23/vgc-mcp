@@ -5,13 +5,11 @@ not just Pokemon types (STAB). It can identify coverage holes,
 suggest coverage moves, and detect quad weaknesses.
 """
 
-from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Optional
 
-from .modifiers import TYPE_CHART, get_type_effectiveness
 from ..utils.normalize import normalize_move_name  # noqa: F401  (re-export for back-compat)
-
+from .modifiers import get_type_effectiveness
 
 # All Pokemon types
 ALL_TYPES = [

@@ -2,7 +2,7 @@
 
 import pytest
 
-from vgc_mcp_core.rules.regulation_loader import RegulationConfig, get_regulation_config
+from vgc_mcp_core.rules.regulation_loader import RegulationConfig
 
 
 @pytest.fixture
@@ -98,9 +98,9 @@ def test_reg_ma_absent_species_stay_illegal(cfg):
 
 # --- Regression: restricted.py allowlist awareness (F1-e) ---
 
-from vgc_mcp_core.rules.restricted import (
-    get_restricted_status,
+from vgc_mcp_core.rules.restricted import (  # noqa: E402
     get_pokemon_legality,
+    get_restricted_status,
 )
 
 

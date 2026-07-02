@@ -6,17 +6,16 @@ assert SP-scale output (cap 32/stat, 66 total, 'SPs:' paste line) for champions
 while leaving the mainline path byte-for-byte unchanged.
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from mcp.server.fastmcp import FastMCP
 
-from vgc_mcp.tools.workflow_tools import register_workflow_tools
 from vgc_mcp.tools.speed_analysis_tools import register_speed_analysis_tools
+from vgc_mcp.tools.workflow_tools import register_workflow_tools
 from vgc_mcp_core.models.pokemon import BaseStats
-from vgc_mcp_core.team.manager import TeamManager
 from vgc_mcp_core.rules.regulation_loader import get_regulation_config
-
+from vgc_mcp_core.team.manager import TeamManager
 
 # Flutter Mane base stats (a Champions-legal Pokemon).
 FLUTTER_MANE = BaseStats(

@@ -4,8 +4,8 @@ These are proven, tournament-tested spreads with explanations
 of what benchmarks they hit.
 """
 
-from typing import Optional
 from dataclasses import dataclass
+from typing import Optional
 
 
 @dataclass

@@ -14,13 +14,12 @@ damage as it would with no Paradox boost at all. These tests pin that behavior s
 it can't silently regress back to boosting Special Attack.
 """
 
-import pytest
 
 from vgc_mcp_core.calc.damage import calculate_damage
 from vgc_mcp_core.calc.modifiers import DamageModifiers
 from vgc_mcp_core.calc.stats import calculate_all_stats
-from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, BaseStats, EVSpread
 from vgc_mcp_core.models.move import Move, MoveCategory
+from vgc_mcp_core.models.pokemon import BaseStats, EVSpread, Nature, PokemonBuild
 
 
 def _iron_valiant() -> PokemonBuild:

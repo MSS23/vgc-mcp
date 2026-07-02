@@ -3,7 +3,7 @@
 name: vgc-mcp
 displayName: VGC Pokémon Coach
 description: >
-  Pokémon VGC team-building and live battle coaching over MCP. 206 tools for
+  Pokémon VGC team-building and live battle coaching over MCP. 208 tools for
   Showdown-accurate damage calcs, multi-threat EV optimization, replay
   analysis, breakpoint finding, and turn-by-turn battle copilot. Plug into
   Claude Desktop, ChatGPT, or any MCP client.

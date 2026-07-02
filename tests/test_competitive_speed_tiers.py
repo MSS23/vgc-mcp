@@ -1,9 +1,10 @@
 """Tests for competitive speed tier analysis using Smogon data."""
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
-from vgc_mcp_core.calc.speed import get_competitive_speed_benchmarks, calculate_speed_tier
+import pytest
+
+from vgc_mcp_core.calc.speed import calculate_speed_tier, get_competitive_speed_benchmarks
 from vgc_mcp_core.models.pokemon import Nature
 
 

@@ -1,11 +1,11 @@
 """Tests for bulk offensive damage calculation tools."""
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
+import pytest
 from mcp.server.fastmcp import FastMCP
 
-from vgc_mcp.tools.bulk_calc_tools import register_bulk_calc_tools, _parse_ev_string
+from vgc_mcp.tools.bulk_calc_tools import _parse_ev_string, register_bulk_calc_tools
 from vgc_mcp_core.models.pokemon import BaseStats
 
 

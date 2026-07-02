@@ -10,10 +10,11 @@ Expected behavior:
 """
 
 import pytest
+
 from vgc_mcp_core.calc.damage import calculate_damage
 from vgc_mcp_core.calc.modifiers import DamageModifiers
-from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, BaseStats, EVSpread
 from vgc_mcp_core.models.move import Move, MoveCategory
+from vgc_mcp_core.models.pokemon import BaseStats, EVSpread, Nature, PokemonBuild
 
 
 class TestLifeOrbSheerForce:
@@ -95,11 +96,11 @@ class TestLifeOrbSheerForce:
         min_ratio = result_with.min_damage / result_without.min_damage
         max_ratio = result_with.max_damage / result_without.max_damage
 
-        print(f"\nLife Orb + Sheer Force Landorus Earth Power vs Entei:")
+        print("\nLife Orb + Sheer Force Landorus Earth Power vs Entei:")
         print(f"With LO+SF: {result_with.min_damage}-{result_with.max_damage}")
         print(f"Without: {result_without.min_damage}-{result_without.max_damage}")
         print(f"Ratio: {min_ratio:.3f}x - {max_ratio:.3f}x")
-        print(f"Expected: ~1.69x (1.3 × 1.3)")
+        print("Expected: ~1.69x (1.3 × 1.3)")
 
         # Allow some tolerance for rounding (1.60-1.75)
         assert 1.60 <= min_ratio <= 1.75, (

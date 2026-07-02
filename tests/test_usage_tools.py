@@ -1,8 +1,8 @@
 """Tests for Smogon usage data tools."""
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, PropertyMock
+from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.usage_tools import register_usage_tools

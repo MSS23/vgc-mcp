@@ -1,8 +1,8 @@
 """Tests for ability synergy analysis tools."""
 
-import pytest
 from unittest.mock import MagicMock
 
+import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.ability_tools import register_ability_tools

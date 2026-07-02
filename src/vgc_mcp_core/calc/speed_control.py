@@ -1,14 +1,11 @@
 """Speed control analysis for Trick Room, Tailwind, and stat drops."""
 
-import math
 from dataclasses import dataclass
 from typing import Optional
 
 from ..models.team import Team
-from ..models.pokemon import PokemonBuild
-from .stats import calculate_all_stats
 from .speed import SPEED_BENCHMARKS, get_speed_benchmark
-
+from .stats import calculate_all_stats
 
 # Speed modifiers from various sources
 SPEED_STAGE_MULTIPLIERS = {

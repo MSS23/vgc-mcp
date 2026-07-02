@@ -1,15 +1,15 @@
 """Tests for name normalization utilities."""
 
 import pytest
+
 from vgc_mcp_core.utils.normalize import (
-    normalize_name,
-    normalize_pokemon_name,
+    ABILITY_ALIASES,
+    ITEM_ALIASES,
+    clear_caches,
     normalize_ability,
     normalize_item,
     normalize_move,
-    clear_caches,
-    ITEM_ALIASES,
-    ABILITY_ALIASES,
+    normalize_pokemon_name,
 )
 
 

@@ -1,8 +1,8 @@
 """Tests for meta threat analysis tools."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.meta_threat_tools import register_meta_threat_tools

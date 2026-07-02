@@ -12,12 +12,10 @@ overriding it.
 from __future__ import annotations
 
 import re
-from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 
-from vgc_mcp_core.utils.errors import error_response, ErrorCodes
-
+from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 # Each rule: (regex pattern, list of suggested tool names, rationale)
 ROUTING_RULES: list[tuple[re.Pattern, list[str], str]] = [

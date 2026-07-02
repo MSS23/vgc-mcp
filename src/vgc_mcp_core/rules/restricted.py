@@ -8,7 +8,6 @@ from typing import Optional
 
 from .regulation_loader import get_regulation_config
 
-
 # Some Pokemon that are specifically allowed despite being legendary
 # (Not restricted, can use as many as you want)
 # This list is shared across all regulations

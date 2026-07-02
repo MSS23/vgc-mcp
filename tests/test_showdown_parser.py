@@ -1,15 +1,16 @@
 """Tests for Showdown paste parsing."""
 
 import pytest
+
 from vgc_mcp_core.formats.showdown import (
-    parse_showdown_pokemon,
-    parse_showdown_team,
+    ShowdownParseError,
     export_pokemon_to_showdown,
     export_team_to_showdown,
+    parse_showdown_pokemon,
+    parse_showdown_team,
     parsed_to_ev_spread,
     parsed_to_iv_spread,
     parsed_to_nature,
-    ShowdownParseError,
 )
 from vgc_mcp_core.models.pokemon import Nature
 
@@ -120,7 +121,7 @@ Timid Nature
 
         parsed = parse_showdown_pokemon(paste)
 
-        assert parsed.shiny == True
+        assert parsed.shiny is True
         assert parsed.species == "Charizard"
 
     def test_parse_team(self):

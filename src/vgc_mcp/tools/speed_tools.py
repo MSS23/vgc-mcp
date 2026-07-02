@@ -5,14 +5,14 @@ Complements speed_analysis_tools.py with live data integration.
 """
 
 from typing import Optional
+
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
 from vgc_mcp_core.calc.stats import calculate_speed
 from vgc_mcp_core.models.pokemon import Nature
-from vgc_mcp_core.utils.errors import error_response, ErrorCodes
-
+from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 # Common VGC Pokemon with their base speeds and common speed investments
 # Used as fallback when Smogon data is unavailable
@@ -176,7 +176,7 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
                                 speed_set.add(speed)
                                 common_speeds.append(speed)
                         common_speeds.sort(reverse=True)
-                    
+
                     usage_per = 100 // len(common_speeds) if common_speeds else 100
                     target_spreads = [
                         {"speed": s, "usage": usage_per}

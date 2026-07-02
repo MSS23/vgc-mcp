@@ -5,10 +5,11 @@ was calculated as 93.8%-110.6% instead of the expected 93.8%-113.9%.
 """
 
 import pytest
+
 from vgc_mcp_core.calc.damage import calculate_damage
 from vgc_mcp_core.calc.modifiers import DamageModifiers
-from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, BaseStats, EVSpread
 from vgc_mcp_core.models.move import Move, MoveCategory
+from vgc_mcp_core.models.pokemon import BaseStats, EVSpread, Nature, PokemonBuild
 
 
 class TestSurgingStrikesVsOgerpon:
@@ -82,13 +83,13 @@ class TestSurgingStrikesVsOgerpon:
         result = calculate_damage(urshifu, ogerpon, surging_strikes, mods)
 
         # Print results for debugging
-        print(f"\nUrshifu Tera Water Surging Strikes vs Ogerpon-Hearthflame Tera Fire")
+        print("\nUrshifu Tera Water Surging Strikes vs Ogerpon-Hearthflame Tera Fire")
         print(f"Ogerpon HP: {result.defender_hp}")
         print(f"Damage: {result.min_damage}-{result.max_damage}")
         print(f"Percent: {result.min_percent:.1f}%-{result.max_percent:.1f}%")
         print(f"KO Chance: {result.ko_chance}")
         print(f"Rolls that OHKO: {result.ko_probability.rolls_that_ohko}/{result.ko_probability.total_combinations}")
-        print(f"\nExpected from Showdown: 168-204 (93.8%-113.9%), 85.77% OHKO (3513/4096 combinations)")
+        print("\nExpected from Showdown: 168-204 (93.8%-113.9%), 85.77% OHKO (3513/4096 combinations)")
         print(f"Our calculation: {result.min_damage}-{result.max_damage} ({result.min_percent:.1f}%-{result.max_percent:.1f}%), {result.ko_probability.ohko_chance:.2f}% OHKO ({result.ko_probability.rolls_that_ohko}/{result.ko_probability.total_combinations} combinations)")
 
         # Verify damage range matches Showdown: 168-204
@@ -144,7 +145,7 @@ class TestSurgingStrikesVsOgerpon:
         variance_ratio = result.max_damage / result.min_damage
         expected_variance = 100 / 85  # 1.176
 
-        print(f"\nDamage variance test:")
+        print("\nDamage variance test:")
         print(f"Min damage: {result.min_damage} (at 85% roll)")
         print(f"Max damage: {result.max_damage} (at 100% roll)")
         print(f"Variance ratio: {variance_ratio:.3f}")

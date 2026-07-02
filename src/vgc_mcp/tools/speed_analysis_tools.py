@@ -7,31 +7,31 @@ This module consolidates:
 """
 
 from typing import Optional
+
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
-from vgc_mcp_core.team.manager import TeamManager
-from vgc_mcp_core.calc.stats import calculate_speed, find_speed_evs
 from vgc_mcp_core.calc.speed import (
-    SPEED_BENCHMARKS,
     META_SPEED_TIERS,
+    SPEED_BENCHMARKS,
     calculate_speed_tier,
     get_competitive_speed_benchmarks,
 )
 from vgc_mcp_core.calc.speed_control import (
-    analyze_trick_room,
-    analyze_tailwind,
-    analyze_speed_drop,
     analyze_paralysis,
-    get_speed_control_summary,
-    get_team_speeds,
+    analyze_speed_drop,
+    analyze_tailwind,
+    analyze_trick_room,
     apply_speed_modifier,
     apply_stage_modifier,
+    get_speed_control_summary,
 )
-from vgc_mcp_core.models.pokemon import Nature
+from vgc_mcp_core.calc.stats import calculate_speed, find_speed_evs
 from vgc_mcp_core.config import EV_BREAKPOINTS_LV50
-from vgc_mcp_core.utils.errors import error_response, ErrorCodes
+from vgc_mcp_core.models.pokemon import Nature
+from vgc_mcp_core.team.manager import TeamManager
+from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 
 def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_manager: TeamManager, smogon_client: SmogonStatsClient):
@@ -216,7 +216,7 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
                         f"| Pokemon          | {pokemon_name}                             |",
                         f"| Target Speed     | {target_speed}                             |",
                         f"| Max with 32 SPs  | {max_speed}                                |",
-                        f"| Result           | Cannot reach target                        |",
+                        "| Result           | Cannot reach target                        |",
                     ]
                     return {
                         "pokemon": pokemon_name,
@@ -275,7 +275,7 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
                     f"| Pokemon          | {pokemon_name}                             |",
                     f"| Target Speed     | {target_speed}                             |",
                     f"| Max with 252 EVs | {max_speed}                                |",
-                    f"| Result           | Cannot reach target                        |",
+                    "| Result           | Cannot reach target                        |",
                 ]
                 return {
                     "pokemon": pokemon_name,

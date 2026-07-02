@@ -1,25 +1,24 @@
 """Core team diff logic for comparing Pokemon team versions."""
 
 from typing import Optional
-from dataclasses import asdict
 
 from ..formats.showdown import ParsedPokemon
-from .models import (
-    TeamDiff,
-    PokemonDiff,
-    FieldChange,
-    ChangeType,
-    FieldType,
-    StatChange,
-    MoveChange,
-)
 from .change_reasons import (
-    explain_nature_change,
+    explain_ability_change,
     explain_ev_change,
     explain_item_change,
     explain_move_change,
-    explain_ability_change,
+    explain_nature_change,
     explain_tera_change,
+)
+from .models import (
+    ChangeType,
+    FieldChange,
+    FieldType,
+    MoveChange,
+    PokemonDiff,
+    StatChange,
+    TeamDiff,
 )
 
 

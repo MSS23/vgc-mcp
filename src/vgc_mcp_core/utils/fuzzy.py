@@ -4,10 +4,8 @@ Provides "Did you mean...?" suggestions for typos and misspellings.
 """
 
 from difflib import get_close_matches
-from typing import Optional
 
 from ..models.pokemon import Nature
-
 
 # Common Pokemon names for fuzzy matching
 # This is a subset of popular VGC Pokemon - can be expanded

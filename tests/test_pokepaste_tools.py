@@ -1,14 +1,12 @@
 """Tests for PokePaste integration tools."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
-from dataclasses import dataclass
 
+import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.pokepaste_tools import register_pokepaste_tools
 from vgc_mcp_core.api.pokepaste import PokePasteError
-
 
 SAMPLE_PASTE = """Flutter Mane @ Choice Specs
 Ability: Protosynthesis

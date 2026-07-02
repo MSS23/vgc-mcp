@@ -1,8 +1,8 @@
 """Tests for stat calculation tools."""
 
-import pytest
 from unittest.mock import AsyncMock
 
+import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.stats_tools import register_stats_tools

@@ -1,17 +1,14 @@
 """MCP tools for Tera type optimization."""
 
-from typing import Optional, List
+from typing import List, Optional
+
 from mcp.server.fastmcp import FastMCP
 
-from vgc_mcp_core.config import logger
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
-from vgc_mcp_core.calc.damage import calculate_damage
-from vgc_mcp_core.calc.modifiers import DamageModifiers
-from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, StatPointSpread, BaseStats
-from vgc_mcp_core.models.move import Move
-from vgc_mcp_core.utils.errors import pokemon_not_found_error, api_error
+from vgc_mcp_core.config import logger
+from vgc_mcp_core.models.pokemon import EVSpread, Nature, PokemonBuild, StatPointSpread
+from vgc_mcp_core.utils.errors import api_error, pokemon_not_found_error
 from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name
-from vgc_mcp_core.rules.regulation_loader import get_regulation_config
 
 
 def _detect_champions(pokemon_name: Optional[str] = None) -> bool:
@@ -45,14 +42,14 @@ def register_tera_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
     ) -> dict:
         """
         Find the optimal Tera type for a Pokemon build.
-        
+
         Args:
             pokemon_name: Pokemon name
             spread: Dict with nature, evs, item, ability
             role: "attacker", "support", or "tank"
             team_pokemon: Optional list of team members for synergy
             meta_threats: Optional list of meta threats to optimize against
-            
+
         Returns:
             Ranked list of Tera types with scores and reasoning
         """
@@ -105,14 +102,14 @@ def register_tera_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                     item=item,
                     ability=ability
                 )
-            
+
             # Score each Tera type
             tera_scores = []
-            
+
             for tera_type in ALL_TYPES:
                 score = 0
                 reasoning = []
-                
+
                 # Offensive scoring (STAB boost)
                 if role == "attacker":
                     # Check if Tera type matches any moves
@@ -123,10 +120,10 @@ def register_tera_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                     else:
                         score += 15
                         reasoning.append("New STAB option")
-                
+
                 # Defensive scoring
                 from vgc_mcp_core.calc.modifiers import get_type_effectiveness
-                
+
                 # Check defensive utility against common threats
                 if meta_threats:
                     for threat_name in meta_threats[:5]:  # Top 5 threats
@@ -141,7 +138,7 @@ def register_tera_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                                     reasoning.append(f"Resists {threat_type}")
                         except Exception:
                             continue
-                
+
                 # Type synergy scoring
                 if team_pokemon:
                     # Give bonus for covering team weaknesses
@@ -152,20 +149,20 @@ def register_tera_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                             team_types.extend(member_types)
                         except Exception:
                             continue
-                    
+
                     # If team is weak to a type, Tera that resists it gets bonus
                     # Simplified scoring
                     score += 5
-                
+
                 tera_scores.append({
                     "type": tera_type,
                     "score": score,
                     "reasoning": reasoning[:3]  # Top 3 reasons
                 })
-            
+
             # Sort by score
             tera_scores.sort(key=lambda x: x["score"], reverse=True)
-            
+
             # Build markdown output. For Champions the subject's allocation is
             # SP-scale (read from the StatPointSpread); mainline reads EVs.
             if is_champions:
@@ -191,13 +188,13 @@ def register_tera_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 "| Rank | Type | Score | Reasoning |",
                 "|------|------|-------|-----------|"
             ]
-            
+
             for i, tera_data in enumerate(tera_scores[:5], 1):  # Top 5
                 reasoning_str = "; ".join(tera_data["reasoning"]) or "General utility"
                 markdown_lines.append(
                     f"| {i} | **{tera_data['type']}** | {tera_data['score']} | {reasoning_str} |"
                 )
-            
+
             response = {
                 "pokemon": pokemon_name,
                 "role": role,
@@ -206,9 +203,9 @@ def register_tera_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 "recommended": tera_scores[0]["type"] if tera_scores else None,
                 "markdown_summary": "\n".join(markdown_lines)
             }
-            
+
             return response
-            
+
         except Exception as e:
             logger.error(f"Error in optimize_tera_type: {e}", exc_info=True)
             error_str = str(e).lower()

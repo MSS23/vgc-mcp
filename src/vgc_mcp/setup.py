@@ -13,8 +13,8 @@ This script:
 
 import json
 import os
-import sys
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -41,11 +41,8 @@ def get_python_executable() -> str:
 
 def check_package_installed() -> bool:
     """Check if vgc_mcp package is properly installed."""
-    try:
-        import vgc_mcp
-        return True
-    except ImportError:
-        return False
+    import importlib.util
+    return importlib.util.find_spec("vgc_mcp") is not None
 
 
 def install_package():

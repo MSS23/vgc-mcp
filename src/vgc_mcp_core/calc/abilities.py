@@ -3,7 +3,6 @@
 from dataclasses import dataclass
 from typing import Optional
 
-
 # ============================================================================
 # INTIMIDATE INTERACTIONS
 # ============================================================================
@@ -295,7 +294,6 @@ def analyze_weather_synergy(team_abilities: list[str]) -> WeatherAnalysis:
     Returns:
         WeatherAnalysis with details
     """
-    normalized = [normalize_ability_name(a) for a in team_abilities]
 
     # Find weather setters
     setters = []
@@ -350,7 +348,6 @@ def analyze_terrain_synergy(team_abilities: list[str]) -> dict:
     Returns:
         Dict with terrain analysis
     """
-    normalized = [normalize_ability_name(a) for a in team_abilities]
 
     setters = []
     terrain_types = []

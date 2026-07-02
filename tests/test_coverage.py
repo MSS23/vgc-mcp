@@ -1,17 +1,18 @@
 """Tests for move-based coverage analysis."""
 
 import pytest
+
 from vgc_mcp_core.calc.coverage import (
-    analyze_move_coverage,
-    find_coverage_holes,
-    check_quad_weaknesses,
-    check_coverage_vs_pokemon,
-    suggest_coverage_moves,
-    get_coverage_summary,
-    normalize_move_name,
-    get_move_type_from_name,
     ALL_TYPES,
     COVERAGE_MOVES,
+    analyze_move_coverage,
+    check_coverage_vs_pokemon,
+    check_quad_weaknesses,
+    find_coverage_holes,
+    get_coverage_summary,
+    get_move_type_from_name,
+    normalize_move_name,
+    suggest_coverage_moves,
 )
 
 
@@ -237,7 +238,7 @@ class TestCoverageVsPokemon:
 
         # Ground hits Fire/Flying 2x, but Flying is immune
         # Actually Ground is immune to Flying, Ground hits Fire 2x
-        result = check_coverage_vs_pokemon(team_data, ["Fire", "Flying"])
+        check_coverage_vs_pokemon(team_data, ["Fire", "Flying"])
 
         # Earthquake hits Fire (though Flying makes it neutral overall)
         # Let's check a simpler case
@@ -258,7 +259,6 @@ class TestCoverageSuggestions:
 
         assert len(suggestions) > 0
         # Should suggest moves that hit Ice or Ground
-        move_names = [s["move"] for s in suggestions]
         # Fighting or Fire hits Ice, Water or Grass hits Ground
         assert any(s["fills_gap"] in ["Ice", "Ground"] for s in suggestions)
 

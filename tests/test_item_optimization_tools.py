@@ -1,13 +1,13 @@
 """Tests for item optimization and comparison tools."""
 
-import pytest
 from unittest.mock import AsyncMock
 
+import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.item_optimization_tools import register_item_optimization_tools
-from vgc_mcp_core.models.pokemon import BaseStats
 from vgc_mcp_core.models.move import Move, MoveCategory
+from vgc_mcp_core.models.pokemon import BaseStats
 
 
 @pytest.fixture

@@ -13,10 +13,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Project uses 3.12+ f-string syntax in some tool files; pin matrix to
-        # 3.12 and 3.13 until that is cleaned up. pyproject.toml's
-        # requires-python should be raised to >=3.12 to match.
-        python-version: ["3.12", "3.13"]
+        # Full range of pyproject.toml's requires-python (>=3.11). The 3.12+
+        # f-string nesting that used to break 3.11 was fixed, and the full
+        # suite passes on 3.11.
+        python-version: ["3.11", "3.12", "3.13"]
 
     steps:
       - uses: actions/checkout@v4
@@ -37,26 +37,10 @@ jobs:
         # Tests are the actual gate — 1100+ across mainline + champions.
         run: python -m pytest tests/ -q --tb=short
 
-      - name: Lint with ruff (advisory)
-        # Ruff is informational while the historical codebase is cleaned up.
-        # Use --exit-zero so findings show in logs but don't block PRs.
-        # Switch to a hard gate once the backlog is below ~50 issues.
-        run: python -m ruff check src/ --exit-zero --output-format=github
-
-      - name: Lint changed files (strict)
-        # Hard gate on files touched in this PR — prevents regressions
-        # without forcing a full-codebase cleanup up front.
-        if: github.event_name == 'pull_request'
-        run: |
-          git fetch origin ${{ github.base_ref }} --depth=1
-          CHANGED=$(git diff --name-only --diff-filter=AM origin/${{ github.base_ref }}...HEAD -- 'src/**/*.py' || true)
-          if [ -n "$CHANGED" ]; then
-            echo "Linting changed files:"
-            echo "$CHANGED"
-            python -m ruff check $CHANGED
-          else
-            echo "No changed Python files in src/."
-          fi
+      - name: Lint with ruff (strict)
+        # The historical backlog was cleaned up (was ~1,900 findings);
+        # ruff is now a hard gate on the whole codebase.
+        run: python -m ruff check src/ tests/ --output-format=github
 
   validate-regulations:
     name: Validate regulations.json

@@ -18,10 +18,9 @@ import vgc_mcp.tools.breakpoint_tools as bt
 import vgc_mcp.tools.delta_tools as dt
 from vgc_mcp.tools.breakpoint_tools import register_breakpoint_tools
 from vgc_mcp.tools.delta_tools import register_delta_tools
-from vgc_mcp_core.models.pokemon import BaseStats
 from vgc_mcp_core.models.move import Move, MoveCategory
+from vgc_mcp_core.models.pokemon import BaseStats
 from vgc_mcp_core.rules.regulation_loader import get_regulation_config
-
 
 # --- Fakes (no network) ---------------------------------------------------
 

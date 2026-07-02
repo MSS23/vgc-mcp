@@ -14,24 +14,21 @@ Stat construction reference (level 50, 0 EV / 31 IV, neutral nature):
         base 100 -> 175
 """
 
-import math
 
-import pytest
 
 from vgc_mcp_core.calc.damage import (
-    calculate_damage,
-    apply_stat_stage,
-    apply_mod,
-    chain_mods,
-    poke_round,
+    MOD_MUSCLE_BAND,
     MOD_SHEER_FORCE,
     MOD_TOUGH_CLAWS,
     MOD_TYPE_BOOST,
-    MOD_MUSCLE_BAND,
+    apply_stat_stage,
+    calculate_damage,
+    chain_mods,
+    poke_round,
 )
 from vgc_mcp_core.calc.modifiers import DamageModifiers
-from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, BaseStats, EVSpread
 from vgc_mcp_core.models.move import Move, MoveCategory
+from vgc_mcp_core.models.pokemon import BaseStats, EVSpread, Nature, PokemonBuild
 
 
 def mon(name, types, **base_overrides):

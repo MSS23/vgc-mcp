@@ -63,8 +63,8 @@ def test_lookup_table_is_complete():
 
 # --- Regression: mega-prefix slug resolution (F1-a / F1-b) ---
 
-from vgc_mcp_core.utils.normalize import reorder_mega_prefix
-from vgc_mcp_core.api.pokeapi import PokeAPIClient
+from vgc_mcp_core.api.pokeapi import PokeAPIClient  # noqa: E402
+from vgc_mcp_core.utils.normalize import reorder_mega_prefix  # noqa: E402
 
 
 def test_reorder_mega_prefix_basic():

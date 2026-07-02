@@ -1,12 +1,12 @@
 """Tests for champions_optimization helpers."""
 
 from vgc_mcp_core.calc.champions_optimization import (
-    find_speed_sps_to_outspeed,
-    find_optimal_hp_sps,
-    find_bulk_sps_to_survive,
-    validate_sp_allocation,
     SP_PER_STAT_MAX,
     SP_TOTAL_MAX,
+    find_bulk_sps_to_survive,
+    find_optimal_hp_sps,
+    find_speed_sps_to_outspeed,
+    validate_sp_allocation,
 )
 from vgc_mcp_core.models.pokemon import Nature
 

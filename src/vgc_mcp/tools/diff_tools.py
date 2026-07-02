@@ -5,12 +5,13 @@ what changed between them. No HTML UI - returns structured data only.
 """
 
 from typing import Optional
+
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp_core.api.pokepaste import PokePasteClient, PokePasteError
-from vgc_mcp_core.formats.showdown import parse_showdown_team, ShowdownParseError
 from vgc_mcp_core.diff import generate_team_diff
-from vgc_mcp_core.utils.errors import error_response, ErrorCodes
+from vgc_mcp_core.formats.showdown import ShowdownParseError, parse_showdown_team
+from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 
 def register_diff_tools(mcp: FastMCP):

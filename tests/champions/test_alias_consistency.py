@@ -8,7 +8,6 @@ fails to resolve. This file fails fast in CI when the two go out of sync.
 from vgc_mcp_core.rules.regulation_loader import RegulationConfig
 from vgc_mcp_core.rules.regulation_router import _ALIASES, resolve_regulation
 
-
 # Codes that exist in the router's alias table but are intentionally not yet
 # defined in regulations.json (e.g. future regulations stubbed out so users
 # don't get blank stares when they ask early). These should resolve to None

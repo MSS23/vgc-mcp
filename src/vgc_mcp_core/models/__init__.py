@@ -1,15 +1,15 @@
 """Data models for Pokemon, moves, and teams."""
 
+from .move import Move, MoveCategory
 from .pokemon import (
-    Pokemon,
-    PokemonBuild,
+    NATURE_MODIFIERS,
     BaseStats,
     EVSpread,
     IVSpread,
     Nature,
-    NATURE_MODIFIERS,
+    Pokemon,
+    PokemonBuild,
 )
-from .move import Move, MoveCategory
 from .team import Team, TeamSlot
 
 __all__ = [

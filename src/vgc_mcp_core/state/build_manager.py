@@ -7,8 +7,8 @@ Manages active Pokemon builds so that:
 3. State persists across tool calls within a session
 """
 
-from typing import Any, Optional
 from difflib import SequenceMatcher
+from typing import Optional
 
 
 class BuildStateManager:
@@ -102,7 +102,12 @@ class BuildStateManager:
         """
         # Imported here to avoid a circular import at module load time.
         from ..models.pokemon import (
-            PokemonBuild, BaseStats, EVSpread, IVSpread, Nature, StatPointSpread,
+            BaseStats,
+            EVSpread,
+            IVSpread,
+            Nature,
+            PokemonBuild,
+            StatPointSpread,
         )
 
         build = self._builds.get(build_id)

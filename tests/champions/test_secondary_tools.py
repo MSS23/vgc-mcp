@@ -20,14 +20,13 @@ from vgc_mcp.tools.stats_tools import register_stats_tools
 from vgc_mcp.tools.team_matchup_tools import register_team_matchup_tools
 from vgc_mcp_core.models.pokemon import (
     BaseStats,
-    PokemonBuild,
-    Nature,
     EVSpread,
+    Nature,
+    PokemonBuild,
     StatPointSpread,
 )
-from vgc_mcp_core.team.manager import TeamManager
 from vgc_mcp_core.rules.regulation_loader import get_regulation_config
-
+from vgc_mcp_core.team.manager import TeamManager
 
 # --- Fakes (no network) ---------------------------------------------------
 

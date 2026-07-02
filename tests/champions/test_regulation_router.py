@@ -4,8 +4,8 @@ import pytest
 
 from vgc_mcp_core.rules.regulation_loader import RegulationConfig
 from vgc_mcp_core.rules.regulation_router import (
-    resolve_regulation,
     describe_regulation,
+    resolve_regulation,
 )
 
 
@@ -148,7 +148,7 @@ def test_session_set_via_phrasing(cfg):
 
 # --- Regression: base-form-aware restricted detection (F1-d) ---
 
-from vgc_mcp_core.rules.regulation_router import infer_format_from_pokemon
+from vgc_mcp_core.rules.regulation_router import infer_format_from_pokemon  # noqa: E402
 
 
 def test_infer_short_form_restricteds_route_to_reg_i(cfg):

@@ -18,37 +18,37 @@ The benchmark types supported:
 
 from __future__ import annotations
 
-import asyncio
 from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
+from vgc_mcp_core.calc.champions_optimization import (
+    SP_TOTAL_MAX,
+    find_speed_sps_to_outspeed,
+)
 from vgc_mcp_core.calc.damage import calculate_damage
 from vgc_mcp_core.calc.modifiers import DamageModifiers
-from vgc_mcp_core.calc.stats import calculate_speed, calculate_stat
+from vgc_mcp_core.calc.stats import calculate_speed
 from vgc_mcp_core.calc.stats_champions import (
     SP_BREAKPOINTS_LV50,
     calculate_speed_sp,
 )
-from vgc_mcp_core.calc.champions_optimization import (
-    SP_PER_STAT_MAX,
-    SP_TOTAL_MAX,
-    find_speed_sps_to_outspeed,
-)
-from vgc_mcp_core.models.pokemon import (
-    BaseStats, EVSpread, IVSpread, Nature, PokemonBuild, StatPointSpread,
-    get_nature_modifier,
-)
 from vgc_mcp_core.formats.showdown import pokemon_build_to_showdown
-from vgc_mcp_core.rules.regulation_loader import get_regulation_config
-from vgc_mcp_core.utils.errors import error_response, ErrorCodes
+from vgc_mcp_core.models.pokemon import (
+    EVSpread,
+    IVSpread,
+    Nature,
+    PokemonBuild,
+    StatPointSpread,
+)
 from vgc_mcp_core.tools import get_common_spread
 from vgc_mcp_core.tools.ability_helpers import (
-    resolve_ability,
     compute_intimidate_attack_stage,
+    resolve_ability,
 )
+from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 
 def _session_is_champions(pokemon_name: Optional[str] = None) -> bool:

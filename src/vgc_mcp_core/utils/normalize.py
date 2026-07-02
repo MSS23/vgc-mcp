@@ -19,7 +19,6 @@ functions per-file. Import from here:
 
 from functools import lru_cache
 
-
 # Smogon API returns concatenated item names (e.g., "lifeorb")
 # This maps them to hyphenated format for damage calc comparisons.
 ITEM_ALIASES: dict[str, str] = {

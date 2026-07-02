@@ -22,7 +22,7 @@ from typing import Any, Optional
 import httpx
 from mcp.server.fastmcp import FastMCP
 
-from vgc_mcp_core.utils.errors import error_response, ErrorCodes
+from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 logger = logging.getLogger(__name__)
 

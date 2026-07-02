@@ -1,10 +1,11 @@
 """MCP tools for Smogon usage data."""
 
 from typing import Optional
+
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp_core.api.smogon import SmogonStatsClient
-from vgc_mcp_core.utils.errors import error_response, ErrorCodes
+from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 
 def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):

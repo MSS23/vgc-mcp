@@ -1,6 +1,5 @@
 """Tests for HP number optimization for items and terrain."""
 
-import pytest
 
 from vgc_mcp_core.calc.hp_optimization import (
     adjust_hp_evs_for_item,

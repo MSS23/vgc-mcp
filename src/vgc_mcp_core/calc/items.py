@@ -11,7 +11,6 @@ This module handles competitive item mechanics including:
 from dataclasses import dataclass
 from typing import Optional
 
-
 # Paradox Pokemon that can use Booster Energy
 PARADOX_POKEMON = {
     # Past Paradox (Great Tusk, etc.)

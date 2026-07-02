@@ -1,13 +1,13 @@
 """Pytest configuration and fixtures."""
 
+from unittest.mock import MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock
 
 from vgc_mcp_core.api.cache import APICache
-from vgc_mcp_core.api.pokeapi import PokeAPIClient
-from vgc_mcp_core.team.manager import TeamManager
 from vgc_mcp_core.models.pokemon import BaseStats
 from vgc_mcp_core.rules.regulation_loader import get_regulation_config
+from vgc_mcp_core.team.manager import TeamManager
 
 
 @pytest.fixture(autouse=True)

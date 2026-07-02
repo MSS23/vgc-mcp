@@ -16,8 +16,8 @@ import bisect
 import math
 from typing import Optional
 
-from ..models.pokemon import Nature, PokemonBuild, BaseStats, get_nature_modifier
 from ..config import EV_BREAKPOINTS_LV50
+from ..models.pokemon import Nature, PokemonBuild, get_nature_modifier
 
 
 def calculate_hp(

@@ -12,20 +12,19 @@ Tools for calculating item effects on stats and damage:
 
 from mcp.server.fastmcp import FastMCP
 
+from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.calc.items import (
-    calculate_booster_energy_boost,
+    PARADOX_POKEMON,
     calculate_assault_vest_boost,
-    calculate_eviolite_boost,
+    calculate_booster_energy_boost,
     calculate_choice_item_boost,
+    calculate_eviolite_boost,
     calculate_life_orb_effect,
     check_berry_activation,
     check_focus_sash_survival,
     get_item_damage_modifier,
-    PARADOX_POKEMON,
-    NFE_POKEMON,
 )
-from vgc_mcp_core.api.pokeapi import PokeAPIClient
-from vgc_mcp_core.utils.errors import error_response, success_response, ErrorCodes
+from vgc_mcp_core.utils.errors import error_response
 
 
 def register_item_tools(mcp: FastMCP, pokeapi: PokeAPIClient):

@@ -15,12 +15,12 @@ When optimizing: d(HP*Def)/d(EV) should be equal across all three stats
 This means: HP stat should roughly equal Defense stat for optimal bulk
 """
 
+import math
 from dataclasses import dataclass
 from typing import Optional
-import math
 
-from ..models.pokemon import Nature, NATURE_MODIFIERS
 from ..config import EV_BREAKPOINTS_LV50, normalize_evs
+from ..models.pokemon import NATURE_MODIFIERS, Nature
 from .stats import calculate_hp
 
 
@@ -166,10 +166,6 @@ def calculate_optimal_bulk_distribution(
     nature_mod_def = get_nature_modifier(nature, "defense")
     nature_mod_spd = get_nature_modifier(nature, "special_defense")
 
-    # Calculate how much to allocate to physical vs special bulk
-    phys_evs = int(total_bulk_evs * defense_weight)
-    spec_evs = total_bulk_evs - phys_evs
-
     # Find optimal HP/Def split for physical bulk
     # We need to decide how much HP goes to physical vs special
     # The mathematically optimal split shares HP between both
@@ -193,7 +189,6 @@ def calculate_optimal_bulk_distribution(
         hp_evs = min(252, hp_evs)
 
         # Recalculate to ensure total is correct
-        actual_total = hp_evs + def_evs + spd_evs
 
         # Calculate stats
         hp = calculate_hp(base_hp, iv=31, ev=hp_evs + existing_hp_evs)
@@ -254,7 +249,6 @@ def calculate_optimal_bulk_distribution(
     efficiency = optimal_bulk / naive_best if naive_best > 0 else 1.0
 
     # Generate explanation
-    hp_ratio = best_result["final_hp"] / best_result["final_def"] if best_result["final_def"] > 0 else 1
     explanation_parts = []
 
     if base_hp > base_def + 20:
@@ -323,12 +317,6 @@ def optimize_for_survival(
     Returns:
         BulkOptimizationResult with survival-optimized distribution
     """
-    nature_mod_def = get_nature_modifier(nature, "defense")
-    nature_mod_spd = get_nature_modifier(nature, "special_defense")
-
-    base_defense = base_def if is_physical else base_spd
-    nature_mod = nature_mod_def if is_physical else nature_mod_spd
-
     # Find minimum EVs to survive
     # Survival requires: HP > incoming_damage
     # But effective HP = HP * (1 + Defense/X) approximately
@@ -344,7 +332,6 @@ def optimize_for_survival(
             if def_evs > min(252, total_evs - hp_evs):
                 break
             hp = calculate_hp(base_hp, iv=31, ev=hp_evs)
-            defense = calculate_defense_stat(base_defense, def_evs, nature_mod)
 
             # Rough survival check (actual formula is more complex)
             if hp > incoming_damage:

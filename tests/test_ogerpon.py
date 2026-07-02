@@ -9,12 +9,12 @@ Tests cover:
 """
 
 import pytest
-from vgc_mcp_core.calc.damage import calculate_damage, _get_ogerpon_mask_boost_4096
-from vgc_mcp_core.calc.modifiers import DamageModifiers, get_type_effectiveness
-from vgc_mcp_core.calc.items import get_fixed_tera_type, get_signature_item
-from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, BaseStats, EVSpread
-from vgc_mcp_core.models.move import Move, MoveCategory
 
+from vgc_mcp_core.calc.damage import _get_ogerpon_mask_boost_4096, calculate_damage
+from vgc_mcp_core.calc.items import get_fixed_tera_type, get_signature_item
+from vgc_mcp_core.calc.modifiers import DamageModifiers, get_type_effectiveness
+from vgc_mcp_core.models.move import Move, MoveCategory
+from vgc_mcp_core.models.pokemon import BaseStats, EVSpread, Nature, PokemonBuild
 
 # Base stats for all Ogerpon forms (same stats, different typings)
 OGERPON_BASE_STATS = BaseStats(

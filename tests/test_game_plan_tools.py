@@ -1,13 +1,12 @@
 """Tests for game plan generation tools."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.game_plan_tools import register_game_plan_tools
 from vgc_mcp_core.models.pokemon import BaseStats
-from vgc_mcp_core.team.manager import TeamManager
 
 
 @pytest.fixture

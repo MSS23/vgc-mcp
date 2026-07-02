@@ -1,7 +1,7 @@
 """Item clause validation for VGC formats."""
 
-from typing import Optional
 from collections import Counter
+from typing import Optional
 
 
 def normalize_item_name(item: str) -> str:

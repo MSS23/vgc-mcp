@@ -1,11 +1,10 @@
 """MCP tools for PokePaste integration - fetch and analyze teams from pokepast.es."""
 
-from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp_core.api.pokepaste import PokePasteClient, PokePasteError
-from vgc_mcp_core.formats.showdown import parse_showdown_team, ShowdownParseError
-from vgc_mcp_core.utils.errors import error_response, ErrorCodes
+from vgc_mcp_core.formats.showdown import ShowdownParseError, parse_showdown_team
+from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 
 def register_pokepaste_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi=None, smogon=None):
@@ -128,8 +127,6 @@ def register_pokepaste_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi=N
                 }
             }
 
-            all_types = []
-            speed_tiers = []
             has_speed_control = False
             has_fake_out = False
             has_redirection = False
@@ -145,7 +142,6 @@ def register_pokepaste_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi=N
 
             # Speed control moves
             SPEED_CONTROL_MOVES = {"tailwind", "trick room", "icy wind", "electroweb", "scary face"}
-            REDIRECTION_ABILITIES = {"follow me", "rage powder", "ally switch"}
             FAKE_OUT_POKEMON = {"incineroar", "rillaboom", "mienshao", "persian", "persian-alola"}
 
             for pokemon in parsed_team:

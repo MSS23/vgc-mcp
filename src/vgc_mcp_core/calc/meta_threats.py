@@ -4,16 +4,13 @@ This module provides analysis of a Pokemon's spread against the top
 threats in the metagame, including damage calculations in both directions.
 """
 
-from dataclasses import dataclass, field
-from typing import Optional
 import math
+from dataclasses import dataclass
+from typing import Optional
 
-from ..models.pokemon import PokemonBuild, BaseStats, EVSpread, Nature
-from ..models.move import Move, MoveCategory
-from .stats import calculate_all_stats
+from ..models.pokemon import PokemonBuild
+from ..utils.damage_verdicts import calculate_ko_probability
 from .modifiers import get_type_effectiveness
-from ..utils.damage_verdicts import calculate_ko_verdict, calculate_ko_probability
-
 
 # Ruinous Pokemon and their aura effects on opponents' stats
 # Sword of Ruin: -25% Defense to all other Pokemon
@@ -192,8 +189,6 @@ def analyze_single_threat(
     Returns:
         ThreatDamageResult with matchup analysis
     """
-    your_hp = your_stats["hp"]
-    threat_hp = threat_stats.get("hp", 150)  # Default if not available
     threat_speed = threat_stats.get("speed", 100)
 
     # Find best threat move against you

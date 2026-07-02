@@ -7,11 +7,12 @@ that stored build automatically.
 """
 
 from typing import Optional
+
 from mcp.server.fastmcp import FastMCP
 
-from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, IVSpread, BaseStats
 from vgc_mcp_core.calc.stats import calculate_all_stats
-from vgc_mcp_core.utils.errors import error_response, ErrorCodes
+from vgc_mcp_core.models.pokemon import EVSpread, Nature, PokemonBuild
+from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 
 def register_context_tools(mcp: FastMCP, pokeapi, team_manager):
@@ -71,7 +72,7 @@ def register_context_tools(mcp: FastMCP, pokeapi, team_manager):
             types = await pokeapi.get_pokemon_types(pokemon_name)
             abilities = await pokeapi.get_pokemon_abilities(pokemon_name)
             pokemon_data = await pokeapi.get_pokemon(pokemon_name)
-        except Exception as e:
+        except Exception:
             return error_response(ErrorCodes.POKEMON_NOT_FOUND, f'Pokemon not found: {pokemon_name}')
 
         if not pokemon_data:

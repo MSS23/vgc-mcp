@@ -13,10 +13,9 @@ import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.spread_tools import register_spread_tools
-from vgc_mcp_core.models.pokemon import BaseStats
 from vgc_mcp_core.models.move import Move, MoveCategory
+from vgc_mcp_core.models.pokemon import BaseStats
 from vgc_mcp_core.rules.regulation_loader import get_regulation_config
-
 
 # --- Fakes (no network) ---------------------------------------------------
 

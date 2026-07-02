@@ -5,10 +5,11 @@ type effectiveness in the damage details output.
 """
 
 import pytest
+
 from vgc_mcp_core.calc.damage import calculate_damage
 from vgc_mcp_core.calc.modifiers import DamageModifiers
-from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, BaseStats, EVSpread
 from vgc_mcp_core.models.move import Move, MoveCategory
+from vgc_mcp_core.models.pokemon import BaseStats, EVSpread, Nature, PokemonBuild
 
 
 class TestTypeChangingAbilities:
@@ -62,7 +63,7 @@ class TestTypeChangingAbilities:
         result = calculate_damage(sylveon, machamp, hyper_voice, mods)
 
         # Print for debugging
-        print(f"\nPixilate Hyper Voice vs Machamp:")
+        print("\nPixilate Hyper Voice vs Machamp:")
         print(f"Damage: {result.min_damage}-{result.max_damage}")
         print(f"Applied mods: {result.details.get('applied_mods', [])}")
 
@@ -135,7 +136,7 @@ class TestTypeChangingAbilities:
         result = calculate_damage(salamence, machamp, double_edge, mods)
 
         # Print for debugging
-        print(f"\nAerilate Double-Edge vs Machamp:")
+        print("\nAerilate Double-Edge vs Machamp:")
         print(f"Damage: {result.min_damage}-{result.max_damage}")
         print(f"Applied mods: {result.details.get('applied_mods', [])}")
 

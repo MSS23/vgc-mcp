@@ -19,12 +19,15 @@ from vgc_mcp_core.api.smogon import SmogonStatsClient
 from vgc_mcp_core.calc.damage import calculate_damage
 from vgc_mcp_core.calc.modifiers import DamageModifiers
 from vgc_mcp_core.models.pokemon import (
-    BaseStats, EVSpread, IVSpread, Nature, PokemonBuild, StatPointSpread,
+    EVSpread,
+    IVSpread,
+    Nature,
+    PokemonBuild,
+    StatPointSpread,
 )
-from vgc_mcp_core.rules.regulation_loader import get_regulation_config
-from vgc_mcp_core.utils.errors import error_response, ErrorCodes
-from vgc_mcp_core.utils.normalize import normalize_move
 from vgc_mcp_core.tools import get_common_spread
+from vgc_mcp_core.utils.errors import ErrorCodes, error_response
+from vgc_mcp_core.utils.normalize import normalize_move
 
 
 def _session_is_champions(pokemon_name: Optional[str] = None) -> bool:

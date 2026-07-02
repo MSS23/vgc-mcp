@@ -1,8 +1,8 @@
 """Tests for Pokemon context persistence tools."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.context_tools import register_context_tools

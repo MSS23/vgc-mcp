@@ -1,9 +1,6 @@
 """Tests for multi-threat EV spread optimization."""
 
 import pytest
-from vgc_mcp.tools.spread_tools import _prepare_threats, DamageCache, _quick_feasibility_check
-from vgc_mcp_core.api.pokeapi import PokeAPIClient
-from vgc_mcp_core.models.pokemon import Nature
 
 
 class TestMultiSurvival:

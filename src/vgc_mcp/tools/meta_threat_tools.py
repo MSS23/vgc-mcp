@@ -6,27 +6,27 @@ and matchup assessments.
 """
 
 from typing import Optional
+
 from mcp.server.fastmcp import FastMCP
 
-from vgc_mcp_core.calc.stats import calculate_all_stats
-from vgc_mcp_core.calc.speed_probability import calculate_speed_stat
+from vgc_mcp_core.calc.conversion import evs_to_sps_spread
 from vgc_mcp_core.calc.damage import format_percent
 from vgc_mcp_core.calc.meta_threats import (
+    ThreatDamageResult,
     analyze_single_threat,
     generate_spread_suggestions,
-    create_empty_threat_report,
-    MetaThreatReport,
-    ThreatDamageResult
 )
-from vgc_mcp_core.models.pokemon import (
-    PokemonBuild, BaseStats, EVSpread, StatPointSpread, Nature,
-)
-from vgc_mcp_core.config import EV_BREAKPOINTS_LV50
+from vgc_mcp_core.calc.stats import calculate_all_stats
 from vgc_mcp_core.calc.stats_champions import SP_BREAKPOINTS_LV50
-from vgc_mcp_core.calc.conversion import evs_to_sps_spread
+from vgc_mcp_core.config import EV_BREAKPOINTS_LV50
 from vgc_mcp_core.formats.showdown import pokemon_build_to_showdown
-from vgc_mcp_core.rules.regulation_loader import get_regulation_config
-from vgc_mcp_core.utils.errors import error_response, ErrorCodes
+from vgc_mcp_core.models.pokemon import (
+    EVSpread,
+    Nature,
+    PokemonBuild,
+    StatPointSpread,
+)
+from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 from vgc_mcp_core.utils.normalize import normalize_move
 
 
@@ -204,7 +204,7 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
         try:
             base_stats = await pokeapi.get_base_stats(pokemon_name)
             your_types = await pokeapi.get_pokemon_types(pokemon_name)
-        except Exception as e:
+        except Exception:
             return error_response(ErrorCodes.POKEMON_NOT_FOUND, f'Pokemon not found: {pokemon_name}')
 
         # Only the USER'S subject Pokemon becomes a Champions (SP) build when the
@@ -368,7 +368,6 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
         table_data = _format_results_table(threat_results)
 
         if is_champions:
-            sp_map = your_pokemon.sps.to_sps_dict()
             spread_out = {
                 "nature": nature,
                 "format_system": "champions",
@@ -1243,9 +1242,12 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
 
             # Build SP string showing only non-zero stats
             sp_parts = []
-            if hp_sps: sp_parts.append(f"{hp_sps} HP")
-            if def_sps: sp_parts.append(f"{def_sps} Def")
-            if spd_sps: sp_parts.append(f"{spd_sps} SpD")
+            if hp_sps:
+                sp_parts.append(f"{hp_sps} HP")
+            if def_sps:
+                sp_parts.append(f"{def_sps} Def")
+            if spd_sps:
+                sp_parts.append(f"{spd_sps} SpD")
             sp_str = " / ".join(sp_parts) if sp_parts else "0 SP"
 
             result["analysis"] = (
@@ -1301,9 +1303,12 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
 
             # Build EV string showing only non-zero stats
             ev_parts = []
-            if best_spread['hp_evs']: ev_parts.append(f"{best_spread['hp_evs']} HP")
-            if best_spread['def_evs']: ev_parts.append(f"{best_spread['def_evs']} Def")
-            if best_spread['spd_evs']: ev_parts.append(f"{best_spread['spd_evs']} SpD")
+            if best_spread['hp_evs']:
+                ev_parts.append(f"{best_spread['hp_evs']} HP")
+            if best_spread['def_evs']:
+                ev_parts.append(f"{best_spread['def_evs']} Def")
+            if best_spread['spd_evs']:
+                ev_parts.append(f"{best_spread['spd_evs']} SpD")
             ev_str = " / ".join(ev_parts) if ev_parts else "0 EVs"
 
             result["analysis"] = (

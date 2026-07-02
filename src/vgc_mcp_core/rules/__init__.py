@@ -1,9 +1,15 @@
 """VGC format rules and legality checking."""
 
-from .regulation_loader import get_regulation_config, RegulationConfig, reset_regulation_config
-from .vgc_rules import get_regulation, list_regulations, validate_team_rules, get_current_regulation
-from .restricted import is_restricted, is_banned, get_restricted_status, find_banned, find_restricted
 from .item_clause import check_item_clause, get_duplicate_items
+from .regulation_loader import RegulationConfig, get_regulation_config, reset_regulation_config
+from .restricted import (
+    find_banned,
+    find_restricted,
+    get_restricted_status,
+    is_banned,
+    is_restricted,
+)
+from .vgc_rules import get_current_regulation, get_regulation, list_regulations, validate_team_rules
 
 __all__ = [
     # Regulation config

@@ -1,8 +1,8 @@
 """Tests for build report generation tools."""
 
-import pytest
 from unittest.mock import AsyncMock
 
+import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.report_tools import register_report_tools

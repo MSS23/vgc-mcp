@@ -1,8 +1,8 @@
 """Tests for core building and team suggestion tools."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.core_tools import register_core_tools

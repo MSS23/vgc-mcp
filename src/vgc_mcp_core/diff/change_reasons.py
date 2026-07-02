@@ -5,8 +5,8 @@ based on the nature of the change itself (not meta knowledge).
 """
 
 from typing import Optional
-from ..models.pokemon import Nature, NATURE_MODIFIERS
 
+from ..models.pokemon import NATURE_MODIFIERS, Nature
 
 # Stat display names
 STAT_DISPLAY = {
@@ -179,7 +179,7 @@ def explain_ev_change(stat_changes: list[dict]) -> str:
 
     # Multiple changes
     gain_stats = [get_stat_name(g["stat"]) for g in gains]
-    loss_stats = [get_stat_name(l["stat"]) for l in losses]
+    loss_stats = [get_stat_name(loss["stat"]) for loss in losses]
 
     # Categorize
     bulk_stats = {"HP", "Def", "SpD"}
@@ -229,7 +229,7 @@ def explain_item_change(before: Optional[str], after: Optional[str]) -> str:
         ("none", "offensive"): f"Added offensive item ({after})",
         ("none", "defensive"): f"Added defensive item ({after})",
         ("none", "speed"): f"Added speed item ({after})",
-        ("none", "focus"): f"Added Focus Sash",
+        ("none", "focus"): "Added Focus Sash",
         ("resist-berry", "defensive"): "Switched from type resist to general bulk",
         ("defensive", "resist-berry"): "Added specific type resistance",
     }
@@ -304,5 +304,5 @@ def explain_tera_change(before: Optional[str], after: Optional[str]) -> str:
     elif after:
         return f"Set Tera type to {after}"
     elif before:
-        return f"Removed Tera type"
+        return "Removed Tera type"
     return "Tera type changed"

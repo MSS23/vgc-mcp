@@ -8,14 +8,16 @@ These tools enable state management for Pokemon builds:
 """
 
 from typing import Optional
+
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
-from vgc_mcp_core.state import BuildStateManager
-from vgc_mcp_core.utils.errors import error_response, ErrorCodes
+from vgc_mcp_core.calc.champions_optimization import validate_sp_allocation
+from vgc_mcp_core.calc.conversion import coerce_champions_allocation
 from vgc_mcp_core.rules.regulation_loader import get_regulation_config
 from vgc_mcp_core.rules.regulation_router import auto_detect_regulation
-from vgc_mcp_core.calc.champions_optimization import validate_sp_allocation
+from vgc_mcp_core.state import BuildStateManager
+from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 
 def _detect_champions(pokemon_name: str) -> bool:
@@ -116,7 +118,10 @@ def register_build_tools(
                 "abilities": abilities,
             }
 
+            sp_conversion_note = None
             if is_champions:
+                # EV-scale numbers (any stat > 32) are auto-converted to SPs.
+                stat_invest, sp_conversion_note = coerce_champions_allocation(stat_invest)
                 validation = validate_sp_allocation(stat_invest)
                 if not validation["is_valid"]:
                     detail = (
@@ -150,12 +155,15 @@ def register_build_tools(
             else:
                 build_payload["evs"] = stat_invest
 
-            return {
+            result = {
                 "success": True,
                 "message": f"Created build for {pokemon_name}",
                 "build_id": build_id,
                 "build": build_payload,
             }
+            if sp_conversion_note:
+                result["sp_conversion"] = sp_conversion_note
+            return result
 
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
@@ -185,12 +193,16 @@ def register_build_tools(
             ability: New ability (if changing)
             item: New item (if changing)
             tera_type: New tera type (if changing)
-            hp_evs through spe_evs: New EVs (if changing)
+            hp_evs through spe_evs: New EVs (if changing). In a Champions
+                session these are Stat Points; EV-scale values (any stat > 32)
+                are auto-converted (1 SP = 8 EVs).
 
         Returns:
             Updated build state
         """
         try:
+            sp_conversion_note = None
+
             # Find build by name
             build = build_manager.get_build_by_name(pokemon_name)
             if not build:
@@ -227,6 +239,13 @@ def register_build_tools(
 
             if stat_changes:
                 if is_champions:
+                    # EV-scale edits (any stat > 32) convert to SPs first, so
+                    # they merge with existing SP values on the same scale.
+                    coerced, sp_conversion_note = coerce_champions_allocation(stat_changes)
+                    if sp_conversion_note:
+                        stat_changes = {
+                            k: v for k, v in coerced.items() if k in stat_changes
+                        }
                     # Validate the merged SP allocation against 32/66.
                     merged = dict(build.get("sps", {}))
                     merged.update(stat_changes)
@@ -259,13 +278,16 @@ def register_build_tools(
             else:
                 build_payload["evs"] = build["evs"]
 
-            return {
+            result = {
                 "success": True,
                 "message": f"Updated {build['pokemon']}",
                 "changes": list(changes.keys()) if changes else [],
                 "build_id": build_id,
                 "build": build_payload,
             }
+            if sp_conversion_note:
+                result["sp_conversion"] = sp_conversion_note
+            return result
 
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))

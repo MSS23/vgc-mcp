@@ -1,14 +1,14 @@
 """Tests for intelligent nature selection algorithm."""
 
 import pytest
+
 from vgc_mcp_core.calc.nature_optimization import (
+    calculate_evs_for_benchmarks,
+    calculate_nature_score,
     find_optimal_nature_for_benchmarks,
     get_relevant_natures,
-    calculate_evs_for_benchmarks,
-    calculate_nature_score
 )
-from vgc_mcp_core.models.pokemon import Nature, BaseStats
-from vgc_mcp_core.calc.stats import calculate_stat, calculate_speed
+from vgc_mcp_core.models.pokemon import BaseStats, Nature
 
 
 class TestGetRelevantNatures:
@@ -48,7 +48,7 @@ class TestCalculateEVsForBenchmarks:
         """Calculate EVs for speed benchmark."""
         base_stats = BaseStats(hp=115, attack=115, defense=85, special_attack=90, special_defense=75, speed=100)
         benchmarks = {"speed_target": 137}
-        
+
         evs = calculate_evs_for_benchmarks(base_stats, Nature.ADAMANT, benchmarks)
         assert evs is not None
         assert evs["speed"] > 0
@@ -58,7 +58,7 @@ class TestCalculateEVsForBenchmarks:
         """Return None for impossible speed target."""
         base_stats = BaseStats(hp=50, attack=50, defense=50, special_attack=50, special_defense=50, speed=30)
         benchmarks = {"speed_target": 300}  # Impossible even with 252 EVs
-        
+
         evs = calculate_evs_for_benchmarks(base_stats, Nature.JOLLY, benchmarks)
         assert evs is None
 
@@ -70,7 +70,7 @@ class TestCalculateEVsForBenchmarks:
             "prioritize": "offense",
             "offensive_evs": 252
         }
-        
+
         evs = calculate_evs_for_benchmarks(base_stats, Nature.ADAMANT, benchmarks)
         assert evs is not None
         assert evs["attack"] == 252
@@ -89,11 +89,11 @@ class TestCalculateNatureScore:
         assert score > 0
         # Higher attack should give higher score
         high_atk_score = calculate_nature_score(
-            Nature.ADAMANT, {"attack": 167, "speed": 137, "hp": 187}, 
+            Nature.ADAMANT, {"attack": 167, "speed": 137, "hp": 187},
             is_physical=True, is_special=False, total_evs=264, role="offensive"
         )
         low_atk_score = calculate_nature_score(
-            Nature.TIMID, {"attack": 147, "speed": 137, "hp": 187}, 
+            Nature.TIMID, {"attack": 147, "speed": 137, "hp": 187},
             is_physical=True, is_special=False, total_evs=264, role="offensive"
         )
         assert high_atk_score > low_atk_score
@@ -116,18 +116,18 @@ class TestEnteiBenchmark:
     def test_entei_chooses_adamant(self):
         """
         Entei benchmark test: 137 Speed, maximize Attack.
-        
+
         Expected: Adamant nature (167 Attack) beats Timid (147 Attack).
         """
         # Entei base stats: 115 HP, 115 Atk, 85 Def, 90 SpA, 75 SpD, 100 Spe
         entei_base = BaseStats(hp=115, attack=115, defense=85, special_attack=90, special_defense=75, speed=100)
-        
+
         benchmarks = {
             "speed_target": 137,  # Outspeed -1 Chien-Pao
             "prioritize": "offense",
             "offensive_evs": 252
         }
-        
+
         result = find_optimal_nature_for_benchmarks(
             base_stats=entei_base,
             benchmarks=benchmarks,
@@ -135,12 +135,12 @@ class TestEnteiBenchmark:
             is_special=False,
             role="offensive"
         )
-        
+
         assert result is not None
         assert result.best_nature == Nature.ADAMANT, f"Expected Adamant, got {result.best_nature}"
         assert result.final_stats["attack"] >= 167, f"Expected >= 167 Attack, got {result.final_stats['attack']}"
         assert result.final_stats["speed"] >= 137, f"Expected >= 137 Speed, got {result.final_stats['speed']}"
-        
+
         # Verify Adamant gives more Attack than Timid would
         # Timid with same EVs would give ~147 Attack (115 base * 0.9 nature penalty)
         assert result.final_stats["attack"] > 150, "Adamant should give significantly more Attack than Timid"
@@ -148,13 +148,13 @@ class TestEnteiBenchmark:
     def test_entei_ev_distribution(self):
         """Verify Entei's EV distribution is efficient."""
         entei_base = BaseStats(hp=115, attack=115, defense=85, special_attack=90, special_defense=75, speed=100)
-        
+
         benchmarks = {
             "speed_target": 137,
             "prioritize": "offense",
             "offensive_evs": 252
         }
-        
+
         result = find_optimal_nature_for_benchmarks(
             base_stats=entei_base,
             benchmarks=benchmarks,
@@ -162,17 +162,17 @@ class TestEnteiBenchmark:
             is_special=False,
             role="offensive"
         )
-        
+
         assert result is not None
         total_evs = sum(result.evs.values())
         assert total_evs <= 508, f"Total EVs ({total_evs}) exceeds 508"
-        
+
         # With Adamant, should need fewer Speed EVs than Timid
         # Adamant: +Atk means we can invest less in Attack EVs, more in Speed
         # Actually wait - if we need 137 Speed, Adamant needs MORE Speed EVs than Timid
         # But Adamant gives us +Atk boost, so we get more Attack with same Attack EVs
         # The key is: Adamant maximizes Attack stat while still hitting speed benchmark
-        
+
         # Verify we're maximizing Attack
         assert result.evs["attack"] > 0, "Should invest in Attack EVs"
         assert result.final_stats["attack"] >= 167, "Should achieve high Attack"
@@ -185,9 +185,9 @@ class TestEnteiBenchmark:
         - BAD: Timid 36 Spe / 228 Atk = 147 Attack (wastes 96 Atk EVs)
         - GOOD: Adamant 132 Spe / 132 Atk = 167 Attack (saves 96 EVs)
         """
-        from vgc_mcp_core.calc.stats import calculate_stat, calculate_speed
+        from vgc_mcp_core.calc.stats import calculate_speed, calculate_stat
         from vgc_mcp_core.models.pokemon import Nature
-        
+
         entei_base = BaseStats(hp=115, attack=115, defense=85,
                                special_attack=90, special_defense=75, speed=100)
 
@@ -234,13 +234,13 @@ class TestHighBaseSpeed:
         """
         # Example: Dragapult (base 142 Speed, 120 Attack)
         dragapult_base = BaseStats(hp=88, attack=120, defense=75, special_attack=100, special_defense=75, speed=142)
-        
+
         benchmarks = {
             "speed_target": 200,  # Common speed tier
             "prioritize": "offense",
             "offensive_evs": 252
         }
-        
+
         result = find_optimal_nature_for_benchmarks(
             base_stats=dragapult_base,
             benchmarks=benchmarks,
@@ -248,12 +248,12 @@ class TestHighBaseSpeed:
             is_special=False,
             role="offensive"
         )
-        
+
         assert result is not None
         # With high base Speed, Adamant (+Atk) should be preferred over Jolly (+Spe)
         # because we can hit speed benchmark with fewer EVs using Adamant
         assert result.best_nature in [Nature.ADAMANT, Nature.JOLLY]
-        
+
         # Verify Attack is maximized (Dragapult with 252 Atk EVs and Adamant = ~172 Attack)
         assert result.final_stats["attack"] > 170, "Should achieve high Attack"
 
@@ -268,13 +268,13 @@ class TestLowBaseSpeed:
         """
         # Example: Incineroar (base 60 Speed, 115 Attack)
         incineroar_base = BaseStats(hp=95, attack=115, defense=90, special_attack=80, special_defense=90, speed=60)
-        
+
         benchmarks = {
             "speed_target": 100,  # Common speed tier
             "prioritize": "offense",
             "offensive_evs": 252
         }
-        
+
         result = find_optimal_nature_for_benchmarks(
             base_stats=incineroar_base,
             benchmarks=benchmarks,
@@ -282,7 +282,7 @@ class TestLowBaseSpeed:
             is_special=False,
             role="offensive"
         )
-        
+
         assert result is not None
         # With low base Speed, Jolly (+Spe) should be preferred to hit speed benchmark
         # But if we can't hit it even with Jolly, might fall back to Adamant
@@ -299,13 +299,13 @@ class TestSpecialAttacker:
         """
         # Example: Flutter Mane (base 135 SpA, 135 Speed)
         flutter_base = BaseStats(hp=55, attack=55, defense=55, special_attack=135, special_defense=135, speed=135)
-        
+
         benchmarks = {
             "speed_target": 200,  # Common speed tier
             "prioritize": "offense",
             "offensive_evs": 252
         }
-        
+
         result = find_optimal_nature_for_benchmarks(
             base_stats=flutter_base,
             benchmarks=benchmarks,
@@ -313,7 +313,7 @@ class TestSpecialAttacker:
             is_special=True,
             role="offensive"
         )
-        
+
         assert result is not None
         # With high base Speed, Modest (+SpA) should be preferred
         assert result.best_nature in [Nature.MODEST, Nature.TIMID]
@@ -330,12 +330,12 @@ class TestNeutralNature:
         """
         # Pokemon with very low EV investment
         base_stats = BaseStats(hp=80, attack=80, defense=80, special_attack=80, special_defense=80, speed=80)
-        
+
         benchmarks = {
             "speed_target": None,
             "prioritize": "bulk",
         }
-        
+
         result = find_optimal_nature_for_benchmarks(
             base_stats=base_stats,
             benchmarks=benchmarks,
@@ -343,7 +343,7 @@ class TestNeutralNature:
             is_special=False,
             role="defensive"
         )
-        
+
         # Neutral nature might be optimal for defensive builds with low EVs
         assert result is not None
         # Should select a valid nature (could be neutral or defensive)
@@ -355,13 +355,13 @@ class TestImpossibleBenchmarks:
     def test_impossible_speed_benchmark(self):
         """Requesting 200 Speed on base 60 Pokemon should fail gracefully."""
         base_stats = BaseStats(hp=80, attack=80, defense=80, special_attack=80, special_defense=80, speed=60)
-        
+
         benchmarks = {
             "speed_target": 200,  # Impossible even with Jolly + 252 EVs
             "prioritize": "offense",
             "offensive_evs": 252
         }
-        
+
         result = find_optimal_nature_for_benchmarks(
             base_stats=base_stats,
             benchmarks=benchmarks,
@@ -369,7 +369,7 @@ class TestImpossibleBenchmarks:
             is_special=False,
             role="offensive"
         )
-        
+
         # Should return None if impossible
         assert result is None, "Should return None for impossible benchmarks"
 

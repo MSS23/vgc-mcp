@@ -1,18 +1,23 @@
 """MCP tools for team management."""
 
 from typing import Optional
+
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
-from vgc_mcp_core.team.manager import TeamManager
-from vgc_mcp_core.team.analysis import TeamAnalyzer
+from vgc_mcp_core.calc.champions_optimization import validate_sp_allocation
+from vgc_mcp_core.calc.conversion import coerce_champions_allocation
 from vgc_mcp_core.models.pokemon import (
-    PokemonBuild, Nature, EVSpread, IVSpread, StatPointSpread,
+    EVSpread,
+    Nature,
+    PokemonBuild,
+    StatPointSpread,
 )
-from vgc_mcp_core.utils.errors import error_response, ErrorCodes
 from vgc_mcp_core.rules.regulation_loader import get_regulation_config
 from vgc_mcp_core.rules.regulation_router import auto_detect_regulation
-from vgc_mcp_core.calc.champions_optimization import validate_sp_allocation
+from vgc_mcp_core.team.analysis import TeamAnalyzer
+from vgc_mcp_core.team.manager import TeamManager
+from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 
 def _detect_champions(pokemon_name: str) -> bool:
@@ -66,14 +71,17 @@ def register_team_tools(
             tera_type: Tera type
             move1, move2, move3, move4: The four moves
             hp_evs through spe_evs: stat investment. Mainline interprets these as
-                EVs (total max 508, 252/stat). In a Champions (Reg MA) session
-                they are interpreted as Stat Points (total max 66, 32/stat).
+                EVs (total max 508, 252/stat). In a Champions (Reg MA/MB) session
+                they are interpreted as Stat Points (total max 66, 32/stat);
+                EV-scale values (any stat > 32) are auto-converted to SPs
+                (1 SP = 8 EVs) and the response includes an `sp_conversion` note.
 
         Returns:
             Success/failure status and current team state
         """
         try:
             is_champions = _detect_champions(pokemon_name)
+            sp_conversion_note = None
 
             # Validate stat investment against the active format's caps.
             if is_champions:
@@ -82,6 +90,14 @@ def register_team_tools(
                     "special_attack": spa_evs, "special_defense": spd_evs,
                     "speed": spe_evs,
                 }
+                # Users porting mainline sets often pass EV-scale numbers
+                # (252 SpA, ...). Any stat > 32 is unambiguously EV-scale:
+                # convert to SPs instead of failing the 32/stat cap.
+                alloc, sp_conversion_note = coerce_champions_allocation(alloc)
+                hp_evs, atk_evs, def_evs = alloc["hp"], alloc["attack"], alloc["defense"]
+                spa_evs, spd_evs, spe_evs = (
+                    alloc["special_attack"], alloc["special_defense"], alloc["speed"]
+                )
                 validation = validate_sp_allocation(alloc)
                 if not validation["is_valid"]:
                     detail = (
@@ -150,11 +166,14 @@ def register_team_tools(
 
             success, message, data = team_manager.add_pokemon(pokemon)
 
-            return {
+            result = {
                 "success": success,
                 "message": message,
                 **data
             }
+            if sp_conversion_note:
+                result["sp_conversion"] = sp_conversion_note
+            return result
 
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
@@ -226,6 +245,7 @@ def register_team_tools(
         """
         try:
             is_champions = _detect_champions(pokemon_name)
+            sp_conversion_note = None
 
             # Validate stat investment against the active format's caps.
             if is_champions:
@@ -234,6 +254,14 @@ def register_team_tools(
                     "special_attack": spa_evs, "special_defense": spd_evs,
                     "speed": spe_evs,
                 }
+                # Users porting mainline sets often pass EV-scale numbers
+                # (252 SpA, ...). Any stat > 32 is unambiguously EV-scale:
+                # convert to SPs instead of failing the 32/stat cap.
+                alloc, sp_conversion_note = coerce_champions_allocation(alloc)
+                hp_evs, atk_evs, def_evs = alloc["hp"], alloc["attack"], alloc["defense"]
+                spa_evs, spd_evs, spe_evs = (
+                    alloc["special_attack"], alloc["special_defense"], alloc["speed"]
+                )
                 validation = validate_sp_allocation(alloc)
                 if not validation["is_valid"]:
                     detail = (
@@ -299,7 +327,10 @@ def register_team_tools(
                 )
 
             success, message, data = team_manager.swap_pokemon(slot - 1, pokemon)
-            return {"success": success, "message": message, **data}
+            result = {"success": success, "message": message, **data}
+            if sp_conversion_note:
+                result["sp_conversion"] = sp_conversion_note
+            return result
 
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))

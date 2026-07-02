@@ -10,12 +10,12 @@ because the Attack boost saves more EVs than the Speed boost would.
 """
 
 from typing import Optional
-from dataclasses import dataclass
+
 from pydantic import BaseModel
 
-from ..models.pokemon import Nature, BaseStats, get_nature_modifier
-from .stats import calculate_stat, calculate_speed, find_speed_evs
 from ..config import EV_BREAKPOINTS_LV50
+from ..models.pokemon import BaseStats, Nature, get_nature_modifier
+from .stats import calculate_stat
 
 
 class NatureOptimizationResult(BaseModel):
@@ -129,7 +129,7 @@ def calculate_evs_for_benchmarks(
     if benchmarks.get("speed_target"):
         target_speed = benchmarks["speed_target"]
         speed_mod = get_nature_modifier(nature, "speed")
-        
+
         # Find minimum Speed EVs needed
         speed_evs = None
         for ev in EV_BREAKPOINTS_LV50:
@@ -139,11 +139,11 @@ def calculate_evs_for_benchmarks(
             if calculated_speed >= target_speed:
                 speed_evs = ev
                 break
-        
+
         if speed_evs is None:
             # Cannot reach speed target even with 252 EVs
             return None
-        
+
         evs["speed"] = speed_evs
 
     # 2. HP benchmark (if specified)
@@ -173,19 +173,19 @@ def calculate_evs_for_benchmarks(
         # Distribute evenly between Def and SpD, ensuring neither exceeds 252
         max_def_add = 252 - evs["defense"]
         max_spd_add = 252 - evs["special_defense"]
-        
+
         # Try to distribute evenly
         def_evs = min(remaining // 2, max_def_add)
         spd_evs = min(remaining - def_evs, max_spd_add)
-        
+
         # If we couldn't add all to SpD, add remainder to Def (if possible)
         if spd_evs < remaining - def_evs and def_evs < max_def_add:
             remaining_after_spd = remaining - def_evs - spd_evs
             def_evs = min(def_evs + remaining_after_spd, max_def_add)
-        
+
         evs["defense"] += def_evs
         evs["special_defense"] += spd_evs
-        
+
         # If still have remaining EVs, add to HP
         total_used = sum(evs.values())
         remaining_after_bulk = 508 - total_used
@@ -291,8 +291,8 @@ def find_optimal_nature_for_benchmarks(
     Returns:
         NatureOptimizationResult with best nature, EVs, and reasoning, or None if impossible
     """
+    from ..models.pokemon import EVSpread, PokemonBuild
     from .stats import calculate_all_stats
-    from ..models.pokemon import PokemonBuild, EVSpread
 
     # Get relevant natures to test
     candidates = get_relevant_natures(is_physical, is_special, role)
@@ -304,7 +304,7 @@ def find_optimal_nature_for_benchmarks(
     for nature in candidates:
         # Calculate required EVs for this nature
         evs_dict = calculate_evs_for_benchmarks(base_stats, nature, benchmarks, level)
-        
+
         if evs_dict is None:
             # This nature cannot meet benchmarks
             continue
@@ -336,7 +336,7 @@ def find_optimal_nature_for_benchmarks(
         # Track best result
         if score > best_score:
             best_score = score
-            
+
             # Generate reasoning
             boosted_stat = None
             if get_nature_modifier(nature, "attack") > 1.0:

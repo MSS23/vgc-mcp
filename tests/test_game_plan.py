@@ -1,26 +1,21 @@
 """Tests for the priority-aware game plan generation."""
 
-import pytest
-from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, BaseStats
-from vgc_mcp_core.models.move import Move, MoveCategory
 from vgc_mcp_core.calc.team_matchup import (
-    build_pokemon_profile,
-    generate_full_game_plan,
     _analyze_fake_out_war,
     _analyze_prankster_interactions,
-    _analyze_terrain_interactions,
     _analyze_redirect_interactions,
-    _predict_opponent_leads,
-    _recommend_leads,
-    _recommend_bring_4,
-    _rank_threats,
-    _determine_win_condition,
+    _analyze_terrain_interactions,
     _best_turn1_move,
+    _predict_opponent_leads,
+    _rank_threats,
+    _recommend_leads,
     _score_lead_pair,
     build_matchup_matrix,
-    PokemonProfile,
-    GamePlanLeadRec,
+    build_pokemon_profile,
+    generate_full_game_plan,
 )
+from vgc_mcp_core.models.move import Move, MoveCategory
+from vgc_mcp_core.models.pokemon import BaseStats, EVSpread, Nature, PokemonBuild
 
 
 def _make_build(name, types, base_hp=80, base_atk=80, base_def=80,
@@ -317,7 +312,7 @@ class TestLeadRecommendations:
         leads = _recommend_leads(team, opponent, matrix)
 
         # Incineroar + Tornadus should be among top leads
-        top_lead_pairs = [(l.pokemon_1, l.pokemon_2) for l in leads]
+        top_lead_pairs = [(lead.pokemon_1, lead.pokemon_2) for lead in leads]
         assert any(
             ("Incineroar" in pair and "Tornadus" in pair)
             for pair in [set(p) for p in top_lead_pairs]
@@ -1088,7 +1083,7 @@ class TestFakeOutGhostImmunity:
             _make_build("Dragapult", ["Dragon", "Ghost"], base_spe=142),
             [], "",
         )
-        non_ghost = build_pokemon_profile(
+        build_pokemon_profile(
             _make_build("Flutter Mane", ["Ghost", "Fairy"], base_spe=135),
             [], "",
         )
@@ -1464,7 +1459,7 @@ class TestPsychicTerrain:
 
     def test_terrain_analysis_notes_electric_blocking_sleep(self):
         """Electric Terrain should block sleep moves."""
-        rillaboom = build_pokemon_profile(
+        build_pokemon_profile(
             _make_build("Rillaboom", ["Grass"], base_spe=85),
             [], "grassy-surge",
         )

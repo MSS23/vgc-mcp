@@ -23,18 +23,26 @@ import math
 from dataclasses import dataclass, replace
 from typing import Optional
 
-from ..models.pokemon import PokemonBuild
-from ..models.move import Move, MoveCategory, get_multi_hit_info, GEN9_SPECIAL_MOVES, get_move_type_for_user
 from ..config import EV_BREAKPOINTS_LV50
-from .stats import calculate_all_stats
+from ..models.move import (
+    GEN9_SPECIAL_MOVES,
+    Move,
+    MoveCategory,
+    get_move_type_for_user,
+    get_multi_hit_info,
+)
+from ..models.pokemon import PokemonBuild
+from ..utils.damage_verdicts import (
+    KOProbability,
+    calculate_ko_probability,
+    calculate_multi_hit_ko_probability,
+)
+from ..utils.normalize import normalize_ability, normalize_item, normalize_move
 from .modifiers import (
     DamageModifiers,
     get_type_effectiveness,
-    is_super_effective,
 )
-from ..utils.damage_verdicts import calculate_ko_probability, calculate_multi_hit_ko_probability, KOProbability
-from ..utils.normalize import normalize_ability, normalize_move, normalize_item
-
+from .stats import calculate_all_stats
 
 # =============================================================================
 # Pokemon-accurate rounding and modifier application
@@ -555,7 +563,6 @@ def calculate_damage(
         modifiers = DamageModifiers()
 
     # Auto-fill attacker/defender items from Pokemon builds if not specified
-    from dataclasses import replace
     if modifiers.attacker_item is None and attacker.item:
         modifiers = replace(modifiers, attacker_item=attacker.item)
     if modifiers.defender_item is None and defender.item:
@@ -1427,7 +1434,6 @@ def calculate_damage(
 
     # Add STAB to applied mods
     if stab_mod_4096 != MOD_NEUTRAL:
-        stab_mult = stab_mod_4096 / 4096
         if stab_mod_4096 == MOD_STAB_TERA_ADAPT:  # 9216 = 2.25x
             applied_mods.append("STAB (2.25x - Tera+Adaptability)")
         elif stab_mod_4096 == MOD_STAB_BOOSTED:

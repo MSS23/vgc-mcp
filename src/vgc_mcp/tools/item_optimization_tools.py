@@ -5,24 +5,29 @@ EV-item trade-offs for competitive VGC optimization.
 """
 
 from typing import Optional
+
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
 from vgc_mcp_core.calc.item_optimization import (
-    compare_items_damage,
     analyze_life_orb_sustainability,
-    calculate_ev_tradeoff
+    calculate_ev_tradeoff,
+    compare_items_damage,
 )
-from vgc_mcp_core.calc.damage import calculate_damage, format_percent
 from vgc_mcp_core.calc.modifiers import DamageModifiers
-from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, StatPointSpread, IVSpread, BaseStats
-from vgc_mcp_core.models.move import Move, MoveCategory
 from vgc_mcp_core.formats.showdown import pokemon_build_to_showdown
-from vgc_mcp_core.utils.errors import pokemon_not_found_error, api_error, error_response, ErrorCodes
-from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name
-from vgc_mcp_core.utils.synergies import get_synergy_ability
-from vgc_mcp_core.rules.regulation_loader import get_regulation_config
+from vgc_mcp_core.models.pokemon import (
+    BaseStats,
+    EVSpread,
+    Nature,
+    PokemonBuild,
+    StatPointSpread,
+)
+from vgc_mcp_core.tools.smogon_helpers import (
+    get_common_spread as _shared_get_common_spread,
+)
+from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 # Import META_SYNERGIES from spread_tools
 from .spread_tools import META_SYNERGIES
@@ -100,8 +105,8 @@ def _champions_ev_tradeoff(
     Points (cap 32/stat, 66 total) and returns 'SPs:' pastes. Returns
     `(analysis_list, best_entry)` sorted by total useful stats (desc).
     """
-    from vgc_mcp_core.calc.stats_champions import calculate_all_stats_champions
     from vgc_mcp_core.calc.champions_optimization import validate_sp_allocation
+    from vgc_mcp_core.calc.stats_champions import calculate_all_stats_champions
 
     results = []
     for item in items_to_test:
@@ -168,8 +173,6 @@ def _champions_ev_tradeoff(
 # Module-level Smogon client reference
 _smogon_client: Optional[SmogonStatsClient] = None
 
-
-from vgc_mcp_core.tools.smogon_helpers import get_common_spread as _shared_get_common_spread
 
 
 async def _get_common_spread(pokemon_name: str) -> Optional[dict]:
@@ -241,22 +244,22 @@ def register_item_optimization_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogo
 
             attacker_nature_enum = Nature(attacker_nature.lower() if attacker_nature else "serious")
             attacker_evs_dict = attacker_evs or {}
-            
+
             # Check for Sheer Force synergy
             attacker_key = pokemon_name.lower().replace(" ", "-")
             has_sheer_force = False
             attacker_ability = None
-            
+
             # Get ability from Smogon spread if available
             if attacker_spread:
                 attacker_ability = attacker_spread.get("ability")
-            
+
             # Check META_SYNERGIES as fallback
             if attacker_key in META_SYNERGIES:
                 _, meta_ability = META_SYNERGIES[attacker_key]
                 if not attacker_ability:
                     attacker_ability = meta_ability
-            
+
             # Normalize ability name for comparison
             if attacker_ability:
                 ability_normalized = attacker_ability.lower().replace(" ", "-").replace("_", "-")
@@ -377,7 +380,7 @@ def register_item_optimization_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogo
                 999 if x.turns_sustainable == 999 else x.turns_sustainable,
                 float(x.damage_percent.split("-")[1].replace("%", ""))
             ))
-            
+
             key_takeaways.append(f"{best_item.item.title()} provides best damage-to-sustainability ratio")
             if has_sheer_force and "life-orb" in items_to_compare:
                 key_takeaways.append("Sheer Force negates Life Orb recoil - Life Orb is optimal")

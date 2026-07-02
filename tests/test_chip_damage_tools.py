@@ -1,8 +1,8 @@
 """Tests for chip damage calculation tools."""
 
-import pytest
 from unittest.mock import AsyncMock
 
+import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.chip_damage_tools import register_chip_damage_tools

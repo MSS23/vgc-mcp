@@ -2,23 +2,21 @@
 
 import pytest
 
+from vgc_mcp_core.formats.showdown import (
+    ShowdownParseError,
+    export_pokemon_to_showdown,
+    format_showdown_species,
+    parse_showdown_pokemon,
+    parsed_to_pokemon_build,
+    parsed_to_sp_spread,
+    pokemon_build_to_showdown,
+)
 from vgc_mcp_core.models.pokemon import (
     BaseStats,
     EVSpread,
     Nature,
     PokemonBuild,
-    StatPointSpread,
 )
-from vgc_mcp_core.formats.showdown import (
-    parse_showdown_pokemon,
-    export_pokemon_to_showdown,
-    format_showdown_species,
-    parsed_to_pokemon_build,
-    parsed_to_sp_spread,
-    pokemon_build_to_showdown,
-    ShowdownParseError,
-)
-
 
 CHAMPIONS_PASTE = """Garchomp @ Choice Band
 Ability: Rough Skin

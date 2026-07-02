@@ -9,19 +9,19 @@ CRITICAL BENCHMARKS - These MUST pass:
 """
 
 import pytest
+
 from vgc_mcp_core.calc.stats import (
-    calculate_hp,
-    calculate_stat,
-    calculate_speed,
     calculate_all_stats,
+    calculate_hp,
+    calculate_speed,
+    calculate_stat,
     find_speed_evs,
 )
 from vgc_mcp_core.models.pokemon import (
-    Nature,
-    PokemonBuild,
     BaseStats,
     EVSpread,
-    IVSpread,
+    Nature,
+    PokemonBuild,
 )
 
 

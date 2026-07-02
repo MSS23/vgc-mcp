@@ -9,12 +9,12 @@ import time
 from dataclasses import dataclass, field
 from typing import Optional
 
-logger = logging.getLogger(__name__)
-
 from ..models.move import Move
 from ..models.pokemon import PokemonBuild
 from .damage import DamageResult, calculate_damage, format_percent
 from .modifiers import DamageModifiers
+
+logger = logging.getLogger(__name__)
 
 # =============================================================================
 # Scenario system

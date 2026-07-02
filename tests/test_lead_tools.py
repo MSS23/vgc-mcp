@@ -1,8 +1,8 @@
 """Tests for lead pair analysis tools."""
 
-import pytest
 from unittest.mock import AsyncMock
 
+import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.lead_tools import register_lead_tools

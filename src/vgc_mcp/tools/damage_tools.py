@@ -2,39 +2,51 @@
 
 import logging
 from typing import Optional
-from mcp.server.fastmcp import FastMCP
 
-logger = logging.getLogger(__name__)
+from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
-from vgc_mcp_core.calc.damage import calculate_damage, calculate_ko_threshold, calculate_bulk_threshold, format_percent
 from vgc_mcp_core.calc.conversion import ev_to_sp, evs_to_sps_spread
+from vgc_mcp_core.calc.damage import (
+    calculate_bulk_threshold,
+    calculate_damage,
+    calculate_ko_threshold,
+    format_percent,
+)
 from vgc_mcp_core.calc.modifiers import DamageModifiers
-from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, EVSpread, IVSpread, StatPointSpread, get_nature_modifier
 from vgc_mcp_core.formats.showdown import pokemon_build_to_showdown
-from vgc_mcp_core.rules.regulation_loader import get_regulation_config
-from vgc_mcp_core.rules.regulation_router import auto_detect_regulation
+from vgc_mcp_core.models.pokemon import (
+    EVSpread,
+    Nature,
+    PokemonBuild,
+    StatPointSpread,
+    get_nature_modifier,
+)
 from vgc_mcp_core.rules.format_detect import detect_champions_format
-from vgc_mcp_core.calc.stats import calculate_stat, calculate_hp
-from vgc_mcp_core.utils.errors import error_response, ErrorCodes, pokemon_not_found_error, invalid_nature_error, api_error
-from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name, suggest_nature
-from vgc_mcp_core.utils.synergies import get_synergy_ability
-
+from vgc_mcp_core.tools.smogon_helpers import (
+    get_common_spread as _shared_get_common_spread,
+)
+from vgc_mcp_core.tools.smogon_helpers import (
+    get_common_spreads as _shared_get_common_spreads,
+)
+from vgc_mcp_core.utils.errors import (
+    ErrorCodes,
+    api_error,
+    error_response,
+    invalid_nature_error,
+    pokemon_not_found_error,
+)
+from vgc_mcp_core.utils.fuzzy import suggest_nature, suggest_pokemon_name
+from vgc_mcp_core.utils.normalize import (
+    normalize_smogon_name as _normalize_smogon_name,  # noqa: F401  (re-exported for back-compat)
+)
 
 # Module-level Smogon client reference (set during registration)
 _smogon_client: Optional[SmogonStatsClient] = None
 
 
-from vgc_mcp_core.utils.normalize import normalize_smogon_name as _normalize_smogon_name  # noqa: F401  (re-exported for back-compat)
-
-
-# Delegate to shared core helpers — the local module-level _smogon_client
-# is captured in these wrappers so existing call sites stay unchanged.
-from vgc_mcp_core.tools.smogon_helpers import (
-    get_common_spread as _shared_get_common_spread,
-    get_common_spreads as _shared_get_common_spreads,
-)
+logger = logging.getLogger(__name__)
 
 
 async def _get_common_spreads(pokemon_name: str, limit: int = 3) -> list[dict]:
@@ -81,7 +93,7 @@ def format_transparent_output(
     calculation_steps: Optional[list[dict]] = None
 ) -> str:
     """Generate transparent markdown output showing full calculation.
-    
+
     Args:
         attacker: Attacking Pokemon build
         defender: Defending Pokemon build
@@ -89,16 +101,16 @@ def format_transparent_output(
         damage_result: DamageResult from calculate_damage
         modifiers_applied: List of modifier strings
         calculation_steps: Optional list of calculation step dicts
-        
+
     Returns:
         Formatted markdown string with full calculation breakdown
     """
     from vgc_mcp_core.calc.stats import calculate_all_stats
-    
+
     # Calculate final stats for both Pokemon
     attacker_stats = calculate_all_stats(attacker)
     defender_stats = calculate_all_stats(defender)
-    
+
     # Format nature string
     def format_nature(nature: Nature) -> str:
         if nature == Nature.SERIOUS:
@@ -108,7 +120,7 @@ def format_transparent_output(
         if minus_stat:
             return f"{plus_stat} (+{plus_stat}, -{minus_stat})"
         return plus_stat
-    
+
     # Get stat abbreviations
     def get_stat_abbrev(stat_name: str) -> str:
         abbrevs = {
@@ -116,21 +128,21 @@ def format_transparent_output(
             "special_attack": "SpA", "special_defense": "SpD", "speed": "Spe"
         }
         return abbrevs.get(stat_name, stat_name.title())
-    
+
     lines = []
     lines.append("## Damage Calculation\n")
-    
+
     # Attacker section
     lines.append(f"### Attacker: {attacker.name}")
     lines.append("| Stat | HP | Atk | Def | SpA | SpD | Spe |")
     lines.append("|------|-----|-----|-----|-----|-----|-----|")
-    
+
     # Base stats
     base_line = "| Base |"
     for stat in ["hp", "attack", "defense", "special_attack", "special_defense", "speed"]:
         base_line += f" {attacker.base_stats.__dict__[stat]} |"
     lines.append(base_line)
-    
+
     # EVs / SPs (Champions builds invest Stat Points, not EVs)
     atk_alloc = attacker.sps if attacker.is_champions() else attacker.evs
     ev_line = ("| SPs  |" if attacker.is_champions() else "| EVs  |")
@@ -157,18 +169,18 @@ def format_transparent_output(
     lines.append("")
     lines.append("---")
     lines.append("")
-    
+
     # Defender section
     lines.append(f"### Defender: {defender.name}")
     lines.append("| Stat | HP | Atk | Def | SpA | SpD | Spe |")
     lines.append("|------|-----|-----|-----|-----|-----|-----|")
-    
+
     # Base stats
     base_line = "| Base |"
     for stat in ["hp", "attack", "defense", "special_attack", "special_defense", "speed"]:
         base_line += f" {defender.base_stats.__dict__[stat]} |"
     lines.append(base_line)
-    
+
     # EVs / SPs (Champions builds invest Stat Points, not EVs)
     def_alloc = defender.sps if defender.is_champions() else defender.evs
     ev_line = ("| SPs  |" if defender.is_champions() else "| EVs  |")
@@ -183,7 +195,7 @@ def format_transparent_output(
         final_line += f" {defender_stats[stat]} |"
     lines.append(final_line)
     lines.append("")
-    
+
     # Defender details
     lines.append(f"**Nature:** {format_nature(defender.nature)}")
     lines.append(f"**Item:** {defender.item or 'None'}")
@@ -195,7 +207,7 @@ def format_transparent_output(
     lines.append("")
     lines.append("---")
     lines.append("")
-    
+
     # Move section
     lines.append(f"### Move: {move.name}")
     lines.append("| Base Power | Type | Category | Accuracy |")
@@ -205,7 +217,7 @@ def format_transparent_output(
     lines.append("")
     lines.append("---")
     lines.append("")
-    
+
     # Calculation breakdown
     if calculation_steps:
         lines.append("### Calculation Breakdown")
@@ -217,32 +229,32 @@ def format_transparent_output(
             notes = step.get("notes", "")
             lines.append(f"| {step_name} | {value} | {notes} |")
         lines.append("")
-    
+
     # Result section
     lines.append("### Result")
     lines.append("| Min | Max | % Range | HP After | Verdict |")
     lines.append("|-----|-----|---------|----------|---------|")
-    
+
     hp_after_min = max(0, defender_stats["hp"] - damage_result.max_damage)
     hp_after_max = max(0, defender_stats["hp"] - damage_result.min_damage)
-    
+
     verdict = damage_result.ko_chance
     if damage_result.is_guaranteed_ohko:
         verdict = "OHKO"
     elif damage_result.is_possible_ohko:
         verdict = f"{damage_result.ko_chance}"
-    
+
     lines.append(f"| {damage_result.min_damage} | {damage_result.max_damage} | "
                 f"{format_percent(damage_result.min_percent)}-{format_percent(damage_result.max_percent)}% | "
                 f"{hp_after_min}-{hp_after_max} | {verdict} |")
     lines.append("")
-    
+
     # Modifiers applied
     if modifiers_applied:
         lines.append("### Modifiers Applied")
         for mod in modifiers_applied:
             lines.append(f"- {mod}")
-    
+
     return "\n".join(lines)
 
 
@@ -601,8 +613,8 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
 
             # Auto-detect Ruinous abilities from attacker/defender
             # Create temporary modifiers to use the helper function
-            from vgc_mcp_core.calc.modifiers import DamageModifiers
             from vgc_mcp_core.calc.abilities import apply_ruin_abilities
+            from vgc_mcp_core.calc.modifiers import DamageModifiers
 
             temp_modifiers = DamageModifiers(
                 sword_of_ruin=sword_of_ruin,
@@ -631,7 +643,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             def get_paradox_boost_stat(base_stats, nature_enum, evs_dict) -> Optional[str]:
                 """Determine which stat gets boosted by Protosynthesis/Quark Drive.
                 Boosts the highest stat (excluding HP). Speed gets 1.5x, others get 1.3x."""
-                from vgc_mcp_core.calc.stats import calculate_stat, calculate_speed
+                from vgc_mcp_core.calc.stats import calculate_speed, calculate_stat
                 from vgc_mcp_core.models.pokemon import get_nature_modifier
 
                 stats = {
@@ -1673,7 +1685,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 if ability_normalized == "protosynthesis":
                     if attacker_item and attacker_item.lower().replace(" ", "-") == "booster-energy":
                         # Calculate which stat gets boosted (highest non-HP stat, Speed priority when tied)
-                        from vgc_mcp_core.calc.stats import calculate_stat, calculate_speed
+                        from vgc_mcp_core.calc.stats import calculate_speed, calculate_stat
                         stats = {
                             "attack": calculate_stat(atk_base.attack, 31, attacker_full_evs.get("attack", 0), 50, get_nature_modifier(atk_nature, "attack")),
                             "defense": calculate_stat(atk_base.defense, 31, attacker_full_evs.get("defense", 0), 50, get_nature_modifier(atk_nature, "defense")),
@@ -1687,7 +1699,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         protosynthesis_boost = "speed" if "speed" in tied_stats else tied_stats[0]
                 elif ability_normalized == "quark-drive":
                     if attacker_item and attacker_item.lower().replace(" ", "-") == "booster-energy":
-                        from vgc_mcp_core.calc.stats import calculate_stat, calculate_speed
+                        from vgc_mcp_core.calc.stats import calculate_speed, calculate_stat
                         stats = {
                             "attack": calculate_stat(atk_base.attack, 31, attacker_full_evs.get("attack", 0), 50, get_nature_modifier(atk_nature, "attack")),
                             "defense": calculate_stat(atk_base.defense, 31, attacker_full_evs.get("defense", 0), 50, get_nature_modifier(atk_nature, "defense")),
@@ -1811,11 +1823,6 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             attacker_spread_info["ability"] = attacker_ability_name.replace("-", " ").title() if attacker_ability_name else None
 
             # Build short attacker spread string for display
-            stat_name = "Atk" if is_physical else "SpA"
-            atk_nature_mod = get_nature_modifier(atk_nature, "attack" if is_physical else "special_attack")
-            nature_boost = "+" if atk_nature_mod > 1.0 else ""
-            nature_penalty = "-" if atk_nature_mod < 1.0 else ""
-            nature_indicator = nature_boost or nature_penalty
             attacker_spread_str = f"{attacker_nature.title()} {ev_string}"
             if attacker_item:
                 attacker_spread_str += f" @ {attacker_item.replace('-', ' ').title()}"
@@ -1832,7 +1839,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     f"| Defender         | {defender_name}                            |",
                     f"| Defender Ability | {defender_ability.replace('-', ' ').title() if defender_ability else 'Unknown'} |",
                     f"| Target Survival  | {target_survival_chance}%                  |",
-                    f"| Result           | Not achievable with max investment         |",
+                    "| Result           | Not achievable with max investment         |",
                 ]
                 if intimidate_note:
                     table_lines.append(f"| Intimidate       | {intimidate_note}                          |")
@@ -1850,7 +1857,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     "intimidate_note": intimidate_note,
                     "move": move_name,
                     "achievable": False,
-                    "message": f"Cannot survive this attack with max investment. Consider items, Tera typing, or screens.",
+                    "message": "Cannot survive this attack with max investment. Consider items, Tera typing, or screens.",
                     "summary_table": "\n".join(table_lines)
                 }
 
@@ -2153,8 +2160,8 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             # Thick Fat, Filter, Levitate, Flash Fire, etc.) flow through the
             # damage engine. Intimidate is computed as a stage event below.
             from vgc_mcp_core.tools.ability_helpers import (
-                resolve_ability,
                 compute_intimidate_attack_stage,
+                resolve_ability,
             )
             attacker_ability, attacker_ability_source = await resolve_ability(
                 attacker_name, pokeapi=pokeapi, smogon_client=_smogon_client,
@@ -2438,8 +2445,8 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             # Scales, Thick Fat, Fluffy, Filter, Levitate, type absorption)
             # interactions all flow through calculate_damage.
             from vgc_mcp_core.tools.ability_helpers import (
-                resolve_ability,
                 compute_intimidate_attack_stage,
+                resolve_ability,
             )
             attacker_ability, attacker_ability_source = await resolve_ability(
                 attacker_name, pokeapi=pokeapi, smogon_client=_smogon_client,
@@ -2568,7 +2575,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     f"| Max Investment   | 252 HP / 252 {def_stat_name} {defender_nature} |",
                     f"| Per Hit (max)    | {result.max_damage} ({result.max_damage/result.defender_hp*100:.1f}%) |",
                     f"| Total (max)      | {total_max} ({total_max/result.defender_hp*100:.1f}%) |",
-                    f"| Result           | Cannot survive                             |",
+                    "| Result           | Cannot survive                             |",
                 ]
 
                 return {
@@ -2833,8 +2840,8 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
 
             # Backfill any abilities Smogon didn't supply (mega > Smogon > pokeapi).
             from vgc_mcp_core.tools.ability_helpers import (
-                resolve_ability,
                 compute_intimidate_attack_stage,
+                resolve_ability,
             )
             if attacker1_ability is None:
                 attacker1_ability, _ = await resolve_ability(

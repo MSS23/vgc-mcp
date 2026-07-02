@@ -1,18 +1,19 @@
 """Tests for matchup analysis."""
 
 import pytest
+
 from vgc_mcp_core.calc.matchup import (
+    COMMON_THREATS,
+    analyze_defensive_matchup,
     analyze_single_matchup,
     analyze_threat_matchup,
-    find_team_threats,
     check_type_coverage,
-    analyze_defensive_matchup,
-    create_threat_pokemon,
     create_threat_move,
-    COMMON_THREATS,
+    create_threat_pokemon,
+    find_team_threats,
 )
-from vgc_mcp_core.models.pokemon import PokemonBuild, BaseStats, Nature, EVSpread
 from vgc_mcp_core.models.move import Move, MoveCategory
+from vgc_mcp_core.models.pokemon import BaseStats, EVSpread, Nature, PokemonBuild
 from vgc_mcp_core.models.team import Team
 
 
@@ -179,7 +180,7 @@ class TestTypeCoverage:
 
         coverage = check_type_coverage(team, "Grass")
 
-        assert coverage["has_coverage"] == True
+        assert coverage["has_coverage"] is True
         assert len(coverage["super_effective"]) > 0
 
     def test_lacks_coverage(self):
@@ -189,7 +190,7 @@ class TestTypeCoverage:
 
         coverage = check_type_coverage(team, "Dragon")
 
-        assert coverage["has_coverage"] == False
+        assert coverage["has_coverage"] is False
 
 
 class TestDefensiveMatchup:

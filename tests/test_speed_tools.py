@@ -1,8 +1,8 @@
 """Tests for Smogon-integrated speed analysis tools."""
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
+import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.speed_tools import register_speed_tools

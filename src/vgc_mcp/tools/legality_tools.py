@@ -1,17 +1,20 @@
 """MCP tools for VGC format legality checking."""
 
 from typing import Optional
+
 from mcp.server.fastmcp import FastMCP
 
-from vgc_mcp_core.rules.regulation_loader import get_regulation_config
-from vgc_mcp_core.rules.vgc_rules import get_regulation, list_regulations, validate_team_rules
-from vgc_mcp_core.rules.restricted import (
-    is_restricted, is_banned, count_restricted,
-    find_banned, get_restricted_status, find_restricted,
-    get_pokemon_legality
+from vgc_mcp_core.rules.item_clause import (
+    check_item_clause,
+    suggest_alternative_items,
 )
-from vgc_mcp_core.rules.item_clause import check_item_clause, get_duplicate_items, suggest_alternative_items
-from vgc_mcp_core.utils.errors import error_response, ErrorCodes
+from vgc_mcp_core.rules.regulation_loader import get_regulation_config
+from vgc_mcp_core.rules.restricted import (
+    find_restricted,
+    get_restricted_status,
+)
+from vgc_mcp_core.rules.vgc_rules import get_regulation, validate_team_rules
+from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 
 def register_legality_tools(mcp: FastMCP, team_manager):
@@ -416,8 +419,8 @@ def register_legality_tools(mcp: FastMCP, team_manager):
             Confirmation including the resolved code and active format system.
         """
         from vgc_mcp_core.rules.regulation_router import (
-            resolve_regulation,
             describe_regulation,
+            resolve_regulation,
         )
 
         config = get_regulation_config()

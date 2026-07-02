@@ -1,32 +1,29 @@
 """MCP tools for team vs team matchup analysis against tournament teams."""
 
 from typing import Optional
+
 from mcp.server.fastmcp import FastMCP
 
-from vgc_mcp_core.api.pokepaste import PokePasteClient, PokePasteError
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
-from vgc_mcp_core.formats.showdown import (
-    parse_showdown_team,
-    parse_showdown_pokemon,
-    parsed_to_pokemon_build,
-    ShowdownParseError,
-)
+from vgc_mcp_core.api.pokepaste import PokePasteClient, PokePasteError
 from vgc_mcp_core.api.smogon import SmogonStatsClient
-from vgc_mcp_core.calc.stats import calculate_all_stats
 from vgc_mcp_core.calc.damage import calculate_damage
-from vgc_mcp_core.calc.modifiers import DamageModifiers, get_type_effectiveness
-from vgc_mcp_core.data.sample_teams import ALL_SAMPLE_TEAMS, SampleTeam
+from vgc_mcp_core.calc.modifiers import DamageModifiers
+from vgc_mcp_core.calc.stats import calculate_all_stats
 from vgc_mcp_core.calc.team_matchup import (
-    full_team_matchup_analysis,
     TeamMatchupResult,
-    score_1v1_matchup,
+    full_team_matchup_analysis,
 )
-from vgc_mcp_core.models.pokemon import (
-    PokemonBuild, Nature, EVSpread
+from vgc_mcp_core.data.sample_teams import ALL_SAMPLE_TEAMS
+from vgc_mcp_core.formats.showdown import (
+    ShowdownParseError,
+    parse_showdown_pokemon,
+    parse_showdown_team,
+    parsed_to_pokemon_build,
 )
 from vgc_mcp_core.models.move import Move, MoveCategory
-from vgc_mcp_core.utils.errors import error_response, ErrorCodes
-
+from vgc_mcp_core.models.pokemon import EVSpread, Nature, PokemonBuild
+from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 # Priority moves that Armor Tail / Queenly Majesty / Dazzling block
 PRIORITY_MOVES = {
@@ -245,8 +242,6 @@ def _format_speed_comparison(speed_data: dict) -> str:
     """Format speed tier comparison."""
     lines = []
     for mon_name, data in speed_data.items():
-        outspeeds_count = len(data["outspeeds"])
-        underspeeds_count = len(data["underspeeds"])
         lines.append(f"**{mon_name}** (Speed: {data['speed']})")
         if data["outspeeds"]:
             lines.append(f"  • Outspeeds: {', '.join(data['outspeeds'][:3])}" +
@@ -665,7 +660,6 @@ def register_tournament_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi:
             survives_special = []
             does_not_survive = []
             blocked_moves = []  # Moves blocked by ability
-            modifiers = DamageModifiers(is_doubles=True)
 
             for threat_name, threat_usage_data in sorted_pokemon:
                 # Skip if it's the same Pokemon
@@ -712,8 +706,8 @@ def register_tournament_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi:
 
                 # Resolve threat's most-used ability (mega > Smogon > pokeapi)
                 from vgc_mcp_core.tools.ability_helpers import (
-                    resolve_ability,
                     compute_intimidate_attack_stage,
+                    resolve_ability,
                 )
                 threat_ability, _ = await resolve_ability(
                     threat_name, pokeapi=pokeapi, smogon_client=smogon,
@@ -770,12 +764,18 @@ def register_tournament_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi:
 
                         # Build full EV string for attacker showing all non-zero EVs
                         threat_ev_parts = []
-                        if threat_evs.hp: threat_ev_parts.append(f"{threat_evs.hp} HP")
-                        if threat_evs.attack: threat_ev_parts.append(f"{threat_evs.attack} Atk")
-                        if threat_evs.defense: threat_ev_parts.append(f"{threat_evs.defense} Def")
-                        if threat_evs.special_attack: threat_ev_parts.append(f"{threat_evs.special_attack} SpA")
-                        if threat_evs.special_defense: threat_ev_parts.append(f"{threat_evs.special_defense} SpD")
-                        if threat_evs.speed: threat_ev_parts.append(f"{threat_evs.speed} Spe")
+                        if threat_evs.hp:
+                            threat_ev_parts.append(f"{threat_evs.hp} HP")
+                        if threat_evs.attack:
+                            threat_ev_parts.append(f"{threat_evs.attack} Atk")
+                        if threat_evs.defense:
+                            threat_ev_parts.append(f"{threat_evs.defense} Def")
+                        if threat_evs.special_attack:
+                            threat_ev_parts.append(f"{threat_evs.special_attack} SpA")
+                        if threat_evs.special_defense:
+                            threat_ev_parts.append(f"{threat_evs.special_defense} SpD")
+                        if threat_evs.speed:
+                            threat_ev_parts.append(f"{threat_evs.speed} Spe")
                         threat_ev_str = " / ".join(threat_ev_parts) if threat_ev_parts else "No EVs"
 
                         damage_range = f"{result.min_percent:.0f}-{result.max_percent:.0f}%"
@@ -837,12 +837,18 @@ def register_tournament_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi:
             # Your spread summary - show ALL non-zero EVs/SPs
             none_label = "No SPs" if is_champions_subject else "No EVs"
             ev_parts = []
-            if spread_hp: ev_parts.append(f"{spread_hp} HP")
-            if spread_atk: ev_parts.append(f"{spread_atk} Atk")
-            if spread_def: ev_parts.append(f"{spread_def} Def")
-            if spread_spa: ev_parts.append(f"{spread_spa} SpA")
-            if spread_spd: ev_parts.append(f"{spread_spd} SpD")
-            if spread_spe: ev_parts.append(f"{spread_spe} Spe")
+            if spread_hp:
+                ev_parts.append(f"{spread_hp} HP")
+            if spread_atk:
+                ev_parts.append(f"{spread_atk} Atk")
+            if spread_def:
+                ev_parts.append(f"{spread_def} Def")
+            if spread_spa:
+                ev_parts.append(f"{spread_spa} SpA")
+            if spread_spd:
+                ev_parts.append(f"{spread_spd} SpD")
+            if spread_spe:
+                ev_parts.append(f"{spread_spe} Spe")
             ev_str = " / ".join(ev_parts) if ev_parts else none_label
             ability_str = f" | {parsed.ability}" if parsed.ability else ""
             item_str = f" | {parsed.item}" if parsed.item else ""

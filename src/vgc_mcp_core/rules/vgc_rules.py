@@ -104,8 +104,8 @@ def validate_team_rules(team, regulation_code: str = None) -> dict:
     Returns:
         Dict with validation results
     """
-    from .restricted import get_restricted_status, count_restricted, find_banned
     from .item_clause import check_item_clause
+    from .restricted import count_restricted, find_banned, get_restricted_status
 
     regulation = get_regulation(regulation_code)
     if not regulation:

@@ -8,7 +8,6 @@
        for Champions spreads instead of an all-zeros EV table.
 """
 
-import asyncio
 
 import pytest
 

@@ -20,7 +20,6 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.meta_threat_tools import register_meta_threat_tools
@@ -28,7 +27,6 @@ from vgc_mcp_core.api.pokeapi import PokeAPIError
 from vgc_mcp_core.models.move import Move, MoveCategory
 from vgc_mcp_core.models.pokemon import BaseStats
 from vgc_mcp_core.rules.regulation_loader import get_regulation_config
-
 
 _BASE = {
     "incineroar": BaseStats(hp=95, attack=115, defense=90,
@@ -182,7 +180,7 @@ class TestAnalyzeSpreadVsThreatsMoveFetch:
 class TestAnalyzeStoredPokemonThreatsMoveFetch:
     def test_stored_subject_does_not_crash(self, mainline_session):
         # The stored-Pokemon variant has the same your-moves Move-vs-dict bug.
-        from vgc_mcp_core.models.pokemon import PokemonBuild, EVSpread, Nature
+        from vgc_mcp_core.models.pokemon import EVSpread, Nature, PokemonBuild
 
         tm = MagicMock()
         stored = PokemonBuild(

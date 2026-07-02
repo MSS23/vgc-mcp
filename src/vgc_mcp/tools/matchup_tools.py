@@ -2,15 +2,15 @@
 
 from mcp.server.fastmcp import FastMCP
 
-from vgc_mcp_core.team.manager import TeamManager
 from vgc_mcp_core.calc.matchup import (
-    analyze_threat_matchup,
-    find_team_threats,
-    check_type_coverage,
-    analyze_defensive_matchup,
     COMMON_THREATS,
+    analyze_defensive_matchup,
+    analyze_threat_matchup,
+    check_type_coverage,
+    find_team_threats,
 )
-from vgc_mcp_core.utils.errors import error_response, ErrorCodes
+from vgc_mcp_core.team.manager import TeamManager
+from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 
 def register_matchup_tools(mcp: FastMCP, team_manager: TeamManager):

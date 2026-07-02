@@ -259,7 +259,6 @@ def calculate_ko_verdict(
 
     # 2HKO analysis
     two_hit_min = min_percent * 2
-    two_hit_max = max_percent * 2
 
     if min_percent >= 50:
         return DamageVerdict(
@@ -292,7 +291,6 @@ def calculate_ko_verdict(
 
     # 3HKO analysis
     three_hit_min = min_percent * 3
-    three_hit_max = max_percent * 3
 
     if min_percent >= 34:
         return DamageVerdict(

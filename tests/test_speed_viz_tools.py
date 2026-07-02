@@ -1,8 +1,8 @@
 """Tests for speed tier visualization tools."""
 
-import pytest
 from unittest.mock import AsyncMock
 
+import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.speed_viz_tools import register_speed_viz_tools

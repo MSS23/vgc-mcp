@@ -1,19 +1,19 @@
 """Tests for priority move and turn order analysis."""
 
 import pytest
+
 from vgc_mcp_core.calc.priority import (
-    get_move_priority,
-    determine_turn_order,
-    get_priority_moves_by_bracket,
-    categorize_priority_move,
-    find_team_priority_moves,
-    analyze_fake_out_matchup,
-    get_priority_bracket_summary,
-    check_prankster_immunity,
-    normalize_move_name,
-    PRIORITY_MOVES,
     FAKE_OUT_POKEMON,
     PRANKSTER_POKEMON,
+    analyze_fake_out_matchup,
+    categorize_priority_move,
+    check_prankster_immunity,
+    determine_turn_order,
+    find_team_priority_moves,
+    get_move_priority,
+    get_priority_bracket_summary,
+    get_priority_moves_by_bracket,
+    normalize_move_name,
 )
 
 

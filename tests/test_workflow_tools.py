@@ -1,8 +1,8 @@
 """Tests for high-level workflow coordinator tools."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.workflow_tools import register_workflow_tools

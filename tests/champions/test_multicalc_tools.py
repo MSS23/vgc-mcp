@@ -19,15 +19,13 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from mcp.server.fastmcp import FastMCP
 
-from vgc_mcp.tools.multicalc_tools import register_multicalc_tools, _build_pokemon_from_smogon
+from vgc_mcp.tools.multicalc_tools import _build_pokemon_from_smogon, register_multicalc_tools
 from vgc_mcp_core.calc.stats import calculate_all_stats
 from vgc_mcp_core.models.move import Move, MoveCategory
 from vgc_mcp_core.models.pokemon import BaseStats
 from vgc_mcp_core.rules.regulation_loader import get_regulation_config
-
 
 # --------------------------------------------------------------------------- #
 # Fixtures / helpers

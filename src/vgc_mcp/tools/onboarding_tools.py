@@ -1,10 +1,11 @@
 """MCP tools for user onboarding and discoverability."""
 
 from typing import Optional
+
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp_core.config import logger
-from vgc_mcp_core.utils.errors import api_error, error_response, ErrorCodes
+from vgc_mcp_core.utils.errors import api_error
 
 
 def register_onboarding_tools(mcp: FastMCP):
@@ -14,10 +15,10 @@ def register_onboarding_tools(mcp: FastMCP):
     async def show_capabilities(category: Optional[str] = None) -> dict:
         """
         Show what this tool can do with example prompts.
-        
+
         Args:
             category: Filter by "damage", "team", "evs", "speed", "learn", or None for all
-            
+
         Returns:
             Capabilities overview with example prompts
         """
@@ -57,13 +58,13 @@ def register_onboarding_tools(mcp: FastMCP):
                     "### More Help",
                     "Say \"help damage\", \"help team\", \"help evs\" for category-specific examples."
                 ]
-                
+
                 response = {
                     "capabilities_type": "overview",
                     "markdown_summary": "\n".join(markdown_lines),
                     "categories": ["damage", "team", "evs", "speed", "learn"]
                 }
-                
+
             elif category.lower() == "damage":
                 markdown_lines = [
                     "## Damage Calculations",
@@ -89,7 +90,7 @@ def register_onboarding_tools(mcp: FastMCP):
                     "category": "damage",
                     "markdown_summary": "\n".join(markdown_lines)
                 }
-                
+
             elif category.lower() in ["team", "teambuilding", "team building"]:
                 markdown_lines = [
                     "## Team Building",
@@ -116,7 +117,7 @@ def register_onboarding_tools(mcp: FastMCP):
                     "category": "team",
                     "markdown_summary": "\n".join(markdown_lines)
                 }
-                
+
             elif category.lower() in ["evs", "ev", "spread"]:
                 markdown_lines = [
                     "## EV Optimization",
@@ -144,7 +145,7 @@ def register_onboarding_tools(mcp: FastMCP):
                     "category": "evs",
                     "markdown_summary": "\n".join(markdown_lines)
                 }
-                
+
             elif category.lower() == "speed":
                 markdown_lines = [
                     "## Speed Analysis",
@@ -171,7 +172,7 @@ def register_onboarding_tools(mcp: FastMCP):
                     "category": "speed",
                     "markdown_summary": "\n".join(markdown_lines)
                 }
-                
+
             elif category.lower() in ["learn", "learning", "education"]:
                 markdown_lines = [
                     "## Learning VGC",
@@ -199,7 +200,7 @@ def register_onboarding_tools(mcp: FastMCP):
                     "category": "learn",
                     "markdown_summary": "\n".join(markdown_lines)
                 }
-                
+
             else:
                 response = {
                     "capabilities_type": "unknown",
@@ -207,9 +208,9 @@ def register_onboarding_tools(mcp: FastMCP):
                     "message": f"Unknown category: {category}. Try: damage, team, evs, speed, learn",
                     "available_categories": ["damage", "team", "evs", "speed", "learn"]
                 }
-            
+
             return response
-            
+
         except Exception as e:
             logger.error(f"Error in show_capabilities: {e}", exc_info=True)
             return api_error(str(e))

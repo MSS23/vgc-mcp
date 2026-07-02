@@ -19,7 +19,8 @@ Concurrency model: single-session, single-user. Mirrors BuildStateManager.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field as df_field
+from dataclasses import dataclass
+from dataclasses import field as df_field
 from typing import Optional
 
 

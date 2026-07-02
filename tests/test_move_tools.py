@@ -1,8 +1,8 @@
 """Tests for move legality and learnset validation tools."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.move_tools import register_move_tools
@@ -43,8 +43,8 @@ class TestValidatePokemonMoveset:
 
     async def test_all_legal_moves(self, tools, mock_pokeapi):
         """Test validation with all legal moves."""
-        from unittest.mock import MagicMock as MM
-        result_mock = MM()
+        from unittest.mock import MagicMock
+        result_mock = MagicMock()
         result_mock.pokemon = "incineroar"
         result_mock.all_legal = True
         result_mock.moves = []

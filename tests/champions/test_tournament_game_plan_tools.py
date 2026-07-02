@@ -18,14 +18,13 @@ Mainline assertions guard that the legacy EV path is untouched.
 import pytest
 from mcp.server.fastmcp import FastMCP
 
-from vgc_mcp.tools.tournament_tools import register_tournament_tools, _parsed_to_build
-from vgc_mcp.tools.game_plan_tools import register_game_plan_tools, _build_profile
+from vgc_mcp.tools.game_plan_tools import _build_profile, register_game_plan_tools
+from vgc_mcp.tools.tournament_tools import _parsed_to_build, register_tournament_tools
+from vgc_mcp_core.calc.stats import calculate_all_stats
 from vgc_mcp_core.formats.showdown import parse_showdown_pokemon
 from vgc_mcp_core.models.pokemon import BaseStats
-from vgc_mcp_core.team.manager import TeamManager
 from vgc_mcp_core.rules.regulation_loader import get_regulation_config
-from vgc_mcp_core.calc.stats import calculate_all_stats
-
+from vgc_mcp_core.team.manager import TeamManager
 
 # --- Fakes (no network) ---------------------------------------------------
 

@@ -1,8 +1,8 @@
 """Tests for VGC format legality checking tools."""
 
-import pytest
 from unittest.mock import MagicMock
 
+import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.legality_tools import register_legality_tools

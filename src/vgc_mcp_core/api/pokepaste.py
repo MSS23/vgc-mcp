@@ -5,8 +5,8 @@ from typing import Optional
 
 import httpx
 
+from ..config import logger, settings
 from .cache import APICache
-from ..config import settings, logger
 
 
 class PokePasteError(Exception):

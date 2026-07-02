@@ -1,15 +1,14 @@
 """Tests for damage calculations."""
 
 import pytest
-from vgc_mcp_core.calc.damage import calculate_damage, _get_stab_mod_4096
+
+from vgc_mcp_core.calc.damage import _get_stab_mod_4096, calculate_damage
 from vgc_mcp_core.calc.modifiers import (
     DamageModifiers,
     get_type_effectiveness,
-    is_super_effective,
-    is_immune,
 )
-from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, BaseStats, EVSpread
 from vgc_mcp_core.models.move import Move, MoveCategory
+from vgc_mcp_core.models.pokemon import BaseStats, EVSpread, Nature, PokemonBuild
 
 
 class TestTypeEffectiveness:
@@ -1548,7 +1547,7 @@ class TestAutoFillFromBuild:
         )
 
         # Calculate damage - this triggers the always_crit logic
-        result = calculate_damage(urshifu, ogerpon, surging_strikes, modifiers)
+        calculate_damage(urshifu, ogerpon, surging_strikes, modifiers)
 
         # Original modifiers should be unchanged (not mutated)
         assert modifiers.is_critical == original_crit_status, (

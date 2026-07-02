@@ -1,16 +1,14 @@
 """MCP tools for sample teams database."""
 
 from typing import Optional
+
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp_core.data.sample_teams import (
     ALL_SAMPLE_TEAMS,
-    get_teams_by_archetype,
-    get_teams_with_pokemon,
-    get_teams_by_regulation,
-    get_teams_by_difficulty,
-    get_all_archetypes,
     SampleTeam,
+    get_all_archetypes,
+    get_teams_by_archetype,
 )
 
 

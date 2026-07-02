@@ -10,14 +10,12 @@ mainline build (which produced Flutter Mane SpA 155 / Spe 170 instead of
 import json
 
 import pytest
-
 from mcp.server.fastmcp import FastMCP
 
-from vgc_mcp_core.api.pokeapi import PokeAPIClient
-from vgc_mcp_core.team.manager import TeamManager
-from vgc_mcp_core.calc.stats import calculate_all_stats
 from vgc_mcp.tools.import_export_tools import register_import_export_tools
-
+from vgc_mcp_core.api.pokeapi import PokeAPIClient
+from vgc_mcp_core.calc.stats import calculate_all_stats
+from vgc_mcp_core.team.manager import TeamManager
 
 CHAMPIONS_PASTE = """Manectric-Mega @ Life Orb
 Ability: Intimidate

@@ -1,13 +1,13 @@
 """Tests for damage calculation tools."""
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
+import pytest
 from mcp.server.fastmcp import FastMCP
 
-from vgc_mcp.tools.damage_tools import register_damage_tools, _normalize_smogon_name
-from vgc_mcp_core.models.pokemon import BaseStats
+from vgc_mcp.tools.damage_tools import _normalize_smogon_name, register_damage_tools
 from vgc_mcp_core.models.move import Move, MoveCategory
+from vgc_mcp_core.models.pokemon import BaseStats
 
 
 @pytest.fixture

@@ -1,8 +1,9 @@
 """Tests for team management."""
 
 import pytest
+
+from vgc_mcp_core.models.pokemon import BaseStats, EVSpread, Nature, PokemonBuild
 from vgc_mcp_core.team.manager import TeamManager
-from vgc_mcp_core.models.pokemon import PokemonBuild, Nature, BaseStats, EVSpread
 
 
 def make_pokemon(name: str, types: list[str] = None) -> PokemonBuild:

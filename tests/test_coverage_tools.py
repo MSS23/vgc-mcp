@@ -1,13 +1,11 @@
 """Tests for coverage analysis tools."""
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, PropertyMock
+from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.coverage_tools import register_coverage_tools
-from vgc_mcp_core.models.pokemon import PokemonBuild, BaseStats, Nature, EVSpread
-from vgc_mcp_core.team.manager import TeamManager
 
 
 def _make_team_slot(name, types, moves):

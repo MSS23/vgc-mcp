@@ -1,6 +1,7 @@
 """Tests for chip damage calculations including Salt Cure."""
 
 import pytest
+
 from vgc_mcp_core.calc.chip_damage import (
     calculate_salt_cure_damage,
     calculate_status_damage,

@@ -1,6 +1,7 @@
 """MCP tools for interactive help and guidance."""
 
 from typing import Optional
+
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp_core.config import logger
@@ -14,10 +15,10 @@ def register_help_tools(mcp: FastMCP):
     async def get_help(topic: Optional[str] = None) -> dict:
         """
         Get help on using this tool. Shows available commands and examples.
-        
+
         Args:
             topic: Optional specific topic to get help on (e.g., "damage", "team building", "speed")
-            
+
         Returns:
             Help menu with available commands and examples
         """
@@ -55,7 +56,7 @@ def register_help_tools(mcp: FastMCP):
                     "- Say \"help team building\" for team building help",
                     "- Say \"help speed\" for speed comparison help"
                 ]
-                
+
                 response = {
                     "help_type": "main_menu",
                     "markdown_summary": "\n".join(markdown_lines),
@@ -64,7 +65,7 @@ def register_help_tools(mcp: FastMCP):
                         "types", "abilities", "items", "moves"
                     ]
                 }
-                
+
             elif topic.lower() == "damage":
                 markdown_lines = [
                     "## Help: Damage Calculations",
@@ -90,7 +91,7 @@ def register_help_tools(mcp: FastMCP):
                     "topic": "damage",
                     "markdown_summary": "\n".join(markdown_lines)
                 }
-                
+
             elif topic.lower() in ["team building", "team", "teambuilding"]:
                 markdown_lines = [
                     "## Help: Team Building",
@@ -117,7 +118,7 @@ def register_help_tools(mcp: FastMCP):
                     "topic": "team building",
                     "markdown_summary": "\n".join(markdown_lines)
                 }
-                
+
             elif topic.lower() == "speed":
                 markdown_lines = [
                     "## Help: Speed and Speed Control",
@@ -139,7 +140,7 @@ def register_help_tools(mcp: FastMCP):
                     "topic": "speed",
                     "markdown_summary": "\n".join(markdown_lines)
                 }
-                
+
             else:
                 response = {
                     "help_type": "unknown_topic",
@@ -147,9 +148,9 @@ def register_help_tools(mcp: FastMCP):
                     "message": f"Help topic '{topic}' not found. Try: damage, team building, speed",
                     "available_topics": ["damage", "team building", "speed"]
                 }
-            
+
             return response
-            
+
         except Exception as e:
             logger.error(f"Error in get_help: {e}", exc_info=True)
             return api_error(str(e))

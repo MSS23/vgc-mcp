@@ -1,7 +1,7 @@
 """Move legality and learnset validation."""
 
-from typing import Optional
 from dataclasses import dataclass
+from typing import Optional
 
 from ..utils.normalize import normalize_move_name  # noqa: F401  (re-export for back-compat)
 

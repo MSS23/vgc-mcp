@@ -10,23 +10,22 @@ SP-scale behavior (32/stat, 66 total) instead of EV-scale (252/508):
   dispatches to the SP formula.
 """
 
-import pytest
 from unittest.mock import AsyncMock
 
+import pytest
 from mcp.server.fastmcp import FastMCP
 
-from vgc_mcp.tools.team_tools import register_team_tools
 from vgc_mcp.tools.build_tools import register_build_tools
-from vgc_mcp_core.models.pokemon import BaseStats
-from vgc_mcp_core.team.manager import TeamManager
-from vgc_mcp_core.team.analysis import TeamAnalyzer
-from vgc_mcp_core.state.build_manager import BuildStateManager
+from vgc_mcp.tools.team_tools import register_team_tools
 from vgc_mcp_core.calc.stats import calculate_all_stats
+from vgc_mcp_core.models.pokemon import BaseStats
 from vgc_mcp_core.rules.regulation_loader import (
     get_regulation_config,
     reset_regulation_config,
 )
-
+from vgc_mcp_core.state.build_manager import BuildStateManager
+from vgc_mcp_core.team.analysis import TeamAnalyzer
+from vgc_mcp_core.team.manager import TeamManager
 
 # Flutter Mane base stats — base Speed 135.
 FLUTTER_MANE_BASE = BaseStats(
@@ -116,12 +115,15 @@ class TestAddToTeamChampions:
         assert result["success"] is False
         assert "error" in result
 
-    async def test_per_stat_cap_enforced(self, champions_session, team_tools):
-        tools, _ = team_tools
+    async def test_ev_scale_input_coerced_to_sps(self, champions_session, team_tools):
+        # A stat > 32 is unambiguously EV-scale input: it now converts to SPs
+        # (40 EV -> 5 SP) instead of failing the per-stat cap.
+        tools, team_manager = team_tools
         fn = tools["add_to_team"].fn
-        result = await fn(pokemon_name="flutter-mane", spe_evs=40)  # > 32/stat
-        assert result["success"] is False
-        assert "error" in result
+        result = await fn(pokemon_name="flutter-mane", spe_evs=40)
+        assert result["success"] is True
+        assert result["sp_conversion"]["converted_sps"] == {"speed": 5}
+        assert team_manager.team.slots[0].pokemon.sps.speed == 5
 
     async def test_swap_uses_sp(self, champions_session, team_tools):
         tools, team_manager = team_tools

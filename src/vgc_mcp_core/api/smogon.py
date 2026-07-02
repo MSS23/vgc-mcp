@@ -5,11 +5,10 @@ from typing import Optional
 
 import httpx
 
-from .cache import APICache
-from ..config import settings, logger
-from ..rules.regulation_loader import get_regulation_config, RegulationConfig
+from ..config import logger, settings
+from ..rules.regulation_loader import RegulationConfig, get_regulation_config
 from ..utils.normalize import reorder_mega_prefix
-
+from .cache import APICache
 
 # Map form names to Smogon's naming convention
 # Smogon uses the base form name for certain Pokemon
@@ -67,12 +66,12 @@ class SmogonStatsClient:
         return self._regulation_config
 
     @property
-    def VGC_FORMATS(self) -> list[str]:
+    def VGC_FORMATS(self) -> list[str]:  # noqa: N802 — legacy constant-style API, callers depend on the name
         """Get VGC formats dynamically from current regulation config."""
         return self.regulation_config.get_all_smogon_formats()
 
     @property
-    def RATING_CUTOFFS(self) -> list[int]:
+    def RATING_CUTOFFS(self) -> list[int]:  # noqa: N802 — legacy constant-style API, callers depend on the name
         """Get available Smogon rating cutoffs.
 
         Returns:

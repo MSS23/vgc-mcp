@@ -1,8 +1,8 @@
 """Tests for Pokemon education tools."""
 
-import pytest
 from unittest.mock import AsyncMock
 
+import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.education_tools import register_education_tools

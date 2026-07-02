@@ -5,23 +5,21 @@ These pin the math: 32 SP saturates at 252 EV, every other SP step is
 so regressions don't silently swap saturation modes.
 """
 
-import pytest
 
 from vgc_mcp_core.calc.conversion import (
-    EV_PER_SP,
     EV_MAX_PER_STAT,
+    EV_PER_SP,
     SP_MAX_PER_STAT,
     SP_MAX_TOTAL,
     describe_conversion,
-    evs_to_sps_spread,
     ev_to_sp,
+    evs_to_sps_spread,
     regulation_uses_champions,
     sp_to_ev,
     sps_to_evs_spread,
 )
 from vgc_mcp_core.formats.showdown import build_dual_paste_payload
 from vgc_mcp_core.models.pokemon import EVSpread, StatPointSpread
-
 
 # ---------- Scalar conversion ----------
 
