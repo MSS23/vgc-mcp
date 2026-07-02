@@ -105,11 +105,13 @@ def register_build_checker_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                     })
             
             if wasted_evs:
+                wasted_msg = ", ".join(w["stat"] + ": " + str(w["wasted"]) + " wasted" for w in wasted_evs)
+                fix_msg = ", ".join(w["stat"] + ": " + str(w["suggestion"]) for w in wasted_evs)
                 issues.append({
                     "severity": "MINOR",
                     "type": "wasted_evs",
-                    "message": f"EVs not in multiples of 4: {', '.join([f'{w['stat']}: {w['wasted']} wasted' for w in wasted_evs])}",
-                    "fix": f"Adjust EVs to multiples of 4: {', '.join([f'{w['stat']}: {w['suggestion']}' for w in wasted_evs])}"
+                    "message": f"EVs not in multiples of 4: {wasted_msg}",
+                    "fix": f"Adjust EVs to multiples of 4: {fix_msg}",
                 })
                 rating_score -= 5 * len(wasted_evs)
             
