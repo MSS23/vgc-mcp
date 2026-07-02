@@ -271,6 +271,19 @@ def main_http(host: str = "0.0.0.0", port: int = None):
             }
         })
 
+    # This is a deliberately public endpoint. FastMCP's default transport
+    # security only allows localhost Host/Origin headers (DNS-rebinding
+    # protection for locally-run servers), which 421-rejects every request
+    # that reaches a hosted deployment (Host: vgc-mcp.onrender.com,
+    # Origin: https://claude.ai, ...). Rebinding attacks target private
+    # services behind the client's network position; they don't apply to a
+    # public TLS host, so disable the check here. The stdio path (main) is
+    # unaffected.
+    from mcp.server.transport_security import TransportSecuritySettings
+    mcp.settings.transport_security = TransportSecuritySettings(
+        enable_dns_rebinding_protection=False
+    )
+
     # Streamable HTTP (modern MCP transport). streamable_http_app() lazily
     # creates the session manager and returns a Starlette app whose only
     # route is /mcp — we reuse that route in our combined app and run the
