@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   class-based `Config`.
 
 ### Added
+- Streamable HTTP transport at `/mcp` (what Claude.ai custom connectors and
+  current MCP clients expect), served alongside the legacy HTTP+SSE
+  transport at `/sse`. Root and `/health` endpoints advertise both.
 - Champions EV->SP auto-conversion at tool entry points: `add_to_team`,
   `swap_team_pokemon`, `create_build` and `modify_build` now detect EV-scale
   input (any stat > 32) in a Champions (Reg MA/MB) session and convert it to

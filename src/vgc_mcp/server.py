@@ -203,7 +203,12 @@ def main():
 
 
 def main_http(host: str = "0.0.0.0", port: int = None):
-    """Entry point for HTTP/SSE transport (for remote/mobile access).
+    """Entry point for remote HTTP transports.
+
+    Serves BOTH remote MCP transports side by side:
+    - /mcp — Streamable HTTP (modern; what Claude.ai custom connectors and
+      current MCP clients expect)
+    - /sse + /messages/ — legacy HTTP+SSE (older clients, mcp-remote bridge)
 
     Usage:
         python -c "from vgc_mcp.server import main_http; main_http()"
@@ -211,7 +216,7 @@ def main_http(host: str = "0.0.0.0", port: int = None):
         python -c "from vgc_mcp.server import main_http; main_http(port=3000)"
 
     Then add to Claude.ai connectors:
-        URL: https://your-server.com/sse
+        URL: https://your-server.com/mcp   (fallback: /sse for legacy clients)
 
     Note: Reads PORT from environment variable (for Render/Heroku deployment).
     """
@@ -259,11 +264,19 @@ def main_http(host: str = "0.0.0.0", port: int = None):
             "description": "Pokemon VGC MCP Server - damage calcs, spreads, team building",
             "tools": tool_count,
             "endpoints": {
+                "mcp": "/mcp",
                 "sse": "/sse",
                 "health": "/health",
                 "messages": "/messages/"
             }
         })
+
+    # Streamable HTTP (modern MCP transport). streamable_http_app() lazily
+    # creates the session manager and returns a Starlette app whose only
+    # route is /mcp — we reuse that route in our combined app and run the
+    # session manager via the outer app's lifespan (mounted sub-app
+    # lifespans do NOT propagate in Starlette, so this must be explicit).
+    streamable_app = mcp.streamable_http_app()
 
     app = Starlette(
         routes=[
@@ -271,6 +284,7 @@ def main_http(host: str = "0.0.0.0", port: int = None):
             Route("/health", endpoint=health_check, methods=["GET"]),
             Route("/sse", endpoint=handle_sse),
             Mount("/messages/", app=sse.handle_post_message),
+            *streamable_app.routes,  # /mcp
         ],
         middleware=[
             Middleware(
@@ -279,12 +293,15 @@ def main_http(host: str = "0.0.0.0", port: int = None):
                 allow_methods=["*"],
                 allow_headers=["*"],
                 allow_credentials=True,
+                expose_headers=["Mcp-Session-Id"],
             )
-        ]
+        ],
+        lifespan=lambda app: mcp.session_manager.run(),
     )
 
     logger.info(f"Starting VGC MCP server on http://{host}:{port}")
-    logger.info(f"SSE endpoint: http://{host}:{port}/sse")
+    logger.info(f"Streamable HTTP endpoint: http://{host}:{port}/mcp")
+    logger.info(f"SSE endpoint (legacy): http://{host}:{port}/sse")
     logger.info(f"Health check: http://{host}:{port}/health")
     uvicorn.run(app, host=host, port=port)
 

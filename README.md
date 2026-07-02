@@ -52,7 +52,7 @@ Every VGC team-builder is a wall of UI: type into a calculator, copy-paste a pas
 
 **🎯 Smart routing** — `what_tool_should_i_use(question)` cuts through 208 tools when the agent is unsure. Spread iteration deltas, archetype classification, breakpoint Pareto-optimal options.
 
-**🌐 Live and free** — Hosted at `https://vgc-mcp.onrender.com/sse` ready for any MCP-compatible client.
+**🌐 Live and free** — Hosted at `https://vgc-mcp.onrender.com/mcp` (Streamable HTTP; legacy SSE at `/sse`) ready for any MCP-compatible client.
 
 [**→ Browse the full 208-tool catalog**](docs/tools-catalog.md)
 
@@ -65,10 +65,15 @@ Every VGC team-builder is a wall of UI: type into a calculator, copy-paste a pas
 In **Claude.ai → Settings → Connectors → Add custom connector**, paste:
 
 ```
-https://vgc-mcp.onrender.com/sse
+https://vgc-mcp.onrender.com/mcp
 ```
 
-Start a new chat. Done.
+Start a new chat. Done. (Older clients that only speak the legacy HTTP+SSE
+transport can use `https://vgc-mcp.onrender.com/sse` instead.)
+
+> **Note:** the free hosting tier sleeps after ~15 min idle — the first
+> request after a quiet period can take 30-60 s to wake the server. Retry
+> once if the initial connection stalls.
 
 ### Option B — Local (Claude Desktop, free)
 
@@ -198,7 +203,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/development.md](docs/developmen
 
 ## Status
 
-- ✅ Live at `https://vgc-mcp.onrender.com/sse`
+- ✅ Live at `https://vgc-mcp.onrender.com/mcp` (legacy SSE at `/sse`)
 - ✅ 208 tools registered, 1,417 tests passing
 - ✅ Auto-deploys from `main` on every push (Render)
 - ✅ MIT licensed — fork it, ship it, no strings
