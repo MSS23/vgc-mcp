@@ -70,10 +70,19 @@ class PokeAPIError(Exception):
 class PokeAPIClient:
     """Async client for PokeAPI v2 with connection pooling and retries."""
 
+    # 404s are negatively cached in-memory for this many seconds so repeated
+    # lookups of an unknown form don't re-hit the API each time.
+    NEGATIVE_CACHE_TTL = 300.0
+
     def __init__(self, cache: Optional[APICache] = None):
         """Initialize client with optional cache."""
         self.cache = cache or APICache()
         self._client: Optional[httpx.AsyncClient] = None
+        # In-flight request coalescing: concurrent identical fetches await one
+        # shared task instead of each hitting the network.
+        self._inflight: dict[str, "asyncio.Future[dict]"] = {}
+        # endpoint -> monotonic timestamp when it 404'd (short-TTL negative cache)
+        self._negative_cache: dict[str, float] = {}
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client with connection pooling."""
@@ -119,13 +128,36 @@ class PokeAPIClient:
         return normalized
 
     async def _fetch(self, endpoint: str) -> dict:
-        """Fetch from API with caching and retry logic."""
-        # Check cache first
+        """Fetch from API with caching, negative caching, and coalescing."""
+        # Persistent (positive) cache first.
         cached = self.cache.get("pokeapi", endpoint)
         if cached is not None:
             return cached
 
-        # Fetch from API with retries
+        # Short-TTL negative cache: don't re-hit the API for a known-404 endpoint.
+        neg_ts = self._negative_cache.get(endpoint)
+        if neg_ts is not None:
+            if asyncio.get_event_loop().time() - neg_ts < self.NEGATIVE_CACHE_TTL:
+                raise PokeAPIError(f"Not found: {endpoint}")
+            del self._negative_cache[endpoint]
+
+        # In-flight coalescing: if an identical fetch is already running, await
+        # the same task instead of issuing a second network request. Using a
+        # shared Task means both owner and waiters retrieve its result/exception,
+        # so there's no dangling future.
+        existing = self._inflight.get(endpoint)
+        if existing is not None:
+            return await existing
+
+        task: "asyncio.Task[dict]" = asyncio.ensure_future(self._do_fetch(endpoint))
+        self._inflight[endpoint] = task
+        try:
+            return await task
+        finally:
+            self._inflight.pop(endpoint, None)
+
+    async def _do_fetch(self, endpoint: str) -> dict:
+        """Perform the actual HTTP fetch with retry logic."""
         client = await self._get_client()
         last_error: Optional[Exception] = None
 
@@ -139,6 +171,9 @@ class PokeAPIClient:
 
             except httpx.HTTPStatusError as e:
                 if e.response.status_code == 404:
+                    # Remember the 404 briefly so repeated unknown-form lookups
+                    # short-circuit instead of re-hitting the API.
+                    self._negative_cache[endpoint] = asyncio.get_event_loop().time()
                     raise PokeAPIError(f"Not found: {endpoint}") from e
                 last_error = e
                 logger.warning(f"PokeAPI request failed (attempt {attempt + 1}): {e}")

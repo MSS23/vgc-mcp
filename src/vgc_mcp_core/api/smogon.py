@@ -1,6 +1,6 @@
 """Smogon usage stats client with caching and retry logic."""
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional
 
 import httpx
@@ -118,13 +118,18 @@ class SmogonStatsClient:
         So on Jan 1, December stats likely aren't available yet.
         We try current month -1, -2, -3, etc. to find latest available.
         """
-        months = []
+        # Decrement whole calendar months. Using timedelta(days=30*i) drifts
+        # near month boundaries (from the 31st it can repeat or skip a month),
+        # so step year/month explicitly instead.
         now = datetime.now()
-        # Start from previous month (current month stats won't exist yet)
-        # and go back several months to ensure we find available data
-        for i in range(1, count + 1):
-            date = now - timedelta(days=30 * i)
-            months.append(date.strftime("%Y-%m"))
+        year, month = now.year, now.month
+        months = []
+        for _ in range(1, count + 1):
+            month -= 1
+            if month == 0:
+                month = 12
+                year -= 1
+            months.append(f"{year:04d}-{month:02d}")
         return months
 
     async def _try_fetch_stats(

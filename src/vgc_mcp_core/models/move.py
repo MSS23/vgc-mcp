@@ -568,6 +568,13 @@ GEN9_SPECIAL_MOVES: dict[str, dict] = {
         "category": "special",
         "variable_bp": "electro_ball",
     },
+    "knock-off": {
+        # 65 BP, boosted 1.5x (→ 97) when the target holds a removable item.
+        "base_power": 65,
+        "type": "dark",
+        "category": "physical",
+        "variable_bp": "knock_off",
+    },
     "eruption": {
         "base_power": 150,  # Calculated: max(1, floor(150 * current_hp / max_hp))
         "type": "fire",

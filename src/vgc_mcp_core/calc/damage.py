@@ -448,6 +448,14 @@ def _calculate_variable_bp(
         # Stored Power/Power Trip: 20 + 20 per positive stat stage
         return 20 + (20 * modifiers.total_positive_stages)
 
+    elif variable_bp_type == "knock_off":
+        # Knock Off: 65 BP, boosted 1.5x (floor -> 97) when the target is
+        # holding a removable item. We treat any held item as removable, which
+        # covers all common VGC items (AV, Leftovers, Choice, berries, masks).
+        if modifiers.defender_item:
+            return math.floor(base_power * 1.5)
+        return base_power
+
     elif variable_bp_type == "weight_ratio":
         # Heavy Slam/Heat Crash: BP based on weight ratio (user / target)
         if modifiers.attacker_weight and modifiers.defender_weight:
@@ -1398,6 +1406,22 @@ def calculate_damage(
         # Generate representative rolls for display
         rolls = _calculate_multi_hit_rolls(damages_per_hit, hit_count)
 
+    # Parental Bond (Mega Kangaskhan): a single-strike damaging move hits a
+    # second time at 0.25x power. The second hit runs through the same modifier
+    # chain, so it lands at ~0.25x the first hit — model it as a per-roll +25%.
+    # Parental Bond strikes only ONCE on spread moves, and doesn't apply to
+    # status moves, already-multi-hit moves, or immune matchups.
+    parental_bond = (
+        modifiers.attacker_ability is not None
+        and normalize_ability(modifiers.attacker_ability) == "parental-bond"
+        and hit_count == 1
+        and move.category != MoveCategory.STATUS
+        and not move.is_spread
+        and type_eff != 0
+    )
+    if parental_bond:
+        rolls = [r + max(1, r // 4) for r in rolls]
+
     # Calculate results
     min_damage = min(rolls)
     max_damage = max(rolls)
@@ -1460,6 +1484,9 @@ def calculate_damage(
     if hit_count > 1:
         crit_note = " (always crits)" if always_crit else ""
         applied_mods.append(f"Multi-hit ({hit_count} hits{crit_note})")
+
+    if parental_bond:
+        applied_mods.append("Parental Bond (2nd hit 0.25x)")
 
     # Add Commander to mods
     if commander_boost_applied:
