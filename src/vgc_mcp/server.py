@@ -36,9 +36,8 @@ from vgc_mcp_core.api.pokepaste import PokePasteClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
 from vgc_mcp_core.config import logger
 from vgc_mcp_core.presentation import PRESENTATION_INSTRUCTIONS
-from vgc_mcp_core.state import BattleStateManager, BuildStateManager
+from vgc_mcp_core.state.session_registry import make_scoped_managers
 from vgc_mcp_core.team.analysis import TeamAnalyzer
-from vgc_mcp_core.team.manager import TeamManager
 
 from .tools import register_all as register_all_tools
 
@@ -170,15 +169,19 @@ Use calculate_damage_output and show:
 # Initialize shared state
 # ============================================================================
 
-# Initialize shared state
+# Initialize shared state. API clients and the stateless analyzer are safely
+# shared across all sessions (read-only / cache-backed). The three MUTABLE
+# managers (team, build, battle) are session-scoped: `make_scoped_managers`
+# returns proxies that transparently resolve to the calling MCP session's own
+# manager set, so concurrent HTTP users can't clobber each other's teams,
+# builds, or battles. In stdio mode everything resolves to one "default"
+# session — identical to the previous single-user behavior.
 cache = APICache()
 pokeapi = PokeAPIClient(cache)
 smogon = SmogonStatsClient(cache)
 pokepaste = PokePasteClient(cache)
-team_manager = TeamManager()
 analyzer = TeamAnalyzer()
-build_manager = BuildStateManager()
-battle_manager = BattleStateManager()
+session_registry, team_manager, build_manager, battle_manager = make_scoped_managers()
 
 # Auto-discover and register every `*_tools.py` module in tools/.
 # Each register_*_tools function is introspected and given the deps it asks for.
@@ -194,6 +197,55 @@ register_all_tools(
     build_manager=build_manager,
     battle_manager=battle_manager,
 )
+
+
+def _build_middleware(cors_cls, middleware_wrapper):
+    """Assemble the ASGI middleware stack for the HTTP app.
+
+    Order (outermost first): CORS → rate-limit → auth. Auth and rate-limiting
+    are opt-in via env vars so local/existing deployments are unaffected:
+    - VGC_MCP_API_KEY: require `Authorization: Bearer <key>` when set.
+    - VGC_MCP_RATE_LIMIT: max requests/IP per VGC_MCP_RATE_WINDOW seconds
+      (default window 60s). Unset or 0 disables limiting.
+    """
+    import os
+
+    from .http_middleware import BearerAuthMiddleware, RateLimitMiddleware
+
+    stack = [
+        middleware_wrapper(
+            cors_cls,
+            allow_origins=["*"],
+            allow_methods=["*"],
+            allow_headers=["*"],
+            # Token-less MCP needs no credentials, and the
+            # `allow_origins=["*"]` + `allow_credentials=True` combination is
+            # rejected by browsers per the Fetch spec. Drop credentials.
+            allow_credentials=False,
+            expose_headers=["Mcp-Session-Id"],
+        ),
+    ]
+
+    try:
+        rate_limit = int(os.environ.get("VGC_MCP_RATE_LIMIT", "0"))
+    except ValueError:
+        rate_limit = 0
+    try:
+        rate_window = float(os.environ.get("VGC_MCP_RATE_WINDOW", "60"))
+    except ValueError:
+        rate_window = 60.0
+    if rate_limit > 0:
+        stack.append(
+            middleware_wrapper(RateLimitMiddleware, limit=rate_limit, window=rate_window)
+        )
+        logger.info(f"Rate limiting enabled: {rate_limit} req / {rate_window:g}s per IP")
+
+    api_key = os.environ.get("VGC_MCP_API_KEY") or None
+    if api_key:
+        stack.append(middleware_wrapper(BearerAuthMiddleware, api_key=api_key))
+        logger.info("Bearer-token auth enabled on MCP endpoints")
+
+    return stack
 
 
 def main():
@@ -227,6 +279,23 @@ def main_http(host: str = "0.0.0.0", port: int = None):
     # Use PORT env var (Render sets this), fallback to 8000
     if port is None:
         port = int(os.environ.get("PORT", 8000))
+
+    app = create_http_app()
+
+    logger.info(f"Starting VGC MCP server on http://{host}:{port}")
+    logger.info(f"Streamable HTTP endpoint: http://{host}:{port}/mcp")
+    logger.info(f"SSE endpoint (legacy): http://{host}:{port}/sse")
+    logger.info(f"Health check: http://{host}:{port}/health")
+    uvicorn.run(app, host=host, port=port)
+
+
+def create_http_app():
+    """Build and return the combined Starlette ASGI app (no server started).
+
+    Split out from ``main_http`` so it can be exercised by a Starlette
+    ``TestClient`` without binding a socket. Serves ``/mcp`` (Streamable HTTP),
+    legacy ``/sse`` + ``/messages/``, plus ``/`` and ``/health``.
+    """
     from mcp.server.sse import SseServerTransport
     from starlette.applications import Starlette
     from starlette.middleware import Middleware
@@ -252,7 +321,8 @@ def main_http(host: str = "0.0.0.0", port: int = None):
         return JSONResponse({
             "status": "healthy",
             "service": "vgc-mcp",
-            "tools": tool_count
+            "tools": tool_count,
+            "active_sessions": session_registry.session_count(),
         })
 
     async def root(request):
@@ -299,27 +369,11 @@ def main_http(host: str = "0.0.0.0", port: int = None):
             Mount("/messages/", app=sse.handle_post_message),
             *streamable_app.routes,  # /mcp
         ],
-        middleware=[
-            Middleware(
-                CORSMiddleware,
-                allow_origins=["*"],
-                allow_methods=["*"],
-                allow_headers=["*"],
-                # Token-less MCP needs no credentials, and the
-                # `allow_origins=["*"]` + `allow_credentials=True` combination is
-                # rejected by browsers per the Fetch spec. Drop credentials.
-                allow_credentials=False,
-                expose_headers=["Mcp-Session-Id"],
-            )
-        ],
+        middleware=_build_middleware(CORSMiddleware, Middleware),
         lifespan=lambda app: mcp.session_manager.run(),
     )
 
-    logger.info(f"Starting VGC MCP server on http://{host}:{port}")
-    logger.info(f"Streamable HTTP endpoint: http://{host}:{port}/mcp")
-    logger.info(f"SSE endpoint (legacy): http://{host}:{port}/sse")
-    logger.info(f"Health check: http://{host}:{port}/health")
-    uvicorn.run(app, host=host, port=port)
+    return app
 
 
 if __name__ == "__main__":

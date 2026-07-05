@@ -123,28 +123,84 @@ class TestMovesetValidationResult:
 # Note: Async tests for API functions would require mocking the PokeAPI client
 # These are integration tests that would be tested separately
 
+def _mock_pokeapi(move_methods: dict[str, list[str]]):
+    """Build a mock PokeAPI whose _fetch returns a PokeAPI-shaped moves list."""
+    from unittest.mock import AsyncMock
+
+    moves = [
+        {
+            "move": {"name": name},
+            "version_group_details": [
+                {"move_learn_method": {"name": m}} for m in methods
+            ],
+        }
+        for name, methods in move_methods.items()
+    ]
+    client = AsyncMock()
+    client._fetch = AsyncMock(return_value={"name": "flutter-mane", "moves": moves})
+    return client
+
+
 class TestLearnsetIntegration:
-    """Placeholder for integration tests with mocked API."""
+    """Integration tests against learnset functions with a mocked PokeAPI."""
 
-    @pytest.mark.skip(reason="Requires mocked PokeAPI client")
     async def test_get_learnable_moves(self):
-        """Test getting learnable moves from API."""
-        pass
+        from vgc_mcp_core.validation.learnset import get_learnable_moves
 
-    @pytest.mark.skip(reason="Requires mocked PokeAPI client")
-    async def test_validate_moveset(self):
-        """Test validating a moveset."""
-        pass
+        api = _mock_pokeapi({"moonblast": ["level-up"], "protect": ["machine"]})
+        result = await get_learnable_moves("flutter-mane", api)
+        assert result["move_count"] == 2
+        assert "moonblast" in result["moves"]
+        assert result["moves"]["protect"] == ["machine"]
 
-    @pytest.mark.skip(reason="Requires mocked PokeAPI client")
+    async def test_get_learnable_moves_filters_by_method(self):
+        from vgc_mcp_core.validation.learnset import get_learnable_moves
+
+        api = _mock_pokeapi({"moonblast": ["level-up"], "protect": ["machine"]})
+        result = await get_learnable_moves("flutter-mane", api, method="machine")
+        assert "protect" in result["moves"]
+        assert "moonblast" not in result["moves"]
+
+    async def test_validate_moveset_all_legal(self):
+        from vgc_mcp_core.validation.learnset import validate_moveset
+
+        api = _mock_pokeapi(
+            {"moonblast": ["level-up"], "shadow-ball": ["machine"], "protect": ["machine"]}
+        )
+        result = await validate_moveset(
+            "flutter-mane", ["Moonblast", "Shadow Ball", "Protect"], api
+        )
+        assert result.all_legal is True
+        assert result.illegal_moves == []
+
+    async def test_validate_moveset_flags_illegal(self):
+        from vgc_mcp_core.validation.learnset import validate_moveset
+
+        api = _mock_pokeapi({"moonblast": ["level-up"]})
+        result = await validate_moveset(
+            "flutter-mane", ["Moonblast", "V-create"], api
+        )
+        assert result.all_legal is False
+        assert "V-create" in result.illegal_moves
+
     async def test_validate_team_movesets(self):
-        """Test validating team movesets."""
-        pass
+        from unittest.mock import MagicMock
 
-    @pytest.mark.skip(reason="Requires mocked PokeAPI client")
-    async def test_suggest_legal_moves(self):
-        """Test suggesting legal moves."""
-        pass
+        from vgc_mcp_core.validation.learnset import validate_team_movesets
+
+        api = _mock_pokeapi({"moonblast": ["level-up"], "protect": ["machine"]})
+
+        pokemon = MagicMock()
+        pokemon.name = "flutter-mane"
+        pokemon.moves = ["Moonblast", "Protect"]
+        slot = MagicMock()
+        slot.pokemon = pokemon
+        team = MagicMock()
+        team.slots = [slot]
+
+        results = await validate_team_movesets(team, api)
+        assert len(results) == 1
+        assert results[0]["all_legal"] is True
 
 
 if __name__ == "__main__":
