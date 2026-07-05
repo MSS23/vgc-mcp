@@ -10,6 +10,7 @@ from vgc_mcp_core.data.sample_teams import (
     get_all_archetypes,
     get_teams_by_archetype,
 )
+from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 
 def register_sample_team_tools(mcp: FastMCP):
@@ -50,11 +51,12 @@ def register_sample_team_tools(mcp: FastMCP):
             teams = [t for t in teams if t.difficulty.lower() == difficulty.lower()]
 
         if not teams:
-            return {
-                "error": "No teams match your criteria",
-                "available_archetypes": get_all_archetypes(),
-                "suggestion": "Try a different archetype or remove some filters"
-            }
+            return error_response(
+                ErrorCodes.INVALID_PARAMETER,
+                "No teams match your criteria",
+                suggestions=["Try a different archetype or remove some filters"],
+                available_archetypes=get_all_archetypes(),
+            )
 
         return {
             "count": len(teams),
@@ -109,10 +111,11 @@ def register_sample_team_tools(mcp: FastMCP):
                     "usage_tip": "Copy the paste above and import into Pokemon Showdown or your team builder"
                 }
 
-        return {
-            "error": f"Team '{team_name}' not found",
-            "available_teams": [t.name for t in ALL_SAMPLE_TEAMS]
-        }
+        return error_response(
+            ErrorCodes.INVALID_PARAMETER,
+            f"Team '{team_name}' not found",
+            available_teams=[t.name for t in ALL_SAMPLE_TEAMS],
+        )
 
     @mcp.tool()
     async def suggest_team_for_playstyle(

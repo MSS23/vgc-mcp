@@ -12,7 +12,7 @@ from vgc_mcp_core.team.core_builder import (
     suggest_partners,
 )
 from vgc_mcp_core.team.manager import TeamManager
-from vgc_mcp_core.utils.errors import ErrorCodes, error_response
+from vgc_mcp_core.utils.errors import ErrorCodes, error_response, success_response
 
 
 def register_core_tools(
@@ -49,10 +49,11 @@ def register_core_tools(
             )
 
             if not suggestions:
-                return {
-                    "error": f"Could not find teammate data for {pokemon_name}",
-                    "suggestion": "Check spelling or try a more common Pokemon"
-                }
+                return error_response(
+                    ErrorCodes.POKEMON_NOT_FOUND,
+                    f"Could not find teammate data for {pokemon_name}",
+                    suggestions=["Check spelling or try a more common Pokemon"],
+                )
 
             return {
                 "pokemon": pokemon_name,
@@ -89,10 +90,11 @@ def register_core_tools(
             cores = await find_popular_cores(smogon_client, size=2, limit=limit)
 
             if not cores:
-                return {
-                    "error": "Could not fetch core data",
-                    "suggestion": "Smogon stats may be temporarily unavailable"
-                }
+                return error_response(
+                    ErrorCodes.API_ERROR,
+                    "Could not fetch core data",
+                    suggestions=["Smogon stats may be temporarily unavailable"],
+                )
 
             return {
                 "core_count": len(cores),
@@ -126,10 +128,11 @@ def register_core_tools(
         """
         try:
             if team_manager.size < 2:
-                return {
-                    "error": "Need at least 2 Pokemon to analyze synergy",
-                    "current_size": team_manager.size
-                }
+                return error_response(
+                    ErrorCodes.INVALID_PARAMETER,
+                    "Need at least 2 Pokemon to analyze synergy",
+                    current_size=team_manager.size,
+                )
 
             analysis = analyze_core_synergy(team_manager.team)
 
@@ -164,17 +167,18 @@ def register_core_tools(
         """
         try:
             if team_manager.size == 0:
-                return {
-                    "error": "No Pokemon on team. Add some Pokemon first.",
-                    "suggestion": "Try adding 1-2 Pokemon you want to build around"
-                }
+                return error_response(
+                    ErrorCodes.TEAM_EMPTY,
+                    "No Pokemon on team. Add some Pokemon first.",
+                    suggestions=["Try adding 1-2 Pokemon you want to build around"],
+                )
 
             if team_manager.is_full:
-                return {
-                    "message": "Team is already full (6 Pokemon)",
-                    "team": team_manager.team.get_pokemon_names(),
-                    "suggestion": "Use analyze_team_synergy to check team quality"
-                }
+                return success_response(
+                    "Team is already full (6 Pokemon)",
+                    team=team_manager.team.get_pokemon_names(),
+                    suggestions=["Use analyze_team_synergy to check team quality"],
+                )
 
             suggestions = await complete_team(
                 team_manager.team,
@@ -183,10 +187,11 @@ def register_core_tools(
             )
 
             if not suggestions:
-                return {
-                    "error": "Could not generate suggestions",
-                    "team": team_manager.team.get_pokemon_names()
-                }
+                return error_response(
+                    ErrorCodes.INTERNAL_ERROR,
+                    "Could not generate suggestions",
+                    team=team_manager.team.get_pokemon_names(),
+                )
 
             # Also get current analysis for context
             current_analysis = analyze_core_synergy(team_manager.team)
@@ -258,10 +263,11 @@ def register_core_tools(
             role = role.lower().replace(" ", "_").replace("-", "_")
 
             if role not in POKEMON_ROLES:
-                return {
-                    "error": f"Unknown role: {role}",
-                    "available_roles": list(POKEMON_ROLES.keys())
-                }
+                return error_response(
+                    ErrorCodes.INVALID_PARAMETER,
+                    f"Unknown role: {role}",
+                    available_roles=list(POKEMON_ROLES.keys()),
+                )
 
             pokemon_list = POKEMON_ROLES[role]
 

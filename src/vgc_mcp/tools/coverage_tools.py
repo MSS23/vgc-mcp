@@ -15,6 +15,7 @@ from vgc_mcp_core.calc.coverage import (
     get_coverage_summary,
     suggest_coverage_moves,
 )
+from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 logger = logging.getLogger(__name__)
 
@@ -40,10 +41,10 @@ def register_coverage_tools(mcp: FastMCP, team_manager, pokeapi):
         team = team_manager.get_current_team()
 
         if not team or len(team.slots) == 0:
-            return {
-                "error": "No Pokemon on team",
-                "message": "Add Pokemon with moves to analyze coverage"
-            }
+            return error_response(
+                ErrorCodes.TEAM_EMPTY,
+                "No Pokemon on team. Add Pokemon with moves to analyze coverage.",
+            )
 
         # Build team data for analysis
         team_data = []
@@ -230,16 +231,17 @@ def register_coverage_tools(mcp: FastMCP, team_manager, pokeapi):
             target_types = target_data.get("types", [])
         except Exception as e:
             logger.warning("Failed to fetch Pokemon '%s': %s", target_pokemon, e)
-            return {
-                "error": f"Could not find Pokemon: {target_pokemon}",
-                "message": "Please check the Pokemon name and spelling"
-            }
+            return error_response(
+                ErrorCodes.POKEMON_NOT_FOUND,
+                f"Could not find Pokemon: {target_pokemon}",
+                suggestions=["Check the Pokemon name and spelling"],
+            )
 
         if not target_types:
-            return {
-                "error": f"Could not determine types for {target_pokemon}",
-                "message": "Pokemon data incomplete"
-            }
+            return error_response(
+                ErrorCodes.API_ERROR,
+                f"Could not determine types for {target_pokemon} — Pokemon data incomplete",
+            )
 
         team_data = []
         for slot in team.slots:
@@ -348,11 +350,11 @@ def register_coverage_tools(mcp: FastMCP, team_manager, pokeapi):
         move_type = move_type.capitalize()
 
         if move_type not in ALL_TYPES:
-            return {
-                "error": f"Invalid type: {move_type}",
-                "valid_types": ALL_TYPES,
-                "message": "Please specify a valid type"
-            }
+            return error_response(
+                ErrorCodes.INVALID_PARAMETER,
+                f"Invalid type: {move_type}. Please specify a valid type.",
+                valid_types=ALL_TYPES,
+            )
 
         if move_type not in COVERAGE_MOVES:
             return {

@@ -69,7 +69,8 @@ class TestGetSpreadPresets:
         fn = tools["get_spread_presets"].fn
         result = await fn(pokemon_name="magikarp")
         assert "error" in result
-        assert "suggestion" in result
+        assert result["success"] is False
+        assert "suggestions" in result
 
     async def test_specific_preset_not_found(self, tools):
         """Test requesting a specific preset that doesn't exist."""

@@ -42,10 +42,11 @@ def register_preset_tools(mcp: FastMCP, smogon=None):
         try:
             data = await smogon.get_pokemon_usage(pokemon_name, format_name)
             if not data:
-                return {
-                    "error": f"No Smogon data found for {pokemon_name}",
-                    "suggestion": "Check the Pokemon name spelling"
-                }
+                return error_response(
+                    ErrorCodes.API_NOT_FOUND,
+                    f"No Smogon data found for {pokemon_name}",
+                    suggestions=["Check the Pokemon name spelling"],
+                )
 
             spreads = data.get("spreads", [])[:limit]
             meta = data.get("_meta", {})
@@ -146,19 +147,21 @@ def register_preset_tools(mcp: FastMCP, smogon=None):
             if not preset:
                 available = get_presets_for_pokemon(pokemon_name)
                 preset_names = [p.name for p in available] if available else []
-                return {
-                    "error": f"Preset '{preset_name}' not found for {pokemon_name}",
-                    "available_presets": preset_names,
-                    "suggestion": "Use get_smogon_spreads for live data from Smogon"
-                }
+                return error_response(
+                    ErrorCodes.INVALID_PARAMETER,
+                    f"Preset '{preset_name}' not found for {pokemon_name}",
+                    suggestions=["Use get_smogon_spreads for live data from Smogon"],
+                    available_presets=preset_names,
+                )
             return _format_preset(preset)
 
         presets = get_presets_for_pokemon(pokemon_name)
         if not presets:
-            return {
-                "error": f"No curated presets for {pokemon_name}",
-                "suggestion": "Use get_smogon_spreads(pokemon_name) for live Smogon data instead"
-            }
+            return error_response(
+                ErrorCodes.INVALID_PARAMETER,
+                f"No curated presets for {pokemon_name}",
+                suggestions=["Use get_smogon_spreads(pokemon_name) for live Smogon data instead"],
+            )
 
         return {
             "pokemon": pokemon_name,
@@ -200,10 +203,11 @@ def register_preset_tools(mcp: FastMCP, smogon=None):
         """
         presets = get_presets_for_pokemon(pokemon_name)
         if not presets:
-            return {
-                "error": f"No curated presets for {pokemon_name}",
-                "suggestion": "Use get_smogon_spreads(pokemon_name) for live Smogon data"
-            }
+            return error_response(
+                ErrorCodes.INVALID_PARAMETER,
+                f"No curated presets for {pokemon_name}",
+                suggestions=["Use get_smogon_spreads(pokemon_name) for live Smogon data"],
+            )
 
         role_lower = role.lower()
         matches = []

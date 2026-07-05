@@ -42,10 +42,11 @@ def register_matchup_tools(mcp: FastMCP, team_manager: TeamManager):
             threat_name = threat_name.lower().replace(" ", "-")
 
             if threat_name not in COMMON_THREATS:
-                return {
-                    "error": f"Unknown threat: {threat_name}",
-                    "available_threats": list(COMMON_THREATS.keys())
-                }
+                return error_response(
+                    ErrorCodes.INVALID_PARAMETER,
+                    f"Unknown threat: {threat_name}",
+                    available_threats=list(COMMON_THREATS.keys()),
+                )
 
             analysis = analyze_threat_matchup(team_manager.team, threat_name)
 

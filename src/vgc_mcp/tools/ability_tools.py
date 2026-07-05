@@ -27,6 +27,7 @@ from vgc_mcp_core.calc.abilities import (
 from vgc_mcp_core.calc.abilities import (
     suggest_ability_additions as _suggest_ability_additions,
 )
+from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 
 def register_ability_tools(mcp: FastMCP, team_manager):
@@ -51,10 +52,10 @@ def register_ability_tools(mcp: FastMCP, team_manager):
         team = team_manager.get_current_team()
 
         if not team or len(team.slots) == 0:
-            return {
-                "error": "No Pokemon on team",
-                "message": "Add Pokemon to analyze ability synergy"
-            }
+            return error_response(
+                ErrorCodes.TEAM_EMPTY,
+                "No Pokemon on team. Add Pokemon to analyze ability synergy.",
+            )
 
         # Gather team data
         abilities = []
