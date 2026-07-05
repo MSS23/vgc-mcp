@@ -44,26 +44,18 @@ def main() -> int:
         sys.stderr.write("Server will fall back to its built-in default regs!\n")
         return 0
 
+    # Reuse the canonical invariant checks from scripts/validate_regulations.py
+    # so the two validators can't drift. The hook is just a thin stdin wrapper.
     errors: list[str] = []
-    regs = data.get("regulations") or {}
-    if not regs:
-        errors.append("regulations.json has no `regulations` block.")
-
-    for code, reg in regs.items():
-        fmt = reg.get("format_system", "mainline")
-        if fmt not in {"mainline", "champions"}:
-            errors.append(f"{code}: unknown format_system={fmt!r}")
-        if fmt == "champions":
-            if "legal_pokemon" not in reg:
-                errors.append(f"{code}: champions reg must declare `legal_pokemon`.")
-            if reg.get("legality_mode") != "allowlist":
-                errors.append(f"{code}: champions reg should set legality_mode='allowlist'.")
-            if "sp_per_stat_max" not in reg or "sp_total_max" not in reg:
-                errors.append(f"{code}: champions reg must declare SP caps.")
-        else:
-            for key in ("restricted_pokemon", "banned_pokemon"):
-                if key not in reg:
-                    errors.append(f"{code}: mainline reg missing `{key}` list.")
+    scripts_dir = str(Path(__file__).resolve().parents[1])
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    try:
+        from validate_regulations import _validate_invariants
+        _validate_invariants(data, errors)
+    except Exception as e:  # never block an edit if the validator can't load
+        sys.stderr.write(f"[hook:validate_regulations] could not run validator: {e}\n")
+        return 0
 
     if errors:
         sys.stderr.write("[hook:validate_regulations] regulations.json issues:\n")

@@ -1,7 +1,7 @@
 """Pokemon data models with nature modifiers and stat spreads."""
 
 from enum import Enum
-from typing import Literal, Optional
+from typing import ClassVar, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -153,7 +153,9 @@ class StatPointSpread(BaseModel):
     special_defense: int = Field(default=0, ge=0, le=32)
     speed: int = Field(default=0, ge=0, le=32)
 
-    MAX_TOTAL: int = 66
+    # ClassVar (not a Pydantic field) — otherwise it serializes into
+    # model_dump() and becomes caller-overridable per instance.
+    MAX_TOTAL: ClassVar[int] = 66
 
     @property
     def total(self) -> int:

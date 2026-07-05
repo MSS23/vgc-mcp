@@ -28,10 +28,12 @@ keywords:
   - battle-coach
   - replay-analysis
 
-# Hosted SSE endpoint — works in Claude.ai connectors and ChatGPT custom GPTs
+# Hosted endpoint — modern Streamable HTTP transport at /mcp (what current
+# Claude.ai connectors and MCP clients expect). Legacy SSE remains served at
+# /sse for older clients / the mcp-remote bridge.
 remote:
-  type: sse
-  url: https://vgc-mcp.onrender.com/sse
+  type: streamable-http
+  url: https://vgc-mcp.onrender.com/mcp
   health: https://vgc-mcp.onrender.com/health
 
 # Local install option for Claude Desktop
@@ -43,7 +45,7 @@ local:
 
 # Tool count + categories for discovery
 tools:
-  count: 206
+  count: 208
   highlights:
     - calculate_damage_output
     - find_survival_evs

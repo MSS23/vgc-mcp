@@ -54,6 +54,11 @@ class Settings:
     # VGC defaults
     DEFAULT_LEVEL: int = 50
     DEFAULT_FORMAT: str = "gen9vgc2026regfbo3"
+    # Canonical short regulation code for the active mainline format (Reg F).
+    # Single source of truth for anything that needs a default reg id — e.g.
+    # the battle copilot's starting format — so it never drifts from the
+    # Smogon DEFAULT_FORMAT above.
+    DEFAULT_REGULATION: str = "reg_f"
     DEFAULT_RATING: int = 0  # 0 = all competitive data (broadest dataset)
 
     # Team settings

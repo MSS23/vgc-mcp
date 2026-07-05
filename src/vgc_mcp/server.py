@@ -305,7 +305,10 @@ def main_http(host: str = "0.0.0.0", port: int = None):
                 allow_origins=["*"],
                 allow_methods=["*"],
                 allow_headers=["*"],
-                allow_credentials=True,
+                # Token-less MCP needs no credentials, and the
+                # `allow_origins=["*"]` + `allow_credentials=True` combination is
+                # rejected by browsers per the Fetch spec. Drop credentials.
+                allow_credentials=False,
                 expose_headers=["Mcp-Session-Id"],
             )
         ],

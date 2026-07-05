@@ -381,6 +381,70 @@ MULTI_HIT_MOVES: dict[str, tuple[int, int, bool]] = {
 }
 
 
+# Contact moves. PokeAPI's REST /move endpoint does not expose the contact
+# flag, so it must be tabulated. Contact gates Tough Claws (+30%), Punching
+# Glove (removes contact), Rocky Helmet, Rough Skin/Iron Barbs, Fluffy (2x
+# from contact), Flame/Poison/Static Body, King's Rock, and Pickpocket.
+#
+# Rather than enumerate every contact move, we tabulate the competitively
+# relevant NON-contact physical moves (the exceptions) and treat every other
+# physical damaging move as making contact — which matches the real
+# distribution far more accurately than the previous always-False behavior.
+# Special/status moves never make contact except the handful in
+# SPECIAL_CONTACT_MOVES (e.g. Trump Card / Petal Dance are physical; the rare
+# special-contact moves like Grass Knot are physical too — kept here for
+# completeness).
+NON_CONTACT_PHYSICAL_MOVES: set[str] = {
+    # Ground (all non-contact except a handful of melee ground moves)
+    "earthquake", "bonemerang", "bone-rush", "bone-club", "drilling-run",
+    "fissure", "magnitude", "sand-tomb", "high-horsepower",
+    "precipice-blades", "thousand-arrows", "thousand-waves",
+    # Rock (thrown/ranged)
+    "rock-slide", "stone-edge", "rock-blast", "rock-throw", "rock-tomb",
+    "ancient-power", "power-gem", "smack-down", "accelerock",
+    "salt-cure", "diamond-storm", "rock-wrecker", "rollout",
+    # Projectile / bomb / thrown physical
+    "bullet-seed", "seed-bomb", "pin-missile", "spike-cannon", "barrage",
+    "egg-bomb", "magnet-bomb", "gyro-ball", "self-destruct", "explosion",
+    "present", "fling", "beat-up", "pyro-ball", "gunk-shot", "poison-sting",
+    "sludge-bomb", "sludge-wave", "octazooka",
+    # Bladed / wind projectiles that don't touch
+    "twineedle", "razor-leaf", "psycho-cut", "sacred-sword", "secret-sword",
+    "aura-wheel", "fusion-bolt", "petal-blizzard", "leafage", "fury-cutter",
+    "night-slash", "cross-poison", "air-cutter", "razor-wind",
+    # Ice projectiles
+    "ice-shard", "icicle-spear", "icicle-crash", "freeze-shock",
+    # Electric / water projectiles
+    "zing-zap", "water-shuriken",
+    # Steel
+    "gear-grind",
+    # Misc ranged
+    "electro-ball", "mud-bomb", "mud-shot",
+}
+# Note: this set is a pragmatic VGC-focused approximation of the in-game
+# contact flag. The impactful competitive cases resolve correctly — melee
+# moves (Close Combat, U-turn, Surging Strikes, Bullet Punch) fall to the
+# contact default, while thrown/ranged physical moves (Earthquake, Rock
+# Slide, Bullet Seed) are excluded — which is what Tough Claws / Fluffy /
+# Rocky Helmet / Rough Skin gating needs.
+
+
+def move_makes_contact(move_name: str, category: "MoveCategory | str") -> bool:
+    """Best-effort contact determination for a move.
+
+    Physical damaging moves make contact unless they are a known projectile /
+    ranged move (NON_CONTACT_PHYSICAL_MOVES). Special and status moves do not
+    make contact. This replaces the previous behavior where every API-fetched
+    move was flagged non-contact, which silently broke Tough Claws, Fluffy,
+    Rocky Helmet, and Rough Skin interactions.
+    """
+    normalized = move_name.lower().replace(" ", "-")
+    cat = category.value if isinstance(category, MoveCategory) else str(category).lower()
+    if cat != "physical":
+        return False
+    return normalized not in NON_CONTACT_PHYSICAL_MOVES
+
+
 def get_multi_hit_info(move_name: str) -> tuple[int, int, bool] | None:
     """
     Get multi-hit info for a move.

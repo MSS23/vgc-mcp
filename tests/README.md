@@ -1,11 +1,16 @@
 # tests/ - Test Suite
 
-Pytest test suite with 289 tests covering all calculations and tools.
+Pytest test suite (1400+ tests) covering the calculation engine and MCP tools,
+split across `tests/` (mainline VGC) and `tests/champions/` (Stat-Point format).
+
+Integration tests that hit live PokeAPI/Smogon are marked `@pytest.mark.integration`
+and excluded by default (see `addopts` in `pyproject.toml`); run them with
+`python -m pytest -m integration`.
 
 ## Running Tests
 
 ```bash
-# Run all tests
+# Run all tests (integration excluded by default)
 python -m pytest tests/ -v
 
 # Run specific test file

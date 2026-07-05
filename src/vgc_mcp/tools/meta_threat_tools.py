@@ -288,6 +288,7 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
 
             # Use actual Smogon spread if available, otherwise estimate
             threat_spread = None
+            threat_pokemon_build = None
             if threat_usage and threat_usage.get("spreads"):
                 top_spread = threat_usage["spreads"][0]
                 try:
@@ -316,6 +317,7 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                     }
                 except (ValueError, KeyError):
                     # Fallback to estimates if spread parsing fails
+                    threat_pokemon_build = None
                     threat_stats = {
                         "hp": threat_base_stats.hp + 75,
                         "attack": threat_base_stats.attack + 40,
@@ -345,7 +347,8 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                 threat_common_moves=threat_moves,
                 your_common_moves=your_moves,
                 your_speed=your_stats["speed"],
-                threat_spread=threat_spread
+                threat_spread=threat_spread,
+                threat_build=threat_pokemon_build
             )
 
             threat_results.append(result)
@@ -473,6 +476,7 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
 
             # Use actual Smogon spread if available, otherwise estimate
             threat_spread = None
+            threat_pokemon_build = None
             if threat_usage and threat_usage.get("spreads"):
                 top_spread = threat_usage["spreads"][0]
                 try:
@@ -528,7 +532,8 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                 threat_common_moves=threat_moves,
                 your_common_moves=your_moves,
                 your_speed=your_stats["speed"],
-                threat_spread=threat_spread
+                threat_spread=threat_spread,
+                threat_build=threat_pokemon_build
             )
 
             threat_results.append(result)

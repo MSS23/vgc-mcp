@@ -13,6 +13,7 @@ from ..models.move import (
     get_move_type_for_user,
     get_multi_hit_info,
     is_always_crit_move,
+    move_makes_contact,
 )
 from ..models.pokemon import BaseStats
 from ..utils.normalize import reorder_mega_prefix
@@ -215,14 +216,11 @@ class PokeAPIClient:
 
         target = data.get("target", {}).get("name", "selected-pokemon")
 
-        # Determine if move makes contact
-        makes_contact = False
-        if "meta" in data and data["meta"]:
-            # Check meta category
-            meta = data["meta"]
-            if meta.get("category", {}).get("name") == "damage+raise":
-                pass  # Continue checking
-            # Contact is usually in the move's metadata
+        # Determine if move makes contact. PokeAPI's REST endpoint doesn't
+        # expose the contact flag, so resolve it from the curated table
+        # (physical melee moves make contact; ranged/thrown ones don't).
+        damage_class = data["damage_class"]["name"]
+        makes_contact = move_makes_contact(data["name"], damage_class)
 
         # Get multi-hit info from our database (e.g., Surging Strikes: 3 hits, always crits)
         multi_hit_info = get_multi_hit_info(name)

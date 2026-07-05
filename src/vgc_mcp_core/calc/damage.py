@@ -1441,8 +1441,10 @@ def calculate_damage(
         else:
             applied_mods.append("STAB (1.5x)")
 
-    # Add type effectiveness to mods
-    type_eff = get_type_effectiveness(effective_move_type, defender_types)
+    # Add type effectiveness to mods. Use the type_eff computed at the top of
+    # the function (which already reflects the Tera Shell clamp and Mind's Eye /
+    # Scrappy override the rolls used) — do NOT recompute the raw value here, or
+    # the reported effectiveness contradicts the actual damage.
     if type_eff == 0:
         applied_mods.append("Immune (0x)")
     elif type_eff == 0.25:

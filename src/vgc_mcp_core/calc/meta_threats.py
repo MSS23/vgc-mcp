@@ -8,8 +8,10 @@ import math
 from dataclasses import dataclass
 from typing import Optional
 
+from ..models.move import Move, MoveCategory
 from ..models.pokemon import PokemonBuild
 from ..utils.damage_verdicts import calculate_ko_probability
+from .damage import DamageModifiers, calculate_damage
 from .modifiers import get_type_effectiveness
 
 # Ruinous Pokemon and their aura effects on opponents' stats
@@ -159,6 +161,55 @@ def calculate_simple_damage(
     }
 
 
+def _damage_via_engine(
+    attacker: PokemonBuild,
+    defender: PokemonBuild,
+    move_data: dict,
+    modifiers: Optional[DamageModifiers] = None,
+) -> dict:
+    """Run a single move through the authoritative damage engine.
+
+    Builds a `Move` from a usage-set move dict and calls `calculate_damage`
+    so meta-threat verdicts use the SAME math (items, abilities, weather,
+    rounding) as `calculate_damage_output` — no parallel formula that can
+    disagree. Returns the legacy dict shape `calculate_simple_damage` used
+    so downstream consumers are unchanged.
+    """
+    category = str(move_data.get("category", "physical")).lower()
+    try:
+        move_category = MoveCategory(category)
+    except ValueError:
+        move_category = MoveCategory.PHYSICAL
+    move = Move(
+        name=move_data.get("name", "unknown"),
+        type=str(move_data.get("type", "Normal")).capitalize(),
+        category=move_category,
+        power=move_data.get("power", 0) or 0,
+        accuracy=move_data.get("accuracy", 100),
+        pp=move_data.get("pp", 5),
+    )
+    result = calculate_damage(attacker, defender, move, modifiers)
+    kp = result.ko_probability
+    return {
+        "move": move.name,
+        "type": move.type,
+        "min_damage": result.min_damage,
+        "max_damage": result.max_damage,
+        "min_percent": result.min_percent,
+        "max_percent": result.max_percent,
+        "damage_rolls": result.rolls,
+        "is_guaranteed_ohko": result.is_guaranteed_ohko,
+        "is_possible_ohko": result.is_possible_ohko,
+        "ko_chance": result.ko_chance,
+        "ko_description": result.ko_chance,
+        "ohko_chance": kp.ohko_chance if kp else None,
+        "twohko_chance": kp.twohko_chance if kp else None,
+        "threehko_chance": kp.threehko_chance if kp else None,
+        "guaranteed_ko": kp.guaranteed_ko if kp else None,
+        "chip_needed": None,
+    }
+
+
 def analyze_single_threat(
     your_pokemon: PokemonBuild,
     your_stats: dict,
@@ -169,7 +220,8 @@ def analyze_single_threat(
     threat_common_moves: list[dict],
     your_common_moves: list[dict],
     your_speed: int,
-    threat_spread: Optional[dict] = None
+    threat_spread: Optional[dict] = None,
+    threat_build: Optional[PokemonBuild] = None,
 ) -> ThreatDamageResult:
     """
     Analyze matchup against a single threat.
@@ -201,18 +253,19 @@ def analyze_single_threat(
         if move_power == 0:
             continue
 
-        # Calculate type effectiveness against your Pokemon
-        type_eff = get_type_effectiveness(move_type, your_pokemon.types)
-
-        # Check STAB
-        stab = move_type.lower() in [t.lower() for t in threat_types]
-
-        damage = calculate_simple_damage(
-            threat_stats, your_stats,
-            move_power, is_physical,
-            stab=stab,
-            type_effectiveness=type_eff
-        )
+        if threat_build is not None:
+            # Authoritative engine path — full item/ability/weather parity.
+            damage = _damage_via_engine(threat_build, your_pokemon, move_data)
+        else:
+            # Fallback: no full threat build (rough-estimate stats only).
+            type_eff = get_type_effectiveness(move_type, your_pokemon.types)
+            stab = move_type.lower() in [t.lower() for t in threat_types]
+            damage = calculate_simple_damage(
+                threat_stats, your_stats,
+                move_power, is_physical,
+                stab=stab,
+                type_effectiveness=type_eff
+            )
 
         if damage["max_percent"] > best_threat_damage.get("max_percent", 0):
             best_threat_damage = {
@@ -231,18 +284,19 @@ def analyze_single_threat(
         if move_power == 0:
             continue
 
-        # Calculate type effectiveness against threat
-        type_eff = get_type_effectiveness(move_type, threat_types)
-
-        # Check STAB
-        stab = move_type.lower() in [t.lower() for t in your_pokemon.types]
-
-        damage = calculate_simple_damage(
-            your_stats, threat_stats,
-            move_power, is_physical,
-            stab=stab,
-            type_effectiveness=type_eff
-        )
+        if threat_build is not None:
+            # Authoritative engine path — full item/ability/weather parity.
+            damage = _damage_via_engine(your_pokemon, threat_build, move_data)
+        else:
+            # Fallback: no full threat build (rough-estimate stats only).
+            type_eff = get_type_effectiveness(move_type, threat_types)
+            stab = move_type.lower() in [t.lower() for t in your_pokemon.types]
+            damage = calculate_simple_damage(
+                your_stats, threat_stats,
+                move_power, is_physical,
+                stab=stab,
+                type_effectiveness=type_eff
+            )
 
         if damage["max_percent"] > best_your_damage.get("max_percent", 0):
             best_your_damage = {

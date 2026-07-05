@@ -24,6 +24,20 @@ from dataclasses import field as df_field
 from typing import Optional
 
 
+def _default_regulation() -> str:
+    """Resolve the active regulation code instead of hardcoding one.
+
+    Reads the canonical current regulation from the regulation config
+    (which honors the session override + regulations.json), falling back
+    to "reg_f" — the loader's own fallback — if anything goes wrong.
+    """
+    try:
+        from ..rules.regulation_loader import get_regulation_config
+        return get_regulation_config().current_regulation
+    except Exception:
+        return "reg_f"
+
+
 @dataclass
 class PokemonBattleState:
     """Per-Pokémon mutable state inside an active battle."""
@@ -89,7 +103,8 @@ class BattleState:
     """One active battle's full state."""
 
     battle_id: str
-    format: str = "reg_h"            # active VGC regulation
+    # Active VGC regulation — derived from the regulation config, not hardcoded.
+    format: str = df_field(default_factory=_default_regulation)
     turn: int = 1
     my_team: list[PokemonBattleState] = df_field(default_factory=list)
     opp_team: list[PokemonBattleState] = df_field(default_factory=list)
@@ -128,14 +143,14 @@ class BattleStateManager:
         self,
         my_team_names: list[str],
         opp_team_names: list[str],
-        format: str = "reg_h",
+        format: Optional[str] = None,
     ) -> BattleState:
         """Begin a new battle, replacing any in-flight one."""
         self._counter += 1
         battle_id = f"battle_{self._counter}"
         self._battle = BattleState(
             battle_id=battle_id,
-            format=format,
+            format=format or _default_regulation(),
             my_team=[
                 PokemonBattleState(name=n, side="me", slot=i)
                 for i, n in enumerate(my_team_names)

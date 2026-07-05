@@ -28,19 +28,70 @@ jobs:
           cache: pip
 
       - name: Install package + dev deps
+        # Install via the declared [dev] extra (pinned toolchain: pytest,
+        # pytest-cov, ruff, mypy) instead of an ad-hoc list, so CI uses the
+        # same tools declared in pyproject.toml.
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e .
-          python -m pip install pytest pytest-asyncio ruff
+          python -m pip install -e ".[dev]"
 
       - name: Run tests
         # Tests are the actual gate — 1100+ across mainline + champions.
-        run: python -m pytest tests/ -q --tb=short
+        # Integration tests are excluded via addopts (-m 'not integration').
+        # Coverage is measured but not yet gated on a floor.
+        run: python -m pytest tests/ -q --tb=short --cov=vgc_mcp --cov=vgc_mcp_core --cov-report=term-missing
 
       - name: Lint with ruff (strict)
         # The historical backlog was cleaned up (was ~1,900 findings);
         # ruff is now a hard gate on the whole codebase.
         run: python -m ruff check src/ tests/ --output-format=github
+
+  typecheck:
+    name: Type check (mypy strict)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install package + dev deps
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: mypy (strict)
+        # mypy strict is configured in pyproject.toml. It is not yet a hard
+        # gate (continue-on-error) while the existing violations are burned
+        # down; flip this to a blocking check once mypy src/ is clean.
+        continue-on-error: true
+        run: python -m mypy src/vgc_mcp_core src/vgc_mcp
+
+  catalog-drift:
+    name: Tool catalog drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[remote]"
+
+      - name: Regenerate catalog and check for drift
+        # The tools catalog is generated from the live server. If adding a tool
+        # without regenerating the catalog, this fails so the docs can't rot.
+        run: |
+          python scripts/build_catalog.py
+          git diff --exit-code docs/tools-catalog.md || {
+            echo "::error::docs/tools-catalog.md is stale. Run scripts/build_catalog.py and commit the result.";
+            exit 1;
+          }
 
   validate-regulations:
     name: Validate regulations.json
@@ -55,8 +106,8 @@ jobs:
       - name: Install package
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e .
-          python -m pip install pytest pytest-asyncio jsonschema
+          python -m pip install -e ".[dev]"
+          python -m pip install jsonschema
 
       - name: Schema + drift check
         # Strict gate on the JSON schema and router-alias drift.

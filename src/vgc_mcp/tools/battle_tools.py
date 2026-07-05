@@ -39,7 +39,7 @@ def register_battle_tools(mcp: FastMCP, battle_manager: BattleStateManager):
     async def start_battle(
         my_team: list[str],
         opp_team: list[str],
-        format: str = "reg_h",
+        format: Optional[str] = None,
         my_lead: Optional[list[str]] = None,
         opp_lead: Optional[list[str]] = None,
     ) -> dict:
@@ -48,7 +48,8 @@ def register_battle_tools(mcp: FastMCP, battle_manager: BattleStateManager):
         Args:
             my_team: 4-6 Pokémon names on YOUR side (full party).
             opp_team: 4-6 Pokémon names on OPPONENT'S side (revealed at team preview).
-            format: Active VGC regulation (default "reg_h").
+            format: Active VGC regulation. Defaults to the current regulation
+                from the regulation config when omitted.
             my_lead: Your two leads. If omitted, no Pokémon are marked on-field yet.
             opp_lead: Opponent's two leads. Same default.
 
@@ -62,7 +63,7 @@ def register_battle_tools(mcp: FastMCP, battle_manager: BattleStateManager):
                 "Each team must be 4-6 Pokémon at battle start.",
             )
 
-        battle = battle_manager.start(my_team, opp_team, format=format)
+        battle = battle_manager.start(my_team, opp_team, format=format or None)
         if my_lead:
             for n in my_lead:
                 battle_manager.update_pokemon("me", n, on_field=True)

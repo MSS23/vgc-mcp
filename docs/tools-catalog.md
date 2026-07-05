@@ -1,6 +1,6 @@
 # Tool Catalog
 
-Auto-generated from the running server. **196 tools** organized by module.
+Auto-generated from the running server. **208 tools** organized by module.
 
 To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 
@@ -16,6 +16,22 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 - **`get_common_intimidate_pokemon`** — Get list of common Intimidate Pokemon in VGC.
 - **`get_weather_ability_info`** — Get information about all weather-related abilities.
 - **`suggest_ability_additions`** — Suggest abilities that would improve team synergy.
+
+## archetype_tools  (1 tools)
+
+- **`classify_team_archetype`** — Classify a team's archetype + return its win condition + bring-3 patterns.
+
+## battle_tools  (5 tools)
+
+- **`end_battle`** — Close the active battle and return its final state.
+- **`get_battle_state`** — Return the full structured snapshot of the active battle.
+- **`record_turn`** — Record one turn of an active battle.
+- **`start_battle`** — Begin a new battle. Replaces any active battle.
+- **`suggest_next_move`** — Recommend the next turn given the remembered battle state.
+
+## breakpoint_tools  (1 tools)
+
+- **`find_breakpoint`** — Find the cheapest spread change to hit a specific benchmark.
 
 ## build_checker_tools  (1 tools)
 
@@ -73,12 +89,16 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 
 ## damage_tools  (6 tools)
 
-- **`calculate_damage_output`** — Calculate damage from one Pokemon to another.
+- **`calculate_damage_output`** — ⭐ PRIMARY DAMAGE TOOL — use this for ANY damage / KO / survival question.
 - **`find_bulk_to_survive_hits`** — Find minimum HP/Def EVs to survive multiple hits of an attack.
 - **`find_ko_evs`** — Find minimum offensive EVs needed to achieve a certain KO probability.
 - **`find_survival_evs`** — Find minimum HP/Defense EVs needed to SURVIVE a specific attack.
 - **`survive_double_up`** — Check if a Pokemon survives combined damage from two attackers in one turn (double-up).
 - **`survive_multiple_hits`** — Calculate if a Pokemon can survive multiple hits of an attack.
+
+## delta_tools  (1 tools)
+
+- **`compare_build_changes`** — Show what changed between two builds against a fixed threat list.
 
 ## diff_tools  (1 tools)
 
@@ -128,18 +148,20 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 
 - **`analyze_lead_pairs`** — Analyze and rank lead pair combinations for your team.
 
-## legality_tools  (12 tools)
+## legality_tools  (14 tools)
 
+- **`auto_detect_regulation_from_pokemon`** — ZERO-CONFIG REGULATION DETECTION — call this whenever a user mentions
 - **`check_item_clause_tool`** — Check if the team violates the item clause (no duplicate items).
 - **`check_pokemon_legality`** — Check if a specific Pokemon is legal, restricted, or banned.
 - **`check_restricted_count`** — Check how many restricted (box legend) Pokemon are on the team.
 - **`clear_session_regulation`** — Clear the session regulation override.
 - **`get_current_regulation_info`** — Get information about the currently active VGC regulation.
 - **`get_format_rules`** — Get the rules for a specific VGC regulation.
+- **`infer_regulation_from_team`** — Infer the most likely VGC regulation from the Pokemon mentioned in a team.
 - **`list_available_regulations`** — List all available VGC regulations.
 - **`list_banned_pokemon`** — List all banned Pokemon for VGC.
 - **`list_restricted_pokemon`** — List all restricted (box legend) Pokemon for VGC.
-- **`set_session_regulation`** — Override the current regulation for this session.
+- **`set_session_regulation`** — Override the current regulation for this session based on user phrasing.
 - **`suggest_item_alternatives`** — Suggest alternative items when there's a duplicate.
 - **`validate_team_legality`** — Validate full team legality for VGC tournament play.
 
@@ -156,7 +178,7 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 
 - **`analyze_spread_vs_threats`** — Analyze a spread against the top meta threats.
 - **`analyze_stored_pokemon_threats`** — Analyze a stored Pokemon's spread against top meta threats.
-- **`check_survival_benchmark`** — Check if a spread survives a specific attack from a threat.
+- **`check_survival_benchmark`** — ⚠️ NARROW USE ONLY. Prefer `calculate_damage_output` for general damage/survival.
 - **`find_survival_evs_meta`** — Find minimum bulk EVs needed to survive a specific attack (meta-threat variant).
 
 ## move_tools  (7 tools)
@@ -213,9 +235,17 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 
 - **`check_tournament_readiness`** — Comprehensive tournament readiness assessment.
 
+## replay_tools  (1 tools)
+
+- **`analyze_replay`** — Pull a public Showdown replay and produce a turn-by-turn breakdown.
+
 ## report_tools  (1 tools)
 
 - **`generate_build_report`** — Generate a shareable team build report showing the building journey.
+
+## router_tools  (1 tools)
+
+- **`what_tool_should_i_use`** — Suggest the right tools for a free-text VGC question.
 
 ## sample_team_tools  (4 tools)
 
