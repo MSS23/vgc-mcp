@@ -1,5 +1,40 @@
 # IMPROVEMENTS.md — VGC MCP Improvement Plan
 
+> ## Execution status (2026-07-05)
+> Implemented on branch `improvements-execution` (test suite: 1450+ → all green,
+> integration excluded by default). Commits are grouped by phase.
+>
+> **Done:**
+> - **P0/P1 correctness:** `makes_contact` table (Tough Claws/Fluffy), meta-threat
+>   verdicts routed through the authoritative `calculate_damage`, reported
+>   type-effectiveness fixed, Parental Bond, Knock Off boost, battle default
+>   regulation, `MAX_TOTAL` ClassVar.
+> - **Production safety:** per-session state isolation (`state/session_registry.py`),
+>   opt-in bearer-auth + rate-limit ASGI middleware (`http_middleware.py`),
+>   CORS `allow_credentials` fixed, testable `create_http_app()`.
+> - **CI trust:** mypy job (non-blocking), integration tests excluded via `addopts`,
+>   install via `.[dev]`, coverage, tool-catalog drift gate.
+> - **Tests (new):** session isolation, HTTP transport + auth + rate limit, battle
+>   copilot, replay analyzer, engine-accuracy, PokeAPI caching, battle adapter;
+>   4 stubbed learnset tests implemented.
+> - **Error contract:** remaining raw `{"error":…}` returns routed through
+>   `error_response`/`success_response` + a CI grep-gate.
+> - **Resilience/accuracy:** PokeAPI negative caching + request coalescing, Smogon
+>   calendar-month arithmetic.
+> - **Feature foundation:** `calc/battle_context.py` — the live-battle → DamageModifiers
+>   adapter (feature #1's missing piece).
+> - **Docs/deploy:** tool-count SSOT (208), smithery `/mcp` + count, `requirements.txt`,
+>   `test_deploy.py`→tests/, dedup `validate_regulations`, removed spent codemod.
+>
+> **Deliberately deferred (need staged rollout / their own focused effort):**
+> - **1.4 tool consolidation (209→~70)** and **1.5 param renames** — change the
+>   public contract of ~200 live tools; require deprecation across releases.
+> - **2.2 O(n²)→bisect solver perf** — risky numeric refactor; needs broad validation.
+> - **2.1 weight-based move plumbing**, **2.3 annotations/resources/output schemas**,
+>   **2.4 large mainline/champions allocation-grain dedup**.
+> - **P3 features** beyond the adapter (offline snapshot, turn-order trees,
+>   defensive-backbone solver, legal-set generator, meta-drift, tournament data).
+
 A prioritized, evidence-based plan for what to fix, change, add, and optimize across the
 whole project. Compiled from a full-codebase audit (core library, MCP tool surface,
 tests/CI/deployment) on 2026-07-05. Every finding cites the file it was verified in.
