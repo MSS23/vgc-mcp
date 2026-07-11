@@ -511,12 +511,13 @@ python -m vgc_mcp_http
 **Server runs on:** `http://localhost:8000`
 
 **Endpoints:**
-- `/sse` - Server-Sent Events endpoint for MCP
+- `/mcp` - Streamable HTTP endpoint for MCP (use this in clients)
+- `/sse` - Legacy HTTP+SSE endpoint (older clients only; POST here is forwarded to `/mcp`)
 - `/health` - Health check
 
 **MCP Protocol:**
 
-Send JSON-RPC messages to `/sse`:
+Send JSON-RPC messages to `/mcp`:
 
 ```json
 {

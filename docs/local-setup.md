@@ -177,7 +177,7 @@ To confirm you're using the **local** server (not remote), check:
    {
      "mcpServers": {
        "vgc": {
-         "url": "https://vgc-mcp.onrender.com/sse"  // ← Remote setup
+         "url": "https://vgc-mcp.onrender.com/mcp"  // ← Remote setup
        }
      }
    }

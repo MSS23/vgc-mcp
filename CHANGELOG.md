@@ -7,7 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Package version bumped to **1.0.0** (the root endpoint previously hardcoded
+  "1.0.0" while the package said 0.1.0; both now agree, and the endpoint
+  reads the real installed version).
+- **All 208 MCP tools modernized to professional MCP Python SDK style.** Every
+  tool now declares `Annotated[type, Field(...)]` parameters (descriptions plus
+  `ge`/`le`/`min_length` constraints surfaced in the JSON schema), a
+  human-readable `title`, and `ToolAnnotations` hints (`readOnlyHint`,
+  `destructiveHint`, `idempotentHint`, `openWorldHint`) so MCP clients can
+  reason about side effects. Docstring `Args:` blocks were folded into the
+  Field descriptions. No tool names, parameter names, defaults, or behavior
+  changed.
+- Champions documentation corrected against primary sources (Bulbapedia,
+  Serebii, Game8): the official closed-form SP formula
+  (`HP = Base + SP + 75`, `Stat = floor((Base + SP + 20) x Nature)`) is
+  documented and verified bit-for-bit identical to the implementation;
+  32 SP == 252 EVs exactly; HOME conversion `SP = (EVs + 4) / 8`.
+
 ### Fixed
+- **Connection reliability (claude.ai connectors):** `POST /sse` no longer
+  returns a bare 405 — it forwards to the Streamable HTTP handler, so a
+  streamable client configured with the legacy `/sse` URL completes its
+  handshake anyway (`DELETE /sse` forwards too). Docs and `smithery.yaml`
+  now present `/mcp` as the primary connector URL with `/sse` marked
+  legacy-only. The keep-alive workflow pings in a 24-minute loop per run to
+  survive GitHub cron drift (an external 5-min uptime monitor is still the
+  recommended primary pinger — see docs/connection-fix-plan.md). The root
+  endpoint reports the real package version instead of a hardcoded "1.0.0".
+- Champions has no IVs (every Pokemon acts as 31 IV): `get_pokemon_speed` in a
+  Champions session no longer reports an impossible "Brave 0 IV" minimum speed
+  and now pins the SP formula to IV 31; presentation instructions now warn
+  against recommending 0-Spe/0-Atk IV tech in Champions.
+- Showdown import: official Showdown Champions pastes reuse the `EVs:` line
+  with SP-scale values (0-32, total <= 66). `parsed_to_pokemon_build` now
+  reinterprets such a line as Stat Points when the format resolves to
+  Champions (explicit `format_hint`, session regulation, or Mega-name
+  inference), instead of misreading it as a mainline EV spread.
 - `optimize_dual_survival_spread`: the HP-item-optimization branch crashed with
   `NameError` (undefined `mods1`/`mods2`) whenever a defender item triggered an
   HP EV adjustment. Damage modifiers are now rebuilt for the re-verification

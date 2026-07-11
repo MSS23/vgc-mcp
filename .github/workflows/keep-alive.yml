@@ -1,52 +1,70 @@
 name: Keep Render dyno warm
 
 # Render's free tier spins instances down after 15 minutes of inactivity
-# (cold restart adds ~50s latency to the next request, which breaks the
-# Claude Desktop MCP connector handshake). This workflow pings the
-# /health endpoint every 14 minutes so the dyno stays warm.
+# (cold restart is ~50s, which breaks the Claude connector handshake).
 #
-# Notes:
-# - GitHub Actions cron schedules can drift up to 15 min during peak load.
-#   We hedge by setting the interval to 14 min, not 15.
+# IMPORTANT — this workflow is the BACKUP pinger, not the primary one.
+# GitHub delays high-frequency scheduled workflows on shared runners: a
+# "*/14" cron was observed firing ~2 hours apart (see
+# docs/connection-fix-plan.md). Cron granularity from GitHub CANNOT keep a
+# 15-minute-idle dyno warm by itself. The reliable options are:
+#   1. An external uptime monitor (UptimeRobot / cron-job.org / Better
+#      Stack, free tiers ping every 5 min): point it at
+#      https://vgc-mcp.onrender.com/health          <- RECOMMENDED
+#   2. Render Starter plan (`plan: starter` in render.yaml) — never sleeps.
+#
+# To compensate for cron drift, each run of this workflow pings /health
+# every 4 minutes for ~24 minutes instead of pinging once. Even when GitHub
+# fires runs late, every run that does fire keeps the dyno warm for a
+# ~25-minute window, and on-schedule runs chain into continuous coverage.
+#
 # - Free Render tier gives 750 instance-hours/month. Continuous keep-alive
 #   uses ~720h, so this fits inside the cap as long as you only run ONE
-#   free Render service. Spinning up a second free service will exceed it.
-# - This workflow runs in GitHub's hosted runners (Ubuntu) and is free for
-#   public repos.
+#   free Render service.
+# - Public-repo GitHub Actions minutes are free.
 
 on:
   schedule:
-    - cron: "*/14 * * * *"
+    - cron: "*/12 * * * *"
   workflow_dispatch:  # allow manual trigger from the Actions tab
 
 permissions:
   contents: read
 
+# Never stack runs: if GitHub fires the next schedule while a ping loop is
+# still running, skip the queued duplicate instead of running two loops.
+concurrency:
+  group: keep-alive
+  cancel-in-progress: false
+
 jobs:
   ping:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 28
     steps:
-      - name: Wake the dyno
-        # 90s timeout absorbs the worst-case cold start. Retry up to 3
-        # times with backoff so a single transient failure doesn't go
-        # unnoticed but also doesn't fail the whole workflow.
+      - name: Ping loop (every 4 min for ~24 min)
+        # Each individual ping tolerates a worst-case cold start (90s) and
+        # retries; the loop only fails the workflow if EVERY ping in the
+        # window failed, so transient blips don't page anyone.
         run: |
           set -u
           URL="https://vgc-mcp.onrender.com/health"
-          attempt=0
-          max_attempts=3
-          while [ $attempt -lt $max_attempts ]; do
-            attempt=$((attempt + 1))
-            echo "Attempt $attempt: GET $URL"
-            if curl -fsS --max-time 90 -o /tmp/body -w "HTTP %{http_code}, %{time_total}s\n" "$URL"; then
-              echo "Body:"
-              head -c 500 /tmp/body
-              echo
-              exit 0
-            fi
-            echo "Attempt $attempt failed, sleeping ${attempt}0s before retry..."
-            sleep $((attempt * 10))
+          PINGS=7            # 7 pings x 4 min = 24 min of coverage
+          INTERVAL=240
+          successes=0
+          for i in $(seq 1 $PINGS); do
+            echo "--- Ping $i/$PINGS: GET $URL"
+            attempt=0
+            while [ $attempt -lt 3 ]; do
+              attempt=$((attempt + 1))
+              if curl -fsS --max-time 90 -o /tmp/body -w "HTTP %{http_code}, %{time_total}s\n" "$URL"; then
+                successes=$((successes + 1))
+                break
+              fi
+              echo "attempt $attempt failed; sleeping $((attempt * 10))s"
+              sleep $((attempt * 10))
+            done
+            [ "$i" -lt "$PINGS" ] && sleep $INTERVAL
           done
-          echo "All $max_attempts attempts failed."
-          exit 1
+          echo "Successful pings: $successes/$PINGS"
+          [ "$successes" -gt 0 ] || exit 1

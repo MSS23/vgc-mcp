@@ -315,6 +315,26 @@ def create_http_app():
             )
         return Response()
 
+    class StreamableHTTPCompat:
+        """ASGI shim: serve a request as if the client had hit ``/mcp``.
+
+        Streamable-HTTP clients (claude.ai custom connectors) POST their
+        `initialize` to the exact URL they're given. Anyone configured with
+        the legacy ``/sse`` URL used to get a bare 405 and a "Couldn't
+        connect" in the client. Rewriting the path to ``/mcp`` and delegating
+        to the Streamable HTTP app makes ``POST /sse`` just work, while
+        ``GET /sse`` still serves the legacy HTTP+SSE handshake above.
+        """
+
+        def __init__(self, app):
+            self.app = app
+
+        async def __call__(self, scope, receive, send):
+            scope = dict(scope)
+            scope["path"] = "/mcp"
+            scope["raw_path"] = b"/mcp"
+            await self.app(scope, receive, send)
+
     async def health_check(request):
         """Health check endpoint for monitoring."""
         tool_count = len(mcp._tool_manager._tools) if hasattr(mcp, '_tool_manager') else 0
@@ -327,10 +347,16 @@ def create_http_app():
 
     async def root(request):
         """Root endpoint with server info."""
+        import importlib.metadata
+
+        try:
+            version = importlib.metadata.version("vgc-mcp")
+        except importlib.metadata.PackageNotFoundError:
+            version = "unknown"
         tool_count = len(mcp._tool_manager._tools) if hasattr(mcp, '_tool_manager') else 0
         return JSONResponse({
             "name": "vgc-mcp",
-            "version": "1.0.0",
+            "version": version,
             "description": "Pokemon VGC MCP Server - damage calcs, spreads, team building",
             "tools": tool_count,
             "endpoints": {
@@ -338,7 +364,9 @@ def create_http_app():
                 "sse": "/sse",
                 "health": "/health",
                 "messages": "/messages/"
-            }
+            },
+            "connect": "Use /mcp (Streamable HTTP) in MCP clients; /sse is the "
+                       "legacy HTTP+SSE transport (POST /sse is forwarded to /mcp)."
         })
 
     # This is a deliberately public endpoint. FastMCP's default transport
@@ -365,7 +393,15 @@ def create_http_app():
         routes=[
             Route("/", endpoint=root, methods=["GET"]),
             Route("/health", endpoint=health_check, methods=["GET"]),
-            Route("/sse", endpoint=handle_sse),
+            # GET /sse = legacy HTTP+SSE handshake. POST /sse = a
+            # streamable-HTTP client pointed at the legacy URL — forward it
+            # to the /mcp handler instead of 405ing (see StreamableHTTPCompat).
+            Route("/sse", endpoint=handle_sse, methods=["GET"]),
+            Route(
+                "/sse",
+                endpoint=StreamableHTTPCompat(streamable_app),
+                methods=["POST", "DELETE"],
+            ),
             Mount("/messages/", app=sse.handle_post_message),
             *streamable_app.routes,  # /mcp
         ],

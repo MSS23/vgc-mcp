@@ -261,7 +261,7 @@ Copy and paste this into the config file:
 {
   "mcpServers": {
     "vgc": {
-      "url": "https://vgc-mcp.onrender.com/sse"
+      "url": "https://vgc-mcp.onrender.com/mcp"
     }
   }
 }
@@ -382,7 +382,7 @@ Not sure if you're using local or remote? Check your config file:
 {
   "mcpServers": {
     "vgc": {
-      "url": "https://vgc-mcp.onrender.com/sse"  // ← Has "url" field
+      "url": "https://vgc-mcp.onrender.com/mcp"  // ← Has "url" field
     }
   }
 }

@@ -138,3 +138,58 @@ def test_mcp_endpoint_exists(http_client):
     resp = http_client.get("/mcp")
     assert resp.status_code != 404
     assert resp.status_code < 500
+
+
+_INITIALIZE_BODY = {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+        "protocolVersion": "2025-03-26",
+        "capabilities": {},
+        "clientInfo": {"name": "probe", "version": "1.0"},
+    },
+}
+
+_MCP_HEADERS = {
+    "Content-Type": "application/json",
+    "Accept": "application/json, text/event-stream",
+}
+
+
+def test_streamable_http_initialize_on_mcp(http_client):
+    resp = http_client.post("/mcp", json=_INITIALIZE_BODY, headers=_MCP_HEADERS)
+    assert resp.status_code == 200
+    assert "VGC Team Builder" in resp.text
+
+
+def test_post_sse_forwards_to_streamable_http(http_client):
+    """A streamable-HTTP client pointed at the legacy /sse URL must not 405.
+
+    Regression for the claude.ai "Couldn't connect" failure: connectors POST
+    initialize to the exact URL they're given. POST /sse now behaves exactly
+    like POST /mcp (see StreamableHTTPCompat in server.py).
+    """
+    resp = http_client.post("/sse", json=_INITIALIZE_BODY, headers=_MCP_HEADERS)
+    assert resp.status_code == 200
+    assert "VGC Team Builder" in resp.text
+
+
+def test_get_sse_still_serves_legacy_transport():
+    # The legacy GET handshake must survive the POST compat route. Opening a
+    # real SSE stream would block the TestClient on an endless response, so
+    # assert the routing table instead: GET /sse and POST /sse are separate
+    # routes, with GET mapping to the legacy handler and POST to the
+    # streamable-HTTP compat shim.
+    from vgc_mcp.server import create_http_app
+
+    app = create_http_app()
+    sse_routes = {
+        tuple(sorted(r.methods - {"HEAD"})): r
+        for r in app.routes
+        if getattr(r, "path", None) == "/sse" and getattr(r, "methods", None)
+    }
+    assert ("GET",) in sse_routes, "GET /sse (legacy SSE handshake) route missing"
+    post_route = sse_routes.get(("DELETE", "POST"))
+    assert post_route is not None, "POST/DELETE /sse compat route missing"
+    assert type(post_route.endpoint).__name__ == "StreamableHTTPCompat"

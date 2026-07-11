@@ -241,7 +241,7 @@ docker build -t vgc-mcp:prod -f Dockerfile.prod .
    flyctl info
    ```
 
-   Your MCP endpoint will be: `https://YOUR_APP.fly.dev/sse`
+   Your MCP endpoint will be: `https://YOUR_APP.fly.dev/mcp`
 
 ### Configure Claude Desktop
 
@@ -249,7 +249,7 @@ docker build -t vgc-mcp:prod -f Dockerfile.prod .
 {
   "mcpServers": {
     "vgc": {
-      "url": "https://YOUR_APP.fly.dev/sse"
+      "url": "https://YOUR_APP.fly.dev/mcp"
     }
   }
 }
@@ -307,7 +307,7 @@ Add DNS records as instructed, then:
 {
   "mcpServers": {
     "vgc": {
-      "url": "https://yourdomain.com/sse"
+      "url": "https://yourdomain.com/mcp"
     }
   }
 }
@@ -374,7 +374,7 @@ Push to GitHub, then connect repository in Render dashboard.
 
 After deployment, Render provides URL: `https://vgc-mcp.onrender.com`
 
-MCP endpoint: `https://vgc-mcp.onrender.com/sse`
+MCP endpoint: `https://vgc-mcp.onrender.com/mcp`
 
 ### Free Tier Limitations
 
@@ -678,7 +678,7 @@ from slowapi.util import get_remote_address
 
 limiter = Limiter(key_func=get_remote_address)
 
-@app.route("/sse")
+@app.route("/mcp")
 @limiter.limit("100/minute")
 async def sse_endpoint(request: Request):
     # ...
