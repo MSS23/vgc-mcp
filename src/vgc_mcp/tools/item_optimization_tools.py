@@ -4,9 +4,11 @@ Tools for comparing items (Life Orb vs Choice items) and analyzing
 EV-item trade-offs for competitive VGC optimization.
 """
 
-from typing import Optional
+from typing import Annotated, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
@@ -185,38 +187,44 @@ def register_item_optimization_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogo
     global _smogon_client
     _smogon_client = smogon
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Compare Item Damage Output",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def compare_item_damage_output(
-        pokemon_name: str,
-        move_name: str,
-        target_name: str,
-        items_to_compare: Optional[list[str]] = None,
-        num_turns: int = 3,
-        attacker_nature: Optional[str] = None,
-        attacker_evs: Optional[dict] = None,
-        target_nature: Optional[str] = None,
-        target_evs: Optional[dict] = None,
-        use_smogon_spreads: bool = True
+        pokemon_name: Annotated[str, Field(description="Attacker Pokemon (e.g. 'landorus-therian')", min_length=1)],
+        move_name: Annotated[str, Field(description="Move to use (e.g. 'earth-power')", min_length=1)],
+        target_name: Annotated[str, Field(description="Defender Pokemon (e.g. 'rillaboom')", min_length=1)],
+        items_to_compare: Annotated[Optional[list[str]], Field(
+            description="Items to compare (default: ['life-orb', 'choice-band', 'choice-specs', 'expert-belt'])",
+        )] = None,
+        num_turns: Annotated[int, Field(ge=1, description="Number of turns for recoil accumulation analysis")] = 3,
+        attacker_nature: Annotated[Optional[str], Field(
+            description="Attacker's nature (auto-fetched from Smogon if not specified)",
+        )] = None,
+        attacker_evs: Annotated[Optional[dict], Field(
+            description="Attacker's EVs dict keyed hp/attack/defense/special_attack/special_defense/speed (auto-fetched from Smogon if not specified)",
+        )] = None,
+        target_nature: Annotated[Optional[str], Field(
+            description="Defender's nature (auto-fetched from Smogon if not specified)",
+        )] = None,
+        target_evs: Annotated[Optional[dict], Field(
+            description="Defender's EVs dict (auto-fetched from Smogon if not specified)",
+        )] = None,
+        use_smogon_spreads: Annotated[bool, Field(
+            description="Auto-fetch common spreads from Smogon for unspecified natures/EVs",
+        )] = True,
     ) -> dict:
-        """
-        Compare damage output across multiple items (Life Orb vs Choice items vs Expert Belt).
+        """Compare damage output across multiple items (Life Orb vs Choice items vs Expert Belt).
 
-        Shows damage, recoil, and sustainability for each item to help optimize item choice.
-
-        Args:
-            pokemon_name: Attacker Pokemon (e.g., "landorus-therian")
-            move_name: Move to use (e.g., "earth-power")
-            target_name: Defender Pokemon (e.g., "rillaboom")
-            items_to_compare: List of items to compare (default: ["life-orb", "choice-band", "choice-specs", "expert-belt"])
-            num_turns: Number of turns for recoil accumulation analysis (default: 3)
-            attacker_nature: Attacker's nature (auto-fetched from Smogon if not specified)
-            attacker_evs: Attacker's EVs dict (auto-fetched from Smogon if not specified)
-            target_nature: Defender's nature (auto-fetched from Smogon if not specified)
-            target_evs: Defender's EVs dict (auto-fetched from Smogon if not specified)
-            use_smogon_spreads: Auto-fetch common spreads from Smogon (default: True)
-
-        Returns:
-            Comparison of all items with damage, recoil, and recommendations
+        Shows damage, recoil, and sustainability per item plus a best-item
+        recommendation and Showdown paste. In a Champions (Reg MA) session the
+        attacker is built on the Stat Point scale automatically.
         """
         try:
             if items_to_compare is None:
@@ -408,31 +416,36 @@ def register_item_optimization_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogo
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Optimize Life Orb Sustainability",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def optimize_life_orb_sustainability(
-        pokemon_name: str,
-        hp_investment: str = "full",
-        recovery_sources: Optional[list[str]] = None,
-        moves_per_game: int = 4,
-        nature: Optional[str] = None,
-        use_smogon_spread: bool = True
+        pokemon_name: Annotated[str, Field(description="Pokemon to analyze (e.g. 'flutter-mane')", min_length=1)],
+        hp_investment: Annotated[str, Field(
+            description="'full' (compare 0 vs 252 HP EVs), 'minimal' (0 only), or a specific EV value; interpreted on the Stat Point grain (0-32) in Champions sessions",
+        )] = "full",
+        recovery_sources: Annotated[Optional[list[str]], Field(
+            description="Recovery sources like ['grassy-terrain', 'leftovers'] (default: none)",
+        )] = None,
+        moves_per_game: Annotated[int, Field(ge=1, description="Expected number of attacks before fainting")] = 4,
+        nature: Annotated[Optional[str], Field(
+            description="Pokemon's nature (auto-fetched from Smogon if not specified)",
+        )] = None,
+        use_smogon_spread: Annotated[bool, Field(
+            description="Auto-fetch the common spread from Smogon when nature is unspecified",
+        )] = True,
     ) -> dict:
-        """
-        Analyze Life Orb sustainability with different HP investments.
+        """Analyze Life Orb sustainability with different HP investments.
 
-        Compares 0 HP EVs vs 252 HP EVs to determine if HP investment is worth it
-        for Life Orb users. Shows attacks before fainting and net HP after multiple attacks.
-
-        Args:
-            pokemon_name: Pokemon to analyze (e.g., "flutter-mane")
-            hp_investment: "full" (252), "minimal" (0), or specific EV value
-            recovery_sources: List like ["grassy-terrain", "leftovers"] (default: [])
-            moves_per_game: Expected number of attacks before fainting (default: 4)
-            nature: Pokemon's nature (auto-fetched from Smogon if not specified)
-            use_smogon_spread: Auto-fetch common spread from Smogon (default: True)
-
-        Returns:
-            Sustainability analysis comparing different HP investments
+        Compares 0 vs max HP investment for Life Orb users, showing attacks
+        before fainting and net HP after multiple attacks. In a Champions
+        (Reg MA) session the comparison runs on the Stat Point grain (0 vs 32).
         """
         try:
             if recovery_sources is None:
@@ -556,29 +569,35 @@ def register_item_optimization_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogo
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Analyze Item vs EV Trade-Off",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def analyze_item_ev_tradeoff(
-        pokemon_name: str,
-        offensive_stat: str = "auto",
-        target_benchmark: Optional[dict] = None,
-        items_to_test: Optional[list[str]] = None,
-        use_smogon_spread: bool = True
+        pokemon_name: Annotated[str, Field(description="Pokemon to optimize (e.g. 'flutter-mane')", min_length=1)],
+        offensive_stat: Annotated[str, Field(
+            description="'attack', 'special-attack', or 'auto' (picks the higher base offensive stat)",
+        )] = "auto",
+        target_benchmark: Annotated[Optional[dict], Field(
+            description="Benchmark requirements dict (e.g. {'speed_target': 200})",
+        )] = None,
+        items_to_test: Annotated[Optional[list[str]], Field(
+            description="Items to compare (default: ['life-orb', 'choice-band', 'choice-specs'])",
+        )] = None,
+        use_smogon_spread: Annotated[bool, Field(
+            description="Auto-fetch the common spread from Smogon for the nature",
+        )] = True,
     ) -> dict:
-        """
-        Find optimal item + EV distribution to maximize stats.
+        """Find the optimal item + EV distribution to maximize useful stats.
 
-        Compares different items to see which saves the most EVs while meeting benchmarks.
-        Useful for deciding between Life Orb (needs full EVs) vs Choice items (needs fewer EVs).
-
-        Args:
-            pokemon_name: Pokemon to optimize (e.g., "flutter-mane")
-            offensive_stat: "attack", "special-attack", or "auto" (default: "auto")
-            target_benchmark: Dict with benchmark requirements (e.g., {"speed_target": 200})
-            items_to_test: List of items to compare (default: ["life-orb", "choice-band", "choice-specs"])
-            use_smogon_spread: Auto-fetch common spread from Smogon (default: True)
-
-        Returns:
-            Trade-off analysis showing EVs saved and total useful stats for each item
+        Compares items to see which saves the most EVs while meeting benchmarks
+        (e.g. Life Orb needs full investment; Choice items reach the same number
+        with fewer EVs). Runs on the Stat Point grain in Champions sessions.
         """
         try:
             if items_to_test is None:

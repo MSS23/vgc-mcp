@@ -1,6 +1,10 @@
 """MCP tools for Pokemon education and explanations."""
 
+from typing import Annotated
+
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.config import logger
@@ -11,20 +15,24 @@ from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name
 def register_education_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
     """Register Pokemon education tools."""
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Explain Pokemon",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def explain_pokemon(
-        pokemon_name: str,
-        detail_level: str = "beginner"  # beginner, intermediate, advanced
+        pokemon_name: Annotated[str, Field(description="Name of the Pokemon to explain (e.g. 'flutter-mane')", min_length=1)],
+        detail_level: Annotated[str, Field(description="Level of detail: 'beginner', 'intermediate', or 'advanced'")] = "beginner"
     ) -> dict:
-        """
-        Explain a Pokemon's strengths, weaknesses, and competitive role.
+        """Explain a Pokemon's strengths, weaknesses, and competitive role.
 
-        Args:
-            pokemon_name: Name of the Pokemon to explain
-            detail_level: Level of detail - "beginner", "intermediate", or "advanced"
-
-        Returns:
-            Comprehensive Pokemon explanation with stats, typing, role, and builds
+        Returns a comprehensive explanation with base stats, typing
+        (weaknesses/resistances/immunities), inferred role, and a markdown
+        summary; at beginner detail it also sketches a starter build.
         """
         try:
             # Fetch Pokemon data

@@ -1,8 +1,10 @@
 """MCP tools for team vs team matchup analysis against tournament teams."""
 
-from typing import Optional
+from typing import Annotated, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.pokepaste import PokePasteClient, PokePasteError
@@ -307,28 +309,24 @@ def _format_full_result(result: TeamMatchupResult) -> str:
 def register_tournament_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi: PokeAPIClient, smogon: SmogonStatsClient = None):
     """Register tournament matchup analysis tools with the MCP server."""
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Analyze Team vs Meta Teams",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def analyze_team_vs_meta(
-        pokepaste_url: str,
-        top_n: int = 5
+        pokepaste_url: Annotated[str, Field(description="PokePaste URL of your team (e.g. 'https://pokepast.es/abc123')", min_length=1)],
+        top_n: Annotated[int, Field(ge=1, description="Number of meta teams to analyze against")] = 5
     ) -> dict:
-        """
-        Analyze your team against top tournament meta teams.
+        """Analyze your team against top tournament meta teams.
 
-        Provides comprehensive matchup analysis including:
-        - Overall advantage percentage vs each meta team
-        - 6x6 matchup matrix showing who beats who
-        - Key threats and your best answers
-        - Recommended leads
-        - Speed tier comparison
-        - Game plan summary
-
-        Args:
-            pokepaste_url: PokePaste URL of your team (e.g., "https://pokepast.es/abc123")
-            top_n: Number of meta teams to analyze against (default 5)
-
-        Returns:
-            Full matchup report for each meta team
+        Returns a full matchup report per meta team: overall advantage
+        percentage, a 6x6 matchup matrix, key threats and your best answers,
+        recommended leads, speed tier comparison, and a game plan summary.
         """
         try:
             # Fetch and parse user's team
@@ -402,27 +400,24 @@ def register_tournament_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi:
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, f'Analysis failed: {e}')
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Compare Two Teams",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def compare_two_teams(
-        team1_url: str,
-        team2_url: str
+        team1_url: Annotated[str, Field(description="PokePaste URL for the first team", min_length=1)],
+        team2_url: Annotated[str, Field(description="PokePaste URL for the second team", min_length=1)]
     ) -> dict:
-        """
-        Compare two teams head-to-head with detailed matchup analysis.
+        """Compare two teams head-to-head with detailed matchup analysis.
 
-        Analyzes both teams against each other, showing:
-        - Who has the overall advantage
-        - Individual Pokemon matchups (6x6 matrix)
-        - Key threats from each side
-        - Best lead combinations
-        - Recommended game plan
-
-        Args:
-            team1_url: PokePaste URL for first team
-            team2_url: PokePaste URL for second team
-
-        Returns:
-            Detailed head-to-head matchup report
+        Returns a detailed report showing who has the overall advantage,
+        individual Pokemon matchups (6x6 matrix), key threats from each side,
+        best lead combinations, and a recommended game plan.
         """
         try:
             # Fetch and parse both teams
@@ -470,13 +465,20 @@ def register_tournament_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi:
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, f'Comparison failed: {e}')
 
-    @mcp.tool()
+    @mcp.tool(
+        title="List Meta Teams",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def get_meta_teams() -> dict:
-        """
-        List available tournament meta teams for matchup analysis.
+        """List available tournament meta teams for matchup analysis.
 
-        Returns:
-            List of meta teams with names, archetypes, and Pokemon
+        Returns meta teams with names, archetypes, Pokemon, regulations,
+        strengths, and weaknesses (from the built-in sample team library).
         """
         teams = []
         for team in ALL_SAMPLE_TEAMS:
@@ -497,20 +499,23 @@ def register_tournament_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi:
             "teams": teams
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Analyze vs Specific Archetype",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def analyze_vs_specific_team(
-        pokepaste_url: str,
-        opponent_archetype: str
+        pokepaste_url: Annotated[str, Field(description="PokePaste URL of your team", min_length=1)],
+        opponent_archetype: Annotated[str, Field(description="Archetype to analyze against (rain, sun, trick_room, goodstuffs, hyper_offense)", min_length=1)]
     ) -> dict:
-        """
-        Analyze your team against a specific meta archetype.
+        """Analyze your team against a specific meta archetype.
 
-        Args:
-            pokepaste_url: PokePaste URL of your team
-            opponent_archetype: Archetype to analyze against (rain, sun, trick_room, goodstuffs, hyper_offense)
-
-        Returns:
-            Detailed matchup analysis against that archetype
+        Returns a detailed matchup analysis against the sample team matching
+        that archetype.
         """
         try:
             # Find matching archetype
@@ -569,32 +574,24 @@ def register_tournament_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi:
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, f'Analysis failed: {e}')
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Analyze Paste Bulk vs Meta",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def analyze_paste_bulk(
-        pokemon_paste: str,
-        top_threats: int = 12
+        pokemon_paste: Annotated[str, Field(description="Pokemon in Showdown paste format (raw text, not a URL), e.g. 'Farigiraf @ Throat Spray\\nAbility: Armor Tail\\nEVs: 236 HP / 52 Def / 140 SpD\\nModest Nature\\n- Trick Room'", min_length=1)],
+        top_threats: Annotated[int, Field(ge=1, description="Number of top meta Pokemon to check")] = 12
     ) -> dict:
-        """
-        Analyze what attacks a Pokemon survives based on its paste.
+        """Analyze what common meta attacks a Pokemon survives based on its paste.
 
-        Paste a Pokemon in Showdown format and see what common
-        meta attacks it can survive with its current spread.
-
-        Example paste:
-        ```
-        Farigiraf @ Throat Spray
-        Ability: Armor Tail
-        EVs: 236 HP / 52 Def / 140 SpD
-        Modest Nature
-        - Trick Room
-        ```
-
-        Args:
-            pokemon_paste: Pokemon in Showdown paste format (raw text, not URL)
-            top_threats: Number of top meta Pokemon to check (default 12)
-
-        Returns:
-            Bulk analysis with survival benchmarks against meta threats
+        Returns a bulk analysis with survival benchmarks against top meta
+        threats using the Pokemon's current spread, including moves blocked by
+        priority-blocking abilities. Supports Champions (SPs:) pastes.
         """
         if smogon is None:
             return error_response(ErrorCodes.API_ERROR, 'Smogon client not available for meta threat analysis')

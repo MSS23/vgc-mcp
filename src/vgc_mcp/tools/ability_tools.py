@@ -1,8 +1,10 @@
 """MCP tools for ability synergy and interaction analysis."""
 
-from typing import Optional
+from typing import Annotated, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.calc.abilities import (
     INTIMIDATE_BLOCKERS,
@@ -33,21 +35,22 @@ from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 def register_ability_tools(mcp: FastMCP, team_manager):
     """Register ability synergy analysis tools with the MCP server."""
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Analyze Team Abilities",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def analyze_team_abilities() -> dict:
-        """
-        Perform full ability synergy analysis for the current team.
+        """Perform full ability synergy analysis for the current team.
 
-        Analyzes:
-        - Weather setters and abusers
-        - Terrain setters
-        - Intimidate presence and protection
-        - Redirect abilities
-        - Partner-supporting abilities
-        - Ability conflicts
-
-        Returns:
-            Comprehensive ability synergy report
+        Covers weather setters/abusers, terrain setters, Intimidate presence
+        and protection, redirect abilities, partner-supporting abilities, and
+        ability conflicts. Returns a comprehensive synergy report with
+        recommendations.
         """
         team = team_manager.get_current_team()
 
@@ -94,16 +97,21 @@ def register_ability_tools(mcp: FastMCP, team_manager):
             )
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Check Intimidate Answers",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def check_intimidate_answers() -> dict:
-        """
-        Check if the team has answers to opposing Intimidate.
+        """Check if the current team has answers to opposing Intimidate.
 
-        Intimidate is one of the most common abilities in VGC.
-        Teams should have Pokemon that block or punish it.
-
-        Returns:
-            Intimidate protection analysis
+        Intimidate is one of the most common abilities in VGC; teams should
+        have Pokemon that block or punish it. Returns blockers, punishers,
+        vulnerable count, and a recommendation.
         """
         team = team_manager.get_current_team()
 
@@ -140,18 +148,21 @@ def register_ability_tools(mcp: FastMCP, team_manager):
             )
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Analyze Weather Synergy",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def analyze_weather_synergy() -> dict:
-        """
-        Analyze team's weather setting and abuse potential.
+        """Analyze the current team's weather setting and abuse potential.
 
-        Checks for:
-        - Weather setters (Drought, Drizzle, Sand Stream, Snow Warning)
-        - Weather abusers (Chlorophyll, Swift Swim, Sand Rush, etc.)
-        - Conflicting weather setters
-
-        Returns:
-            Weather synergy analysis
+        Checks for weather setters (Drought, Drizzle, Sand Stream, Snow
+        Warning), weather abusers (Chlorophyll, Swift Swim, Sand Rush, etc.),
+        and conflicting setters. Returns a synergy score and analysis.
         """
         team = team_manager.get_current_team()
 
@@ -180,16 +191,20 @@ def register_ability_tools(mcp: FastMCP, team_manager):
             )
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Analyze Terrain Synergy",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def analyze_terrain_synergy() -> dict:
-        """
-        Analyze team's terrain setting potential.
+        """Analyze the current team's terrain setting potential.
 
-        Checks for terrain setters like Grassy Surge, Electric Surge,
-        Psychic Surge, and Misty Surge.
-
-        Returns:
-            Terrain synergy analysis
+        Checks for terrain setters like Grassy Surge, Electric Surge, Psychic
+        Surge, and Misty Surge, and lists the benefits of the detected terrain.
         """
         team = team_manager.get_current_team()
 
@@ -238,18 +253,21 @@ def register_ability_tools(mcp: FastMCP, team_manager):
             )
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Find Ability Conflicts",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def find_ability_conflicts() -> dict:
-        """
-        Check for conflicting abilities on the team.
+        """Check the current team for conflicting abilities.
 
-        Identifies:
-        - Multiple different weather setters
-        - Multiple different terrain setters
-        - Weather/Terrain nullifiers vs weather/terrain teams
-
-        Returns:
-            List of ability conflicts
+        Identifies multiple different weather setters, multiple different
+        terrain setters, and weather/terrain nullifiers on weather/terrain
+        teams. Returns the list of conflicts found.
         """
         team = team_manager.get_current_team()
 
@@ -272,18 +290,24 @@ def register_ability_tools(mcp: FastMCP, team_manager):
             )
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Suggest Ability Additions",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def suggest_ability_additions(
-        team_style: Optional[str] = None
+        team_style: Annotated[Optional[str], Field(
+            description="Optional team archetype ('rain', 'sun', 'trick-room', etc.)",
+        )] = None,
     ) -> dict:
-        """
-        Suggest abilities that would improve team synergy.
+        """Suggest abilities that would improve the current team's synergy.
 
-        Args:
-            team_style: Optional team archetype ("rain", "sun", "trick-room", etc.)
-
-        Returns:
-            List of suggested abilities with reasons
+        Returns a list of suggested abilities with reasons, optionally
+        tailored to a team archetype.
         """
         team = team_manager.get_current_team()
 
@@ -302,18 +326,21 @@ def register_ability_tools(mcp: FastMCP, team_manager):
             "message": f"Found {len(suggestions)} ability suggestion(s)"
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Check Redirect Abilities",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def check_redirect_abilities() -> dict:
-        """
-        Check for redirection abilities on the team.
+        """Check the current team for redirection abilities.
 
-        Redirect abilities protect partners by drawing in specific types:
-        - Lightning Rod: Draws Electric moves
-        - Storm Drain: Draws Water moves
-        - Flash Fire: Draws Fire moves
-
-        Returns:
-            Redirect abilities and their protection
+        Redirect abilities protect partners by drawing in specific move types
+        (Lightning Rod draws Electric, Storm Drain draws Water, Flash Fire
+        draws Fire). Returns the redirects found and the types protected.
         """
         team = team_manager.get_current_team()
 
@@ -339,19 +366,21 @@ def register_ability_tools(mcp: FastMCP, team_manager):
             )
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Check Partner Abilities",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def check_partner_abilities() -> dict:
-        """
-        Check for abilities that benefit partner Pokemon.
+        """Check the current team for abilities that benefit partner Pokemon.
 
-        Partner abilities include:
-        - Friend Guard: -25% damage to allies
-        - Power Spot: +30% power to allies' moves
-        - Battery: +30% to allies' special moves
-        - Steely Spirit: +50% to allies' Steel moves
-
-        Returns:
-            Partner-supporting abilities on team
+        Partner abilities include Friend Guard (-25% damage to allies), Power
+        Spot (+30% power to allies' moves), Battery (+30% to allies' special
+        moves), and Steely Spirit (+50% to allies' Steel moves).
         """
         team = team_manager.get_current_team()
 
@@ -374,13 +403,20 @@ def register_ability_tools(mcp: FastMCP, team_manager):
             )
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Get Common Intimidate Pokemon",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def get_common_intimidate_pokemon() -> dict:
-        """
-        Get list of common Intimidate Pokemon in VGC.
+        """Get the list of common Intimidate Pokemon in VGC.
 
-        Returns:
-            List of popular Intimidate users to watch for
+        Returns popular Intimidate users to prepare for, plus example
+        blocker and punisher abilities.
         """
         return {
             "intimidate_pokemon": INTIMIDATE_POKEMON,
@@ -397,13 +433,20 @@ def register_ability_tools(mcp: FastMCP, team_manager):
             "message": "Common Intimidate Pokemon to prepare for"
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Get Weather Ability Info",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def get_weather_ability_info() -> dict:
-        """
-        Get information about all weather-related abilities.
+        """Get reference information about all weather-related abilities.
 
-        Returns:
-            Weather setters and abusers for each weather type
+        Returns weather setters and abusers for each weather type, plus
+        duration notes.
         """
         setters = {
             weather: ability.replace("-", " ").title()

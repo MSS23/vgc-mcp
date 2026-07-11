@@ -5,9 +5,11 @@ opponents based on current Smogon usage data. It accounts for the
 distribution of spreads used by players in the meta.
 """
 
-from typing import Optional
+from typing import Annotated, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.calc.speed_probability import (
     calculate_meta_outspeed_rate,
@@ -23,29 +25,26 @@ from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 def register_speed_probability_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
     """Register speed probability analysis tools with the MCP server."""
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Calculate Outspeed Probability",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def outspeed_probability(
-        your_pokemon: str,
-        your_speed_evs: int,
-        your_nature: str,
-        target_pokemon: str
+        your_pokemon: Annotated[str, Field(description="Your Pokemon's name (e.g. 'Entei')", min_length=1)],
+        your_speed_evs: Annotated[int, Field(ge=0, le=252, description="Your Speed EVs (0-252)")],
+        your_nature: Annotated[str, Field(description="Your nature (e.g. 'Adamant', 'Jolly')", min_length=1)],
+        target_pokemon: Annotated[str, Field(description="Opponent's Pokemon (e.g. 'Landorus-Therian')", min_length=1)]
     ) -> dict:
-        """
-        Calculate probability of outspeeding a specific opponent.
+        """Calculate the probability of outspeeding a specific opponent.
 
-        Uses live Smogon usage data to determine what percentage of
-        the target's common spreads you will outspeed.
-
+        Uses live Smogon usage data to determine what percentage of the
+        target's common spreads you will outspeed, tie, or underspeed.
         Example: "What's the probability my Entei outspeeds Landorus?"
-
-        Args:
-            your_pokemon: Your Pokemon's name (e.g., "Entei")
-            your_speed_evs: Your Speed EVs (0-252)
-            your_nature: Your nature (e.g., "Adamant", "Jolly")
-            target_pokemon: Opponent's Pokemon (e.g., "Landorus-Therian")
-
-        Returns:
-            Outspeed probability breakdown with analysis
         """
         # Get your Pokemon's base stats
         try:
@@ -124,24 +123,22 @@ def register_speed_probability_tools(mcp: FastMCP, smogon, pokeapi, team_manager
             }
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Outspeed Probability (Stored Pokemon)",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def outspeed_probability_stored(
-        target_pokemon: str,
-        your_pokemon_reference: Optional[str] = None
+        target_pokemon: Annotated[str, Field(description="Opponent's Pokemon (e.g. 'Landorus-Therian')", min_length=1)],
+        your_pokemon_reference: Annotated[Optional[str], Field(
+            description="Reference to a stored Pokemon (e.g. 'my Entei'); None uses the most recently stored",
+        )] = None
     ) -> dict:
-        """
-        Calculate outspeed probability using a stored Pokemon.
-
-        Uses a Pokemon previously stored with set_my_pokemon.
-
-        Args:
-            target_pokemon: Opponent's Pokemon (e.g., "Landorus-Therian")
-            your_pokemon_reference: Reference to stored Pokemon (e.g., "my Entei"),
-                                   or None to use most recently stored
-
-        Returns:
-            Outspeed probability breakdown
-        """
+        """Calculate outspeed probability using a Pokemon previously stored with set_my_pokemon."""
         # Get stored Pokemon
         pokemon = team_manager.get_pokemon_context(your_pokemon_reference)
         if not pokemon:
@@ -212,27 +209,25 @@ def register_speed_probability_tools(mcp: FastMCP, smogon, pokeapi, team_manager
             "meta_info": meta_info
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Analyze Meta Outspeed Rate",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def meta_outspeed_analysis(
-        your_pokemon: str,
-        your_speed_evs: int,
-        your_nature: str,
-        top_n: int = 20
+        your_pokemon: Annotated[str, Field(description="Your Pokemon's name", min_length=1)],
+        your_speed_evs: Annotated[int, Field(ge=0, le=252, description="Your Speed EVs (0-252)")],
+        your_nature: Annotated[str, Field(description="Your nature (e.g. 'Timid', 'Jolly')", min_length=1)],
+        top_n: Annotated[int, Field(ge=1, description="Number of top usage Pokemon to analyze")] = 20
     ) -> dict:
-        """
-        Analyze what percentage of the top meta Pokemon you outspeed.
+        """Analyze what percentage of the top meta Pokemon you outspeed.
 
-        Provides a comprehensive view of your speed tier relative to
-        the entire metagame, weighted by Pokemon usage.
-
-        Args:
-            your_pokemon: Your Pokemon's name
-            your_speed_evs: Your Speed EVs (0-252)
-            your_nature: Your nature
-            top_n: Number of top Pokemon to analyze (default 20)
-
-        Returns:
-            Meta-wide speed analysis with threats and outspeeds
+        Provides a comprehensive view of your speed tier relative to the
+        entire metagame, weighted by Pokemon usage.
         """
         # Get your Pokemon's base stats
         try:
@@ -306,27 +301,25 @@ def register_speed_probability_tools(mcp: FastMCP, smogon, pokeapi, team_manager
             }
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Calculate Speed Creep EVs",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def speed_creep_calculator(
-        your_pokemon: str,
-        your_nature: str,
-        target_pokemon: str,
-        desired_outspeed_pct: float = 100.0
+        your_pokemon: Annotated[str, Field(description="Your Pokemon's name", min_length=1)],
+        your_nature: Annotated[str, Field(description="Your nature (e.g. 'Jolly', 'Timid')", min_length=1)],
+        target_pokemon: Annotated[str, Field(description="Pokemon to outspeed", min_length=1)],
+        desired_outspeed_pct: Annotated[float, Field(ge=0, le=100, description="Percentage of the target's spread distribution to outspeed")] = 100.0
     ) -> dict:
-        """
-        Calculate how many Speed EVs needed to outspeed a target.
+        """Calculate how many Speed EVs are needed to outspeed a target.
 
-        Determines the minimum speed investment needed to outspeed
-        a specific percentage of a Pokemon's spread distribution.
-
-        Args:
-            your_pokemon: Your Pokemon's name
-            your_nature: Your nature
-            target_pokemon: Pokemon to outspeed
-            desired_outspeed_pct: % of target spreads to outspeed (default 100)
-
-        Returns:
-            Required Speed EVs and resulting stats
+        Determines the minimum speed investment needed to outspeed a specific
+        percentage of a Pokemon's Smogon spread distribution.
         """
         # Get your Pokemon's base stats
         try:
@@ -376,25 +369,26 @@ def register_speed_probability_tools(mcp: FastMCP, smogon, pokeapi, team_manager
             "meta_info": meta_info
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Compare Speed Investments",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def compare_speed_investment(
-        pokemon_name: str,
-        target_pokemon: str,
-        ev_options: Optional[str] = None
+        pokemon_name: Annotated[str, Field(description="Your Pokemon's name", min_length=1)],
+        target_pokemon: Annotated[str, Field(description="Target Pokemon to compare against", min_length=1)],
+        ev_options: Annotated[Optional[str], Field(
+            description="Comma-separated Speed EV values to test (default '0,52,100,156,196,252')",
+        )] = None
     ) -> dict:
-        """
-        Compare different speed investments against a target.
+        """Compare different Speed EV investments against a target.
 
-        Shows outspeed probabilities at different EV thresholds
-        to help decide optimal speed investment.
-
-        Args:
-            pokemon_name: Your Pokemon's name
-            target_pokemon: Target to compare against
-            ev_options: Comma-separated EVs to test (default: "0,52,100,156,196,252")
-
-        Returns:
-            Comparison of outspeed rates at each EV threshold
+        Shows outspeed probabilities at each EV threshold (for both Adamant
+        and Jolly natures) to help decide the optimal speed investment.
         """
         # Parse EV options
         if ev_options:

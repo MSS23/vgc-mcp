@@ -1,6 +1,10 @@
 """MCP tools for PokePaste integration - fetch and analyze teams from pokepast.es."""
 
+from typing import Annotated
+
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.api.pokepaste import PokePasteClient, PokePasteError
 from vgc_mcp_core.formats.showdown import ShowdownParseError, parse_showdown_team
@@ -10,23 +14,25 @@ from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 def register_pokepaste_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi=None, smogon=None):
     """Register PokePaste tools with the MCP server."""
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Fetch PokePaste Team",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def fetch_pokepaste(
-        url_or_id: str
+        url_or_id: Annotated[str, Field(
+            description="PokePaste URL or paste ID; accepts 'https://pokepast.es/abc123', 'pokepast.es/abc123', or just 'abc123'",
+            min_length=1,
+        )],
     ) -> dict:
-        """
-        Fetch a team from a PokePaste URL and parse it.
+        """Fetch a team from a PokePaste URL and parse it.
 
-        Accepts various formats:
-        - Full URL: "https://pokepast.es/abc123"
-        - Partial URL: "pokepast.es/abc123"
-        - Just the paste ID: "abc123"
-
-        Args:
-            url_or_id: PokePaste URL or paste ID
-
-        Returns:
-            Parsed team with all Pokemon details (species, EVs, moves, items, etc.)
+        Returns the parsed team with all Pokemon details (species, EVs, moves,
+        items, etc.) plus the raw paste text.
         """
         try:
             # Fetch the raw paste
@@ -83,27 +89,25 @@ def register_pokepaste_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi=N
         except Exception as e:
             return error_response(ErrorCodes.INVALID_PARAMETER, f'Unexpected error: {e}')
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Analyze PokePaste Team",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def analyze_pokepaste(
-        url_or_id: str,
-        include_usage_data: bool = True
+        url_or_id: Annotated[str, Field(description="PokePaste URL or paste ID", min_length=1)],
+        include_usage_data: Annotated[bool, Field(description="Whether to compare items/abilities against Smogon usage stats")] = True,
     ) -> dict:
-        """
-        Fetch a PokePaste and provide comprehensive analysis.
+        """Fetch a PokePaste and provide a comprehensive team analysis.
 
-        Analyzes:
-        - EV spread efficiency and potential improvements
-        - Speed tier analysis (who outspeeds what)
-        - Type coverage and weaknesses
-        - Common items/abilities vs Smogon usage
-        - Team composition (roles, synergies)
-
-        Args:
-            url_or_id: PokePaste URL or paste ID
-            include_usage_data: Whether to compare against Smogon usage stats
-
-        Returns:
-            Full team analysis with optimization suggestions
+        Analyzes EV spread efficiency, speed investment, restricted Pokemon
+        count, speed control / Fake Out / redirection presence, and (optionally)
+        item and ability choices vs Smogon usage. Returns per-Pokemon findings
+        plus team-level suggestions.
         """
         try:
             # First fetch and parse the paste
@@ -274,26 +278,24 @@ def register_pokepaste_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi=N
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, f'Analysis failed: {e}')
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Optimize PokePaste Pokemon",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def optimize_pokepaste_pokemon(
-        url_or_id: str,
-        pokemon_index: int = 0
+        url_or_id: Annotated[str, Field(description="PokePaste URL or paste ID", min_length=1)],
+        pokemon_index: Annotated[int, Field(ge=0, description="Which Pokemon to optimize (0-5, default first)")] = 0,
     ) -> dict:
-        """
-        Analyze a specific Pokemon from a PokePaste and suggest optimizations.
+        """Analyze a specific Pokemon from a PokePaste and suggest optimizations.
 
-        Provides:
-        - EV spread optimization suggestions
-        - Move coverage analysis
-        - Item alternatives from Smogon usage
-        - Nature recommendations
-
-        Args:
-            url_or_id: PokePaste URL or paste ID
-            pokemon_index: Which Pokemon to optimize (0-5, default first)
-
-        Returns:
-            Optimization suggestions for the specified Pokemon
+        Provides EV spread optimization suggestions (unused EVs, level 50
+        breakpoint alignment), unusual move flags, and item/ability/spread
+        alternatives from Smogon usage data.
         """
         try:
             raw_paste = await pokepaste.get_paste(url_or_id)

@@ -10,9 +10,11 @@ This tool produces that diff against a list of threats.
 from __future__ import annotations
 
 import asyncio
-from typing import Optional
+from typing import Annotated, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
@@ -133,33 +135,28 @@ def register_delta_tools(
     pokeapi: PokeAPIClient,
     smogon: Optional[SmogonStatsClient] = None,
 ):
-    @mcp.tool()
+    @mcp.tool(
+        title="Compare Build Changes",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def compare_build_changes(
-        pokemon_name: str,
-        before: dict,
-        after: dict,
-        threats: list[str],
-        threat_moves: Optional[dict[str, str]] = None,
-        as_attacker: bool = True,
+        pokemon_name: Annotated[str, Field(description="The Pokemon being iterated (e.g. 'flutter-mane')", min_length=1)],
+        before: Annotated[dict, Field(description="Build before the change: dict with any of nature, item, ability, tera_type, evs (e.g. {'evs': {'hp': 4, 'special_attack': 252}}). Unspecified fields default to the most common Smogon spread — only override what you're testing.")],
+        after: Annotated[dict, Field(description="Build after the change; same shape and defaulting as 'before'")],
+        threats: Annotated[list[str], Field(description="Threat Pokemon names (the opponents), 1-20 entries")],
+        threat_moves: Annotated[Optional[dict[str, str]], Field(description="Optional per-threat move override (e.g. {'incineroar': 'flare-blitz'}); defaults to each threat's most common move")] = None,
+        as_attacker: Annotated[bool, Field(description="True = 'what KOs do I gain/lose against threats?'; False = 'which threats do I survive better/worse against?'")] = True,
     ) -> dict:
         """Show what changed between two builds against a fixed threat list.
 
-        Use this whenever a user iterates ONE thing on a Pokémon (changed
+        Use this whenever a user iterates ONE thing on a Pokemon (changed
         item, nature, Tera type, or moved EVs around) and wants to know
         what flipped. Avoids the user re-running 10 separate damage calcs.
-
-        Args:
-            pokemon_name: The Pokémon being iterated (e.g. "flutter-mane").
-            before / after: dicts with any of:
-                {"nature": "...", "item": "...", "ability": "...",
-                 "tera_type": "...", "evs": {"hp":4,"special_attack":252,...}}
-                Both dicts default to the "most common Smogon spread" for any
-                unspecified field — only override what you're testing.
-            threats: list of threat Pokémon names (the opponents).
-            threat_moves: optional {"incineroar": "flare-blitz"} override of
-                each threat's move; defaults to the threat's most common move.
-            as_attacker: True = "what KOs do I gain/lose against threats?"
-                         False = "which threats do I survive better/worse against?"
 
         Returns a delta table per threat: before result vs after result,
         with a one-word change label (gained-OHKO, lost-OHKO, no-change, etc.).

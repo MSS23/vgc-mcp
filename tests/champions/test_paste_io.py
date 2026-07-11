@@ -258,3 +258,76 @@ class TestParsedToPokemonBuild:
         )
         assert build.name == "garchomp"
         assert build.format_system == "champions"
+
+
+class TestEvsLineAsSps:
+    """Official Showdown Champions pastes reuse `EVs:` with SP-scale values."""
+
+    SHOWDOWN_CHAMPIONS_PASTE = (
+        "Garchomp @ Choice Band\n"
+        "Ability: Rough Skin\n"
+        "EVs: 4 HP / 32 Atk / 30 Spe\n"
+        "Adamant Nature\n"
+        "- Earthquake"
+    )
+    BS = BaseStats(
+        hp=108, attack=130, defense=95,
+        special_attack=80, special_defense=85, speed=102,
+    )
+
+    def test_evs_line_looks_like_sps(self):
+        from vgc_mcp_core.formats.showdown import evs_line_looks_like_sps
+        parsed = parse_showdown_pokemon(self.SHOWDOWN_CHAMPIONS_PASTE)
+        assert evs_line_looks_like_sps(parsed)
+        # A real mainline spread never qualifies
+        assert not evs_line_looks_like_sps(parse_showdown_pokemon(MAINLINE_PASTE))
+        # An explicit SPs: line disqualifies (already unambiguous)
+        assert not evs_line_looks_like_sps(parse_showdown_pokemon(CHAMPIONS_PASTE))
+
+    def test_champions_hint_coerces_evs_to_sps(self):
+        parsed = parse_showdown_pokemon(self.SHOWDOWN_CHAMPIONS_PASTE)
+        build = parsed_to_pokemon_build(
+            parsed, self.BS, ["dragon", "ground"], format_hint="champions"
+        )
+        assert build.format_system == "champions"
+        assert build.sps is not None
+        assert build.sps.hp == 4
+        assert build.sps.attack == 32
+        assert build.sps.speed == 30
+        assert build.evs == EVSpread()
+        # Source object is not mutated
+        assert parsed.sps is None
+        assert parsed.evs["atk"] == 32
+
+    def test_mainline_hint_keeps_evs(self):
+        parsed = parse_showdown_pokemon(self.SHOWDOWN_CHAMPIONS_PASTE)
+        build = parsed_to_pokemon_build(
+            parsed, self.BS, ["dragon", "ground"], format_hint="mainline"
+        )
+        assert build.format_system == "mainline"
+        assert build.sps is None
+        assert build.evs.attack == 32
+
+    def test_no_hint_defaults_to_mainline_session(self):
+        # Without a champions session or Mega mention, detection resolves
+        # mainline and the small EV spread stays an EV spread.
+        parsed = parse_showdown_pokemon(self.SHOWDOWN_CHAMPIONS_PASTE)
+        build = parsed_to_pokemon_build(parsed, self.BS, ["dragon", "ground"])
+        assert build.format_system == "mainline"
+
+    def test_mega_species_auto_detects_champions(self):
+        paste = (
+            "Charizard-Mega-Y @ Charizardite Y\n"
+            "Ability: Drought\n"
+            "EVs: 4 HP / 32 SpA / 30 Spe\n"
+            "Timid Nature\n"
+            "- Heat Wave"
+        )
+        parsed = parse_showdown_pokemon(paste)
+        bs = BaseStats(
+            hp=78, attack=104, defense=78,
+            special_attack=159, special_defense=115, speed=100,
+        )
+        build = parsed_to_pokemon_build(parsed, bs, ["fire", "flying"])
+        assert build.format_system == "champions"
+        assert build.sps is not None and build.sps.total == 66

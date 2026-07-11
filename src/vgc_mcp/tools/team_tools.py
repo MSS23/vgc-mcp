@@ -1,8 +1,10 @@
 """MCP tools for team management."""
 
-from typing import Optional
+from typing import Annotated, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.calc.champions_optimization import validate_sp_allocation
@@ -42,42 +44,38 @@ def register_team_tools(
 ):
     """Register team management tools with the MCP server."""
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Add Pokemon to Team",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=True,
+        ),
+    )
     async def add_to_team(
-        pokemon_name: str,
-        nature: str = "serious",
-        ability: Optional[str] = None,
-        item: Optional[str] = None,
-        tera_type: Optional[str] = None,
-        move1: Optional[str] = None,
-        move2: Optional[str] = None,
-        move3: Optional[str] = None,
-        move4: Optional[str] = None,
-        hp_evs: int = 0,
-        atk_evs: int = 0,
-        def_evs: int = 0,
-        spa_evs: int = 0,
-        spd_evs: int = 0,
-        spe_evs: int = 0
+        pokemon_name: Annotated[str, Field(description="Name of the Pokemon to add (e.g. 'flutter-mane')", min_length=1)],
+        nature: Annotated[str, Field(description="Pokemon's nature (e.g. 'adamant', 'timid')")] = "serious",
+        ability: Annotated[Optional[str], Field(description="Pokemon's ability")] = None,
+        item: Annotated[Optional[str], Field(description="Held item")] = None,
+        tera_type: Annotated[Optional[str], Field(description="Tera type")] = None,
+        move1: Annotated[Optional[str], Field(description="First move")] = None,
+        move2: Annotated[Optional[str], Field(description="Second move")] = None,
+        move3: Annotated[Optional[str], Field(description="Third move")] = None,
+        move4: Annotated[Optional[str], Field(description="Fourth move")] = None,
+        hp_evs: Annotated[int, Field(ge=0, le=252, description="HP EVs (0-252, total max 508); in Champions sessions treated as Stat Points (0-32, total max 66), EV-scale values (>32) auto-convert at 1 SP = 8 EVs")] = 0,
+        atk_evs: Annotated[int, Field(ge=0, le=252, description="Attack EVs (0-252, total max 508); in Champions sessions treated as Stat Points (0-32, total max 66), EV-scale values (>32) auto-convert at 1 SP = 8 EVs")] = 0,
+        def_evs: Annotated[int, Field(ge=0, le=252, description="Defense EVs (0-252, total max 508); in Champions sessions treated as Stat Points (0-32, total max 66), EV-scale values (>32) auto-convert at 1 SP = 8 EVs")] = 0,
+        spa_evs: Annotated[int, Field(ge=0, le=252, description="Special Attack EVs (0-252, total max 508); in Champions sessions treated as Stat Points (0-32, total max 66), EV-scale values (>32) auto-convert at 1 SP = 8 EVs")] = 0,
+        spd_evs: Annotated[int, Field(ge=0, le=252, description="Special Defense EVs (0-252, total max 508); in Champions sessions treated as Stat Points (0-32, total max 66), EV-scale values (>32) auto-convert at 1 SP = 8 EVs")] = 0,
+        spe_evs: Annotated[int, Field(ge=0, le=252, description="Speed EVs (0-252, total max 508); in Champions sessions treated as Stat Points (0-32, total max 66), EV-scale values (>32) auto-convert at 1 SP = 8 EVs")] = 0
     ) -> dict:
-        """
-        Add a Pokemon to the current team (max 6, species clause enforced).
+        """Add a Pokemon to the current team (max 6, species clause enforced).
 
-        Args:
-            pokemon_name: Name of the Pokemon to add
-            nature: Pokemon's nature (e.g., "adamant", "timid")
-            ability: Pokemon's ability
-            item: Held item
-            tera_type: Tera type
-            move1, move2, move3, move4: The four moves
-            hp_evs through spe_evs: stat investment. Mainline interprets these as
-                EVs (total max 508, 252/stat). In a Champions (Reg MA/MB) session
-                they are interpreted as Stat Points (total max 66, 32/stat);
-                EV-scale values (any stat > 32) are auto-converted to SPs
-                (1 SP = 8 EVs) and the response includes an `sp_conversion` note.
-
-        Returns:
-            Success/failure status and current team state
+        Returns success/failure status and the current team state. In a
+        Champions (Reg MA/MB) session the EV inputs are interpreted as Stat
+        Points; when EV-scale values are auto-converted the response includes
+        an `sp_conversion` note.
         """
         try:
             is_champions = _detect_champions(pokemon_name)
@@ -178,16 +176,21 @@ def register_team_tools(
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
-    async def remove_from_team(slot: int) -> dict:
-        """
-        Remove a Pokemon from the team by slot number.
+    @mcp.tool(
+        title="Remove Pokemon by Slot",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=True,
+            idempotentHint=False,
+            openWorldHint=False,
+        ),
+    )
+    async def remove_from_team(
+        slot: Annotated[int, Field(ge=1, le=6, description="Slot number of the Pokemon to remove (1-6)")],
+    ) -> dict:
+        """Remove a Pokemon from the team by slot number.
 
-        Args:
-            slot: Slot number (1-6)
-
-        Returns:
-            Success status and updated team
+        Returns success status and the updated team.
         """
         try:
             # Convert to 0-indexed
@@ -196,16 +199,21 @@ def register_team_tools(
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
-    async def remove_pokemon_by_name(name: str) -> dict:
-        """
-        Remove a Pokemon from the team by name.
+    @mcp.tool(
+        title="Remove Pokemon by Name",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=True,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def remove_pokemon_by_name(
+        name: Annotated[str, Field(description="Name of the Pokemon to remove from the team", min_length=1)],
+    ) -> dict:
+        """Remove a Pokemon from the team by name.
 
-        Args:
-            name: Pokemon name to remove
-
-        Returns:
-            Success status and updated team
+        Returns success status and the updated team.
         """
         try:
             success, message, data = team_manager.remove_by_name(name)
@@ -213,35 +221,39 @@ def register_team_tools(
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Replace Pokemon in Slot",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=True,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def swap_team_pokemon(
-        slot: int,
-        pokemon_name: str,
-        nature: str = "serious",
-        ability: Optional[str] = None,
-        item: Optional[str] = None,
-        tera_type: Optional[str] = None,
-        move1: Optional[str] = None,
-        move2: Optional[str] = None,
-        move3: Optional[str] = None,
-        move4: Optional[str] = None,
-        hp_evs: int = 0,
-        atk_evs: int = 0,
-        def_evs: int = 0,
-        spa_evs: int = 0,
-        spd_evs: int = 0,
-        spe_evs: int = 0
+        slot: Annotated[int, Field(ge=1, le=6, description="Slot number to replace (1-6); the existing Pokemon in that slot is overwritten")],
+        pokemon_name: Annotated[str, Field(description="New Pokemon's name", min_length=1)],
+        nature: Annotated[str, Field(description="Pokemon's nature (e.g. 'adamant', 'timid')")] = "serious",
+        ability: Annotated[Optional[str], Field(description="Pokemon's ability")] = None,
+        item: Annotated[Optional[str], Field(description="Held item")] = None,
+        tera_type: Annotated[Optional[str], Field(description="Tera type")] = None,
+        move1: Annotated[Optional[str], Field(description="First move")] = None,
+        move2: Annotated[Optional[str], Field(description="Second move")] = None,
+        move3: Annotated[Optional[str], Field(description="Third move")] = None,
+        move4: Annotated[Optional[str], Field(description="Fourth move")] = None,
+        hp_evs: Annotated[int, Field(ge=0, le=252, description="HP EVs (0-252, total max 508); in Champions sessions treated as Stat Points (0-32, total max 66), EV-scale values (>32) auto-convert at 1 SP = 8 EVs")] = 0,
+        atk_evs: Annotated[int, Field(ge=0, le=252, description="Attack EVs (0-252, total max 508); in Champions sessions treated as Stat Points (0-32, total max 66), EV-scale values (>32) auto-convert at 1 SP = 8 EVs")] = 0,
+        def_evs: Annotated[int, Field(ge=0, le=252, description="Defense EVs (0-252, total max 508); in Champions sessions treated as Stat Points (0-32, total max 66), EV-scale values (>32) auto-convert at 1 SP = 8 EVs")] = 0,
+        spa_evs: Annotated[int, Field(ge=0, le=252, description="Special Attack EVs (0-252, total max 508); in Champions sessions treated as Stat Points (0-32, total max 66), EV-scale values (>32) auto-convert at 1 SP = 8 EVs")] = 0,
+        spd_evs: Annotated[int, Field(ge=0, le=252, description="Special Defense EVs (0-252, total max 508); in Champions sessions treated as Stat Points (0-32, total max 66), EV-scale values (>32) auto-convert at 1 SP = 8 EVs")] = 0,
+        spe_evs: Annotated[int, Field(ge=0, le=252, description="Speed EVs (0-252, total max 508); in Champions sessions treated as Stat Points (0-32, total max 66), EV-scale values (>32) auto-convert at 1 SP = 8 EVs")] = 0
     ) -> dict:
-        """
-        Replace a Pokemon in a specific slot with a new one.
+        """Replace the Pokemon in a specific team slot with a new one.
 
-        Args:
-            slot: Slot number to replace (1-6)
-            pokemon_name: New Pokemon's name
-            (other args same as add_to_team)
-
-        Returns:
-            Success status with old and new Pokemon
+        Returns success status with the old and new Pokemon. In a Champions
+        (Reg MA/MB) session the EV inputs are interpreted as Stat Points; when
+        EV-scale values are auto-converted the response includes an
+        `sp_conversion` note.
         """
         try:
             is_champions = _detect_champions(pokemon_name)
@@ -335,17 +347,22 @@ def register_team_tools(
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
-    async def reorder_team(slot1: int, slot2: int) -> dict:
-        """
-        Swap the positions of two Pokemon in the team.
+    @mcp.tool(
+        title="Reorder Team Slots",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=False,
+        ),
+    )
+    async def reorder_team(
+        slot1: Annotated[int, Field(ge=1, le=6, description="First slot number (1-6)")],
+        slot2: Annotated[int, Field(ge=1, le=6, description="Second slot number (1-6)")],
+    ) -> dict:
+        """Swap the positions of two Pokemon in the team.
 
-        Args:
-            slot1: First slot number (1-6)
-            slot2: Second slot number (1-6)
-
-        Returns:
-            Success status and new team order
+        Returns success status and the new team order.
         """
         try:
             success, message, data = team_manager.reorder(slot1 - 1, slot2 - 1)
@@ -353,13 +370,19 @@ def register_team_tools(
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="View Current Team",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def view_team() -> dict:
-        """
-        View the current team with full details.
+        """View the current team with full details.
 
-        Returns:
-            Complete team information including all Pokemon builds
+        Returns complete team information including all Pokemon builds.
         """
         try:
             result = team_manager.get_team_summary()
@@ -367,13 +390,19 @@ def register_team_tools(
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Clear Team",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=True,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def clear_team() -> dict:
-        """
-        Clear all Pokemon from the current team.
+        """Clear all Pokemon from the current team.
 
-        Returns:
-            Confirmation of team cleared
+        Returns confirmation that the team was cleared.
         """
         try:
             success, message, data = team_manager.clear()
@@ -381,13 +410,20 @@ def register_team_tools(
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Analyze Current Team",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def analyze_team() -> dict:
-        """
-        Perform comprehensive analysis of the current team.
+        """Perform comprehensive analysis of the current team.
 
-        Returns:
-            Type weaknesses/resistances, offensive coverage, speed tiers, and role analysis
+        Returns type weaknesses/resistances, offensive coverage, speed tiers,
+        and role analysis. Requires at least one Pokemon on the team.
         """
         try:
             if team_manager.size == 0:

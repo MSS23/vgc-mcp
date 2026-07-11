@@ -255,6 +255,15 @@ Stat Points (SPs), not EVs:
   flag it to the user as "this tool isn't Champions-aware yet, here's the
   approximate equivalent" and convert by dividing EVs by 8 (1 SP ≈ 8 EV).
 
+Champions mechanics differences to respect in advice:
+- No IVs: every Pokemon acts as 31 IV in all stats. Never recommend 0-Spe
+  Trick Room IVs or 0-Atk confusion tech — they don't exist in Champions.
+- No Terastallization. Mega Evolution instead (one Mega per battle;
+  multiple Mega Stones may be brought). Natures are "Stat Alignments"
+  in-game but work identically (+10%/-10%).
+- Official Showdown Champions pastes may reuse the `EVs:` line with
+  SP-scale values (0-32); the importer handles both `SPs:` and that form.
+
 Damage tables and survival benchmarks otherwise use the same format — only
 the spread notation changes.
 

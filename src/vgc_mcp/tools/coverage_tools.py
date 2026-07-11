@@ -1,9 +1,11 @@
 """MCP tools for move-based coverage analysis."""
 
 import logging
-from typing import Optional
+from typing import Annotated, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.calc.coverage import (
     ALL_TYPES,
@@ -23,20 +25,21 @@ logger = logging.getLogger(__name__)
 def register_coverage_tools(mcp: FastMCP, team_manager, pokeapi):
     """Register coverage analysis tools with the MCP server."""
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Analyze Team Move Coverage",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def analyze_team_move_coverage() -> dict:
-        """
-        Analyze team's move-based offensive coverage.
+        """Analyze the current team's move-based offensive coverage.
 
-        Unlike STAB-based analysis, this checks what types the team
-        can hit super-effectively with their actual moveset.
-
-        Returns:
-            Complete coverage analysis including:
-            - Types covered by moves
-            - Coverage holes (types with no SE coverage)
-            - Best and worst covered types
-            - Coverage percentage
+        Unlike STAB-based analysis, this checks what types the team can hit
+        super-effectively with their actual movesets. Returns types covered,
+        coverage holes, best/worst covered types, and coverage percentage.
         """
         team = team_manager.get_current_team()
 
@@ -95,16 +98,20 @@ def register_coverage_tools(mcp: FastMCP, team_manager, pokeapi):
 
         return output
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Find Team Coverage Holes",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def find_team_coverage_holes() -> dict:
-        """
-        Find types that no team member can hit super-effectively.
+        """Find types that no current team member can hit super-effectively.
 
-        Coverage holes represent types the team struggles against.
-        Consider adding coverage moves or Pokemon to address these.
-
-        Returns:
-            List of types with no super-effective coverage
+        Coverage holes represent types the team struggles against. Returns the
+        hole list plus move suggestions to address them.
         """
         team = team_manager.get_current_team()
 
@@ -146,16 +153,20 @@ def register_coverage_tools(mcp: FastMCP, team_manager, pokeapi):
             )
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Check Team Quad Weaknesses",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def check_team_quad_weaknesses() -> dict:
-        """
-        Find Pokemon on the team with 4x type weaknesses.
+        """Find Pokemon on the current team with 4x type weaknesses.
 
-        Quad weaknesses are dangerous because even resisted
-        super-effective moves can deal massive damage.
-
-        Returns:
-            List of Pokemon and their 4x weaknesses
+        Quad weaknesses are dangerous because even resisted super-effective
+        moves can deal massive damage. Returns each 4x weakness, grouped by type.
         """
         team = team_manager.get_current_team()
 
@@ -202,20 +213,22 @@ def register_coverage_tools(mcp: FastMCP, team_manager, pokeapi):
             )
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Check Coverage vs Target",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def check_coverage_vs_target(
-        target_pokemon: str
+        target_pokemon: Annotated[str, Field(description="Name of the Pokemon to check coverage against (e.g. 'incineroar')", min_length=1)]
     ) -> dict:
-        """
-        Check if the team has super-effective coverage against a specific Pokemon.
+        """Check if the current team has super-effective coverage against a specific Pokemon.
 
-        Useful for checking matchups against common meta threats.
-
-        Args:
-            target_pokemon: Name of the Pokemon to check coverage against
-
-        Returns:
-            Coverage options against the target
+        Useful for checking matchups against common meta threats. Returns the
+        coverage options (best move and all moves) that hit the target super-effectively.
         """
         team = team_manager.get_current_team()
 
@@ -270,20 +283,23 @@ def register_coverage_tools(mcp: FastMCP, team_manager, pokeapi):
             )
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Suggest Team Coverage Moves",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def suggest_team_coverage_moves(
-        category: Optional[str] = None,
-        prioritize_spread: bool = False
+        category: Annotated[Optional[str], Field(description="Filter suggestions by move category: 'physical' or 'special'")] = None,
+        prioritize_spread: Annotated[bool, Field(description="If True, prefer spread moves (better in doubles)")] = False
     ) -> dict:
-        """
-        Suggest moves to fill coverage gaps on the team.
+        """Suggest moves to fill the current team's coverage gaps.
 
-        Args:
-            category: Filter by "physical" or "special" (optional)
-            prioritize_spread: If True, prefer spread moves for doubles
-
-        Returns:
-            Move suggestions to improve coverage
+        Finds the team's coverage holes and returns candidate moves that would
+        cover them, honoring the category/spread filters.
         """
         team = team_manager.get_current_team()
 
@@ -334,18 +350,22 @@ def register_coverage_tools(mcp: FastMCP, team_manager, pokeapi):
             )
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Get Coverage Move Options",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def get_coverage_move_options(
-        move_type: str
+        move_type: Annotated[str, Field(description="The type of coverage move to look for (e.g. 'Ice', 'Ground')", min_length=1)]
     ) -> dict:
-        """
-        Get available coverage moves of a specific type.
+        """Get available coverage moves of a specific type.
 
-        Args:
-            move_type: The type of coverage move to look for (e.g., "Ice", "Ground")
-
-        Returns:
-            List of moves with their stats and notes
+        Returns physical/special/spread/priority move options of that type,
+        with stats and what they hit super-effectively.
         """
         move_type = move_type.capitalize()
 

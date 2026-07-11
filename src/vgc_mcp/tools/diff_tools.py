@@ -4,9 +4,11 @@ This module provides tools to compare two versions of a team and identify
 what changed between them. No HTML UI - returns structured data only.
 """
 
-from typing import Optional
+from typing import Annotated, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.api.pokepaste import PokePasteClient, PokePasteError
 from vgc_mcp_core.diff import generate_team_diff
@@ -17,35 +19,30 @@ from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 def register_diff_tools(mcp: FastMCP):
     """Register team diff tools with the MCP server."""
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Compare Team Versions",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def compare_team_versions(
-        version1: str,
-        version2: str,
-        v1_name: Optional[str] = None,
-        v2_name: Optional[str] = None,
+        version1: Annotated[str, Field(description="First team version (Pokepaste URL or raw Showdown paste text)", min_length=1)],
+        version2: Annotated[str, Field(description="Second team version (Pokepaste URL or raw Showdown paste text)", min_length=1)],
+        v1_name: Annotated[Optional[str], Field(description="Optional display name for version 1")] = None,
+        v2_name: Annotated[Optional[str], Field(description="Optional display name for version 2")] = None,
     ) -> dict:
         """Compare two versions of a Pokemon team and show what changed.
 
-        Accepts either Pokepaste URLs or raw Showdown paste text.
-        Pokemon are matched by species name (not slot position), so
-        reordering the team won't count as changes.
+        Accepts either Pokepaste URLs or raw Showdown paste text. Pokemon are
+        matched by species name (not slot position), so reordering the team
+        won't count as changes.
 
-        Detects changes to:
-        - EVs/IVs - with explanations like "Moved 52 EVs from Spe to Def"
-        - Nature - with stat trade explanations
-        - Item - with role change explanations
-        - Ability
-        - Tera Type
-        - Moves - shows added/removed
-
-        Args:
-            version1: First team version (Pokepaste URL or raw paste text)
-            version2: Second team version (Pokepaste URL or raw paste text)
-            v1_name: Optional display name for version 1
-            v2_name: Optional display name for version 2
-
-        Returns:
-            Dict with diff summary, changes per Pokemon, added/removed Pokemon
+        Detects changes to EVs/IVs (with explanations like "Moved 52 EVs from
+        Spe to Def"), nature, item, ability, Tera type, and moves. Returns a
+        diff summary, changes per Pokemon, and added/removed Pokemon.
         """
         pokepaste = PokePasteClient()
 

@@ -1,20 +1,36 @@
-"""Stat calculator for Pokemon Champions VGC (Reg MA, level 50).
+"""Stat calculator for Pokemon Champions VGC (Reg MA/MB, level 50).
 
 Champions uses Stat Points (SPs) instead of EVs:
 - 0-32 per stat, 66 total budget across all six stats
-- Natures and IVs still apply (same 25 natures, 0-31 IVs)
+- Natures ("Stat Alignments" in-game) apply the standard +10%/-10%
+- IVs do not exist in Champions: every Pokemon behaves as if it has 31 IVs
+  in all six stats, and they cannot be lowered (no 0-Spe Trick Room or
+  0-Atk confusion tech). The `iv` parameters below default to 31 and should
+  stay there for real Champions builds; they exist only for formula parity.
 - Damage formula is otherwise identical to mainline Gen 9
 
-Formula equivalence
--------------------
-We model 1 SP as "8 EVs of effectiveness". The mainline EV slot in the stat
-formula is `EV/4`, so substituting SP*8 yields `SP*2`. This places SP=32 at
-EV-equivalent 256 (a hair above the 252 mainline cap), which matches
-observed values from the NCP calculator.
+Formula
+-------
+Bulbapedia (https://bulbapedia.bulbagarden.net/wiki/Stat) gives the official
+Champions closed form at level 50:
 
-Level-50 formulas:
-- HP: floor((2 * Base + IV + 2 * SP) * 0.5 + 60)
-- Other: floor((floor((2 * Base + IV + 2 * SP) * 0.5) + 5) * Nature)
+    HP   = Base + SP + 75
+    Stat = floor((Base + SP + 20) * Alignment)     Alignment in {0.9, 1.0, 1.1}
+
+This is bit-for-bit identical to substituting `SP*2` into the `floor(EV/4)`
+slot of the mainline Gen 3+ formula with IV=31 (2*Base+31 is odd, so
+floor((2B+31+2n)*0.5) = B+15+n). Equivalences that follow:
+- 1 SP = +1 pre-nature stat point = 8 EVs of effectiveness at level 50
+- 32 SP is EXACTLY 252 EVs (252 and 256 EVs floor to the same stat)
+- Pokemon HOME transfer conversion: SP = (EVs + 4) / 8
+- 66 SP total ~= 528 EV-equivalent, slightly above mainline's 508
+
+Parity check: Flutter Mane (base 135 Spe), Timid, 32 SP ->
+floor((135+32+20) * 1.1) = 205, identical to mainline Timid 252 Spe.
+
+Generalized formulas used here (any level, IV kept for parity testing):
+- HP: floor((2*Base + IV + 2*SP) * Level/100 + Level + 10)
+- Other: floor((floor((2*Base + IV + 2*SP) * Level/100) + 5) * Nature)
 """
 
 import math

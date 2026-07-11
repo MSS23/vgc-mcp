@@ -1,8 +1,10 @@
 """MCP tools for interactive help and guidance."""
 
-from typing import Optional
+from typing import Annotated, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.config import logger
 from vgc_mcp_core.utils.errors import api_error
@@ -11,16 +13,22 @@ from vgc_mcp_core.utils.errors import api_error
 def register_help_tools(mcp: FastMCP):
     """Register help and guidance tools."""
 
-    @mcp.tool()
-    async def get_help(topic: Optional[str] = None) -> dict:
-        """
-        Get help on using this tool. Shows available commands and examples.
+    @mcp.tool(
+        title="Get Help",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def get_help(
+        topic: Annotated[Optional[str], Field(description="Optional specific topic to get help on: 'damage', 'team building', or 'speed'. Omit for the main help menu.")] = None
+    ) -> dict:
+        """Get help on using this server. Shows available commands and examples.
 
-        Args:
-            topic: Optional specific topic to get help on (e.g., "damage", "team building", "speed")
-
-        Returns:
-            Help menu with available commands and examples
+        Returns the main help menu, or a topic-specific help page when a topic
+        is given.
         """
         try:
             if topic is None:

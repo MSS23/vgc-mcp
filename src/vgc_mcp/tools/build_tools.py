@@ -7,9 +7,11 @@ These tools enable state management for Pokemon builds:
 - Returns JSON state (rendered as tables by the agent per presentation rules)
 """
 
-from typing import Optional
+from typing import Annotated, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.calc.champions_optimization import validate_sp_allocation
@@ -44,38 +46,37 @@ def register_build_tools(
     This is the non-UI version that returns JSON state instead of HTML cards.
     """
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Create Pokemon Build",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=True,
+        ),
+    )
     async def create_build(
-        pokemon_name: str,
-        nature: str = "Serious",
-        ability: Optional[str] = None,
-        item: Optional[str] = None,
-        tera_type: Optional[str] = None,
-        move1: Optional[str] = None,
-        move2: Optional[str] = None,
-        move3: Optional[str] = None,
-        move4: Optional[str] = None,
-        hp_evs: int = 0,
-        atk_evs: int = 0,
-        def_evs: int = 0,
-        spa_evs: int = 0,
-        spd_evs: int = 0,
-        spe_evs: int = 0
+        pokemon_name: Annotated[str, Field(description="Name of the Pokemon (e.g. 'flutter-mane')", min_length=1)],
+        nature: Annotated[str, Field(description="Pokemon's nature (e.g. 'Adamant', 'Timid')")] = "Serious",
+        ability: Annotated[Optional[str], Field(description="Selected ability (defaults to the Pokemon's first ability)")] = None,
+        item: Annotated[Optional[str], Field(description="Held item")] = None,
+        tera_type: Annotated[Optional[str], Field(description="Tera type (defaults to the Pokemon's primary type)")] = None,
+        move1: Annotated[Optional[str], Field(description="First move")] = None,
+        move2: Annotated[Optional[str], Field(description="Second move")] = None,
+        move3: Annotated[Optional[str], Field(description="Third move")] = None,
+        move4: Annotated[Optional[str], Field(description="Fourth move")] = None,
+        hp_evs: Annotated[int, Field(ge=0, le=252, description="HP EVs (0-252); in Champions sessions interpreted as Stat Points (EV-scale values >32 auto-convert, 1 SP = 8 EVs)")] = 0,
+        atk_evs: Annotated[int, Field(ge=0, le=252, description="Attack EVs (0-252); in Champions sessions interpreted as Stat Points (EV-scale values >32 auto-convert, 1 SP = 8 EVs)")] = 0,
+        def_evs: Annotated[int, Field(ge=0, le=252, description="Defense EVs (0-252); in Champions sessions interpreted as Stat Points (EV-scale values >32 auto-convert, 1 SP = 8 EVs)")] = 0,
+        spa_evs: Annotated[int, Field(ge=0, le=252, description="Special Attack EVs (0-252); in Champions sessions interpreted as Stat Points (EV-scale values >32 auto-convert, 1 SP = 8 EVs)")] = 0,
+        spd_evs: Annotated[int, Field(ge=0, le=252, description="Special Defense EVs (0-252); in Champions sessions interpreted as Stat Points (EV-scale values >32 auto-convert, 1 SP = 8 EVs)")] = 0,
+        spe_evs: Annotated[int, Field(ge=0, le=252, description="Speed EVs (0-252); in Champions sessions interpreted as Stat Points (EV-scale values >32 auto-convert, 1 SP = 8 EVs)")] = 0
     ) -> dict:
-        """
-        Create a Pokemon build with state tracking.
+        """Create a Pokemon build with state tracking.
 
-        Args:
-            pokemon_name: Name of the Pokemon
-            nature: Pokemon's nature
-            ability: Selected ability
-            item: Held item
-            tera_type: Tera type
-            move1-move4: The four moves
-            hp_evs through spe_evs: EV spread
-
-        Returns:
-            Build state with build_id for future reference
+        Returns the build state with a build_id for future reference. In a
+        Champions (Reg MA) session the investment is stored as Stat Points
+        and validated against the 32-per-stat / 66-total caps.
         """
         try:
             is_champions = _detect_champions(pokemon_name)
@@ -168,37 +169,32 @@ def register_build_tools(
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Modify Pokemon Build",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def modify_build(
-        pokemon_name: str,
-        nature: Optional[str] = None,
-        ability: Optional[str] = None,
-        item: Optional[str] = None,
-        tera_type: Optional[str] = None,
-        hp_evs: Optional[int] = None,
-        atk_evs: Optional[int] = None,
-        def_evs: Optional[int] = None,
-        spa_evs: Optional[int] = None,
-        spd_evs: Optional[int] = None,
-        spe_evs: Optional[int] = None
+        pokemon_name: Annotated[str, Field(description="Name of the Pokemon build to modify", min_length=1)],
+        nature: Annotated[Optional[str], Field(description="New nature (if changing)")] = None,
+        ability: Annotated[Optional[str], Field(description="New ability (if changing)")] = None,
+        item: Annotated[Optional[str], Field(description="New item (if changing)")] = None,
+        tera_type: Annotated[Optional[str], Field(description="New tera type (if changing)")] = None,
+        hp_evs: Annotated[Optional[int], Field(ge=0, le=252, description="New HP EVs (if changing); in Champions sessions these are Stat Points, EV-scale values >32 auto-convert (1 SP = 8 EVs)")] = None,
+        atk_evs: Annotated[Optional[int], Field(ge=0, le=252, description="New Attack EVs (if changing); in Champions sessions these are Stat Points, EV-scale values >32 auto-convert (1 SP = 8 EVs)")] = None,
+        def_evs: Annotated[Optional[int], Field(ge=0, le=252, description="New Defense EVs (if changing); in Champions sessions these are Stat Points, EV-scale values >32 auto-convert (1 SP = 8 EVs)")] = None,
+        spa_evs: Annotated[Optional[int], Field(ge=0, le=252, description="New Special Attack EVs (if changing); in Champions sessions these are Stat Points, EV-scale values >32 auto-convert (1 SP = 8 EVs)")] = None,
+        spd_evs: Annotated[Optional[int], Field(ge=0, le=252, description="New Special Defense EVs (if changing); in Champions sessions these are Stat Points, EV-scale values >32 auto-convert (1 SP = 8 EVs)")] = None,
+        spe_evs: Annotated[Optional[int], Field(ge=0, le=252, description="New Speed EVs (if changing); in Champions sessions these are Stat Points, EV-scale values >32 auto-convert (1 SP = 8 EVs)")] = None
     ) -> dict:
-        """
-        Modify an existing Pokemon build.
+        """Modify an existing Pokemon build.
 
-        Can be called with just the changes you want to make.
-
-        Args:
-            pokemon_name: Name of Pokemon to modify
-            nature: New nature (if changing)
-            ability: New ability (if changing)
-            item: New item (if changing)
-            tera_type: New tera type (if changing)
-            hp_evs through spe_evs: New EVs (if changing). In a Champions
-                session these are Stat Points; EV-scale values (any stat > 32)
-                are auto-converted (1 SP = 8 EVs).
-
-        Returns:
-            Updated build state
+        Can be called with just the changes you want to make; unspecified
+        fields keep their current values. Returns the updated build state.
         """
         try:
             sp_conversion_note = None
@@ -292,25 +288,24 @@ def register_build_tools(
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Change Build Move",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def change_move(
-        pokemon_name: str,
-        old_move: str,
-        new_move: str
+        pokemon_name: Annotated[str, Field(description="Name of the Pokemon build to modify", min_length=1)],
+        old_move: Annotated[str, Field(description="Move to replace", min_length=1)],
+        new_move: Annotated[str, Field(description="New move to use", min_length=1)]
     ) -> dict:
-        """
-        Change a specific move on a Pokemon build.
+        """Change a specific move on a Pokemon build.
 
-        User-friendly wrapper for modifying moves. Finds the old move
-        and replaces it with the new one.
-
-        Args:
-            pokemon_name: Name of Pokemon to modify
-            old_move: Move to replace
-            new_move: New move to use
-
-        Returns:
-            Updated build state
+        User-friendly wrapper for modifying moves: finds the old move and
+        replaces it with the new one. Returns the updated move list.
         """
         try:
             build = build_manager.get_build_by_name(pokemon_name)
@@ -337,13 +332,20 @@ def register_build_tools(
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="List Pokemon Builds",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def list_builds() -> dict:
-        """
-        List all active Pokemon builds in the current session.
+        """List all active Pokemon builds in the current session.
 
-        Returns:
-            List of builds with pokemon name, item, and nature
+        Returns each build's Pokemon name, item, and nature, plus the
+        currently active Pokemon.
         """
         builds = build_manager.list_builds()
         active = build_manager.active_pokemon_name
@@ -355,18 +357,22 @@ def register_build_tools(
             "count": len(builds),
         }
 
-    @mcp.tool()
-    async def get_build_state(pokemon_name: str) -> dict:
-        """
-        Get the current state of a Pokemon build.
+    @mcp.tool(
+        title="Get Build State",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def get_build_state(
+        pokemon_name: Annotated[str, Field(description="Name of the Pokemon build to fetch", min_length=1)]
+    ) -> dict:
+        """Get the current state of a Pokemon build.
 
-        Useful for debugging or exporting build details.
-
-        Args:
-            pokemon_name: Name of Pokemon to get
-
-        Returns:
-            Full build state including EVs, nature, moves, etc.
+        Useful for debugging or exporting build details. Returns the full
+        build state including EVs (or Stat Points), nature, and moves.
         """
         build = build_manager.get_build_by_name(pokemon_name)
         if not build:

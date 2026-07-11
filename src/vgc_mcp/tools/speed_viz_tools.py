@@ -1,8 +1,10 @@
 """MCP tools for speed tier visualization."""
 
-from typing import Dict, List, Optional
+from typing import Annotated, Dict, List, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
@@ -19,24 +21,24 @@ from vgc_mcp_core.utils.errors import api_error
 def register_speed_viz_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[SmogonStatsClient]):
     """Register speed tier visualization tools."""
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Visualize Team Speed Tiers",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def visualize_team_speed_tiers(
-        team_pokemon: List[Dict],
-        include_weather: bool = True,
-        include_tailwind: bool = True,
-        format: str = "reg_h"
+        team_pokemon: Annotated[List[Dict], Field(description="List of Pokemon dicts, each with 'name' and optional 'nature', 'evs', 'item'")],
+        include_weather: Annotated[bool, Field(description="Include weather speed modifiers")] = True,
+        include_tailwind: Annotated[bool, Field(description="Include Tailwind (2x) speed tiers")] = True,
+        format: Annotated[str, Field(description="VGC format (e.g. 'reg_h')")] = "reg_h"
     ) -> dict:
-        """
-        Generate speed tier chart with your team highlighted.
+        """Generate a speed tier chart comparing your team against common meta Pokemon.
 
-        Args:
-            team_pokemon: List of dicts with name, nature, evs, item
-            include_weather: Include weather speed modifiers
-            include_tailwind: Include Tailwind speed tiers
-            format: VGC format
-
-        Returns:
-            Speed tier chart with team highlighted
+        Returns team and meta speeds plus a markdown chart with your team highlighted.
         """
         try:
             # Calculate speeds for team Pokemon

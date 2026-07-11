@@ -2,9 +2,11 @@
 
 import asyncio
 import logging
-from typing import Optional
+from typing import Annotated, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
@@ -189,49 +191,56 @@ def register_bulk_calc_tools(
     global _smogon_client
     _smogon_client = smogon
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Calculate Bulk Offensive Damage",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def calculate_bulk_offensive_calcs(
-        attacker_name: str,
-        move_names: list[str],
-        defender_names: Optional[list[str]] = None,
-        scenarios: Optional[list[str]] = None,
-        attacker_item: Optional[str] = None,
-        attacker_ability: Optional[str] = None,
-        attacker_nature: Optional[str] = None,
-        attacker_evs: Optional[str] = None,
-        attacker_sps: Optional[str] = None,
-        attacker_tera_type: Optional[str] = None,
-        defender_tera_types: Optional[dict[str, str]] = None,
+        attacker_name: Annotated[str, Field(
+            description="Your Pokemon (e.g. 'urshifu-rapid-strike')",
+            min_length=1,
+        )],
+        move_names: Annotated[list[str], Field(
+            description="List of 1-4 moves to test (e.g. ['surging-strikes', 'close-combat'])",
+        )],
+        defender_names: Annotated[Optional[list[str]], Field(
+            description="Defenders to test against (max 30, e.g. ['incineroar', 'rillaboom']). If not specified, auto-fetches top 25 Pokemon by Smogon usage.",
+        )] = None,
+        scenarios: Annotated[Optional[list[str]], Field(
+            description="Scenario names to test: 'normal', 'tera', 'rain', 'sun', 'rain_tera', 'sun_tera', 'intimidate', 'helping_hand'. Default: ['normal']",
+        )] = None,
+        attacker_item: Annotated[Optional[str], Field(
+            description="Attacker's held item (auto-fetched from Smogon if not specified)",
+        )] = None,
+        attacker_ability: Annotated[Optional[str], Field(
+            description="Attacker's ability (auto-fetched from Smogon if not specified)",
+        )] = None,
+        attacker_nature: Annotated[Optional[str], Field(
+            description="Attacker's nature (auto-fetched from Smogon if not specified)",
+        )] = None,
+        attacker_evs: Annotated[Optional[str], Field(
+            description="Attacker's EVs in 'HP/Atk/Def/SpA/SpD/Spe' format, e.g. '4/252/0/0/0/252' (mainline only)",
+        )] = None,
+        attacker_sps: Annotated[Optional[str], Field(
+            description="Champions (Reg MA) only. Attacker Stat Points in 'HP/Atk/Def/SpA/SpD/Spe' format (0-32 per stat, 66 total), e.g. '0/0/0/32/0/32'. Ignored outside a Champions session.",
+        )] = None,
+        attacker_tera_type: Annotated[Optional[str], Field(
+            description="Attacker's Tera type (required for 'tera' and '*_tera' scenarios)",
+        )] = None,
+        defender_tera_types: Annotated[Optional[dict[str, str]], Field(
+            description="Map of defender name to their Tera type (e.g. {'incineroar': 'water', 'rillaboom': 'fire'})",
+        )] = None,
     ) -> dict:
-        """
-        Run bulk offensive damage calculations: 1 attacker × N moves × M defenders × K scenarios.
+        """Run bulk offensive damage calculations: 1 attacker x N moves x M defenders x K scenarios.
 
-        Replaces running dozens of individual damage calcs. Returns structured results
-        with calc strings, KO counts, and markdown tables per scenario.
-
-        Args:
-            attacker_name: Your Pokemon (e.g., "urshifu-rapid-strike")
-            move_names: List of 1-4 moves to test
-                (e.g., ["surging-strikes", "close-combat"])
-            defender_names: List of defenders to test against
-                (e.g., ["incineroar", "rillaboom"]).
-                If not specified, auto-fetches top 25 Pokemon by Smogon usage.
-            scenarios: List of scenario names to test. Options: "normal", "tera", "rain", "sun",
-                       "rain_tera", "sun_tera", "intimidate", "helping_hand". Default: ["normal"]
-            attacker_item: Attacker's held item (auto-fetched from Smogon if not specified)
-            attacker_ability: Attacker's ability (auto-fetched from Smogon if not specified)
-            attacker_nature: Attacker's nature (auto-fetched from Smogon if not specified)
-            attacker_evs: Attacker's EVs in "HP/Atk/Def/SpA/SpD/Spe" format, e.g. "4/252/0/0/0/252"
-                (mainline only)
-            attacker_sps: Champions (Reg MA) only. Attacker Stat Points in
-                "HP/Atk/Def/SpA/SpD/Spe" format (0-32 per stat, 66 total),
-                e.g. "0/0/0/32/0/32". Ignored outside a Champions session.
-            attacker_tera_type: Attacker's Tera type (required for "tera" and "*_tera" scenarios)
-            defender_tera_types: Map of defender name to their Tera type
-                (e.g., {"incineroar": "water", "rillaboom": "fire"})
-
-        Returns:
-            Structured results with per-scenario markdown tables, calc strings, and KO summary
+        Replaces running dozens of individual damage calcs. Returns structured
+        results with per-scenario markdown tables, Showdown-style calc strings,
+        and OHKO/2HKO counts.
         """
         try:
             if len(move_names) > 4:
@@ -417,48 +426,62 @@ def register_bulk_calc_tools(
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Export Damage Report",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def export_damage_report(
-        attacker_name: str,
-        move_names: list[str],
-        defender_names: Optional[list[str]] = None,
-        format: str = "excel",
-        scenarios: Optional[list[str]] = None,
-        attacker_item: Optional[str] = None,
-        attacker_ability: Optional[str] = None,
-        attacker_nature: Optional[str] = None,
-        attacker_evs: Optional[str] = None,
-        attacker_sps: Optional[str] = None,
-        attacker_tera_type: Optional[str] = None,
-        defender_tera_types: Optional[dict[str, str]] = None,
-        output_path: Optional[str] = None,
+        attacker_name: Annotated[str, Field(
+            description="Your Pokemon (e.g. 'urshifu-rapid-strike')",
+            min_length=1,
+        )],
+        move_names: Annotated[list[str], Field(
+            description="List of 1-4 moves to test",
+        )],
+        defender_names: Annotated[Optional[list[str]], Field(
+            description="Defenders to test against (max 30). If not specified, auto-fetches top 25 by Smogon usage.",
+        )] = None,
+        format: Annotated[str, Field(
+            description="Output format: 'excel' for .xlsx or 'pdf' for .pdf",
+        )] = "excel",
+        scenarios: Annotated[Optional[list[str]], Field(
+            description="Scenario names (default: ['normal']). See calculate_bulk_offensive_calcs for options.",
+        )] = None,
+        attacker_item: Annotated[Optional[str], Field(
+            description="Attacker's held item (auto-fetched if not specified)",
+        )] = None,
+        attacker_ability: Annotated[Optional[str], Field(
+            description="Attacker's ability (auto-fetched if not specified)",
+        )] = None,
+        attacker_nature: Annotated[Optional[str], Field(
+            description="Attacker's nature (auto-fetched if not specified)",
+        )] = None,
+        attacker_evs: Annotated[Optional[str], Field(
+            description="Attacker's EVs in 'HP/Atk/Def/SpA/SpD/Spe' format (mainline only)",
+        )] = None,
+        attacker_sps: Annotated[Optional[str], Field(
+            description="Champions (Reg MA) only. Attacker Stat Points in 'HP/Atk/Def/SpA/SpD/Spe' format (0-32 per stat, 66 total)",
+        )] = None,
+        attacker_tera_type: Annotated[Optional[str], Field(
+            description="Attacker's Tera type",
+        )] = None,
+        defender_tera_types: Annotated[Optional[dict[str, str]], Field(
+            description="Map of defender name to their Tera type",
+        )] = None,
+        output_path: Annotated[Optional[str], Field(
+            description="Output file path. Auto-generated if not specified.",
+        )] = None,
     ) -> dict:
-        """
-        Export bulk damage calculations as an Excel spreadsheet or PDF file.
+        """Export bulk damage calculations as an Excel spreadsheet or PDF file on disk.
 
-        Generates a color-coded report (green=OHKO, yellow=2HKO, orange=3HKO, red=4HKO+)
-        with one sheet/page per scenario.
-
-        Args:
-            attacker_name: Your Pokemon (e.g., "urshifu-rapid-strike")
-            move_names: List of 1-4 moves to test
-            defender_names: List of defenders to test against.
-                If not specified, auto-fetches top 25 by Smogon usage.
-            format: Output format - "excel" for .xlsx or "pdf" for .pdf
-            scenarios: Scenario names (default: ["normal"]).
-                See calculate_bulk_offensive_calcs for options.
-            attacker_item: Attacker's held item (auto-fetched if not specified)
-            attacker_ability: Attacker's ability (auto-fetched if not specified)
-            attacker_nature: Attacker's nature (auto-fetched if not specified)
-            attacker_evs: Attacker's EVs in "HP/Atk/Def/SpA/SpD/Spe" format (mainline only)
-            attacker_sps: Champions (Reg MA) only. Attacker Stat Points in
-                "HP/Atk/Def/SpA/SpD/Spe" format (0-32 per stat, 66 total)
-            attacker_tera_type: Attacker's Tera type
-            defender_tera_types: Map of defender name to their Tera type
-            output_path: Optional output file path. Auto-generated if not specified.
-
-        Returns:
-            Dict with file_path and total_calcs
+        Generates a color-coded report (green=OHKO, yellow=2HKO, orange=3HKO,
+        red=4HKO+) with one sheet/page per scenario. Returns the file path and
+        total calc count.
         """
         try:
             if format not in ("excel", "pdf"):

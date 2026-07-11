@@ -5,9 +5,11 @@ the top threats in the metagame, including damage calculations
 and matchup assessments.
 """
 
-from typing import Optional
+from typing import Annotated, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.calc.conversion import evs_to_sps_spread
 from vgc_mcp_core.calc.damage import format_percent
@@ -159,40 +161,41 @@ def _format_results_table(threat_results: list[ThreatDamageResult]) -> dict:
 def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
     """Register meta threat analysis tools with the MCP server."""
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Analyze Spread vs Meta Threats",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def analyze_spread_vs_threats(
-        pokemon_name: str,
-        nature: str,
-        hp_evs: int = 0,
-        atk_evs: int = 0,
-        def_evs: int = 0,
-        spa_evs: int = 0,
-        spd_evs: int = 0,
-        spe_evs: int = 0,
-        top_threats: int = 10
+        pokemon_name: Annotated[str, Field(
+            description="Your Pokemon's name (e.g. 'flutter-mane')",
+            min_length=1,
+        )],
+        nature: Annotated[str, Field(
+            description="Nature (e.g. 'adamant', 'timid')",
+            min_length=1,
+        )],
+        hp_evs: Annotated[int, Field(ge=0, le=252, description="HP EVs (0-252, default 0 — specify your full spread for accurate results); Stat Points 0-32 in Champions sessions")] = 0,
+        atk_evs: Annotated[int, Field(ge=0, le=252, description="Attack EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0,
+        def_evs: Annotated[int, Field(ge=0, le=252, description="Defense EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0,
+        spa_evs: Annotated[int, Field(ge=0, le=252, description="Special Attack EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0,
+        spd_evs: Annotated[int, Field(ge=0, le=252, description="Special Defense EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0,
+        spe_evs: Annotated[int, Field(ge=0, le=252, description="Speed EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0,
+        top_threats: Annotated[int, Field(ge=1, description="Number of top meta threats to analyze")] = 10,
     ) -> dict:
-        """
-        Analyze a spread against the top meta threats.
+        """Analyze a spread against the top meta threats.
 
-        Checks damage calculations in both directions against the most
-        used Pokemon in the current metagame.
+        Runs damage calculations in both directions against the most used
+        Pokemon in the current metagame and returns matchup verdicts, a
+        matchup table, OHKO lists, and spread suggestions.
 
-        NOTE: EVs default to 0 if not specified. For accurate results,
-        specify your full EV spread. Common spreads are 252/252/4.
-
-        Args:
-            pokemon_name: Your Pokemon's name
-            nature: Nature (e.g., "Adamant", "Timid")
-            hp_evs: HP EVs (0-252, default 0 - specify for accurate results)
-            atk_evs: Attack EVs (0-252, default 0)
-            def_evs: Defense EVs (0-252, default 0)
-            spa_evs: Special Attack (Sp. Atk) EVs (0-252, default 0)
-            spd_evs: Special Defense (Sp. Def) EVs (0-252, default 0)
-            spe_evs: Speed EVs (0-252, default 0)
-            top_threats: Number of top threats to analyze (default 10)
-
-        Returns:
-            Comprehensive threat analysis with matchup verdicts
+        NOTE: EVs default to 0 — specify the full spread (e.g. 252/252/4) for
+        accurate results. In a Champions (Reg MA) session your Pokemon is built
+        on the Stat Point grain; the opposing meta threats stay mainline.
         """
         # Validate nature first
         try:
@@ -419,23 +422,26 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
             "meta_info": meta_info
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Analyze Stored Pokemon vs Meta Threats",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def analyze_stored_pokemon_threats(
-        pokemon_reference: Optional[str] = None,
-        top_threats: int = 10
+        pokemon_reference: Annotated[Optional[str], Field(
+            description="Reference to a stored Pokemon (e.g. 'my Entei'); uses the most recently stored Pokemon if omitted",
+        )] = None,
+        top_threats: Annotated[int, Field(ge=1, description="Number of top meta threats to analyze")] = 10,
     ) -> dict:
-        """
-        Analyze a stored Pokemon's spread against top meta threats.
+        """Analyze a stored Pokemon's spread against the top meta threats.
 
-        Uses a Pokemon previously stored with set_my_pokemon.
-
-        Args:
-            pokemon_reference: Reference to stored Pokemon (e.g., "my Entei"),
-                              or None to use most recently stored
-            top_threats: Number of top threats to analyze (default 10)
-
-        Returns:
-            Comprehensive threat analysis
+        Uses a Pokemon previously stored with set_my_pokemon and returns the
+        same comprehensive threat analysis as analyze_spread_vs_threats
+        (matchup verdicts, matchup table, OHKO lists, suggestions).
         """
         pokemon = team_manager.get_pokemon_context(pokemon_reference)
         if not pokemon:
@@ -604,16 +610,39 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
             "meta_info": meta_info
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Check Survival Benchmark",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def check_survival_benchmark(
-        pokemon_name: str,
-        nature: str,
-        hp_evs: int,
-        def_evs: int,
-        spd_evs: int,
-        threat_pokemon: str,
-        threat_move: str,
-        survival_threshold: float = 100.0
+        pokemon_name: Annotated[str, Field(
+            description="Your Pokemon's name",
+            min_length=1,
+        )],
+        nature: Annotated[str, Field(
+            description="Your Pokemon's nature (e.g. 'bold', 'careful')",
+            min_length=1,
+        )],
+        hp_evs: Annotated[int, Field(ge=0, le=252, description="Exact HP EVs (0-252); mapped to the Stat Point grain in Champions sessions")],
+        def_evs: Annotated[int, Field(ge=0, le=252, description="Exact Defense EVs (0-252); mapped to the Stat Point grain in Champions sessions")],
+        spd_evs: Annotated[int, Field(ge=0, le=252, description="Exact Special Defense EVs (0-252); mapped to the Stat Point grain in Champions sessions")],
+        threat_pokemon: Annotated[str, Field(
+            description="Attacking Pokemon's name",
+            min_length=1,
+        )],
+        threat_move: Annotated[str, Field(
+            description="Attacking move name (e.g. 'surging-strikes')",
+            min_length=1,
+        )],
+        survival_threshold: Annotated[float, Field(
+            ge=0, le=100,
+            description="Required survival % (default 100). 93.75 is the standard 'survive max roll only' benchmark",
+        )] = 100.0,
     ) -> dict:
         """⚠️ NARROW USE ONLY. Prefer `calculate_damage_output` for general damage/survival.
 
@@ -625,18 +654,8 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
         abilities, partial info — use `calculate_damage_output` (the primary
         damage tool).
 
-        Args:
-            pokemon_name: Your Pokemon
-            nature: Your nature
-            hp_evs / def_evs / spd_evs: exact EV breakdown
-            threat_pokemon: Attacking Pokemon
-            threat_move: Move name
-            survival_threshold: Required survival % (default 100). 93.75 is
-                the standard "survive max roll only" benchmark.
-
-        Returns:
-            Pass/fail vs threshold with damage range. For nuanced calcs,
-            use `calculate_damage_output` instead.
+        Returns pass/fail vs the threshold with damage range, survival
+        probability, and HP remaining.
         """
         # Validate nature first
         try:
@@ -888,36 +907,51 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
 
         return result
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Find Survival EVs (Meta Threat)",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def find_survival_evs_meta(
-        pokemon_name: str,
-        nature: str,
-        threat_pokemon: str,
-        threat_move: str,
-        is_physical: Optional[bool] = None,
-        survival_threshold: float = 100.0
+        pokemon_name: Annotated[str, Field(
+            description="Your Pokemon's name",
+            min_length=1,
+        )],
+        nature: Annotated[str, Field(
+            description="Your Pokemon's nature",
+            min_length=1,
+        )],
+        threat_pokemon: Annotated[str, Field(
+            description="Attacking Pokemon's name",
+            min_length=1,
+        )],
+        threat_move: Annotated[str, Field(
+            description="Attacking move name",
+            min_length=1,
+        )],
+        is_physical: Annotated[Optional[bool], Field(
+            description="Override move category detection (True = physical, False = special); auto-detected from the move if omitted",
+        )] = None,
+        survival_threshold: Annotated[float, Field(
+            ge=0, le=100,
+            description="Required survival % (0-100): 100 = survive all rolls (default), 75 = 'most of the time', 50 = 'sometimes'",
+        )] = 100.0,
     ) -> dict:
-        """
-        Find minimum bulk EVs needed to survive a specific attack (meta-threat variant).
+        """Find minimum bulk EVs needed to survive a specific attack (meta-threat variant).
 
         This is the meta-threat-aware version. The canonical survival EV finder
         is `find_survival_evs` in damage_tools.py — prefer that for general use.
         Use this one when you specifically want the meta-threat module's
         Smogon-spread defaults and survival_threshold semantics.
 
-        Args:
-            pokemon_name: Your Pokemon
-            nature: Your nature
-            threat_pokemon: Attacking Pokemon
-            threat_move: Move name
-            is_physical: Override move category detection
-            survival_threshold: Required survival percentage (0-100).
-                - 100 = must survive all rolls (default, "always survives")
-                - 75 = survive 75% of rolls ("most of the time")
-                - 50 = survive 50% of rolls ("sometimes")
-
-        Returns:
-            Minimum HP and defensive EVs needed to achieve the survival threshold
+        Returns the minimum HP and defensive investment needed to achieve the
+        survival threshold (Stat Points on the 0-32/66 grain in Champions
+        sessions, EVs on the 0-252/508 grain otherwise), accounting for Ruin
+        abilities on the attacker.
         """
         # Validate nature first
         try:

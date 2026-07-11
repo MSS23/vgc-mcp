@@ -1,8 +1,10 @@
 """MCP tools for stat calculations."""
 
-from typing import Optional
+from typing import Annotated, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.calc.stats import (
@@ -108,36 +110,37 @@ def _champions_stats_response(
 def register_stats_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
     """Register stat calculation tools with the MCP server."""
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Calculate Pokemon Stats",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def get_pokemon_stats(
-        pokemon_name: str,
-        nature: str = "serious",
-        hp_evs: int = 0,
-        atk_evs: int = 0,
-        def_evs: int = 0,
-        spa_evs: int = 0,
-        spd_evs: int = 0,
-        spe_evs: int = 0,
-        level: int = 50
+        pokemon_name: Annotated[str, Field(
+            description="Pokemon name (e.g. 'flutter-mane', 'urshifu-rapid-strike')",
+            min_length=1,
+        )],
+        nature: Annotated[str, Field(
+            description="Nature (e.g. 'timid', 'jolly', 'modest', 'adamant')",
+        )] = "serious",
+        hp_evs: Annotated[int, Field(ge=0, le=252, description="HP EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0,
+        atk_evs: Annotated[int, Field(ge=0, le=252, description="Attack EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0,
+        def_evs: Annotated[int, Field(ge=0, le=252, description="Defense EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0,
+        spa_evs: Annotated[int, Field(ge=0, le=252, description="Special Attack EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0,
+        spd_evs: Annotated[int, Field(ge=0, le=252, description="Special Defense EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0,
+        spe_evs: Annotated[int, Field(ge=0, le=252, description="Speed EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0,
+        level: Annotated[int, Field(ge=1, le=100, description="Pokemon level (VGC standard is 50)")] = 50,
     ) -> dict:
-        """
-        Calculate all stats for a Pokemon at level 50 (VGC standard).
+        """Calculate all six final stats for a Pokemon at level 50 (VGC standard).
 
-        Args:
-            pokemon_name: Pokemon name (e.g., "flutter-mane", "dragapult", "urshifu-rapid-strike")
-            nature: Pokemon's nature (e.g., "timid", "jolly", "modest", "adamant")
-            hp_evs: HP EVs (0-252)
-            atk_evs: Attack EVs (0-252)
-            def_evs: Defense EVs (0-252)
-            spa_evs: Special Attack EVs (0-252)
-            spd_evs: Special Defense EVs (0-252)
-            spe_evs: Speed EVs (0-252)
-            level: Pokemon level (default 50 for VGC)
+        Returns base stats, the investment used, final calculated stats, a
+        markdown summary table, and a Showdown paste when applicable.
 
-        Returns:
-            Dict with base stats, EVs, and calculated final stats
-
-        In a Pokemon Champions (Reg MA) session the same six inputs are
+        In a Pokemon Champions (Reg MA) session the six investment inputs are
         interpreted as Stat Points (0-32 per stat, 66 total) and stats use the
         SP formula (e.g. Flutter Mane 32 Spe SP -> 205 Speed).
         """
@@ -253,26 +256,25 @@ def register_stats_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 return pokemon_not_found_error(pokemon_name, suggestions if suggestions else None)
             return api_error("PokeAPI", str(e), is_retryable=True)
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Calculate Pokemon Speed",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def get_pokemon_speed(
-        pokemon_name: str,
-        nature: str = "serious",
-        speed_evs: int = 0,
-        speed_iv: int = 31,
-        level: int = 50
+        pokemon_name: Annotated[str, Field(description="Pokemon name", min_length=1)],
+        nature: Annotated[str, Field(
+            description="Nature affecting speed (+Spe: timid/jolly; -Spe: brave/quiet/relaxed/sassy)",
+        )] = "serious",
+        speed_evs: Annotated[int, Field(ge=0, le=252, description="Speed EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0,
+        speed_iv: Annotated[int, Field(ge=0, le=31, description="Speed IV (0-31)")] = 31,
+        level: Annotated[int, Field(ge=1, le=100, description="Pokemon level (VGC standard is 50)")] = 50,
     ) -> dict:
-        """
-        Calculate the Speed stat for a Pokemon.
-
-        Args:
-            pokemon_name: Pokemon name
-            nature: Nature affecting speed (+Spe: timid/jolly, -Spe: brave/quiet/relaxed/sassy)
-            speed_evs: Speed EVs (0-252)
-            speed_iv: Speed IV (0-31, default 31)
-            level: Pokemon level (default 50)
-
-        Returns:
-            Speed stat value with calculation details
+        """Calculate the Speed stat for a Pokemon, with min/max reference values.
 
         In a Pokemon Champions (Reg MA) session `speed_evs` is interpreted as
         Speed Stat Points (0-32) and Speed uses the SP formula (e.g. Flutter
@@ -293,9 +295,11 @@ def register_stats_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 if speed_evs > 32:
                     return invalid_evs_error("speed", speed_evs, f"Speed Stat Points ({speed_evs}) exceed maximum of 32")
 
-                speed = calculate_speed_sp(base_speed, speed_iv, speed_evs, level, parsed_nature)
+                # Champions has no IVs — every Pokemon behaves as 31 IVs in
+                # all stats, so min speed is Brave + 0 SP at IV 31.
+                speed = calculate_speed_sp(base_speed, 31, speed_evs, level, parsed_nature)
                 max_speed = calculate_speed_sp(base_speed, 31, 32, level, Nature.JOLLY)
-                min_speed = calculate_speed_sp(base_speed, 0, 0, level, Nature.BRAVE)
+                min_speed = calculate_speed_sp(base_speed, 31, 0, level, Nature.BRAVE)
 
                 table_lines = [
                     "| Metric           | Value                                      |",
@@ -304,10 +308,9 @@ def register_stats_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                     f"| Base Speed       | {base_speed}                               |",
                     f"| Nature           | {nature}                                   |",
                     f"| Speed SPs        | {speed_evs}                                |",
-                    f"| Speed IV         | {speed_iv}                                 |",
                     f"| Final Speed      | {speed}                                    |",
                     f"| Max (Jolly 32SP) | {max_speed}                                |",
-                    f"| Min (Brave 0 IV) | {min_speed}                                |",
+                    f"| Min (Brave 0SP)  | {min_speed}                                |",
                 ]
                 analysis_str = f"{pokemon_name} reaches {speed} Speed ({min_speed} min, {max_speed} max possible, Stat Points)"
 
@@ -317,11 +320,11 @@ def register_stats_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                     "nature": nature,
                     "format_system": "champions",
                     "sps": speed_evs,
-                    "iv": speed_iv,
+                    "note": "Champions has no IVs; all Pokemon act as 31 IV",
                     "calculated_speed": speed,
                     "reference": {
                         "max_speed_jolly_32sp": max_speed,
-                        "min_speed_brave_0iv_0sp": min_speed,
+                        "min_speed_brave_0sp": min_speed,
                     },
                     "summary_table": "\n".join(table_lines),
                     "analysis": analysis_str,

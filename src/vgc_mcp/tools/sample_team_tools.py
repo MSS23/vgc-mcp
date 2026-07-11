@@ -1,8 +1,10 @@
 """MCP tools for sample teams database."""
 
-from typing import Optional
+from typing import Annotated, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.data.sample_teams import (
     ALL_SAMPLE_TEAMS,
@@ -16,24 +18,33 @@ from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 def register_sample_team_tools(mcp: FastMCP):
     """Register sample team tools."""
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Get Sample Team",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def get_sample_team(
-        archetype: Optional[str] = None,
-        pokemon: Optional[str] = None,
-        regulation: Optional[str] = None,
-        difficulty: Optional[str] = None
+        archetype: Annotated[Optional[str], Field(
+            description="Team style filter: 'rain', 'sun', 'trick_room', 'hyper_offense', 'goodstuffs', or 'balance'",
+        )] = None,
+        pokemon: Annotated[Optional[str], Field(
+            description="Only return teams containing this Pokemon",
+        )] = None,
+        regulation: Annotated[Optional[str], Field(
+            description="VGC regulation filter (e.g. 'G', 'H')",
+        )] = None,
+        difficulty: Annotated[Optional[str], Field(
+            description="Difficulty filter: 'beginner', 'intermediate', or 'advanced'",
+        )] = None
     ) -> dict:
-        """
-        Get sample tournament-proven teams.
+        """Get sample tournament-proven teams matching the given filters.
 
-        Args:
-            archetype: Team style - "rain", "sun", "trick_room", "hyper_offense", "goodstuffs", "balance"
-            pokemon: Find teams containing this Pokemon
-            regulation: VGC regulation (e.g., "G", "H")
-            difficulty: "beginner", "intermediate", or "advanced"
-
-        Returns:
-            Sample teams with full Showdown pastes, descriptions, strengths/weaknesses
+        Returns teams with Showdown paste previews, descriptions, and
+        strengths/weaknesses. All filters are optional and combine.
         """
         teams = ALL_SAMPLE_TEAMS
 
@@ -63,14 +74,17 @@ def register_sample_team_tools(mcp: FastMCP):
             "teams": [_format_team(t) for t in teams]
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="List Sample Team Archetypes",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def list_sample_team_archetypes() -> dict:
-        """
-        List all available team archetypes in the sample database.
-
-        Returns:
-            List of archetypes with descriptions
-        """
+        """List all available team archetypes in the sample database, with descriptions."""
         archetype_info = {
             "rain": "Weather teams centered around Drizzle + Swift Swim/Water moves",
             "sun": "Weather teams with Drought/Orichalcum Pulse boosting Fire moves",
@@ -89,19 +103,22 @@ def register_sample_team_tools(mcp: FastMCP):
             "total_teams": len(ALL_SAMPLE_TEAMS)
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Get Sample Team Paste",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def get_team_paste(
-        team_name: str
+        team_name: Annotated[str, Field(
+            description="Name of the sample team (case-insensitive exact match)",
+            min_length=1,
+        )]
     ) -> dict:
-        """
-        Get the full Showdown paste for a sample team by name.
-
-        Args:
-            team_name: Name of the sample team
-
-        Returns:
-            Full Showdown-importable paste
-        """
+        """Get the full Showdown-importable paste for a sample team by name."""
         for team in ALL_SAMPLE_TEAMS:
             if team.name.lower() == team_name.lower():
                 return {
@@ -117,20 +134,30 @@ def register_sample_team_tools(mcp: FastMCP):
             available_teams=[t.name for t in ALL_SAMPLE_TEAMS],
         )
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Suggest Team for Playstyle",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def suggest_team_for_playstyle(
-        playstyle: str,
-        experience_level: str = "intermediate"
+        playstyle: Annotated[str, Field(
+            description=(
+                "How you like to play: 'aggressive', 'defensive', 'weather', "
+                "'speed_control', 'flexible', 'fast', or 'slow' (unknown values fall back to 'goodstuffs')"
+            ),
+        )],
+        experience_level: Annotated[str, Field(
+            description="'beginner', 'intermediate', or 'advanced'",
+        )] = "intermediate"
     ) -> dict:
-        """
-        Suggest a sample team based on your preferred playstyle.
+        """Suggest a sample team based on your preferred playstyle.
 
-        Args:
-            playstyle: How you like to play - "aggressive", "defensive", "weather", "speed_control", "flexible"
-            experience_level: "beginner", "intermediate", or "advanced"
-
-        Returns:
-            Recommended team(s) for your playstyle
+        Returns a recommended team plus up to two alternatives, preferring
+        teams that match the given experience level.
         """
         playstyle_map = {
             "aggressive": ["hyper_offense", "sun"],

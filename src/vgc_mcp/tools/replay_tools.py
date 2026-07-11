@@ -17,10 +17,12 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any, Optional
+from typing import Annotated, Any, Optional
 
 import httpx
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
@@ -190,17 +192,31 @@ def _identify(slot: str) -> tuple[str, str]:
 def register_replay_tools(mcp: FastMCP):
     """Showdown replay analysis tools."""
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Analyze Showdown Replay",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def analyze_replay(
-        replay_url: str,
-        deep: bool = False,
+        replay_url: Annotated[str, Field(
+            description=(
+                "Showdown replay URL, .json URL, or bare replay ID — e.g. "
+                "'https://replay.pokemonshowdown.com/<id>' or 'gen9vgc2024regh-1234567890'"
+            ),
+            min_length=1,
+        )],
+        deep: Annotated[bool, Field(
+            description=(
+                "If True, keep raw HP-tracked state per turn — useful to verify "
+                "'did this move actually KO?' without rerunning the damage formula"
+            ),
+        )] = False,
     ) -> dict:
         """Pull a public Showdown replay and produce a turn-by-turn breakdown.
-
-        Accepts any of:
-        - `https://replay.pokemonshowdown.com/<id>`
-        - `https://replay.pokemonshowdown.com/<id>.json`
-        - just the bare replay ID (e.g. `gen9vgc2024regh-1234567890`)
 
         Returns:
             * `meta` — players, format, winner, turn count
@@ -209,10 +225,6 @@ def register_replay_tools(mcp: FastMCP):
             * `key_events` — the moments worth coaching on (KOs, Tera uses,
               status applications, weather/TR setup, missed KOs)
             * `agent_instruction` — how to summarise this for the user
-
-        With `deep=True`, includes raw HP-tracked Pokémon state per turn —
-        useful for the agent to check "did this move actually KO?" without
-        rerunning the damage formula.
         """
         try:
             data = await _fetch_replay(replay_url)

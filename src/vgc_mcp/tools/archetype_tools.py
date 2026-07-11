@@ -13,9 +13,11 @@ Useful as input to game_plan, scouting, and matchup tools.
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Annotated, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.formats.showdown import ShowdownParseError, parse_showdown_team
 from vgc_mcp_core.team.manager import TeamManager
@@ -65,23 +67,30 @@ def _normalize(name: str) -> str:
 
 def register_archetype_tools(mcp: FastMCP, team_manager: Optional[TeamManager] = None):
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Classify Team Archetype",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def classify_team_archetype(
-        paste: Optional[str] = None,
-        pokemon_names: Optional[list[str]] = None,
+        paste: Annotated[Optional[str], Field(
+            description="Showdown team paste. Provide this OR pokemon_names.",
+        )] = None,
+        pokemon_names: Annotated[Optional[list[str]], Field(
+            description="List of 4-6 Pokemon names. Provide this OR paste.",
+        )] = None,
     ) -> dict:
-        """Classify a team's archetype + return its win condition + bring-3 patterns.
+        """Classify a team's archetype and return its win condition + bring-3 patterns.
 
-        Provide ONE of:
-            paste: a Showdown team paste
-            pokemon_names: a list of 4-6 Pokémon names
-
-        Returns:
-            * archetype: the most-confident label (e.g. "Sun Hyper Offense")
-            * confidence: 0.0-1.0
-            * triggers: which Pokémon triggered each rule
-            * win_condition: what the team is trying to accomplish
-            * recommended_brings: which 4 to bring vs broad opponent types
+        Rule-based: detects Trick Room, weather (Sun/Rain/Sand/Snow), Tailwind
+        Offense, Redirect, and Bulky Balance from signature Pokemon. Returns
+        the most-confident archetype label, a 0.0-1.0 confidence, the triggers
+        (which Pokemon fired each rule), the team's win condition, and
+        recommended brings vs broad opponent types.
         """
         names: list[str] = []
         if paste:

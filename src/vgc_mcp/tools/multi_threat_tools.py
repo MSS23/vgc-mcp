@@ -1,8 +1,10 @@
 """MCP tools for multi-threat bulk calculations."""
 
-from typing import Dict, List, Optional
+from typing import Annotated, Dict, List, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.calc.damage import calculate_damage
@@ -33,35 +35,30 @@ def _detect_champions(pokemon_name: Optional[str] = None) -> bool:
 def register_multi_threat_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon_client=None):
     """Register multi-threat bulk calculation tools with the MCP server."""
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Find Multi-Threat Bulk EVs",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def find_multi_threat_bulk_evs(
-        pokemon_name: str,
-        threats: List[Dict],
-        nature: str = "bold",
-        item: Optional[str] = None,
-        ability: Optional[str] = None,
-        target_survival_chance: float = 100.0
+        pokemon_name: Annotated[str, Field(description="Name of the Pokemon to optimize", min_length=1)],
+        threats: Annotated[List[Dict], Field(
+            description="List of threat dicts, each with 'name' (attacker Pokemon), 'move' (move name), and optional 'spread' (dict with nature, evs, item, ability; most common Smogon spread used if omitted)",
+        )],
+        nature: Annotated[str, Field(description="Nature for the defender")] = "bold",
+        item: Annotated[Optional[str], Field(description="Item for the defender")] = None,
+        ability: Annotated[Optional[str], Field(description="Ability for the defender (auto-detected if None)")] = None,
+        target_survival_chance: Annotated[float, Field(ge=0, le=100, description="Target survival % (100 = guaranteed survive)")] = 100.0,
     ) -> dict:
-        """
-        Find minimum EVs to survive multiple threats simultaneously.
+        """Find the minimum HP/Def/SpD EV distribution that survives multiple threats simultaneously.
 
-        This tool calculates the optimal HP and defensive EV distribution
-        that allows a Pokemon to survive all specified threats.
-
-        Args:
-            pokemon_name: Name of the Pokemon to optimize
-            threats: List of threat dicts, each with:
-                - name: Attacker Pokemon name
-                - move: Move name
-                - spread (optional): Dict with nature, evs, item, ability
-                    If not provided, uses most common Smogon spread
-            nature: Nature for the defender (default: "bold")
-            item: Item for the defender (optional)
-            ability: Ability for the defender (optional, auto-detected if None)
-            target_survival_chance: Target survival % (100 = guaranteed survive)
-
-        Returns:
-            Dict with recommended spread and survival results for each threat
+        Returns the recommended spread, a Showdown paste, and per-threat survival
+        results. In a Champions (Reg MA) session the defender is optimized on the
+        Stat Point grain (0-32 per stat, 66 total) instead of EVs.
         """
         try:
             # Fetch defender Pokemon data

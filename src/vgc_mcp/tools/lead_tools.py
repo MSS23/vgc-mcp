@@ -1,8 +1,10 @@
 """MCP tools for lead pair analysis."""
 
-from typing import List
+from typing import Annotated, List
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.config import logger
@@ -12,20 +14,26 @@ from vgc_mcp_core.utils.errors import ErrorCodes, api_error, error_response
 def register_lead_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
     """Register lead pair analysis tools."""
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Analyze Lead Pairs",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def analyze_lead_pairs(
-        team_pokemon: List[str],
-        format: str = "reg_h"
+        team_pokemon: Annotated[List[str], Field(
+            description="List of exactly 6 Pokemon names on your team",
+        )],
+        format: Annotated[str, Field(description="VGC format (e.g. 'reg_h')")] = "reg_h",
     ) -> dict:
-        """
-        Analyze and rank lead pair combinations for your team.
+        """Analyze and rank all 15 lead pair combinations for a 6-Pokemon team.
 
-        Args:
-            team_pokemon: List of your 6 Pokemon names
-            format: VGC format (default: "reg_h")
-
-        Returns:
-            Ranked lead pairs with synergy analysis
+        Scores each pair on type coverage, ability synergy (Fake Out,
+        Intimidate), and speed control, returning ranked pairs with a markdown
+        summary and detail on the top lead.
         """
         try:
             if len(team_pokemon) != 6:

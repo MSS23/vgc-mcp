@@ -1,8 +1,10 @@
 """MCP tools for tournament readiness checking."""
 
-from typing import Dict, List
+from typing import Annotated, Dict, List
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.config import logger
@@ -12,20 +14,28 @@ from vgc_mcp_core.utils.errors import ErrorCodes, api_error, error_response
 def register_readiness_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
     """Register tournament readiness checking tools."""
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Check Tournament Readiness",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def check_tournament_readiness(
-        team_pokemon: List[Dict],
-        format: str = "reg_h"
+        team_pokemon: Annotated[List[Dict], Field(
+            description="Exactly 6 Pokemon build dicts (name, nature, evs, item, ability, moves)",
+        )],
+        format: Annotated[str, Field(
+            description="VGC format (e.g. 'reg_h')",
+        )] = "reg_h"
     ) -> dict:
-        """
-        Comprehensive tournament readiness assessment.
+        """Comprehensive tournament readiness assessment for a full team of 6.
 
-        Args:
-            team_pokemon: List of dicts with Pokemon builds (name, nature, evs, item, ability, moves)
-            format: VGC format
-
-        Returns:
-            Readiness report with scores and recommendations
+        Scores legality, type coverage, speed control, meta coverage, and
+        synergy, then returns an overall letter rating with critical issues,
+        recommendations, and a markdown report.
         """
         try:
             if len(team_pokemon) != 6:

@@ -1,6 +1,10 @@
 """MCP tools for core building and team suggestions."""
 
+from typing import Annotated
+
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.api.smogon import SmogonStatsClient
 from vgc_mcp_core.team.core_builder import (
@@ -22,20 +26,25 @@ def register_core_tools(
 ):
     """Register core building tools with the MCP server."""
 
-    @mcp.tool()
-    async def suggest_partners_with_synergy(pokemon_name: str, limit: int = 10) -> dict:
-        """
-        Suggest Pokemon that pair well with a given Pokemon (enhanced analysis).
+    @mcp.tool(
+        title="Suggest Partners With Synergy",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
+    async def suggest_partners_with_synergy(
+        pokemon_name: Annotated[str, Field(description="The Pokemon to find partners for", min_length=1)],
+        limit: Annotated[int, Field(ge=1, description="Maximum number of suggestions")] = 10
+    ) -> dict:
+        """Suggest Pokemon that pair well with a given Pokemon (enhanced analysis).
 
-        Uses Smogon usage data combined with type synergy, role complementarity,
-        and team context analysis for better suggestions than raw usage data.
-
-        Args:
-            pokemon_name: The Pokemon to find partners for
-            limit: Maximum number of suggestions (default 10)
-
-        Returns:
-            Ranked list of suggested teammates with synergy scores and reasoning
+        Uses Smogon usage data combined with type synergy, role
+        complementarity, and current-team context for better suggestions than
+        raw usage data. Returns a ranked list of teammates with synergy
+        scores and reasoning.
         """
         try:
             # Normalize name
@@ -72,19 +81,22 @@ def register_core_tools(
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
-    async def get_popular_cores(limit: int = 10) -> dict:
-        """
-        Get popular 2-Pokemon cores from the current metagame.
+    @mcp.tool(
+        title="Get Popular Cores",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
+    async def get_popular_cores(
+        limit: Annotated[int, Field(ge=1, description="Maximum number of cores to return")] = 10
+    ) -> dict:
+        """Get popular 2-Pokemon cores from the current metagame.
 
-        Analyzes Smogon usage data to find Pokemon that are frequently
-        used together in top teams.
-
-        Args:
-            limit: Maximum number of cores to return (default 10)
-
-        Returns:
-            List of popular cores with usage data
+        Analyzes Smogon usage data to find Pokemon that are frequently used
+        together in top teams. Returns cores with pairing rates and roles.
         """
         try:
             cores = await find_popular_cores(smogon_client, size=2, limit=limit)
@@ -112,19 +124,22 @@ def register_core_tools(
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Analyze Team Synergy",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def analyze_team_synergy() -> dict:
-        """
-        Analyze how well the current team members work together.
+        """Analyze how well the current team members work together.
 
-        Evaluates:
-        - Type coverage and resistances
-        - Role coverage (speed control, support, etc.)
-        - Shared weaknesses
-        - Missing elements
-
-        Returns:
-            Synergy analysis with score and recommendations
+        Evaluates type coverage and resistances, role coverage (speed
+        control, support, etc.), shared weaknesses, and missing elements.
+        Requires at least 2 Pokemon on the current team. Returns a synergy
+        score with strengths, weaknesses, and recommendations.
         """
         try:
             if team_manager.size < 2:
@@ -151,19 +166,23 @@ def register_core_tools(
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
-    async def suggest_team_completion(limit: int = 5) -> dict:
-        """
-        Suggest Pokemon to complete the current team.
+    @mcp.tool(
+        title="Suggest Team Completion",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
+    async def suggest_team_completion(
+        limit: Annotated[int, Field(ge=1, description="Number of suggestions to return")] = 5
+    ) -> dict:
+        """Suggest Pokemon to complete the current team.
 
-        Analyzes the current team composition and suggests Pokemon
-        that would fill gaps in coverage, roles, and synergy.
-
-        Args:
-            limit: Number of suggestions to return (default 5)
-
-        Returns:
-            Suggested Pokemon with reasoning
+        Analyzes the current team composition and suggests Pokemon that
+        would fill gaps in coverage, roles, and synergy. Requires at least
+        one Pokemon on the team and open slots.
         """
         try:
             if team_manager.size == 0:
@@ -214,19 +233,22 @@ def register_core_tools(
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
-    async def get_pokemon_roles(pokemon_name: str) -> dict:
-        """
-        Get the competitive roles a Pokemon can fill.
+    @mcp.tool(
+        title="Get Pokemon Roles",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def get_pokemon_roles(
+        pokemon_name: Annotated[str, Field(description="The Pokemon to check", min_length=1)]
+    ) -> dict:
+        """Get the competitive roles a Pokemon can fill.
 
-        Roles include things like Tailwind setter, Trick Room setter,
-        Intimidate support, weather setter, etc.
-
-        Args:
-            pokemon_name: The Pokemon to check
-
-        Returns:
-            List of roles this Pokemon can fill
+        Roles include Tailwind setter, Trick Room setter, Intimidate support,
+        weather setter, etc. Returns the list of roles this Pokemon can fill.
         """
         try:
             pokemon_name = pokemon_name.lower().replace(" ", "-")
@@ -241,23 +263,30 @@ def register_core_tools(
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
-    async def list_role_pokemon(role: str) -> dict:
-        """
-        List Pokemon that can fill a specific role.
+    @mcp.tool(
+        title="List Role Pokemon",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def list_role_pokemon(
+        role: Annotated[str, Field(
+            description=(
+                "The role to look up: tailwind_setter, trick_room_setter, "
+                "sun_setter, rain_setter, sand_setter, snow_setter, "
+                "grassy_terrain, electric_terrain, psychic_terrain, "
+                "misty_terrain, intimidate, fake_out, redirection, restricted"
+            ),
+            min_length=1,
+        )]
+    ) -> dict:
+        """List Pokemon that can fill a specific role.
 
-        Available roles:
-        - tailwind_setter, trick_room_setter
-        - sun_setter, rain_setter, sand_setter, snow_setter
-        - grassy_terrain, electric_terrain, psychic_terrain, misty_terrain
-        - intimidate, fake_out, redirection
-        - restricted
-
-        Args:
-            role: The role to look up
-
-        Returns:
-            List of Pokemon that fill this role
+        Returns the Pokemon that fill the given role; unknown roles return
+        an error listing the available roles.
         """
         try:
             role = role.lower().replace(" ", "_").replace("-", "_")

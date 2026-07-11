@@ -1,6 +1,10 @@
 """MCP tools for importing/exporting Pokemon Showdown format."""
 
+from typing import Annotated
+
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.formats.showdown import (
@@ -21,31 +25,34 @@ def register_import_export_tools(
 ):
     """Register import/export tools with the MCP server."""
 
-    @mcp.tool()
-    async def import_showdown_pokemon(paste: str, add_to_team: bool = True) -> dict:
-        """
-        Parse a Pokemon from Showdown paste format.
+    @mcp.tool(
+        title="Import Showdown Pokemon",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=True,
+        ),
+    )
+    async def import_showdown_pokemon(
+        paste: Annotated[str, Field(
+            description=(
+                "Showdown paste text for one Pokemon, e.g. "
+                "'Urshifu-Rapid-Strike @ Choice Scarf\\nAbility: Unseen Fist\\nLevel: 50\\n"
+                "Tera Type: Water\\nEVs: 4 HP / 252 Atk / 252 Spe\\nJolly Nature\\n"
+                "- Surging Strikes\\n- Close Combat'. An 'SPs:' line imports as a "
+                "Champions (Reg MA) build instead of a mainline EV build."
+            ),
+            min_length=1,
+        )],
+        add_to_team: Annotated[bool, Field(
+            description="If True (default), also add the parsed Pokemon to the current team",
+        )] = True,
+    ) -> dict:
+        """Parse a single Pokemon from Showdown paste format and optionally add it to the team.
 
-        Example paste:
-        ```
-        Urshifu-Rapid-Strike @ Choice Scarf
-        Ability: Unseen Fist
-        Level: 50
-        Tera Type: Water
-        EVs: 4 HP / 252 Atk / 252 Spe
-        Jolly Nature
-        - Surging Strikes
-        - Close Combat
-        - U-turn
-        - Aqua Jet
-        ```
-
-        Args:
-            paste: The Showdown paste text for one Pokemon
-            add_to_team: If True, automatically add to current team
-
-        Returns:
-            Parsed Pokemon data and team status if added
+        Returns the parsed build data, types, auto-detected regulation info, and
+        team status when added.
         """
         try:
             parsed = parse_showdown_pokemon(paste)
@@ -116,19 +123,28 @@ def register_import_export_tools(
         except Exception as e:
             return error_response(ErrorCodes.UNKNOWN_ERROR, str(e))
 
-    @mcp.tool()
-    async def import_showdown_team(paste: str, clear_existing: bool = False) -> dict:
-        """
-        Parse a full team from Showdown paste format.
+    @mcp.tool(
+        title="Import Showdown Team",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=True,
+            idempotentHint=False,
+            openWorldHint=True,
+        ),
+    )
+    async def import_showdown_team(
+        paste: Annotated[str, Field(
+            description="Full team Showdown paste; Pokemon separated by blank lines (up to 6 imported)",
+            min_length=1,
+        )],
+        clear_existing: Annotated[bool, Field(
+            description="If True, clear the current team before importing (default keeps existing Pokemon)",
+        )] = False,
+    ) -> dict:
+        """Parse a full team from Showdown paste format and add each Pokemon to the team.
 
-        Pokemon should be separated by blank lines. Up to 6 Pokemon will be imported.
-
-        Args:
-            paste: The full team paste text
-            clear_existing: If True, clear current team before importing
-
-        Returns:
-            List of imported Pokemon and team status
+        Returns per-Pokemon import results, final team roster, and auto-detected
+        regulation info.
         """
         try:
             if clear_existing:
@@ -204,13 +220,20 @@ def register_import_export_tools(
         except Exception as e:
             return error_response(ErrorCodes.UNKNOWN_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Export Team to Showdown Paste",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def export_team_to_paste() -> dict:
-        """
-        Export the current team to Showdown paste format.
+        """Export the current team to Showdown paste format.
 
-        Returns:
-            Showdown paste text that can be imported into Pokemon Showdown
+        Returns paste text ready to import into Pokemon Showdown's teambuilder
+        (Champions builds emit 'SPs:' lines automatically).
         """
         try:
             if team_manager.size == 0:
@@ -232,16 +255,22 @@ def register_import_export_tools(
         except Exception as e:
             return error_response(ErrorCodes.EXPORT_ERROR, str(e))
 
-    @mcp.tool()
-    async def export_pokemon_to_paste(slot: int) -> dict:
-        """
-        Export a single Pokemon from the team to Showdown paste format.
+    @mcp.tool(
+        title="Export Pokemon to Showdown Paste",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def export_pokemon_to_paste(
+        slot: Annotated[int, Field(ge=1, le=6, description="Team slot number (1-6)")],
+    ) -> dict:
+        """Export a single Pokemon from the team to Showdown paste format.
 
-        Args:
-            slot: Slot number (1-6)
-
-        Returns:
-            Showdown paste text for the Pokemon
+        Returns paste text for the Pokemon in the given slot (Champions builds
+        emit 'SPs:' lines automatically).
         """
         try:
             pokemon = team_manager.get_pokemon(slot - 1)

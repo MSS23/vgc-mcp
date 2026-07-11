@@ -12,8 +12,11 @@ overriding it.
 from __future__ import annotations
 
 import re
+from typing import Annotated
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
@@ -143,8 +146,24 @@ ROUTING_RULES: list[tuple[re.Pattern, list[str], str]] = [
 
 def register_router_tools(mcp: FastMCP):
 
-    @mcp.tool()
-    async def what_tool_should_i_use(question: str, max_suggestions: int = 5) -> dict:
+    @mcp.tool(
+        title="What Tool Should I Use",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def what_tool_should_i_use(
+        question: Annotated[str, Field(
+            description="Free-text VGC question to route to the right tools",
+        )],
+        max_suggestions: Annotated[int, Field(
+            ge=1,
+            description="Maximum number of tool suggestions to return",
+        )] = 5,
+    ) -> dict:
         """Suggest the right tools for a free-text VGC question.
 
         Use this when:

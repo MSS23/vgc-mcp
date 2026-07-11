@@ -6,9 +6,11 @@ This module consolidates:
 - Speed control analysis (Trick Room, Tailwind, drops)
 """
 
-from typing import Optional
+from typing import Annotated, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
@@ -39,28 +41,24 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
 
     # ========== Basic Speed Calculations ==========
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Compare Pokemon Speed",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def compare_speed(
-        pokemon1_name: str,
-        pokemon2_name: str,
-        pokemon1_nature: str = "serious",
-        pokemon1_speed_evs: int = 0,
-        pokemon2_nature: str = "serious",
-        pokemon2_speed_evs: int = 0
+        pokemon1_name: Annotated[str, Field(description="First Pokemon's name", min_length=1)],
+        pokemon2_name: Annotated[str, Field(description="Second Pokemon's name", min_length=1)],
+        pokemon1_nature: Annotated[str, Field(description="First Pokemon's nature")] = "serious",
+        pokemon1_speed_evs: Annotated[int, Field(ge=0, le=252, description="First Pokemon's Speed EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0,
+        pokemon2_nature: Annotated[str, Field(description="Second Pokemon's nature")] = "serious",
+        pokemon2_speed_evs: Annotated[int, Field(ge=0, le=252, description="Second Pokemon's Speed EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0
     ) -> dict:
-        """
-        Compare speed between two Pokemon to determine who moves first.
-
-        Args:
-            pokemon1_name: First Pokemon's name
-            pokemon1_nature: First Pokemon's nature
-            pokemon1_speed_evs: First Pokemon's Speed EVs
-            pokemon2_name: Second Pokemon's name
-            pokemon2_nature: Second Pokemon's nature
-            pokemon2_speed_evs: Second Pokemon's Speed EVs
-
-        Returns:
-            Speed comparison with who outspeeds whom
+        """Compare speed between two Pokemon to determine who moves first.
 
         In a Pokemon Champions (Reg MA) session the ``*_speed_evs`` arguments are
         interpreted as Speed Stat Points (0-32, 66-point budget) and Speed uses
@@ -164,22 +162,25 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Find Speed EVs to Outspeed",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def find_speed_evs_to_outspeed(
-        pokemon_name: str,
-        target_speed: int,
-        nature: str = "serious"
+        pokemon_name: Annotated[str, Field(description="Your Pokemon's name", min_length=1)],
+        target_speed: Annotated[int, Field(description="The Speed stat you want to reach or exceed")],
+        nature: Annotated[str, Field(description="Your Pokemon's nature")] = "serious"
     ) -> dict:
-        """
-        Find minimum Speed EVs needed to reach or exceed a target Speed stat.
+        """Find minimum Speed EVs needed to reach or exceed a target Speed stat.
 
-        Args:
-            pokemon_name: Your Pokemon's name
-            target_speed: The Speed stat you want to reach/exceed
-            nature: Your Pokemon's nature
-
-        Returns:
-            Required EVs or indication if target is unreachable
+        Returns the required EVs (or Stat Points in a Champions Reg MA session)
+        and the resulting Speed, or flags the target as unreachable with the
+        max achievable Speed.
         """
         try:
             base_stats = await pokeapi.get_base_stats(pokemon_name)
@@ -316,22 +317,26 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
 
     # ========== Speed Tier Analysis ==========
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Get Speed Tiers",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def get_speed_tiers(
-        min_base_speed: int = 50,
-        max_base_speed: int = 200,
-        investment: str = "max"
+        min_base_speed: Annotated[int, Field(description="Minimum base speed to include")] = 50,
+        max_base_speed: Annotated[int, Field(description="Maximum base speed to include")] = 200,
+        investment: Annotated[str, Field(
+            description="'max' (252 EVs, +nature), 'neutral' (252 EVs, neutral nature), or 'min' (0 EVs, -nature, 0 IV)",
+        )] = "max"
     ) -> dict:
-        """
-        Get speed tier benchmarks for common VGC Pokemon.
+        """Get speed tier benchmarks for common VGC Pokemon.
 
-        Args:
-            min_base_speed: Minimum base speed to include
-            max_base_speed: Maximum base speed to include
-            investment: "max" (252 EVs, +nature), "neutral" (0 EVs, neutral), or "min" (0 EVs, -nature, 0 IV)
-
-        Returns:
-            List of Pokemon with their speed stats at the specified investment level
+        Returns a list of benchmark Pokemon with their final Speed stats at the
+        specified investment level, sorted fastest first.
         """
         try:
             tiers = []
@@ -373,26 +378,27 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Analyze Speed Spread",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def analyze_speed_spread(
-        pokemon_name: str,
-        nature: str = "serious",
-        speed_evs: int = 0,
-        use_competitive_data: bool = True
+        pokemon_name: Annotated[str, Field(description="Pokemon name", min_length=1)],
+        nature: Annotated[str, Field(description="Nature")] = "serious",
+        speed_evs: Annotated[int, Field(ge=0, le=252, description="Speed EVs (0-252)")] = 0,
+        use_competitive_data: Annotated[bool, Field(
+            description="Use Smogon competitive spreads for benchmarks; if False (or Smogon is unavailable), uses theoretical max speeds",
+        )] = True
     ) -> dict:
-        """
-        Analyze what a specific speed spread outspeeds and underspeeds.
+        """Analyze what a specific speed spread outspeeds and underspeeds.
 
-        Args:
-            pokemon_name: Pokemon name
-            nature: Nature
-            speed_evs: Speed EVs
-            use_competitive_data: Use Smogon competitive spreads (default True).
-                                 If False, uses theoretical max speeds.
-
-        Returns:
-            Analysis of what this spread outspeeds/underspeeds based on real
-            competitive usage data or theoretical benchmarks
+        Benchmarks come from real Smogon competitive usage data when available,
+        otherwise from theoretical max speeds.
         """
         try:
             base_stats = await pokeapi.get_base_stats(pokemon_name)
@@ -438,25 +444,30 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Visualize Speed Tiers",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def visualize_speed_tiers(
-        pokemon_speeds: list[dict],
-        include_tailwind: bool = False,
-        include_trick_room: bool = False,
-        compare_to_meta: bool = True
+        pokemon_speeds: Annotated[list[dict], Field(
+            description=(
+                "List of dicts with 'name' and 'speed' keys, "
+                "e.g. [{\"name\": \"Entei\", \"speed\": 157}, {\"name\": \"Flutter Mane\", \"speed\": 205}]"
+            ),
+        )],
+        include_tailwind: Annotated[bool, Field(description="Also show doubled (Tailwind) speeds")] = False,
+        include_trick_room: Annotated[bool, Field(description="Reverse the order (slowest first) for Trick Room")] = False,
+        compare_to_meta: Annotated[bool, Field(description="Include common meta Pokemon for reference")] = True
     ) -> dict:
-        """
-        Visualize speed tiers as a text-based chart.
+        """Visualize speed tiers as a text-based chart.
 
-        Args:
-            pokemon_speeds: List of dicts with 'name' and 'speed' keys
-                           e.g., [{"name": "Entei", "speed": 157}, {"name": "Flutter Mane", "speed": 205}]
-            include_tailwind: Show doubled speeds
-            include_trick_room: Show order reversed (slowest first)
-            compare_to_meta: Include common meta Pokemon for reference
-
-        Returns:
-            Text-based speed tier visualization
+        Your Pokemon are marked in the chart; optionally interleaves common
+        meta Pokemon and shows Tailwind or Trick Room ordering.
         """
         all_pokemon = []
 
@@ -556,23 +567,30 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
 
         return result
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Get Meta Speed Tiers",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def get_meta_speed_tiers(
-        format_type: str = "general",
-        tier: Optional[str] = None,
-        use_competitive_data: bool = True
+        format_type: Annotated[str, Field(
+            description="'general', 'trick_room' (slowest first), or 'tailwind' (adds doubled max speeds)",
+        )] = "general",
+        tier: Annotated[Optional[str], Field(
+            description="Optional filter: 'fast' (base 120+), 'medium' (base 80+), or 'slow'",
+        )] = None,
+        use_competitive_data: Annotated[bool, Field(
+            description="Use Smogon competitive spreads; if False (or Smogon is unavailable), uses theoretical meta speed tiers",
+        )] = True
     ) -> dict:
-        """
-        Get common speed tiers in the current VGC metagame.
+        """Get common speed tiers in the current VGC metagame.
 
-        Args:
-            format_type: "general", "trick_room", or "tailwind"
-            tier: Optional filter - "fast", "medium", "slow"
-            use_competitive_data: Use Smogon competitive spreads (default True).
-                                 If False, uses theoretical speeds from META_SPEED_TIERS.
-
-        Returns:
-            Speed tier information for meta Pokemon based on real competitive usage
+        Returns speed tier information for meta Pokemon based on real
+        competitive usage data, with theoretical max/min speeds for reference.
         """
         result = []
 
@@ -677,22 +695,28 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
             "speed_tiers": result
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Find Speed Benchmark",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def find_speed_benchmark(
-        target_speed: int,
-        nature: str = "jolly",
-        pokemon_name: Optional[str] = None
+        target_speed: Annotated[int, Field(description="The speed stat to analyze")],
+        nature: Annotated[str, Field(
+            description="Nature to assume for calculations (invalid values fall back to jolly)",
+        )] = "jolly",
+        pokemon_name: Annotated[Optional[str], Field(
+            description="Optional: also compute the EVs this Pokemon needs to hit the target",
+        )] = None
     ) -> dict:
-        """
-        Find what Pokemon/spreads hit a specific speed stat.
+        """Find what Pokemon/spreads hit a specific speed stat.
 
-        Args:
-            target_speed: The speed stat to analyze
-            nature: Nature to assume for calculations
-            pokemon_name: Optional - find EVs needed for this Pokemon to hit target
-
-        Returns:
-            Analysis of what Pokemon hit this speed tier
+        Returns meta Pokemon at, above, and below the target speed tier, and
+        optionally the EV investment your Pokemon needs to reach it.
         """
         results = {
             "target_speed": target_speed,
@@ -768,19 +792,21 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
 
     # ========== Speed Control Analysis (Trick Room, Tailwind, etc.) ==========
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Analyze Team Trick Room",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def analyze_team_trick_room() -> dict:
-        """
-        Analyze how the current team performs under Trick Room.
+        """Analyze how the current team performs under Trick Room.
 
-        Shows:
-        - Move order in Trick Room (slowest first)
-        - Which Pokemon benefit from TR
-        - What each Pokemon "outspeeds" in TR
-        - Whether team has TR setters
-
-        Returns:
-            Trick Room analysis with move order and recommendations
+        Shows the move order in Trick Room (slowest first), which Pokemon
+        benefit, what each Pokemon "outspeeds" in TR, and whether the team has
+        TR setters. Requires Pokemon on the current team.
         """
         try:
             if team_manager.size == 0:
@@ -809,20 +835,21 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Analyze Team Tailwind",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def analyze_team_tailwind() -> dict:
-        """
-        Analyze how the current team performs with Tailwind active.
+        """Analyze how the current team performs with Tailwind active.
 
-        Tailwind doubles Speed for 4 turns.
-
-        Shows:
-        - Speeds after 2x boost
-        - What each Pokemon outspeeds with Tailwind
-        - Whether team has Tailwind setters
-
-        Returns:
-            Tailwind analysis with boosted speeds
+        Tailwind doubles Speed for 4 turns. Shows speeds after the 2x boost,
+        what each Pokemon outspeeds with Tailwind, and whether the team has
+        Tailwind setters. Requires Pokemon on the current team.
         """
         try:
             if team_manager.size == 0:
@@ -851,18 +878,26 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
-    async def analyze_speed_drops(stages: int = -1) -> dict:
-        """
-        Analyze what your team can outspeed after using Icy Wind/Electroweb.
+    @mcp.tool(
+        title="Analyze Speed Drops",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def analyze_speed_drops(
+        stages: Annotated[int, Field(
+            description=(
+                "Speed stages dropped on the opponent: -1 = Icy Wind/Electroweb/Rock Tomb, "
+                "-2 = Scary Face/Cotton Spore (values are clamped to -6..0)"
+            ),
+        )] = -1
+    ) -> dict:
+        """Analyze what your team can outspeed after using Icy Wind/Electroweb.
 
-        Args:
-            stages: Number of speed stages dropped on opponent (default -1)
-                   -1 = Icy Wind, Electroweb, Rock Tomb
-                   -2 = Scary Face, Cotton Spore
-
-        Returns:
-            Analysis of what your team outspeeds after speed control
+        Requires Pokemon on the current team.
         """
         try:
             if team_manager.size == 0:
@@ -886,15 +921,19 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Analyze Paralysis Matchup",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def analyze_paralysis_matchup() -> dict:
-        """
-        Analyze what your team outspeeds when opponents are paralyzed.
+        """Analyze what your team outspeeds when opponents are paralyzed.
 
-        Paralysis halves Speed.
-
-        Returns:
-            Analysis of matchups vs paralyzed opponents
+        Paralysis halves Speed. Requires Pokemon on the current team.
         """
         try:
             if team_manager.size == 0:
@@ -915,19 +954,20 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Get Full Speed Analysis",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def get_full_speed_analysis() -> dict:
-        """
-        Get comprehensive speed control analysis for the team.
+        """Get comprehensive speed control analysis for the current team.
 
-        Includes:
-        - Base speed tiers
-        - Trick Room analysis
-        - Tailwind analysis
-        - Icy Wind/Electroweb impact
-
-        Returns:
-            Complete speed control breakdown
+        Covers base speed tiers, Trick Room, Tailwind, and Icy Wind/Electroweb
+        impact in one breakdown. Requires Pokemon on the current team.
         """
         try:
             if team_manager.size == 0:
@@ -938,22 +978,29 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Calculate Speed After Modifier",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def calculate_speed_after_modifier(
-        base_speed: int,
-        modifier_type: str,
-        stages: int = 0
+        base_speed: Annotated[int, Field(description="The Pokemon's current Speed stat")],
+        modifier_type: Annotated[str, Field(
+            description="'tailwind' (2x), 'paralysis' (0.5x), 'stage' (uses stages), or 'none'",
+            min_length=1,
+        )],
+        stages: Annotated[int, Field(
+            description="Stat stages when modifier_type is 'stage' (values are clamped to -6..+6)",
+        )] = 0
     ) -> dict:
-        """
-        Calculate what a speed stat becomes after various modifiers.
+        """Calculate what a speed stat becomes after various modifiers.
 
-        Args:
-            base_speed: The Pokemon's current Speed stat
-            modifier_type: "tailwind", "paralysis", "stage", or "none"
-            stages: Stat stages (-6 to +6) if modifier_type is "stage"
-
-        Returns:
-            Modified speed and what it outspeeds
+        Returns the modified speed plus which max-Speed meta benchmarks it
+        outspeeds and underspeeds.
         """
         try:
             if modifier_type == "tailwind":

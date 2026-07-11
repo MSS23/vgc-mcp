@@ -1,8 +1,10 @@
 """MCP tools for VGC format legality checking."""
 
-from typing import Optional
+from typing import Annotated, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.rules.item_clause import (
     check_item_clause,
@@ -20,24 +22,25 @@ from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 def register_legality_tools(mcp: FastMCP, team_manager):
     """Register VGC legality checking tools with the MCP server."""
 
-    @mcp.tool()
-    async def validate_team_legality(regulation: Optional[str] = None) -> dict:
-        """
-        Validate full team legality for VGC tournament play.
+    @mcp.tool(
+        title="Validate Team Legality",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def validate_team_legality(
+        regulation: Annotated[Optional[str], Field(
+            description="VGC regulation to validate against (e.g. 'reg_f', 'reg_g', 'reg_h'); uses the current session regulation if omitted",
+        )] = None,
+    ) -> dict:
+        """Validate full team legality for VGC tournament play.
 
-        Checks:
-        - Restricted Pokemon count (max 2 for Reg F, 1 for Reg G, 0 for Reg H)
-        - Banned Pokemon (mythicals)
-        - Item clause (no duplicate items)
-        - Species clause (no duplicate species)
-        - Team size (max 6)
-
-        Args:
-            regulation: VGC regulation to validate against (reg_f, reg_g, reg_h).
-                       If None, uses the current regulation.
-
-        Returns:
-            Complete legality report with any violations
+        Checks restricted Pokemon count (regulation-dependent limit), banned
+        Pokemon (mythicals), item clause, species clause, and team size.
+        Returns a complete legality report with any violations.
         """
         config = get_regulation_config()
         reg_code = regulation or config.current_regulation
@@ -66,20 +69,24 @@ def register_legality_tools(mcp: FastMCP, team_manager):
 
         return result
 
-    @mcp.tool()
-    async def check_restricted_count(regulation: Optional[str] = None) -> dict:
-        """
-        Check how many restricted (box legend) Pokemon are on the team.
+    @mcp.tool(
+        title="Check Restricted Pokemon Count",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def check_restricted_count(
+        regulation: Annotated[Optional[str], Field(
+            description="VGC regulation (reg_f allows 2 restricted, reg_g allows 1, reg_h allows 0); uses the current session regulation if omitted",
+        )] = None,
+    ) -> dict:
+        """Check how many restricted (box legend) Pokemon are on the team.
 
         Restricted Pokemon include Koraidon, Miraidon, Kyogre, Groudon, etc.
-        Different regulations have different limits.
-
-        Args:
-            regulation: VGC regulation (reg_f allows 2, reg_g allows 1, reg_h allows 0).
-                       If None, uses the current regulation.
-
-        Returns:
-            Count of restricted Pokemon and whether it's within limits
+        Returns the count and whether it is within the regulation's limit.
         """
         config = get_regulation_config()
         reg_code = regulation or config.current_regulation
@@ -118,15 +125,20 @@ def register_legality_tools(mcp: FastMCP, team_manager):
             )
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Check Item Clause",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def check_item_clause_tool() -> dict:
-        """
-        Check if the team violates the item clause (no duplicate items).
+        """Check if the current team violates the item clause (no duplicate items).
 
-        In VGC, each Pokemon must hold a different item.
-
-        Returns:
-            Validation result with any duplicate items found
+        In VGC, each Pokemon must hold a different item. Returns the validation
+        result with any duplicate items found and which Pokemon hold them.
         """
         team = team_manager.get_current_team()
 
@@ -160,17 +172,24 @@ def register_legality_tools(mcp: FastMCP, team_manager):
 
         return result
 
-    @mcp.tool()
-    async def get_format_rules(regulation: Optional[str] = None) -> dict:
-        """
-        Get the rules for a specific VGC regulation.
+    @mcp.tool(
+        title="Get Format Rules",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def get_format_rules(
+        regulation: Annotated[Optional[str], Field(
+            description="VGC regulation code (e.g. 'reg_f', 'reg_g', 'reg_h'); uses the current session regulation if omitted",
+        )] = None,
+    ) -> dict:
+        """Get the full rule set for a specific VGC regulation.
 
-        Args:
-            regulation: VGC regulation (reg_f, reg_g, reg_h).
-                       If None, uses the current regulation.
-
-        Returns:
-            Full rule set for the regulation
+        Returns restricted limit, item/species clauses, level, team size,
+        bring limit, and descriptive notes.
         """
         config = get_regulation_config()
         reg_code = regulation or config.current_regulation
@@ -199,21 +218,28 @@ def register_legality_tools(mcp: FastMCP, team_manager):
             ]
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Check Pokemon Legality",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def check_pokemon_legality(
-        pokemon_name: str,
-        regulation: Optional[str] = None
+        pokemon_name: Annotated[str, Field(
+            description="Name of the Pokemon to check (e.g. 'koraidon', 'flutter-mane')",
+            min_length=1,
+        )],
+        regulation: Annotated[Optional[str], Field(
+            description="VGC regulation to check against; uses the current session regulation if omitted",
+        )] = None,
     ) -> dict:
-        """
-        Check if a specific Pokemon is legal, restricted, or banned.
+        """Check if a specific Pokemon is legal, restricted, or banned.
 
-        Args:
-            pokemon_name: Name of the Pokemon to check
-            regulation: VGC regulation to check against.
-                       If None, uses the current regulation.
-
-        Returns:
-            Legality status and any restrictions
+        For allowlist regulations (e.g. Reg MA Champions), legality is decided
+        purely by the allowlist. Returns the legality status and any restrictions.
         """
         config = get_regulation_config()
         reg_code = regulation or config.current_regulation
@@ -266,20 +292,28 @@ def register_legality_tools(mcp: FastMCP, team_manager):
 
         return result
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Suggest Item Alternatives",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def suggest_item_alternatives(
-        item_name: str,
-        pokemon_role: Optional[str] = None
+        item_name: Annotated[str, Field(
+            description="The duplicated item to find alternatives for (e.g. 'focus-sash')",
+            min_length=1,
+        )],
+        pokemon_role: Annotated[Optional[str], Field(
+            description="Optional role hint to tailor suggestions (e.g. 'attacker', 'support')",
+        )] = None,
     ) -> dict:
-        """
-        Suggest alternative items when there's a duplicate.
+        """Suggest alternative items when the item clause flags a duplicate.
 
-        Args:
-            item_name: The duplicated item
-            pokemon_role: Optional role hint (attacker, support, etc.)
-
-        Returns:
-            List of alternative item suggestions
+        Returns a list of alternative item suggestions, optionally tailored to
+        the Pokemon's role.
         """
         alternatives = suggest_alternative_items(item_name, pokemon_role)
 
@@ -293,16 +327,23 @@ def register_legality_tools(mcp: FastMCP, team_manager):
             "message": f"Consider replacing one {item_name} with one of these alternatives"
         }
 
-    @mcp.tool()
-    async def list_restricted_pokemon(regulation: Optional[str] = None) -> dict:
-        """
-        List all restricted (box legend) Pokemon for VGC.
+    @mcp.tool(
+        title="List Restricted Pokemon",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def list_restricted_pokemon(
+        regulation: Annotated[Optional[str], Field(
+            description="VGC regulation code; uses the current session regulation if omitted",
+        )] = None,
+    ) -> dict:
+        """List all restricted (box legend) Pokemon for a VGC regulation.
 
-        Args:
-            regulation: VGC regulation. If None, uses the current regulation.
-
-        Returns:
-            Complete list of restricted Pokemon for the regulation
+        Returns the complete restricted list plus the regulation's restricted limit.
         """
         config = get_regulation_config()
         reg_code = regulation or config.current_regulation
@@ -317,19 +358,24 @@ def register_legality_tools(mcp: FastMCP, team_manager):
             "description": f"These Pokemon count toward the restricted limit ({config.get_restricted_limit(reg_code)} allowed in {reg_code})"
         }
 
-    @mcp.tool()
-    async def list_banned_pokemon(regulation: Optional[str] = None) -> dict:
-        """
-        List all banned Pokemon for VGC.
+    @mcp.tool(
+        title="List Banned Pokemon",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def list_banned_pokemon(
+        regulation: Annotated[Optional[str], Field(
+            description="VGC regulation code; uses the current session regulation if omitted",
+        )] = None,
+    ) -> dict:
+        """List all banned Pokemon for a VGC regulation.
 
-        Banned Pokemon are typically mythicals that cannot be used
-        in official VGC tournaments.
-
-        Args:
-            regulation: VGC regulation. If None, uses the current regulation.
-
-        Returns:
-            Complete list of banned Pokemon
+        Banned Pokemon are typically mythicals that cannot be used in official
+        VGC tournaments.
         """
         config = get_regulation_config()
         reg_code = regulation or config.current_regulation
@@ -343,16 +389,20 @@ def register_legality_tools(mcp: FastMCP, team_manager):
             "description": "These Pokemon are banned from VGC and cannot be used"
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Get Current Regulation Info",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def get_current_regulation_info() -> dict:
-        """
-        Get information about the currently active VGC regulation.
+        """Get information about the currently active VGC regulation.
 
-        Returns the regulation that is currently in effect based on date
-        or manual override setting.
-
-        Returns:
-            Current regulation details including rules and dates
+        Returns the regulation currently in effect (from date-based detection
+        or a session/manual override), including its rules and date range.
         """
         config = get_regulation_config()
         reg_code = config.current_regulation
@@ -371,16 +421,19 @@ def register_legality_tools(mcp: FastMCP, team_manager):
             "message": f"Currently using {reg_data.get('name', reg_code)}"
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="List Available Regulations",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def list_available_regulations() -> dict:
-        """
-        List all available VGC regulations.
+        """List all available VGC regulations with key parameters and date ranges.
 
-        Shows all regulations that can be used, with their key parameters
-        and date ranges.
-
-        Returns:
-            List of all available regulations with summary info
+        Also reports which regulation is currently active.
         """
         config = get_regulation_config()
         regulations = config.list_regulations()
@@ -392,31 +445,34 @@ def register_legality_tools(mcp: FastMCP, team_manager):
             "message": f"Found {len(regulations)} available regulations. Current: {config.current_regulation}"
         }
 
-    @mcp.tool()
-    async def set_session_regulation(regulation: str) -> dict:
-        """
-        Override the current regulation for this session based on user phrasing.
+    @mcp.tool(
+        title="Set Session Regulation",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def set_session_regulation(
+        regulation: Annotated[str, Field(
+            description="Any reasonable regulation phrasing — 'Reg F'/'F'/'regulation_f', 'Reg G', 'Reg H', 'Reg I', 'Champions'/'Pokemon Champions'/'Reg MB'/'MB', or 'Reg MA'/'MA'",
+            min_length=1,
+        )],
+    ) -> dict:
+        """Override the current regulation for this session based on user phrasing.
 
-        Accepts natural inputs and routes them to the right format system:
-        - "Reg F" / "F" / "regulation_f" -> reg_f (mainline EVs, 252/508)
-        - "Reg G" / "G" -> reg_g (mainline EVs)
-        - "Reg H" / "H" -> reg_h (mainline EVs)
-        - "Reg I" / "I" -> reg_i (mainline EVs, when defined)
-        - "Champions" / "Pokemon Champions" / "Reg MB" / "MB" -> reg_mb_champs
-          (Stat Points, 32/66; current default Champions roster)
-        - "Reg MA" / "MA" -> reg_ma_champs (original Champions roster, subset of MB)
+        Routes natural inputs to the right format system:
+        - "Reg F" / "G" / "H" / "I" -> mainline regulations (EVs, 252/508)
+        - "Champions" / "Reg MB" -> reg_mb_champs (Stat Points, 32/66;
+          current default Champions roster)
+        - "Reg MA" -> reg_ma_champs (original Champions roster, subset of MB)
 
         Champions formats automatically use the matching gen9championsvgc2026regm*
-        Smogon JSON files (MB -> gen9championsvgc2026regmb, MA -> ...regma);
-        mainline regulations use the gen9vgc2025/2026 regulation-specific JSON
-        files. The format system flag flips downstream stat / damage calcs to
-        the correct math.
-
-        Args:
-            regulation: Any reasonable phrasing — see examples above.
-
-        Returns:
-            Confirmation including the resolved code and active format system.
+        Smogon JSON files; mainline regulations use the gen9vgc2025/2026
+        regulation-specific files. The format system flag flips downstream
+        stat / damage calcs to the correct math. Returns confirmation with the
+        resolved code and active format system.
         """
         from vgc_mcp_core.rules.regulation_router import (
             describe_regulation,
@@ -447,10 +503,21 @@ def register_legality_tools(mcp: FastMCP, team_manager):
         })
         return info
 
-    @mcp.tool()
-    async def auto_detect_regulation_from_pokemon(pokemon_names: list[str]) -> dict:
-        """
-        ZERO-CONFIG REGULATION DETECTION — call this whenever a user mentions
+    @mcp.tool(
+        title="Auto-Detect Regulation From Pokemon",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def auto_detect_regulation_from_pokemon(
+        pokemon_names: Annotated[list[str], Field(
+            description="Pokemon names from the conversation. Pass whatever the user wrote — Mega forms, restricteds, partial names — the inference normalizes everything",
+        )],
+    ) -> dict:
+        """ZERO-CONFIG REGULATION DETECTION — call this whenever a user mentions
         Pokemon and you don't know the format yet. Combines inference and
         session-set in one call.
 
@@ -460,32 +527,13 @@ def register_legality_tools(mcp: FastMCP, team_manager):
           `{"action": "skipped"}` — explicit user choice always wins.
         - Otherwise infers from Pokemon mentions and AUTO-SETS the session
           regulation if confidence is high or medium.
-        - Returns the regulation code, format_system, stat units, and the
-          reasoning so you can mention it to the user (e.g. "I noticed you
-          have a Mega — using Champions Reg MA").
+        - Returns action ("set" | "skipped" | "low_confidence"), the regulation
+          code, format_system, stat units, confidence, and the reasoning so you
+          can mention it to the user (e.g. "I noticed you have a Mega — using
+          Champions Reg MA").
 
-        Use cases that should trigger this tool:
-        - User pastes a team
-        - User asks about a specific Pokemon ("Mega Manectric needs ___")
-        - User asks about a damage matchup involving named Pokemon
-        - Anytime the model isn't sure which regulation is active
-
-        Args:
-            pokemon_names: list of Pokemon names from the conversation. Pass
-                whatever the user wrote — Mega forms, restricteds, partial
-                names — the inference normalizes everything.
-
-        Returns:
-            {
-                "action": "set" | "skipped" | "low_confidence",
-                "regulation": "reg_ma_champs" | ...,
-                "format_system": "champions" | "mainline",
-                "stat_units": "Stat Points (SPs)" | "EVs",
-                "regulation_name": "Champions Regulation MA" | ...,
-                "confidence": "high" | "medium" | "low",
-                "reasons": [...],
-                "alternatives": [...],
-            }
+        Use when the user pastes a team, asks about a specific Pokemon or
+        damage matchup, or anytime the active regulation is unclear.
         """
         from vgc_mcp_core.rules.regulation_router import (
             auto_detect_regulation,
@@ -500,44 +548,35 @@ def register_legality_tools(mcp: FastMCP, team_manager):
             result["regulation_name"] = info["name"]
         return result
 
-    @mcp.tool()
-    async def infer_regulation_from_team(pokemon_names: list[str]) -> dict:
-        """
-        Infer the most likely VGC regulation from the Pokemon mentioned in a team.
+    @mcp.tool(
+        title="Infer Regulation From Team",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def infer_regulation_from_team(
+        pokemon_names: Annotated[list[str], Field(
+            description="Pokemon names from the team. Accepts any common phrasing — 'Mega Kangaskhan', 'Calyrex-Shadow', 'Urshifu Rapid Strike' — form variations are normalized internally",
+        )],
+    ) -> dict:
+        """Infer the most likely VGC regulation from the Pokemon mentioned in a team.
 
         Use this whenever a user pastes a team or mentions specific Pokemon and
         you don't already know the regulation. Call BEFORE other tools so the
         session can be set with `set_session_regulation` to the inferred code.
 
         Detection rules (in order of confidence):
-        - Any Mega form (e.g. "Mega Manectric", "Charizard-Mega-Y") -> Champions
-          Reg MA. Megas only exist in Pokemon Champions.
-        - Any Pokemon legal in Champions but banned in mainline (NCP-only mons)
-          -> Champions Reg MA.
-        - 1 restricted Pokemon -> Reg G (1-restricted format).
-        - 2+ restricted Pokemon (e.g. Calyrex Shadow + Koraidon) -> Reg I
-          (current 2-restrict format), with Reg F as a fallback alternative.
-        - 0 restricteds + no Mega -> Reg F primary, with Reg MA as a popularity-
-          weighted alternative since Champions is the most popular current format.
+        - Any Mega form -> Champions Reg MA (Megas only exist in Champions).
+        - Any Pokemon legal in Champions but banned in mainline -> Champions Reg MA.
+        - 1 restricted Pokemon -> Reg G; 2+ restricteds -> Reg I (Reg F fallback).
+        - 0 restricteds + no Mega -> Reg F primary, Reg MA as alternative.
 
-        Args:
-            pokemon_names: list of Pokemon names from the team. Accepts any
-                           common phrasing — "Mega Kangaskhan", "Calyrex-Shadow",
-                           "Urshifu Rapid Strike", etc. Form variations are
-                           normalized internally.
-
-        Returns:
-            {
-                "regulation": "reg_ma_champs" | "reg_g" | "reg_i" | "reg_f" | ...,
-                "confidence": "high" | "medium" | "low",
-                "reasons": [str, ...],
-                "alternatives": [reg_code, ...],
-                "restricted_seen": [pokemon_name, ...],
-                "illegal_seen": [pokemon_name, ...],
-                "format_system": "mainline" | "champions",
-                "stat_units": "EVs" | "Stat Points (SPs)",
-                "next_step": "Call set_session_regulation('<code>') to apply."
-            }
+        Returns the inferred regulation, confidence, reasons, alternatives,
+        restricted/illegal Pokemon seen, format system, stat units, and a
+        next_step hint. This tool only infers — it never changes the session.
         """
         from vgc_mcp_core.rules.regulation_router import (
             describe_regulation,
@@ -561,16 +600,21 @@ def register_legality_tools(mcp: FastMCP, team_manager):
             )
         return result
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Clear Session Regulation",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=True,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def clear_session_regulation() -> dict:
-        """
-        Clear the session regulation override.
+        """Clear the session regulation override.
 
-        Reverts to using the default regulation detection (date-based or
-        explicit setting in configuration).
-
-        Returns:
-            Confirmation with the now-active regulation
+        Reverts to the default regulation detection (date-based or explicit
+        configuration setting). Returns confirmation with the now-active
+        regulation.
         """
         config = get_regulation_config()
         config.clear_session_override()

@@ -9,7 +9,11 @@ Tools for calculating passive damage and healing over time:
 """
 
 
+from typing import Annotated
+
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.calc.chip_damage import (
@@ -27,30 +31,29 @@ from vgc_mcp_core.utils.errors import error_response
 def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
     """Register chip damage calculation tools."""
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Calculate Weather Chip Damage",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def calculate_weather_damage(
-        pokemon_name: str,
-        weather: str,
-        hp_evs: int = 0,
-        hp_ivs: int = 31,
-        ability: str = ""
+        pokemon_name: Annotated[str, Field(description="Pokemon name", min_length=1)],
+        weather: Annotated[str, Field(description="Weather condition (sandstorm, hail, snow, sun, rain)", min_length=1)],
+        hp_evs: Annotated[int, Field(ge=0, le=252, description="HP EVs (0-252)")] = 0,
+        hp_ivs: Annotated[int, Field(ge=0, le=31, description="HP IVs (0-31)")] = 31,
+        ability: Annotated[str, Field(description="Pokemon's ability (for immunity check, e.g. Magic Guard, Overcoat)")] = ""
     ) -> dict:
-        """
-        Calculate weather chip damage for a Pokemon.
+        """Calculate weather chip damage for a Pokemon.
 
-        Sandstorm: 6.25% damage per turn (Rock/Ground/Steel immune)
-        Hail/Snow: 6.25% damage per turn (Ice immune)
-        Sun/Rain: No passive damage
+        Sandstorm: 6.25% per turn (Rock/Ground/Steel immune).
+        Hail/Snow: 6.25% per turn (Ice immune). Sun/Rain: no passive damage.
 
-        Args:
-            pokemon_name: Pokemon name
-            weather: Weather condition (sandstorm, hail, snow, sun, rain)
-            hp_evs: HP EVs (0-252)
-            hp_ivs: HP IVs (0-31)
-            ability: Pokemon's ability (for immunity check)
-
-        Returns:
-            Damage per turn, immunity status, and turns until faint from weather alone
+        Returns damage per turn, immunity status, and turns until faint from
+        weather alone.
         """
         try:
             # Get Pokemon data
@@ -118,32 +121,29 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         except Exception as e:
             return error_response("calculation_error", str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Calculate Status Chip Damage",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def calculate_status_chip(
-        pokemon_name: str,
-        status: str,
-        toxic_turn: int = 1,
-        hp_evs: int = 0,
-        hp_ivs: int = 31,
-        ability: str = ""
+        pokemon_name: Annotated[str, Field(description="Pokemon name", min_length=1)],
+        status: Annotated[str, Field(description="Status condition (burn, poison, toxic)", min_length=1)],
+        toxic_turn: Annotated[int, Field(ge=1, description="For Toxic, which turn of poison (1-15; counter caps at 15)")] = 1,
+        hp_evs: Annotated[int, Field(ge=0, le=252, description="HP EVs (0-252)")] = 0,
+        hp_ivs: Annotated[int, Field(ge=0, le=31, description="HP IVs (0-31)")] = 31,
+        ability: Annotated[str, Field(description="Pokemon's ability (Poison Heal, Magic Guard, Guts)")] = ""
     ) -> dict:
-        """
-        Calculate status condition damage for a Pokemon.
+        """Calculate status condition damage for a Pokemon.
 
-        Burn: 6.25% damage per turn (also halves physical attack)
-        Poison: 12.5% damage per turn
-        Toxic: N/16 damage per turn (N = turn counter, caps at 15)
+        Burn: 6.25% per turn (also halves physical attack).
+        Poison: 12.5% per turn. Toxic: N/16 per turn (N = turn counter).
 
-        Args:
-            pokemon_name: Pokemon name
-            status: Status condition (burn, poison, toxic)
-            toxic_turn: For Toxic, which turn of poison (1-15)
-            hp_evs: HP EVs (0-252)
-            hp_ivs: HP IVs (0-31)
-            ability: Pokemon's ability (Poison Heal, Magic Guard, Guts)
-
-        Returns:
-            Damage per turn, special ability interactions
+        Returns damage per turn and special ability interactions.
         """
         try:
             stats = await pokeapi.get_pokemon_stats(pokemon_name)
@@ -192,29 +192,28 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         except Exception as e:
             return error_response("calculation_error", str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Calculate Grassy Terrain Healing",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def calculate_grassy_terrain_healing(
-        pokemon_name: str,
-        hp_evs: int = 0,
-        hp_ivs: int = 31,
-        is_flying: bool = False,
-        has_levitate: bool = False
+        pokemon_name: Annotated[str, Field(description="Pokemon name", min_length=1)],
+        hp_evs: Annotated[int, Field(ge=0, le=252, description="HP EVs (0-252)")] = 0,
+        hp_ivs: Annotated[int, Field(ge=0, le=31, description="HP IVs (0-31)")] = 31,
+        is_flying: Annotated[bool, Field(description="Whether Pokemon is Flying-type (not grounded); Flying is also auto-detected from the API")] = False,
+        has_levitate: Annotated[bool, Field(description="Whether Pokemon has Levitate (not grounded)")] = False
     ) -> dict:
-        """
-        Calculate Grassy Terrain healing for a Pokemon.
+        """Calculate Grassy Terrain healing for a Pokemon.
 
-        Grassy Terrain heals grounded Pokemon for 6.25% HP per turn.
-        Also reduces Earthquake/Bulldoze/Magnitude damage by 50%.
+        Grassy Terrain heals grounded Pokemon for 6.25% HP per turn and
+        reduces Earthquake/Bulldoze/Magnitude damage by 50%.
 
-        Args:
-            pokemon_name: Pokemon name
-            hp_evs: HP EVs (0-252)
-            hp_ivs: HP IVs (0-31)
-            is_flying: Whether Pokemon is Flying-type (not grounded)
-            has_levitate: Whether Pokemon has Levitate (not grounded)
-
-        Returns:
-            Healing per turn, grounded status
+        Returns healing per turn and grounded status.
         """
         try:
             stats = await pokeapi.get_pokemon_stats(pokemon_name)
@@ -253,29 +252,28 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         except Exception as e:
             return error_response("calculation_error", str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Calculate Leftovers Healing",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def calculate_leftovers_healing(
-        pokemon_name: str,
-        item: str = "leftovers",
-        hp_evs: int = 0,
-        hp_ivs: int = 31,
-        is_poison_type: bool = False
+        pokemon_name: Annotated[str, Field(description="Pokemon name", min_length=1)],
+        item: Annotated[str, Field(description="'leftovers' or 'black-sludge'")] = "leftovers",
+        hp_evs: Annotated[int, Field(ge=0, le=252, description="HP EVs (0-252)")] = 0,
+        hp_ivs: Annotated[int, Field(ge=0, le=31, description="HP IVs (0-31)")] = 31,
+        is_poison_type: Annotated[bool, Field(description="Override for the Poison-type check (Black Sludge); Poison typing is also auto-detected from the API")] = False
     ) -> dict:
-        """
-        Calculate Leftovers or Black Sludge recovery.
+        """Calculate Leftovers or Black Sludge recovery.
 
-        Leftovers: Heals 6.25% HP per turn (any Pokemon)
-        Black Sludge: Heals 6.25% for Poison-types, damages 12.5% for others
+        Leftovers heals 6.25% HP per turn for any Pokemon. Black Sludge heals
+        6.25% for Poison-types but damages 12.5% for everything else.
 
-        Args:
-            pokemon_name: Pokemon name
-            item: "leftovers" or "black-sludge"
-            hp_evs: HP EVs (0-252)
-            hp_ivs: HP IVs (0-31)
-            is_poison_type: Override for Poison-type check (Black Sludge)
-
-        Returns:
-            Recovery per turn, item-specific notes
+        Returns recovery per turn and item-specific notes.
         """
         try:
             stats = await pokeapi.get_pokemon_stats(pokemon_name)
@@ -326,39 +324,33 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         except Exception as e:
             return error_response("calculation_error", str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Simulate Chip Damage Over Turns",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def simulate_chip_over_turns(
-        pokemon_name: str,
-        turns: int = 5,
-        weather: str = "",
-        status: str = "",
-        terrain: str = "",
-        item: str = "",
-        hp_evs: int = 0,
-        hp_ivs: int = 31,
-        ability: str = "",
-        starting_hp_percent: float = 100.0
+        pokemon_name: Annotated[str, Field(description="Pokemon name", min_length=1)],
+        turns: Annotated[int, Field(description="Number of turns to simulate (clamped to 1-20)")] = 5,
+        weather: Annotated[str, Field(description="Active weather (sandstorm, hail, snow, sun, rain); empty for none")] = "",
+        status: Annotated[str, Field(description="Status condition (burn, poison, toxic); empty for none")] = "",
+        terrain: Annotated[str, Field(description="Active terrain (grassy, electric, psychic, misty); empty for none")] = "",
+        item: Annotated[str, Field(description="Held item (leftovers, black-sludge); empty for none")] = "",
+        hp_evs: Annotated[int, Field(ge=0, le=252, description="HP EVs (0-252)")] = 0,
+        hp_ivs: Annotated[int, Field(ge=0, le=31, description="HP IVs (0-31)")] = 31,
+        ability: Annotated[str, Field(description="Pokemon's ability (affects immunities and grounding)")] = "",
+        starting_hp_percent: Annotated[float, Field(ge=0, le=100, description="Starting HP as percentage of max (0-100)")] = 100.0
     ) -> dict:
-        """
-        Simulate chip damage/healing over multiple turns.
+        """Simulate chip damage/healing over multiple turns.
 
-        Combines weather, status, terrain, and item effects to project
-        HP changes over time. Essential for planning long battles.
+        Combines weather, status, terrain, and item effects to project HP
+        changes over time. Essential for planning long battles.
 
-        Args:
-            pokemon_name: Pokemon name
-            turns: Number of turns to simulate (1-20)
-            weather: Active weather (sandstorm, hail, snow, sun, rain)
-            status: Status condition (burn, poison, toxic)
-            terrain: Active terrain (grassy, electric, psychic, misty)
-            item: Held item (leftovers, black-sludge)
-            hp_evs: HP EVs (0-252)
-            hp_ivs: HP IVs (0-31)
-            ability: Pokemon's ability
-            starting_hp_percent: Starting HP as percentage (0-100)
-
-        Returns:
-            Turn-by-turn HP breakdown, when Pokemon would faint
+        Returns a turn-by-turn HP breakdown and when the Pokemon would faint.
         """
         try:
             turns = min(20, max(1, turns))
@@ -441,37 +433,32 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         except Exception as e:
             return error_response("calculation_error", str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Calculate Survival With Chip Damage",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def calculate_survival_with_chip(
-        pokemon_name: str,
-        incoming_damage_percent: float,
-        weather: str = "",
-        status: str = "",
-        terrain: str = "",
-        item: str = "",
-        hp_evs: int = 0,
-        hp_ivs: int = 31,
-        ability: str = ""
+        pokemon_name: Annotated[str, Field(description="Pokemon name", min_length=1)],
+        incoming_damage_percent: Annotated[float, Field(ge=0, description="Damage from the attack as % of max HP (may exceed 100)")],
+        weather: Annotated[str, Field(description="Active weather (sandstorm, hail, snow, sun, rain); empty for none")] = "",
+        status: Annotated[str, Field(description="Status condition (burn, poison, toxic); empty for none")] = "",
+        terrain: Annotated[str, Field(description="Active terrain (grassy, electric, psychic, misty); empty for none")] = "",
+        item: Annotated[str, Field(description="Held item (leftovers, black-sludge); empty for none")] = "",
+        hp_evs: Annotated[int, Field(ge=0, le=252, description="HP EVs (0-252)")] = 0,
+        hp_ivs: Annotated[int, Field(ge=0, le=31, description="HP IVs (0-31)")] = 31,
+        ability: Annotated[str, Field(description="Pokemon's ability (affects immunities and grounding)")] = ""
     ) -> dict:
-        """
-        Calculate if a Pokemon survives an attack plus chip damage.
+        """Calculate if a Pokemon survives an attack plus chip damage.
 
         Useful for determining if you can afford to take a hit and still
         survive end-of-turn effects.
 
-        Args:
-            pokemon_name: Pokemon name
-            incoming_damage_percent: Damage from attack as % of max HP
-            weather: Active weather
-            status: Status condition
-            terrain: Active terrain
-            item: Held item
-            hp_evs: HP EVs (0-252)
-            hp_ivs: HP IVs (0-31)
-            ability: Pokemon's ability
-
-        Returns:
-            HP after attack, HP after chip, survival status
+        Returns HP after the attack, HP after chip, and survival status.
         """
         try:
             # Get Pokemon data

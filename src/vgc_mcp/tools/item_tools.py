@@ -10,7 +10,11 @@ Tools for calculating item effects on stats and damage:
 - Life Orb damage and recoil
 """
 
+from typing import Annotated
+
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.calc.items import (
@@ -30,23 +34,27 @@ from vgc_mcp_core.utils.errors import error_response
 def register_item_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
     """Register item calculation tools."""
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Calculate Booster Energy Boost",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def calculate_booster_energy(
-        pokemon_name: str,
-        nature: str = "hardy"
+        pokemon_name: Annotated[str, Field(
+            description="Paradox Pokemon name (e.g. 'flutter-mane', 'iron-hands')",
+            min_length=1,
+        )],
+        nature: Annotated[str, Field(description="Nature for stat modifiers (default: hardy/neutral)")] = "hardy",
     ) -> dict:
-        """
-        Calculate Booster Energy stat boost for Paradox Pokemon.
+        """Calculate the Booster Energy stat boost for a Paradox Pokemon.
 
         Booster Energy activates Protosynthesis (past) or Quark Drive (future)
-        to boost the highest stat by 30% (or 50% for Speed).
-
-        Args:
-            pokemon_name: Paradox Pokemon name (e.g., "flutter-mane", "iron-hands")
-            nature: Nature for stat modifiers (default: hardy/neutral)
-
-        Returns:
-            Which stat gets boosted and by how much, or error if not Paradox
+        to boost the highest stat by 30% (or 50% for Speed). Returns which stat
+        gets boosted and by how much, or an error if the Pokemon is not Paradox.
         """
         try:
             # Fetch base stats
@@ -93,26 +101,25 @@ def register_item_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         except Exception as e:
             return error_response("calculation_error", str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Calculate Assault Vest Boost",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def calculate_assault_vest(
-        pokemon_name: str,
-        spd_evs: int = 0,
-        spd_ivs: int = 31,
-        nature: str = "hardy"
+        pokemon_name: Annotated[str, Field(description="Pokemon name", min_length=1)],
+        spd_evs: Annotated[int, Field(ge=0, le=252, description="Special Defense EVs (0-252)")] = 0,
+        spd_ivs: Annotated[int, Field(ge=0, le=31, description="Special Defense IVs (0-31)")] = 31,
+        nature: Annotated[str, Field(description="Nature (affects SpD if +/- SpD nature)")] = "hardy",
     ) -> dict:
-        """
-        Calculate Assault Vest Special Defense boost.
+        """Calculate the Assault Vest Special Defense boost.
 
         Assault Vest provides 1.5x Special Defense but prevents status moves.
-
-        Args:
-            pokemon_name: Pokemon name
-            spd_evs: Special Defense EVs (0-252)
-            spd_ivs: Special Defense IVs (0-31)
-            nature: Nature (affects SpD if +/- SpD nature)
-
-        Returns:
-            SpD before and after Assault Vest, effective bulk increase
+        Returns SpD before/after the boost and the effective bulk increase.
         """
         try:
             stats = await pokeapi.get_pokemon_stats(pokemon_name)
@@ -154,30 +161,29 @@ def register_item_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         except Exception as e:
             return error_response("calculation_error", str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Calculate Choice Item Boost",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def calculate_choice_item(
-        pokemon_name: str,
-        item: str,
-        evs: int = 252,
-        ivs: int = 31,
-        nature: str = "hardy"
+        pokemon_name: Annotated[str, Field(description="Pokemon name", min_length=1)],
+        item: Annotated[str, Field(
+            description="'choice-band' (1.5x Attack), 'choice-specs' (1.5x SpA), or 'choice-scarf' (1.5x Speed)",
+            min_length=1,
+        )],
+        evs: Annotated[int, Field(ge=0, le=252, description="EVs in the boosted stat (0-252)")] = 252,
+        ivs: Annotated[int, Field(ge=0, le=31, description="IVs in the boosted stat (0-31)")] = 31,
+        nature: Annotated[str, Field(description="Nature for the stat calculation")] = "hardy",
     ) -> dict:
-        """
-        Calculate Choice item stat boost.
+        """Calculate a Choice item's 1.5x stat boost.
 
-        Choice Band: 1.5x Attack (locked to one move)
-        Choice Specs: 1.5x Special Attack (locked to one move)
-        Choice Scarf: 1.5x Speed (locked to one move)
-
-        Args:
-            pokemon_name: Pokemon name
-            item: "choice-band", "choice-specs", or "choice-scarf"
-            evs: EVs in the relevant stat (0-252)
-            ivs: IVs in the relevant stat (0-31)
-            nature: Nature for stat calculation
-
-        Returns:
-            Stat before and after Choice item boost
+        Returns the relevant stat before and after the boost, plus the
+        move-lock drawback.
         """
         try:
             item_lower = item.lower().replace(" ", "-")
@@ -239,31 +245,31 @@ def register_item_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         except Exception as e:
             return error_response("calculation_error", str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Calculate Eviolite Boost",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def calculate_eviolite(
-        pokemon_name: str,
-        def_evs: int = 0,
-        spd_evs: int = 0,
-        def_ivs: int = 31,
-        spd_ivs: int = 31,
-        nature: str = "hardy"
+        pokemon_name: Annotated[str, Field(
+            description="Not-fully-evolved Pokemon name (e.g. 'porygon2', 'dusclops', 'chansey')",
+            min_length=1,
+        )],
+        def_evs: Annotated[int, Field(ge=0, le=252, description="Defense EVs (0-252)")] = 0,
+        spd_evs: Annotated[int, Field(ge=0, le=252, description="Special Defense EVs (0-252)")] = 0,
+        def_ivs: Annotated[int, Field(ge=0, le=31, description="Defense IVs (0-31)")] = 31,
+        spd_ivs: Annotated[int, Field(ge=0, le=31, description="Special Defense IVs (0-31)")] = 31,
+        nature: Annotated[str, Field(description="Nature for stat modifiers")] = "hardy",
     ) -> dict:
-        """
-        Calculate Eviolite defensive boosts for NFE Pokemon.
+        """Calculate Eviolite defensive boosts for a not-fully-evolved Pokemon.
 
-        Eviolite gives 1.5x Defense AND Special Defense to not-fully-evolved Pokemon.
-        Common Eviolite users: Chansey, Porygon2, Dusclops
-
-        Args:
-            pokemon_name: NFE Pokemon name
-            def_evs: Defense EVs (0-252)
-            spd_evs: Special Defense EVs (0-252)
-            def_ivs: Defense IVs (0-31)
-            spd_ivs: Special Defense IVs (0-31)
-            nature: Nature for stat modifiers
-
-        Returns:
-            Defensive stats before and after Eviolite, or error if fully evolved
+        Eviolite gives 1.5x Defense AND Special Defense to NFE Pokemon. Returns
+        both stats before/after, or explains why it does not apply when the
+        Pokemon is fully evolved.
         """
         try:
             stats = await pokeapi.get_pokemon_stats(pokemon_name)
@@ -322,30 +328,31 @@ def register_item_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         except Exception as e:
             return error_response("calculation_error", str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Check Berry Activation Threshold",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def check_berry_activation_threshold(
-        pokemon_name: str,
-        berry: str,
-        current_hp_percent: float = 100.0,
-        hp_evs: int = 0,
-        hp_ivs: int = 31
+        pokemon_name: Annotated[str, Field(description="Pokemon name (for max HP calculation)", min_length=1)],
+        berry: Annotated[str, Field(
+            description="Berry name (e.g. 'sitrus', 'figy', 'liechi')",
+            min_length=1,
+        )],
+        current_hp_percent: Annotated[float, Field(ge=0, le=100, description="Current HP as a percentage (0-100)")] = 100.0,
+        hp_evs: Annotated[int, Field(ge=0, le=252, description="HP EVs (0-252)")] = 0,
+        hp_ivs: Annotated[int, Field(ge=0, le=31, description="HP IVs (0-31)")] = 31,
     ) -> dict:
-        """
-        Check when a berry would activate based on HP threshold.
+        """Check when a berry would activate based on its HP threshold.
 
-        Sitrus Berry: Heals 25% HP when below 50%
-        Pinch berries (Figy, Wiki, etc.): Heal 33% HP when below 25%
-        Stat berries (Liechi, Petaya, etc.): +1 stat when below 25%
-
-        Args:
-            pokemon_name: Pokemon name (for HP calculation)
-            berry: Berry name (sitrus, figy, liechi, etc.)
-            current_hp_percent: Current HP as percentage (0-100)
-            hp_evs: HP EVs (0-252)
-            hp_ivs: HP IVs (0-31)
-
-        Returns:
-            Whether berry would activate and its effect
+        Sitrus heals 25% HP below 50%; pinch berries (Figy, Wiki, ...) heal 33%
+        below 25%; stat berries (Liechi, Petaya, ...) grant +1 below 25%.
+        Returns whether the berry activates now and how much damage is needed
+        to reach the threshold.
         """
         try:
             stats = await pokeapi.get_pokemon_stats(pokemon_name)
@@ -376,29 +383,29 @@ def register_item_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         except Exception as e:
             return error_response("calculation_error", str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Check Focus Sash Survival",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def check_focus_sash(
-        pokemon_name: str,
-        incoming_damage: int,
-        hp_evs: int = 0,
-        hp_ivs: int = 31,
-        at_full_hp: bool = True
+        pokemon_name: Annotated[str, Field(description="Pokemon name", min_length=1)],
+        incoming_damage: Annotated[int, Field(ge=0, description="Damage amount from the attack")],
+        hp_evs: Annotated[int, Field(ge=0, le=252, description="HP EVs (0-252)")] = 0,
+        hp_ivs: Annotated[int, Field(ge=0, le=31, description="HP IVs (0-31)")] = 31,
+        at_full_hp: Annotated[bool, Field(
+            description="Whether the Pokemon is at full HP (Focus Sash only activates at full HP)",
+        )] = True,
     ) -> dict:
-        """
-        Check if Focus Sash would save a Pokemon from an attack.
+        """Check if Focus Sash would save a Pokemon from an attack.
 
-        Focus Sash prevents OHKO when at full HP, leaving 1 HP.
-        Only works once, doesn't protect from multi-hit moves.
-
-        Args:
-            pokemon_name: Pokemon name
-            incoming_damage: Damage amount from the attack
-            hp_evs: HP EVs (0-252)
-            hp_ivs: HP IVs (0-31)
-            at_full_hp: Whether Pokemon is at full HP (sash requires this)
-
-        Returns:
-            Whether sash activates, HP remaining, and relevant notes
+        Focus Sash prevents an OHKO at full HP, leaving 1 HP; it only works once
+        and doesn't protect against multi-hit moves. Returns whether the sash
+        activates, HP remaining, and sash-breaking tips.
         """
         try:
             stats = await pokeapi.get_pokemon_stats(pokemon_name)
@@ -428,26 +435,26 @@ def register_item_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         except Exception as e:
             return error_response("calculation_error", str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Calculate Life Orb Damage and Recoil",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def calculate_life_orb_damage(
-        pokemon_name: str,
-        base_damage: int,
-        hp_evs: int = 0,
-        hp_ivs: int = 31
+        pokemon_name: Annotated[str, Field(description="Pokemon name (for HP/recoil calculation)", min_length=1)],
+        base_damage: Annotated[int, Field(ge=0, description="Damage the move would deal without Life Orb")],
+        hp_evs: Annotated[int, Field(ge=0, le=252, description="HP EVs (0-252)")] = 0,
+        hp_ivs: Annotated[int, Field(ge=0, le=31, description="HP IVs (0-31)")] = 31,
     ) -> dict:
-        """
-        Calculate Life Orb damage boost and recoil.
+        """Calculate the Life Orb damage boost and recoil cost.
 
-        Life Orb: 1.3x damage dealt, costs 10% max HP per attack.
-
-        Args:
-            pokemon_name: Pokemon name (for HP/recoil calculation)
-            base_damage: Damage the move would deal without Life Orb
-            hp_evs: HP EVs (0-252)
-            hp_ivs: HP IVs (0-31)
-
-        Returns:
-            Boosted damage, recoil amount, and how many attacks before fainting to recoil
+        Life Orb deals 1.3x damage at the cost of 10% max HP per attack.
+        Returns the boosted damage, recoil per attack, and attacks before
+        fainting to recoil.
         """
         try:
             stats = await pokeapi.get_pokemon_stats(pokemon_name)
@@ -473,24 +480,35 @@ def register_item_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         except Exception as e:
             return error_response("calculation_error", str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Get Item Damage Multiplier",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def get_item_damage_boost(
-        item: str,
-        move_category: str = "physical",
-        is_super_effective: bool = False,
-        consecutive_uses: int = 1
+        item: Annotated[str, Field(
+            description="Item name (e.g. 'life-orb', 'expert-belt', 'muscle-band', 'metronome')",
+            min_length=1,
+        )],
+        move_category: Annotated[str, Field(
+            description="'physical' or 'special' (relevant for Muscle Band/Wise Glasses)",
+        )] = "physical",
+        is_super_effective: Annotated[bool, Field(
+            description="Whether the move is super effective (relevant for Expert Belt)",
+        )] = False,
+        consecutive_uses: Annotated[int, Field(
+            ge=1,
+            description="For the Metronome item: how many times the move has been used in a row",
+        )] = 1,
     ) -> dict:
-        """
-        Get the damage multiplier for a held item.
+        """Get the damage multiplier a held item applies to a move.
 
-        Args:
-            item: Item name (life-orb, expert-belt, muscle-band, etc.)
-            move_category: "physical" or "special" (for Muscle Band/Wise Glasses)
-            is_super_effective: Whether move is super effective (for Expert Belt)
-            consecutive_uses: For Metronome item, how many times move used in a row
-
-        Returns:
-            Damage multiplier and conditions
+        Returns the multiplier, its activation condition, and any drawback
+        (static item data; no network lookup).
         """
         is_physical = move_category.lower() == "physical"
 

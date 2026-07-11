@@ -1,8 +1,10 @@
 """MCP tools for team building wizard."""
 
-from typing import Dict, Optional
+from typing import Annotated, Dict, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.config import logger
 from vgc_mcp_core.utils.errors import ErrorCodes, api_error, error_response
@@ -11,20 +13,24 @@ from vgc_mcp_core.utils.errors import ErrorCodes, api_error, error_response
 def register_wizard_tools(mcp: FastMCP):
     """Register team building wizard tools."""
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Team Building Wizard",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def team_building_wizard(
-        step: int = 1,
-        previous_choices: Optional[Dict] = None
+        step: Annotated[int, Field(ge=1, le=5, description="Current wizard step (1-5): playstyle, core Pokemon, support, counters, finalize")] = 1,
+        previous_choices: Annotated[Optional[Dict], Field(description="Choices made in earlier steps (e.g. {'playstyle': 'Hyper Offense'}); used to tailor step 2+ suggestions")] = None,
     ) -> dict:
-        """
-        Interactive step-by-step team building guide for beginners.
+        """Interactive step-by-step team building guide for beginners.
 
-        Args:
-            step: Current step (1-5)
-            previous_choices: Dict with previous step choices
-
-        Returns:
-            Current step instructions and options
+        Returns the current step's instructions, question, and options as
+        markdown. Walk through steps 1-5 in order, passing the user's earlier
+        answers via previous_choices.
         """
         try:
             if previous_choices is None:

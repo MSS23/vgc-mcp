@@ -4,9 +4,11 @@ This module provides speed probability analysis using real Smogon usage data.
 Complements speed_analysis_tools.py with live data integration.
 """
 
-from typing import Optional
+from typing import Annotated, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
@@ -82,27 +84,26 @@ META_SPEED_TIERS = {
 def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[SmogonStatsClient] = None):
     """Register Smogon-integrated speed tools with the MCP server."""
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Analyze Outspeed Probability",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def analyze_outspeed_probability(
-        pokemon_name: str,
-        target_pokemon: str,
-        nature: str = "serious",
-        speed_evs: int = 0,
-        speed_stat: Optional[int] = None
+        pokemon_name: Annotated[str, Field(description="Your Pokemon's name", min_length=1)],
+        target_pokemon: Annotated[str, Field(description="The target Pokemon to compare against", min_length=1)],
+        nature: Annotated[str, Field(description="Your Pokemon's nature (ignored if speed_stat is provided)")] = "serious",
+        speed_evs: Annotated[int, Field(ge=0, le=252, description="Your Pokemon's Speed EVs (0-252; ignored if speed_stat is provided)")] = 0,
+        speed_stat: Annotated[Optional[int], Field(description="Your Pokemon's final Speed stat (overrides the nature/EVs calculation)")] = None
     ) -> dict:
-        """
-        Analyze what percentage of a target Pokemon's common spreads you outspeed.
-        Uses real Smogon usage data when available, falls back to hardcoded meta tiers.
+        """Analyze what percentage of a target Pokemon's common spreads you outspeed.
 
-        Args:
-            pokemon_name: Your Pokemon's name
-            target_pokemon: The target Pokemon to compare against
-            nature: Your Pokemon's nature (ignored if speed_stat provided)
-            speed_evs: Your Pokemon's Speed EVs (ignored if speed_stat provided)
-            speed_stat: Your Pokemon's final Speed stat (overrides nature/EVs calculation)
-
-        Returns:
-            Analysis showing what percentage of target spreads you outspeed
+        Uses real Smogon usage data when available, falling back to hardcoded
+        meta speed tiers and then calculated standard spreads.
         """
         try:
             # Get base stats for your Pokemon

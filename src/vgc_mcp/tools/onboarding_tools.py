@@ -1,8 +1,10 @@
 """MCP tools for user onboarding and discoverability."""
 
-from typing import Optional
+from typing import Annotated, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.config import logger
 from vgc_mcp_core.utils.errors import api_error
@@ -11,16 +13,22 @@ from vgc_mcp_core.utils.errors import api_error
 def register_onboarding_tools(mcp: FastMCP):
     """Register onboarding and discoverability tools."""
 
-    @mcp.tool()
-    async def show_capabilities(category: Optional[str] = None) -> dict:
-        """
-        Show what this tool can do with example prompts.
+    @mcp.tool(
+        title="Show Capabilities",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def show_capabilities(
+        category: Annotated[Optional[str], Field(description="Filter by 'damage', 'team', 'evs', 'speed', 'learn', or None for the full overview")] = None,
+    ) -> dict:
+        """Show what this server can do, with example prompts.
 
-        Args:
-            category: Filter by "damage", "team", "evs", "speed", "learn", or None for all
-
-        Returns:
-            Capabilities overview with example prompts
+        Returns a capabilities overview (or a category-specific guide) as
+        markdown, listing example prompts and the relevant tools.
         """
         try:
             if category is None:
@@ -215,14 +223,20 @@ def register_onboarding_tools(mcp: FastMCP):
             logger.error(f"Error in show_capabilities: {e}", exc_info=True)
             return api_error(str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Welcome New User",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def welcome_new_user() -> dict:
-        """
-        Show welcome message for first-time users.
-        Call this when a user says hello or seems new to the tool.
+        """Show the welcome message for first-time users.
 
-        Returns:
-            Welcome message with quick start guide
+        Call this when a user says hello or seems new to the tool. Returns a
+        quick-start guide as markdown plus suggested starter prompts.
         """
         try:
             markdown_lines = [
@@ -280,14 +294,20 @@ def register_onboarding_tools(mcp: FastMCP):
             logger.error(f"Error in welcome_new_user: {e}", exc_info=True)
             return api_error(str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Get Starter Prompts",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def get_starter_prompts() -> dict:
-        """
-        Get a list of starter prompts for UI integration.
-        These can be shown as clickable buttons in chat interfaces.
+        """Get a list of starter prompts for UI integration.
 
-        Returns:
-            List of starter prompts with titles and icons
+        Returns prompts with titles, icons, and descriptions that can be shown
+        as clickable buttons in chat interfaces.
         """
         try:
             prompts = [

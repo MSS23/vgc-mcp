@@ -6,9 +6,11 @@ a specific spread, future queries can reference "my Entei" to use
 that stored build automatically.
 """
 
-from typing import Optional
+from typing import Annotated, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.calc.stats import calculate_all_stats
 from vgc_mcp_core.models.pokemon import EVSpread, Nature, PokemonBuild
@@ -18,41 +20,33 @@ from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 def register_context_tools(mcp: FastMCP, pokeapi, team_manager):
     """Register Pokemon context management tools with the MCP server."""
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Store My Pokemon",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def set_my_pokemon(
-        pokemon_name: str,
-        nature: str,
-        hp_evs: int = 0,
-        atk_evs: int = 0,
-        def_evs: int = 0,
-        spa_evs: int = 0,
-        spd_evs: int = 0,
-        spe_evs: int = 0,
-        ability: Optional[str] = None,
-        item: Optional[str] = None,
-        tera_type: Optional[str] = None
+        pokemon_name: Annotated[str, Field(description="Name of the Pokemon (e.g. 'Entei', 'Landorus-Therian')", min_length=1)],
+        nature: Annotated[str, Field(description="Nature name (e.g. 'Adamant', 'Timid', 'Jolly')", min_length=1)],
+        hp_evs: Annotated[int, Field(ge=0, le=252, description="HP EVs (0-252)")] = 0,
+        atk_evs: Annotated[int, Field(ge=0, le=252, description="Attack EVs (0-252)")] = 0,
+        def_evs: Annotated[int, Field(ge=0, le=252, description="Defense EVs (0-252)")] = 0,
+        spa_evs: Annotated[int, Field(ge=0, le=252, description="Special Attack EVs (0-252)")] = 0,
+        spd_evs: Annotated[int, Field(ge=0, le=252, description="Special Defense EVs (0-252)")] = 0,
+        spe_evs: Annotated[int, Field(ge=0, le=252, description="Speed EVs (0-252)")] = 0,
+        ability: Annotated[Optional[str], Field(description="Pokemon's ability (defaults to the Pokemon's first ability)")] = None,
+        item: Annotated[Optional[str], Field(description="Held item")] = None,
+        tera_type: Annotated[Optional[str], Field(description="Tera type")] = None
     ) -> dict:
-        """
-        Store a Pokemon spread for future calculations.
+        """Store a Pokemon spread for future calculations.
 
-        After storing, you can reference this Pokemon as "my <pokemon>"
-        in other tools (e.g., "my Entei", "my Landorus").
-
-        Args:
-            pokemon_name: Name of the Pokemon (e.g., "Entei", "Landorus-Therian")
-            nature: Nature name (e.g., "Adamant", "Timid", "Jolly")
-            hp_evs: HP EVs (0-252)
-            atk_evs: Attack EVs (0-252)
-            def_evs: Defense EVs (0-252)
-            spa_evs: Special Attack EVs (0-252)
-            spd_evs: Special Defense EVs (0-252)
-            spe_evs: Speed EVs (0-252)
-            ability: Pokemon's ability (optional)
-            item: Held item (optional)
-            tera_type: Tera type (optional)
-
-        Returns:
-            Confirmation with calculated stats
+        After storing, you can reference this Pokemon as "my <pokemon>" in
+        other tools (e.g. "my Entei", "my Landorus"). Returns a confirmation
+        with the calculated final stats.
         """
         # Validate EVs
         total_evs = hp_evs + atk_evs + def_evs + spa_evs + spd_evs + spe_evs
@@ -127,16 +121,22 @@ def register_context_tools(mcp: FastMCP, pokeapi, team_manager):
             "usage": f"You can now use 'my {pokemon_build.name.lower()}' in other tools"
         }
 
-    @mcp.tool()
-    async def get_my_pokemon(reference: Optional[str] = None) -> dict:
-        """
-        Get details of a stored Pokemon.
+    @mcp.tool(
+        title="Get My Pokemon",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def get_my_pokemon(
+        reference: Annotated[Optional[str], Field(description="Reference name (e.g. 'my Entei', 'Entei'); omit for the most recently used Pokemon")] = None
+    ) -> dict:
+        """Get details of a stored Pokemon.
 
-        Args:
-            reference: Reference name (e.g., "my Entei", "Entei", or None for most recent)
-
-        Returns:
-            The stored Pokemon's full details with calculated stats
+        Returns the stored Pokemon's full details with calculated stats, or
+        the list of stored references if the requested one is not found.
         """
         pokemon = team_manager.get_pokemon_context(reference)
 
@@ -186,14 +186,17 @@ def register_context_tools(mcp: FastMCP, pokeapi, team_manager):
             "level": pokemon.level
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="List My Pokemon",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def list_my_pokemon() -> dict:
-        """
-        List all stored Pokemon.
-
-        Returns:
-            List of all stored Pokemon with their key stats
-        """
+        """List all stored Pokemon with their key stats (nature, Speed, HP)."""
         stored = team_manager.list_pokemon_context()
 
         if not stored:
@@ -224,17 +227,21 @@ def register_context_tools(mcp: FastMCP, pokeapi, team_manager):
             "pokemon": pokemon_list
         }
 
-    @mcp.tool()
-    async def clear_my_pokemon(reference: Optional[str] = None) -> dict:
-        """
-        Clear stored Pokemon context.
+    @mcp.tool(
+        title="Clear My Pokemon",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=True,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def clear_my_pokemon(
+        reference: Annotated[Optional[str], Field(description="Specific Pokemon to clear (e.g. 'my Entei'); omit to clear ALL stored Pokemon")] = None
+    ) -> dict:
+        """Clear stored Pokemon context.
 
-        Args:
-            reference: Specific Pokemon to clear (e.g., "my Entei"),
-                      or None to clear all stored Pokemon
-
-        Returns:
-            Confirmation of cleared Pokemon
+        Returns a confirmation and the count of remaining stored Pokemon.
         """
         success, message = team_manager.clear_pokemon_context(reference)
 
@@ -244,40 +251,32 @@ def register_context_tools(mcp: FastMCP, pokeapi, team_manager):
             "remaining": len(team_manager.list_pokemon_context())
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Update My Pokemon",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def update_my_pokemon(
-        reference: str,
-        nature: Optional[str] = None,
-        hp_evs: Optional[int] = None,
-        atk_evs: Optional[int] = None,
-        def_evs: Optional[int] = None,
-        spa_evs: Optional[int] = None,
-        spd_evs: Optional[int] = None,
-        spe_evs: Optional[int] = None,
-        ability: Optional[str] = None,
-        item: Optional[str] = None,
-        tera_type: Optional[str] = None
+        reference: Annotated[str, Field(description="Reference name (e.g. 'my Entei', 'Entei')", min_length=1)],
+        nature: Annotated[Optional[str], Field(description="New nature (if changing)")] = None,
+        hp_evs: Annotated[Optional[int], Field(ge=0, le=252, description="New HP EVs (if changing)")] = None,
+        atk_evs: Annotated[Optional[int], Field(ge=0, le=252, description="New Attack EVs (if changing)")] = None,
+        def_evs: Annotated[Optional[int], Field(ge=0, le=252, description="New Defense EVs (if changing)")] = None,
+        spa_evs: Annotated[Optional[int], Field(ge=0, le=252, description="New Special Attack EVs (if changing)")] = None,
+        spd_evs: Annotated[Optional[int], Field(ge=0, le=252, description="New Special Defense EVs (if changing)")] = None,
+        spe_evs: Annotated[Optional[int], Field(ge=0, le=252, description="New Speed EVs (if changing)")] = None,
+        ability: Annotated[Optional[str], Field(description="New ability (if changing)")] = None,
+        item: Annotated[Optional[str], Field(description="New item (if changing)")] = None,
+        tera_type: Annotated[Optional[str], Field(description="New tera type (if changing)")] = None
     ) -> dict:
-        """
-        Update an existing stored Pokemon's spread or attributes.
+        """Update an existing stored Pokemon's spread or attributes.
 
         Only updates the specified parameters, keeping others unchanged.
-
-        Args:
-            reference: Reference name (e.g., "my Entei", "Entei")
-            nature: New nature (optional)
-            hp_evs: New HP EVs (optional)
-            atk_evs: New Attack EVs (optional)
-            def_evs: New Defense EVs (optional)
-            spa_evs: New Special Attack EVs (optional)
-            spd_evs: New Special Defense EVs (optional)
-            spe_evs: New Speed EVs (optional)
-            ability: New ability (optional)
-            item: New item (optional)
-            tera_type: New tera type (optional)
-
-        Returns:
-            Updated Pokemon details
+        Returns the updated Pokemon details with recalculated stats.
         """
         pokemon = team_manager.get_pokemon_context(reference)
 
@@ -331,23 +330,22 @@ def register_context_tools(mcp: FastMCP, pokeapi, team_manager):
             "tera_type": pokemon.tera_type
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Reset Session",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=True,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def reset_session() -> dict:
-        """
-        Start fresh by clearing all stored Pokemon and team data.
+        """Start fresh by clearing all stored Pokemon and team data.
 
-        Use this when:
-        - Starting a new teambuilding session
-        - You want to clear old data from a previous conversation
-        - Switching between different team projects
-
-        This clears:
-        - All stored "my Pokemon" builds
-        - The current team
-        - Any active Pokemon reference
-
-        Returns:
-            Confirmation of what was cleared
+        Clears all stored "my Pokemon" builds, the current team, and any
+        active Pokemon reference. Use when starting a new teambuilding
+        session, clearing old data from a previous conversation, or switching
+        between team projects. Returns a confirmation of what was cleared.
         """
         # Get counts before clearing for user feedback
         stored_count = len(team_manager.list_pokemon_context())
@@ -373,20 +371,21 @@ def register_context_tools(mcp: FastMCP, pokeapi, team_manager):
             ]
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Get Session Status",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def session_status() -> dict:
-        """
-        Check what's currently stored in this session.
+        """Check what's currently stored in this session.
 
-        Shows:
-        - All stored "my Pokemon" builds with their spreads
-        - Current team composition
-        - Whether there's existing data (useful at start of conversation)
-
-        Use this to see if there's leftover data from a previous conversation.
-
-        Returns:
-            Overview of all stored session data
+        Shows all stored "my Pokemon" builds, the current team composition,
+        and whether there's leftover data from a previous conversation
+        (useful at the start of a conversation).
         """
         stored_pokemon = team_manager.list_pokemon_context()
         team = team_manager.get_current_team()

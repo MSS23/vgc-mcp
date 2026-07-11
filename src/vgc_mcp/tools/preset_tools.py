@@ -1,8 +1,10 @@
 """MCP tools for EV spread presets - pulls LIVE data from Smogon Chaos."""
 
-from typing import Optional
+from typing import Annotated, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.data.spread_presets import (
     SpreadPreset,
@@ -16,25 +18,26 @@ from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 def register_preset_tools(mcp: FastMCP, smogon=None):
     """Register spread preset tools with the MCP server."""
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Get Smogon Spreads",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def get_smogon_spreads(
-        pokemon_name: str,
-        limit: int = 5,
-        format_name: Optional[str] = None
+        pokemon_name: Annotated[str, Field(description="Pokemon name (e.g. 'Incineroar', 'Flutter Mane')", min_length=1)],
+        limit: Annotated[int, Field(ge=1, description="Number of top spreads to return")] = 5,
+        format_name: Annotated[Optional[str], Field(description="Optional format override (auto-detects current VGC format)")] = None,
     ) -> dict:
-        """
-        Get the most popular EV spreads from LIVE Smogon Chaos data.
+        """Get the most popular EV spreads from LIVE Smogon Chaos data.
 
-        This fetches real-time usage data from Smogon's latest stats,
-        showing what spreads top players are actually using right now.
-
-        Args:
-            pokemon_name: Pokemon name (e.g., "Incineroar", "Flutter Mane")
-            limit: Number of top spreads to return (default 5)
-            format_name: Optional format override (auto-detects current VGC format)
-
-        Returns:
-            Top spreads with usage %, nature, EVs, and metadata about the data source
+        Fetches real-time usage data from Smogon's latest stats, showing what
+        spreads top players are actually using right now. Returns top spreads
+        with usage %, nature, EVs (or Stat Points for Champions spreads),
+        common items/abilities, and data-source metadata.
         """
         if smogon is None:
             return error_response(ErrorCodes.API_ERROR, "Smogon client not available")
@@ -124,23 +127,24 @@ def register_preset_tools(mcp: FastMCP, smogon=None):
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Get Spread Presets",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def get_spread_presets(
-        pokemon_name: str,
-        preset_name: Optional[str] = None
+        pokemon_name: Annotated[str, Field(description="Pokemon name (e.g. 'Incineroar', 'Flutter Mane')", min_length=1)],
+        preset_name: Annotated[Optional[str], Field(description="Optional specific preset to get (e.g. 'Bulky Pivot')")] = None,
     ) -> dict:
-        """
-        Get curated EV spread presets with benchmark explanations.
+        """Get curated EV spread presets with benchmark explanations.
 
-        These are manually curated spreads with explanations of what
-        benchmarks they hit. For LIVE usage data, use get_smogon_spreads instead.
-
-        Args:
-            pokemon_name: Pokemon name (e.g., "Incineroar", "Flutter Mane")
-            preset_name: Optional specific preset to get (e.g., "Bulky Pivot")
-
-        Returns:
-            List of preset spreads with EVs, nature, item, and benchmark info
+        These are manually curated spreads with explanations of what benchmarks
+        they hit. For LIVE usage data, use get_smogon_spreads instead. Returns
+        preset spreads with EVs, nature, item, and benchmark info.
         """
         if preset_name:
             preset = get_preset_by_name(pokemon_name, preset_name)
@@ -170,13 +174,19 @@ def register_preset_tools(mcp: FastMCP, smogon=None):
             "note": "For live usage data, use get_smogon_spreads instead"
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="List Pokemon With Presets",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def list_pokemon_with_presets() -> dict:
-        """
-        List all Pokemon that have curated preset spreads available.
+        """List all Pokemon that have curated preset spreads available.
 
-        Returns:
-            List of Pokemon names with curated spreads
+        For Pokemon not on this list, use get_smogon_spreads for live data.
         """
         pokemon_list = get_all_pokemon_with_presets()
         return {
@@ -186,20 +196,23 @@ def register_preset_tools(mcp: FastMCP, smogon=None):
             "alternative": "Use get_smogon_spreads(pokemon_name) for ANY Pokemon with live Smogon data"
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Suggest Spread for Role",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def suggest_spread_for_role(
-        pokemon_name: str,
-        role: str
+        pokemon_name: Annotated[str, Field(description="Pokemon name", min_length=1)],
+        role: Annotated[str, Field(description="Role description (e.g. 'bulky', 'fast', 'support', 'sweeper', 'trick room')", min_length=1)],
     ) -> dict:
-        """
-        Suggest a spread preset based on the role you want the Pokemon to fill.
+        """Suggest a curated spread preset matching the role you want the Pokemon to fill.
 
-        Args:
-            pokemon_name: Pokemon name
-            role: Role description (e.g., "bulky", "fast", "support", "sweeper", "trick room")
-
-        Returns:
-            Recommended preset(s) matching the role
+        Returns the best-matching preset plus alternatives; only works for
+        Pokemon that have curated presets (see list_pokemon_with_presets).
         """
         presets = get_presets_for_pokemon(pokemon_name)
         if not presets:

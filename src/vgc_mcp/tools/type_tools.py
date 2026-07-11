@@ -1,8 +1,10 @@
 """MCP tools for type effectiveness education."""
 
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.calc.modifiers import TYPE_CHART, get_type_effectiveness
@@ -13,22 +15,25 @@ from vgc_mcp_core.utils.errors import ErrorCodes, api_error, error_response
 def register_type_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
     """Register type effectiveness education tools."""
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Explain Type Matchup",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def explain_type_matchup(
-        attacking_type: Optional[str] = None,
-        defending_types: Optional[List[str]] = None,
-        pokemon_name: Optional[str] = None
+        attacking_type: Annotated[Optional[str], Field(description="Type of the attacking move (e.g. 'Fire')")] = None,
+        defending_types: Annotated[Optional[List[str]], Field(description="List of defending Pokemon types (e.g. ['Water', 'Ground'])")] = None,
+        pokemon_name: Annotated[Optional[str], Field(description="Optional defending Pokemon name; its types are fetched automatically when defending_types is omitted")] = None
     ) -> dict:
-        """
-        Explain type effectiveness for attacks or Pokemon matchups.
+        """Explain type effectiveness for attacks or Pokemon matchups.
 
-        Args:
-            attacking_type: Type of the attacking move
-            defending_types: List of defending Pokemon types
-            pokemon_name: Optional Pokemon name (will fetch types automatically)
-
-        Returns:
-            Type matchup explanation with effectiveness and reasoning
+        Provide attacking_type plus either defending_types or pokemon_name.
+        Returns the effectiveness multiplier with reasoning, a type cheat
+        sheet, and usage tips.
         """
         try:
             # If Pokemon name provided, fetch types

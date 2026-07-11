@@ -30,7 +30,7 @@ Jolly Nature
 """
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Optional
 
 import pydantic
@@ -624,12 +624,31 @@ def parsed_to_iv_spread(parsed: ParsedPokemon) -> IVSpread:
     )
 
 
+def evs_line_looks_like_sps(parsed: ParsedPokemon) -> bool:
+    """Return True when the paste's ``EVs:`` line plausibly holds SP values.
+
+    Pokemon Showdown's own teambuilder reuses the ``EVs:`` line for Champions
+    formats, writing SP-scale numbers (0-32 per stat, 66 total) instead of
+    real EVs. A spread qualifies when at least one value is set and every
+    value fits the Champions budget.
+    """
+    if parsed.sps is not None or not parsed.evs:
+        return False
+    values = list(parsed.evs.values())
+    return (
+        any(v > 0 for v in values)
+        and all(0 <= v <= 32 for v in values)
+        and sum(values) <= 66
+    )
+
+
 def parsed_to_pokemon_build(
     parsed: ParsedPokemon,
     base_stats,
     types: list[str],
     *,
     extra_kwargs: Optional[dict] = None,
+    format_hint: Optional[str] = None,
 ) -> PokemonBuild:
     """Build a PokemonBuild from a ParsedPokemon with the correct format.
 
@@ -638,12 +657,20 @@ def parsed_to_pokemon_build(
     (``evs`` left at the all-zero default). Otherwise it is a mainline build
     with ``evs`` populated from the paste.
 
+    Official Showdown Champions pastes reuse the ``EVs:`` line with SP-scale
+    numbers rather than an ``SPs:`` line. When the active format resolves to
+    Champions (via ``format_hint`` or read-only session/name detection) and
+    the EV line fits the SP budget (each value 0-32, total <= 66), the EV
+    values are reinterpreted as Stat Points.
+
     Args:
         parsed: ParsedPokemon from ``parse_showdown_pokemon``.
         base_stats: BaseStats for the species (fetched by the caller).
         types: Type list for the species.
         extra_kwargs: Optional dict of additional PokemonBuild kwargs to set
             or override (e.g. a normalized ``name``/``species``).
+        format_hint: "champions" or "mainline" to skip detection; None to
+            resolve read-only from the session / species name.
 
     Returns:
         A validated PokemonBuild.
@@ -651,6 +678,16 @@ def parsed_to_pokemon_build(
     Raises:
         ShowdownParseError: If the Champions SPs allocation is invalid.
     """
+    if parsed.sps is None and format_hint != "mainline" and evs_line_looks_like_sps(parsed):
+        if format_hint == "champions":
+            is_champions = True
+        else:
+            from ..rules.format_detect import detect_champions_format
+            is_champions = detect_champions_format(parsed.species)
+        if is_champions:
+            parsed = replace(parsed, sps=dict(parsed.evs), evs={
+                "hp": 0, "atk": 0, "def": 0, "spa": 0, "spd": 0, "spe": 0,
+            })
     kwargs: dict = {
         "name": parsed.species,
         "base_stats": base_stats,

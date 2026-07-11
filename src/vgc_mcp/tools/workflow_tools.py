@@ -4,9 +4,11 @@ These tools combine multiple operations into single, intuitive commands
 for common VGC teambuilding workflows.
 """
 
-from typing import Optional
+from typing import Annotated, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.calc.damage import format_percent
 from vgc_mcp_core.config import EV_BREAKPOINTS_LV50
@@ -19,39 +21,27 @@ from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name
 def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyzer):
     """Register high-level workflow tools with the MCP server."""
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Full Team Check",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def full_team_check(
-        paste: Optional[str] = None,
-        detailed: bool = True
+        paste: Annotated[Optional[str], Field(description="Showdown team paste (Pokemon separated by blank lines). If omitted, analyzes the currently loaded team")] = None,
+        detailed: Annotated[bool, Field(description="True for full analysis (grade, tournament readiness, legality, strengths/weaknesses, fix suggestions); False for a quick summary (major weaknesses, unresisted types, speed range)")] = True,
     ) -> dict:
-        """
-        Team analysis with configurable detail level.
+        """Team analysis with configurable detail level.
 
-        When detailed=True (default): Full comprehensive analysis with grade,
-        tournament readiness, legality check, strengths, weaknesses, and fix suggestions.
-
-        When detailed=False: Quick summary with just major weaknesses,
-        unresisted types, and speed range - useful for fast iteration.
-
-        Args:
-            paste: Optional Showdown paste. If not provided, uses current team.
-            detailed: If True (default), returns full analysis with grades.
-                     If False, returns quick summary only.
-
-        Returns (detailed=True):
-            - overall_grade: Letter grade (A to F)
-            - tournament_ready: Whether team can be used in tournaments
-            - legality: Pass/fail with specific issues
-            - strengths: Top 3 things the team does well
-            - weaknesses: Top 3 problems to address
-            - one_fix: Single most impactful improvement to make
-
-        Returns (detailed=False):
-            - team_size: Number of Pokemon
-            - pokemon: List of names
-            - major_weaknesses: Types the team is weak to
-            - unresisted_types: Types the team can't hit super effectively
-            - speed_range: Slowest and fastest Pokemon
+        detailed=True returns overall_grade (A-F), tournament_ready, legality,
+        top strengths/weaknesses, and the single most impactful fix.
+        detailed=False returns a quick summary (team size, major weaknesses,
+        unresisted types, speed range) - useful for fast iteration. Note:
+        quick mode on a raw paste is limited; load the team first for the
+        full quick analysis.
         """
         try:
             # If paste provided, parse it temporarily
@@ -230,25 +220,25 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
-    async def import_and_analyze(paste: str, load_to_team: bool = True) -> dict:
-        """
-        Import a Showdown team paste and immediately analyze it.
+    @mcp.tool(
+        title="Import and Analyze Team",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=True,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
+    async def import_and_analyze(
+        paste: Annotated[str, Field(description="Showdown format team paste (Pokemon separated by blank lines)", min_length=1)],
+        load_to_team: Annotated[bool, Field(description="If True, REPLACES the currently loaded team with this paste so further tools can use it")] = True,
+    ) -> dict:
+        """Import a Showdown team paste and immediately analyze it.
 
-        Combines import + legality check + coverage analysis + threat assessment
-        into a single operation.
-
-        Args:
-            paste: Showdown format team paste (Pokemon separated by blank lines)
-            load_to_team: If True, loads the team for further operations (default: True)
-
-        Returns:
-            - team: List of imported Pokemon with their builds
-            - legality: Whether the team is tournament legal
-            - coverage: Types the team can hit super-effectively
-            - coverage_holes: Types the team struggles against
-            - speed_structure: Speed tiers from fastest to slowest
-            - suggested_improvements: Top 3 things to improve
+        Combines import + legality check + coverage analysis + speed structure
+        into one call. Returns the imported builds, legality verdict, coverage
+        holes, speed tiers, and top suggested improvements. With load_to_team
+        (default) the current team is cleared and replaced.
         """
         try:
             # Parse the team
@@ -425,21 +415,23 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
-    async def fix_team_issues(paste: Optional[str] = None) -> dict:
-        """
-        Identify team issues and suggest specific fixes.
+    @mcp.tool(
+        title="Fix Team Issues",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def fix_team_issues(
+        paste: Annotated[Optional[str], Field(description="Showdown team paste to analyze. If omitted, uses the currently loaded team")] = None,
+    ) -> dict:
+        """Identify team legality/structure issues and suggest specific fixes.
 
-        Goes beyond just reporting problems - provides actionable solutions
-        for each issue found.
-
-        Args:
-            paste: Optional Showdown paste. If not provided, uses current team.
-
-        Returns:
-            - issues: List of problems found with severity
-            - fixes: Specific solution for each issue
-            - priority_order: Which issues to fix first
+        Checks banned Pokemon, restricted count, item clause, species clause,
+        and team size. Returns each issue with severity, an actionable fix,
+        and a priority order for addressing them.
         """
         try:
             # Get team data
@@ -587,28 +579,26 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Add Pokemon with Smart Defaults",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=True,
+        ),
+    )
     async def add_pokemon_smart(
-        pokemon_name: str,
-        role: str = "auto"
+        pokemon_name: Annotated[str, Field(description="Pokemon to add (use hyphens for forms, e.g. 'flutter-mane')", min_length=1)],
+        role: Annotated[str, Field(description="Role hint: 'sweeper', 'wall', 'support', 'trick_room', 'bulky_offense', 'mixed', or 'auto' (detects the best role from base stats)")] = "auto",
     ) -> dict:
-        """
-        Add a Pokemon to the team with intelligent defaults.
+        """Add a Pokemon to the team with an intelligently suggested build.
 
-        Automatically suggests nature, EVs, and moves based on:
-        - The Pokemon's base stats and common competitive builds
-        - What the current team needs (coverage, speed, bulk)
-        - Popular Smogon usage data
-
-        Args:
-            pokemon_name: Name of the Pokemon to add
-            role: Role hint - "sweeper", "wall", "support", "mixed", or "auto" (default)
-                  "auto" will detect the best role based on base stats
-
-        Returns:
-            - Added Pokemon with suggested build
-            - Reasoning for the suggested spread
-            - Alternative options
+        Picks nature, investment, and ability from the Pokemon's base stats
+        and the detected role. Auto-detects the regulation/format from the
+        Pokemon name (Champions builds get Stat Points instead of EVs) and
+        surfaces `regulation_auto_detected` when inference applied. Returns
+        the added build with reasoning and a Showdown paste.
         """
         from vgc_mcp_core.rules.regulation_router import auto_detect_regulation
 
@@ -868,51 +858,35 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Suggest EV Spread",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def suggest_ev_spread(
-        pokemon_name: str,
-        nature: str = "auto",
-        outspeed_targets: list[str] = None,
-        survive_hits: list[dict] = None,
-        ko_targets: list[dict] = None,
-        prioritize: str = "bulk"
+        pokemon_name: Annotated[str, Field(description="Your Pokemon (e.g. 'entei', 'flutter-mane')", min_length=1)],
+        nature: Annotated[str, Field(description="Nature to use, or 'auto' to suggest one based on constraints and prioritize mode")] = "auto",
+        outspeed_targets: Annotated[Optional[list[str]], Field(description="Pokemon names to outspeed, assuming +Speed nature 252 EVs on the target (e.g. ['arcanine-hisui', 'iron-bundle'])")] = None,
+        survive_hits: Annotated[Optional[list[dict]], Field(description="Attacks to survive, each a dict with 'attacker' and 'move', plus optional 'item' (auto-fetched from Smogon usage if omitted) and 'ability'")] = None,
+        ko_targets: Annotated[Optional[list[dict]], Field(description="KOs to achieve, each a dict with 'defender' and 'move', plus optional 'evs' (defender HP EVs, default 0)")] = None,
+        prioritize: Annotated[str, Field(description="Where leftover EVs go: 'bulk' (maximize survival), 'offense' (maximize damage), or 'speed' (maximize speed tier)")] = "bulk",
     ) -> dict:
-        """
-        Design an optimal EV spread meeting multiple constraints in ONE call.
+        """Design an optimal EV spread meeting multiple constraints in ONE call.
 
-        This is the go-to tool for spread design. Instead of calling 5+ tools
-        for speed, bulk, and damage calcs separately, this handles everything.
+        The go-to tool for spread design - handles speed benchmarks, survival
+        requirements, and KO targets together instead of 5+ separate calls.
+        Returns the spread, suggested nature, final level-50 stats,
+        benchmarks_met / benchmarks_failed, and a Showdown-ready summary.
+        Auto-detects Champions (Reg MA) sessions and emits Stat Points there.
 
-        Args:
-            pokemon_name: Your Pokemon (e.g., "entei", "flutter-mane")
-            nature: Nature to use, or "auto" to suggest based on constraints
-            outspeed_targets: List of Pokemon names to outspeed (e.g., ["arcanine-hisui", "iron-bundle"])
-            survive_hits: List of attacks to survive, each with:
-                - attacker: Pokemon name
-                - move: Move name
-                - item: Optional attacker item (e.g., "choice-band")
-                - ability: Optional attacker ability
-            ko_targets: List of KOs to achieve, each with:
-                - defender: Pokemon name
-                - move: Move name
-                - evs: Optional defender HP EVs (default 0)
-            prioritize: "bulk" (maximize survival), "offense" (maximize damage), "speed" (maximize speed tier)
-
-        Returns:
-            - spread: Complete EV distribution
-            - nature: Suggested nature
-            - final_stats: Calculated stats at level 50
-            - benchmarks_met: Which constraints are satisfied
-            - benchmarks_failed: Which couldn't be met (with explanation)
-            - summary: Ready-to-use spread string
-
-        Example:
-            suggest_ev_spread(
-                pokemon_name="rillaboom",
-                outspeed_targets=["amoonguss"],
-                survive_hits=[{"attacker": "flutter-mane", "move": "moonblast"}],
-                ko_targets=[{"defender": "palafin", "move": "wood-hammer"}]
-            )
+        Example: suggest_ev_spread(pokemon_name="rillaboom",
+        outspeed_targets=["amoonguss"],
+        survive_hits=[{"attacker": "flutter-mane", "move": "moonblast"}],
+        ko_targets=[{"defender": "palafin", "move": "wood-hammer"}])
         """
         from vgc_mcp_core.calc.conversion import evs_to_sps_spread
         from vgc_mcp_core.calc.damage import calculate_damage
@@ -1549,39 +1523,31 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Quick Damage Check",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def quick_damage_check(
-        attacker: str,
-        defender: str,
-        move: str,
-        attacker_item: str = None,
-        attacker_ability: str = None,
-        defender_hp_evs: int = 0,
-        defender_def_evs: int = 0,
-        is_doubles: bool = True
+        attacker: Annotated[str, Field(description="Attacking Pokemon name", min_length=1)],
+        defender: Annotated[str, Field(description="Defending Pokemon name", min_length=1)],
+        move: Annotated[str, Field(description="Move name to use (e.g. 'surging-strikes')", min_length=1)],
+        attacker_item: Annotated[Optional[str], Field(description="Attacker's item (e.g. 'life-orb', 'choice-band')")] = None,
+        attacker_ability: Annotated[Optional[str], Field(description="Attacker's ability (auto-detected from PokeAPI if not specified)")] = None,
+        defender_hp_evs: Annotated[int, Field(ge=0, le=252, description="Defender's HP EVs (0-252)")] = 0,
+        defender_def_evs: Annotated[int, Field(ge=0, le=252, description="Defender's Def/SpD EVs (0-252); applied to the relevant defensive stat for the move's category")] = 0,
+        is_doubles: Annotated[bool, Field(description="True applies the doubles spread-move 0.75x reduction")] = True,
     ) -> dict:
-        """
-        Quick damage calculation with smart defaults - ONE call for damage info.
+        """Quick damage calculation with smart defaults - ONE call for damage info.
 
         Uses competitive defaults (252 offensive EVs, optimal nature) so you
-        don't need to specify everything manually.
-
-        Args:
-            attacker: Attacking Pokemon name
-            defender: Defending Pokemon name
-            move: Move name to use
-            attacker_item: Optional item (e.g., "life-orb", "choice-band")
-            attacker_ability: Optional ability (auto-detected if not specified)
-            defender_hp_evs: Defender's HP EVs (default 0)
-            defender_def_evs: Defender's Def/SpD EVs (default 0)
-            is_doubles: True for doubles spread move reduction (default True)
-
-        Returns:
-            - damage_range: Min-max damage
-            - percent_range: Min-max as percentage
-            - survives: Whether defender survives
-            - ko_chance: "Guaranteed OHKO", "Possible OHKO", "2HKO", "3HKO+", "Never KO"
-            - what_changes_outcome: Items/abilities that would flip the result
+        don't need to specify everything. Returns the damage/percent range,
+        whether the defender survives, a KO verdict, and which items or
+        abilities would flip the outcome.
         """
         from vgc_mcp_core.calc.damage import calculate_damage
         from vgc_mcp_core.calc.modifiers import DamageModifiers
@@ -1685,39 +1651,29 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Analyze Speed Matchup",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def analyze_speed_matchup(
-        my_pokemon: str,
-        opponent_pokemon: str,
-        my_nature: str = "jolly",
-        my_speed_evs: int = 252,
-        opponent_nature: str = "jolly",
-        opponent_speed_evs: int = 252,
-        include_scenarios: list[str] = None
+        my_pokemon: Annotated[str, Field(description="Your Pokemon name", min_length=1)],
+        opponent_pokemon: Annotated[str, Field(description="Opponent's Pokemon name", min_length=1)],
+        my_nature: Annotated[str, Field(description="Your Pokemon's nature")] = "jolly",
+        my_speed_evs: Annotated[int, Field(ge=0, le=252, description="Your Speed EVs (0-252)")] = 252,
+        opponent_nature: Annotated[str, Field(description="Opponent's nature")] = "jolly",
+        opponent_speed_evs: Annotated[int, Field(ge=0, le=252, description="Opponent's Speed EVs (0-252)")] = 252,
+        include_scenarios: Annotated[Optional[list[str]], Field(description="Extra scenarios to check: 'tailwind' (2x), 'trick_room' (slower first), 'paralysis' (0.5x), 'icy_wind' (-1 stage), 'choice_scarf' (1.5x)")] = None,
     ) -> dict:
-        """
-        Compare speed between two Pokemon across various scenarios.
+        """Compare Speed between two Pokemon across various scenarios.
 
-        Answers: "Who's faster?" in normal play, Tailwind, Trick Room, etc.
-
-        Args:
-            my_pokemon: Your Pokemon name
-            opponent_pokemon: Opponent's Pokemon name
-            my_nature: Your Pokemon's nature (default: jolly)
-            my_speed_evs: Your speed EVs (default: 252)
-            opponent_nature: Opponent's nature (default: jolly)
-            opponent_speed_evs: Opponent's speed EVs (default: 252)
-            include_scenarios: List of scenarios to check:
-                - "tailwind" (2x speed)
-                - "trick_room" (slower goes first)
-                - "paralysis" (0.5x speed)
-                - "icy_wind" (-1 speed stage = 0.67x)
-                - "choice_scarf" (1.5x speed)
-
-        Returns:
-            - base_comparison: Who's faster normally
-            - scenarios: Result for each requested scenario
-            - evs_to_outspeed: Minimum EVs needed to outspeed (if behind)
+        Answers "who's faster?" in normal play plus any requested scenarios
+        (Tailwind, Trick Room, paralysis, Icy Wind, Choice Scarf). Also
+        reports the minimum EVs needed to outspeed if you're behind.
         """
         from vgc_mcp_core.calc.stats import calculate_stat
         from vgc_mcp_core.models.pokemon import Nature, get_nature_modifier
@@ -1842,36 +1798,29 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Check Team vs Threat",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def check_team_vs_threat(
-        threat_pokemon: str,
-        threat_nature: str = "modest",
-        threat_offensive_evs: int = 252,
-        threat_item: str = None,
-        threat_ability: str = None,
-        check_moves: list[str] = None
+        threat_pokemon: Annotated[str, Field(description="The threatening Pokemon to check the loaded team against", min_length=1)],
+        threat_nature: Annotated[str, Field(description="Threat's nature")] = "modest",
+        threat_offensive_evs: Annotated[int, Field(ge=0, le=252, description="Threat's offensive EVs (0-252), applied to its stronger attacking stat")] = 252,
+        threat_item: Annotated[Optional[str], Field(description="Threat's item (e.g. 'choice-specs')")] = None,
+        threat_ability: Annotated[Optional[str], Field(description="Threat's ability (auto-detected if not specified)")] = None,
+        check_moves: Annotated[Optional[list[str]], Field(description="Specific moves to check (top 2 used); defaults to common STAB moves for the threat's types")] = None,
     ) -> dict:
-        """
-        Check how your current team handles a specific threat.
+        """Check how your currently loaded team handles a specific threat.
 
-        Calculates damage from the threat to each team member and vice versa.
-
-        Args:
-            threat_pokemon: The threatening Pokemon to check against
-            threat_nature: Threat's nature (default: modest)
-            threat_offensive_evs: Threat's offensive EVs (default: 252)
-            threat_item: Threat's item (e.g., "choice-specs")
-            threat_ability: Threat's ability (auto-detected if not specified)
-            check_moves: Specific moves to check (auto-detects common moves if not specified)
-
-        Returns:
-            - threat_info: The threat's stats
-            - team_matchups: For each team member:
-                - survives: Can they survive the threat's attack?
-                - can_ko: Can they KO the threat?
-                - verdict: "Checks", "Counters", "Loses to", "Mutual KO"
-            - safe_switches: Team members that can switch in safely
-            - answers: Team members that can KO the threat
+        Calculates damage from the threat to each team member and vice versa,
+        giving each member a verdict (Counters / Checks / Revenge kills /
+        Loses to) plus overall safe_switches and answers lists. Requires a
+        loaded team (import_showdown_team first).
         """
         from vgc_mcp_core.calc.damage import calculate_damage
         from vgc_mcp_core.calc.modifiers import DamageModifiers
@@ -2033,42 +1982,27 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Design Pokemon for Role",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def design_pokemon_for_role(
-        pokemon_name: str,
-        role: str = "auto",
-        speed_benchmark: str = None,
-        survive_hit: dict = None,
-        item: str = None
+        pokemon_name: Annotated[str, Field(description="Pokemon to build", min_length=1)],
+        role: Annotated[str, Field(description="Desired role: 'auto' (detect from stats), 'sweeper' (fast + offensive), 'bulky_attacker' (offense with HP), 'wall' (max bulk), 'support' (bulk with some speed), or 'trick_room' (min speed, max offense)")] = "auto",
+        speed_benchmark: Annotated[Optional[str], Field(description="Pokemon to outspeed (e.g. 'iron-bundle'); Speed EVs are tuned to beat its max-investment speed")] = None,
+        survive_hit: Annotated[Optional[dict], Field(description="Attack to survive as a dict with 'attacker' and 'move'")] = None,
+        item: Annotated[Optional[str], Field(description="Item to use (auto-suggested from the role if not provided)")] = None,
     ) -> dict:
-        """
-        Design a complete Pokemon build for a specific role in ONE call.
+        """Design a complete Pokemon build for a specific role in ONE call.
 
-        Automatically determines nature, EVs, suggested moves, and item
-        based on the Pokemon's stats and the desired role.
-
-        Args:
-            pokemon_name: Pokemon to build
-            role: Desired role:
-                - "auto": Detect from stats
-                - "sweeper": Fast + offensive
-                - "bulky_attacker": Offensive with HP investment
-                - "wall": Maximum bulk
-                - "support": Bulk with some speed
-                - "trick_room": Minimum speed, max offense
-            speed_benchmark: Optional Pokemon to outspeed (e.g., "iron-bundle")
-            survive_hit: Optional attack to survive:
-                - attacker: Pokemon name
-                - move: Move name
-            item: Suggested item (auto-suggested if not provided)
-
-        Returns:
-            - build: Complete recommended build
-            - nature: Optimal nature with reasoning
-            - evs: Full EV spread
-            - item: Suggested item
-            - moves: Suggested moves (from common competitive usage)
-            - final_stats: Stats at level 50
+        Determines nature, EV spread, item, and suggested moves from the
+        Pokemon's stats and the desired role. Returns the full build with
+        reasoning, level-50 final stats, and a Showdown-format block.
         """
         from vgc_mcp_core.calc.stats import calculate_hp, calculate_stat
         from vgc_mcp_core.models.pokemon import Nature, get_nature_modifier
@@ -2256,53 +2190,39 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Damage vs Smogon Sets",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def calc_damage_vs_smogon_sets(
-        my_pokemon: str,
-        my_nature: str,
-        my_hp_evs: int = 0,
-        my_atk_evs: int = 0,
-        my_def_evs: int = 0,
-        my_spa_evs: int = 0,
-        my_spd_evs: int = 0,
-        my_spe_evs: int = 0,
-        my_item: str = None,
-        my_ability: str = None,
-        my_tera_type: str = None,
-        opponent_pokemon: str = "",
-        move: str = "",
-        direction: str = "from",
-        num_sets: int = 3
+        my_pokemon: Annotated[str, Field(description="Your Pokemon name", min_length=1)],
+        my_nature: Annotated[str, Field(description="Your Pokemon's nature", min_length=1)],
+        my_hp_evs: Annotated[int, Field(ge=0, le=252, description="Your HP EVs (0-252)")] = 0,
+        my_atk_evs: Annotated[int, Field(ge=0, le=252, description="Your Attack EVs (0-252)")] = 0,
+        my_def_evs: Annotated[int, Field(ge=0, le=252, description="Your Defense EVs (0-252)")] = 0,
+        my_spa_evs: Annotated[int, Field(ge=0, le=252, description="Your Sp. Atk EVs (0-252)")] = 0,
+        my_spd_evs: Annotated[int, Field(ge=0, le=252, description="Your Sp. Def EVs (0-252)")] = 0,
+        my_spe_evs: Annotated[int, Field(ge=0, le=252, description="Your Speed EVs (0-252)")] = 0,
+        my_item: Annotated[Optional[str], Field(description="Your item")] = None,
+        my_ability: Annotated[Optional[str], Field(description="Your ability (auto-detected if not specified)")] = None,
+        my_tera_type: Annotated[Optional[str], Field(description="Your Tera type if active (replaces your defensive typing)")] = None,
+        opponent_pokemon: Annotated[str, Field(description="Opponent Pokemon to check against (required)")] = "",
+        move: Annotated[str, Field(description="Move being used (required)")] = "",
+        direction: Annotated[str, Field(description="'from' = opponent attacks you with the move; 'to' = you attack the opponent")] = "from",
+        num_sets: Annotated[int, Field(ge=1, description="Number of top Smogon spreads to check")] = 3,
     ) -> dict:
-        """
-        Calculate damage using YOUR exact spread vs the top Smogon sets.
+        """Calculate damage using YOUR exact spread vs the top Smogon sets.
 
-        This answers questions like:
-        - "How much damage does my Entei (252 HP/116 Def) take from the top 3 Urshifu sets?"
-        - "Can my Flutter Mane OHKO the common Incineroar spreads?"
-
-        Args:
-            my_pokemon: Your Pokemon name
-            my_nature: Your Pokemon's nature
-            my_hp_evs: Your HP EVs
-            my_atk_evs: Your Attack EVs
-            my_def_evs: Your Defense EVs
-            my_spa_evs: Your Sp. Atk EVs
-            my_spd_evs: Your Sp. Def EVs
-            my_spe_evs: Your Speed EVs
-            my_item: Your item (optional)
-            my_ability: Your ability (auto-detected if not specified)
-            my_tera_type: Your Tera type if active (changes your defensive typing)
-            opponent_pokemon: The opponent Pokemon to check against
-            move: The move being used
-            direction: "from" (opponent attacks you) or "to" (you attack opponent)
-            num_sets: Number of top Smogon sets to check (default 3)
-
-        Returns:
-            - your_build: Your Pokemon's stats
-            - opponent_sets: Top N Smogon sets with usage %
-            - damage_results: Damage calc for each set
-            - summary: Quick overview of survival/KO across sets
+        Answers questions like "how much damage does my 252 HP / 116 Def Entei
+        take from the top 3 Urshifu sets?" or "can my Flutter Mane OHKO the
+        common Incineroar spreads?". Returns your build's stats, the top N
+        Smogon sets with usage %, a damage calc per set, and a survival/KO
+        summary.
         """
         from vgc_mcp_core.calc.damage import calculate_damage
         from vgc_mcp_core.calc.modifiers import DamageModifiers
@@ -2631,100 +2551,58 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Optimize EV Spread",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def optimize_spread(
-        pokemon_name: str,
-        current_nature: str = None,
-        current_hp_evs: int = 0,
-        current_atk_evs: int = 0,
-        current_def_evs: int = 0,
-        current_spa_evs: int = 0,
-        current_spd_evs: int = 0,
-        current_spe_evs: int = 0,
-        target_speed: int = None,
-        outspeed_pokemon: str = None,
-        outspeed_pokemon_nature: str = "jolly",
-        outspeed_pokemon_evs: int = 252,
-        survive_pokemon: str = None,
-        survive_move: str = None,
-        survive_pokemon_nature: str = "adamant",
-        survive_pokemon_evs: int = 252,
-        survive_pokemon_item: str = None,
-        survive_pokemon_ability: str = None,
-        use_smogon_spreads: bool = False,
-        smogon_spread_count: int = 3,
-        max_damage_percent: float = None,
-        target_nko: int = None,
-        target_hp_stat: int = None,
-        target_atk_stat: int = None,
-        target_def_stat: int = None,
-        target_spa_stat: int = None,
-        target_spd_stat: int = None
+        pokemon_name: Annotated[str, Field(description="Your Pokemon", min_length=1)],
+        current_nature: Annotated[Optional[str], Field(description="Current nature (optimal one is suggested if not provided)")] = None,
+        current_hp_evs: Annotated[int, Field(ge=0, le=252, description="Current HP EVs, used as starting point (0-252)")] = 0,
+        current_atk_evs: Annotated[int, Field(ge=0, le=252, description="Current Attack EVs, used as starting point (0-252)")] = 0,
+        current_def_evs: Annotated[int, Field(ge=0, le=252, description="Current Defense EVs, used as starting point (0-252)")] = 0,
+        current_spa_evs: Annotated[int, Field(ge=0, le=252, description="Current Sp. Atk EVs, used as starting point (0-252)")] = 0,
+        current_spd_evs: Annotated[int, Field(ge=0, le=252, description="Current Sp. Def EVs, used as starting point (0-252)")] = 0,
+        current_spe_evs: Annotated[int, Field(ge=0, le=252, description="Current Speed EVs, used as starting point (0-252)")] = 0,
+        target_speed: Annotated[Optional[int], Field(description="Exact Speed stat you want to hit")] = None,
+        outspeed_pokemon: Annotated[Optional[str], Field(description="Pokemon you want to outspeed")] = None,
+        outspeed_pokemon_nature: Annotated[str, Field(description="Outspeed target's nature")] = "jolly",
+        outspeed_pokemon_evs: Annotated[int, Field(ge=0, le=252, description="Outspeed target's Speed EVs (0-252)")] = 252,
+        survive_pokemon: Annotated[Optional[str], Field(description="Attacker to survive against")] = None,
+        survive_move: Annotated[Optional[str], Field(description="Move to survive")] = None,
+        survive_pokemon_nature: Annotated[str, Field(description="Attacker's nature (ignored if use_smogon_spreads=True)")] = "adamant",
+        survive_pokemon_evs: Annotated[int, Field(ge=0, le=252, description="Attacker's offensive EVs (0-252; ignored if use_smogon_spreads=True)")] = 252,
+        survive_pokemon_item: Annotated[Optional[str], Field(description="Attacker's item (e.g. 'choice-specs') - REQUIRED if use_smogon_spreads=True")] = None,
+        survive_pokemon_ability: Annotated[Optional[str], Field(description="Attacker's ability")] = None,
+        use_smogon_spreads: Annotated[bool, Field(description="If True, fetch the attacker's top Smogon spreads and calc against each")] = False,
+        smogon_spread_count: Annotated[int, Field(ge=1, description="Number of top Smogon spreads to check")] = 3,
+        max_damage_percent: Annotated[Optional[float], Field(ge=0, description="Max damage % to take from the survive attack (e.g. 80.0 = take at most 80%)")] = None,
+        target_nko: Annotated[Optional[int], Field(ge=1, description="Target N-HKO vs the survive attack (2 = be 2HKO'd = survive 1 hit; 3 = survive 2 hits)")] = None,
+        target_hp_stat: Annotated[Optional[int], Field(description="Exact HP stat you want")] = None,
+        target_atk_stat: Annotated[Optional[int], Field(description="Exact Attack stat you want")] = None,
+        target_def_stat: Annotated[Optional[int], Field(description="Exact Defense stat you want")] = None,
+        target_spa_stat: Annotated[Optional[int], Field(description="Exact Sp. Atk stat you want")] = None,
+        target_spd_stat: Annotated[Optional[int], Field(description="Exact Sp. Def stat you want")] = None,
     ) -> dict:
-        """
-        Optimize or fix an EV spread to meet specific stat targets.
+        """Optimize or fix an EV spread to meet specific stat/benchmark targets.
 
-        Give me your current spread (optional) and tell me what you need:
-        - A specific speed stat to hit
-        - A Pokemon to outspeed
-        - An attack to survive (100% survival)
-        - A max damage % to take (e.g., "take max 80% from this attack")
-        - A target N-HKO (e.g., "be 2HKO'd by this attack" = survive 1 hit)
-        - Any target stat value
-
-        I'll reverse-engineer the exact EVs and nature needed.
-
-        Args:
-            pokemon_name: Your Pokemon
-            current_nature: Current nature (optional, will suggest optimal if not provided)
-            current_*_evs: Current EV spread (optional, used as starting point)
-            target_speed: Exact speed stat you want to hit
-            outspeed_pokemon: Pokemon you want to outspeed
-            outspeed_pokemon_nature: Target's nature (default: jolly)
-            outspeed_pokemon_evs: Target's speed EVs (default: 252)
-            survive_pokemon: Attacker to check against
-            survive_move: Move to check against
-            survive_pokemon_nature: Attacker's nature (default: adamant, ignored if use_smogon_spreads=True)
-            survive_pokemon_evs: Attacker's offensive EVs (default: 252, ignored if use_smogon_spreads=True)
-            survive_pokemon_item: Attacker's item (e.g., "choice-specs") - REQUIRED if use_smogon_spreads=True
-            survive_pokemon_ability: Attacker's ability
-            use_smogon_spreads: If True, fetch top spreads from Smogon and calc against each
-            smogon_spread_count: Number of top Smogon spreads to check (default: 3)
-            max_damage_percent: Max damage % to take (e.g., 80.0 = take max 80%)
-            target_nko: Target N-HKO (2 = be 2HKO'd = survive 1 hit, 3 = survive 2 hits)
-            target_hp_stat: Exact HP stat you want
-            target_atk_stat: Exact Attack stat you want
-            target_def_stat: Exact Defense stat you want
-            target_spa_stat: Exact Sp. Atk stat you want
-            target_spd_stat: Exact Sp. Def stat you want
-
-        Returns:
-            - optimized_spread: New EV distribution
-            - optimized_nature: Recommended nature
-            - changes_from_current: What changed and why
-            - final_stats: Resulting stats at level 50
-            - benchmarks_hit: Targets achieved
-            - ev_savings: EVs saved compared to current spread
-            - smogon_calcs: (if use_smogon_spreads) Damage from each top spread
+        Reverse-engineers the exact EVs and nature needed for any mix of: an
+        exact Speed stat, a Pokemon to outspeed, an attack to survive (100%),
+        a max damage % to take, a target N-HKO, or exact stat values. Returns
+        the optimized spread and nature, changes from the current spread,
+        level-50 final stats, benchmarks_hit, ev_savings, and (with
+        use_smogon_spreads) per-spread Smogon damage calcs.
 
         Examples:
-            # Survive a hit (100% survival)
             optimize_spread(pokemon_name="entei", survive_pokemon="urshifu", survive_move="surging-strikes")
-
-            # Take max 80% from an attack
             optimize_spread(pokemon_name="entei", survive_pokemon="urshifu", survive_move="surging-strikes", max_damage_percent=80)
-
-            # Be 2HKO'd (survive 1 hit guaranteed)
             optimize_spread(pokemon_name="entei", survive_pokemon="flutter-mane", survive_move="moonblast", target_nko=2)
-
-            # Survive Choice Specs Flutter Mane using top 3 Smogon spreads
-            optimize_spread(
-                pokemon_name="entei",
-                survive_pokemon="flutter-mane",
-                survive_move="power-gem",
-                survive_pokemon_item="choice-specs",
-                use_smogon_spreads=True
-            )
+            optimize_spread(pokemon_name="entei", survive_pokemon="flutter-mane", survive_move="power-gem", survive_pokemon_item="choice-specs", use_smogon_spreads=True)
         """
         from vgc_mcp_core.calc.damage import calculate_damage
         from vgc_mcp_core.calc.modifiers import DamageModifiers
@@ -3208,41 +3086,26 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Compare Pokemon Options",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def compare_pokemon_options(
-        pokemon_a: str,
-        pokemon_b: str,
-        role: str = "auto",
-        check_vs_pokemon: str = None
+        pokemon_a: Annotated[str, Field(description="First Pokemon to compare", min_length=1)],
+        pokemon_b: Annotated[str, Field(description="Second Pokemon to compare", min_length=1)],
+        role: Annotated[str, Field(description="Context for the comparison: 'auto' (detect from stats), 'physical_attacker', 'special_attacker', 'support', 'wall', or 'speed_control'")] = "auto",
+        check_vs_pokemon: Annotated[Optional[str], Field(description="Also check both candidates against this specific threat")] = None,
     ) -> dict:
-        """
-        Compare two Pokemon to help decide which fits your team better.
+        """Compare two Pokemon to help decide which fits your team better.
 
-        Answers: "Should I use Entei or Arcanine-Hisui?"
-
-        Compares:
-        - Base stats and stat spreads
-        - Speed tiers (who outspeeds what)
-        - Typing and weaknesses
-        - Abilities
-        - Common moves and sets (from Smogon)
-
-        Args:
-            pokemon_a: First Pokemon to compare
-            pokemon_b: Second Pokemon to compare
-            role: Context for comparison:
-                - "auto": Detect from stats
-                - "physical_attacker", "special_attacker"
-                - "support", "wall", "speed_control"
-            check_vs_pokemon: Optional - check both against a specific threat
-
-        Returns:
-            - side_by_side: Stats comparison
-            - speed_comparison: Who's faster, by how much
-            - typing_analysis: Shared weaknesses, unique resistances
-            - ability_comparison: Key ability differences
-            - usage_data: Smogon usage if available
-            - verdict: Recommendation with reasoning
+        Answers "should I use Entei or Arcanine-Hisui?" - compares base stats,
+        max speed tiers, typing (shared/unique weaknesses and resistances),
+        abilities, and Smogon usage, then returns a verdict with reasoning.
         """
         from vgc_mcp_core.calc.modifiers import get_type_effectiveness
         from vgc_mcp_core.calc.stats import calculate_stat
@@ -3462,36 +3325,26 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Find Counters for Threat",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def find_counter_for(
-        threat: str,
-        check_team_first: bool = True,
-        suggest_pokemon: bool = True,
-        max_suggestions: int = 5
+        threat: Annotated[str, Field(description="The Pokemon you need to counter", min_length=1)],
+        check_team_first: Annotated[bool, Field(description="Check the currently loaded team for existing answers")] = True,
+        suggest_pokemon: Annotated[bool, Field(description="Suggest popular meta Pokemon as counters")] = True,
+        max_suggestions: Annotated[int, Field(ge=1, description="Maximum Pokemon to suggest")] = 5,
     ) -> dict:
-        """
-        Find counters for a threatening Pokemon.
+        """Find counters for a threatening Pokemon.
 
-        Answers: "What beats Flutter Mane?" or "How do I handle Urshifu?"
-
-        Checks:
-        1. Your current team for existing answers
-        2. Type advantages
-        3. Speed matchups
-        4. Common counters from meta usage
-
-        Args:
-            threat: The Pokemon you need to counter
-            check_team_first: Check current team for answers (default: True)
-            suggest_pokemon: Suggest meta Pokemon as counters (default: True)
-            max_suggestions: Max Pokemon to suggest (default: 5)
-
-        Returns:
-            - threat_info: The threat's key stats/typing
-            - team_answers: Which team members can handle it
-            - type_counters: Types that resist and hit back
-            - meta_counters: Popular Pokemon that counter this threat
-            - recommendation: Best approach
+        Answers "what beats Flutter Mane?" - checks your current team for
+        answers, type advantages (resist + hit super effectively), speed
+        matchups, and common meta counters, then recommends the best approach.
         """
         from vgc_mcp_core.calc.modifiers import get_type_effectiveness
         from vgc_mcp_core.calc.stats import calculate_stat
@@ -3666,37 +3519,26 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Evaluate Pokemon Core",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def evaluate_core(
-        pokemon_list: list[str],
-        suggest_partners: bool = True,
-        max_partners: int = 3
+        pokemon_list: Annotated[list[str], Field(description="2-4 Pokemon names forming the core")],
+        suggest_partners: Annotated[bool, Field(description="Suggest Pokemon that complement the core's gaps")] = True,
+        max_partners: Annotated[int, Field(ge=1, description="Number of partner suggestions to return")] = 3,
     ) -> dict:
-        """
-        Evaluate a Pokemon core (2-4 Pokemon) for synergy.
+        """Evaluate a Pokemon core (2-4 Pokemon) for synergy.
 
-        Answers: "Is Kyogre + Flutter Mane a good core?"
-
-        Checks:
-        - Type synergy (shared weaknesses, complementary resistances)
-        - Speed control compatibility
-        - Offensive coverage
-        - Defensive gaps
-        - Role redundancy
-
-        Args:
-            pokemon_list: List of 2-4 Pokemon names forming the core
-            suggest_partners: Suggest Pokemon to complete the core (default: True)
-            max_partners: Number of partners to suggest (default: 3)
-
-        Returns:
-            - core_pokemon: The Pokemon in this core
-            - type_synergy: Weaknesses, resistances, gaps
-            - speed_analysis: Speed tiers and control options
-            - coverage: Offensive type coverage
-            - synergy_score: 1-10 rating
-            - issues: Problems with this core
-            - suggested_partners: Pokemon that complement this core
+        Answers "is Kyogre + Flutter Mane a good core?" - checks type synergy
+        (shared weaknesses, covered gaps), speed tiers and speed control,
+        offensive coverage, and role redundancy. Returns a 1-10 synergy score,
+        issues found, and suggested partner Pokemon.
         """
         from vgc_mcp_core.calc.modifiers import get_type_effectiveness
         from vgc_mcp_core.calc.stats import calculate_stat

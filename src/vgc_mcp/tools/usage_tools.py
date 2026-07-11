@@ -1,8 +1,10 @@
 """MCP tools for Smogon usage data."""
 
-from typing import Optional
+from typing import Annotated, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.api.smogon import SmogonStatsClient
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
@@ -11,22 +13,24 @@ from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
     """Register Smogon usage data tools with the MCP server."""
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Get Pokemon Usage Stats",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def get_usage_stats(
-        pokemon_name: str,
-        format_name: Optional[str] = None,
-        rating: int = 0
+        pokemon_name: Annotated[str, Field(description="Name of the Pokemon (e.g. 'flutter-mane', 'incineroar')", min_length=1)],
+        format_name: Annotated[Optional[str], Field(description="VGC format (auto-detects latest if not specified)")] = None,
+        rating: Annotated[int, Field(ge=0, description="Rating cutoff (0, 1500, 1630, or 1760). Higher = more competitive data")] = 0
     ) -> dict:
-        """
-        Get Smogon usage statistics for a Pokemon in VGC.
+        """Get Smogon usage statistics for a Pokemon in VGC.
 
-        Args:
-            pokemon_name: Name of the Pokemon (e.g., "flutter-mane", "incineroar")
-            format_name: VGC format (auto-detects latest if not specified)
-            rating: Rating cutoff (0, 1500, 1630, or 1760). Higher = more competitive data.
-
-        Returns:
-            Usage percentage, common items, abilities, moves, spreads, and teammates
+        Returns usage percentage, common items, abilities, moves, spreads,
+        and teammates.
         """
         try:
             usage = await smogon.get_pokemon_usage(pokemon_name, format_name, rating)
@@ -39,22 +43,24 @@ def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Get Common Competitive Sets",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def get_common_sets(
-        pokemon_name: str,
-        format_name: Optional[str] = None,
-        rating: int = 0
+        pokemon_name: Annotated[str, Field(description="Name of the Pokemon", min_length=1)],
+        format_name: Annotated[Optional[str], Field(description="VGC format (auto-detects latest if not specified)")] = None,
+        rating: Annotated[int, Field(ge=0, description="Rating cutoff (0=1500+, 1500, 1630, 1760=top players)")] = 0
     ) -> dict:
-        """
-        Get the most common competitive sets for a Pokemon.
+        """Get the most common competitive sets for a Pokemon.
 
-        Args:
-            pokemon_name: Name of the Pokemon
-            format_name: VGC format (auto-detects latest if not specified)
-            rating: Rating cutoff (0=1500+, 1500, 1630, 1760=top players). Default 0.
-
-        Returns:
-            Top items, abilities, moves, EV spreads, and Tera types with usage rates
+        Returns top items, abilities, moves, EV spreads, and Tera types with
+        usage rates.
         """
         try:
             sets = await smogon.get_common_sets(pokemon_name, format_name, rating)
@@ -67,24 +73,24 @@ def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Suggest Teammates",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def suggest_teammates(
-        pokemon_name: str,
-        format_name: Optional[str] = None,
-        rating: int = 0,
-        limit: int = 10
+        pokemon_name: Annotated[str, Field(description="Pokemon to find teammates for", min_length=1)],
+        format_name: Annotated[Optional[str], Field(description="VGC format (auto-detects latest if not specified)")] = None,
+        rating: Annotated[int, Field(ge=0, description="Rating cutoff (0=1500+, 1500, 1630, 1760=top players)")] = 0,
+        limit: Annotated[int, Field(ge=1, description="Number of suggestions to return")] = 10
     ) -> dict:
-        """
-        Get suggested teammates based on usage data.
+        """Get suggested teammates based on Smogon usage data.
 
-        Args:
-            pokemon_name: Pokemon to find teammates for
-            format_name: VGC format (auto-detects latest if not specified)
-            rating: Rating cutoff (0=1500+, 1500, 1630, 1760=top players). Default 0.
-            limit: Number of suggestions to return (default 10)
-
-        Returns:
-            List of common teammates with usage correlation percentages
+        Returns common teammates with usage correlation percentages.
         """
         try:
             teammates = await smogon.suggest_teammates(pokemon_name, format_name, rating, limit)
@@ -97,18 +103,22 @@ def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Get Current Format Info",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def get_current_format_info() -> dict:
-        """
-        Get information about the currently detected VGC format.
+        """Get information about the currently detected VGC format.
 
-        Shows both the configured regulation and the actual regulation
-        the data is from (they may differ if Smogon doesn't have the
-        latest regulation's stats yet).
-
-        Returns:
-            Current format name, month, actual and configured regulation,
-            available formats, and any mismatch warnings.
+        Returns the current format name, month, actual and configured
+        regulation, available formats, and any mismatch warnings. The
+        configured regulation and the data's regulation may differ if Smogon
+        doesn't have the latest regulation's stats yet.
         """
         try:
             # Trigger a fetch to populate current format info
@@ -144,22 +154,23 @@ def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Get Top Used Pokemon",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def get_top_pokemon(
-        format_name: Optional[str] = None,
-        rating: int = 0,
-        limit: int = 20
+        format_name: Annotated[Optional[str], Field(description="VGC format (auto-detects latest if not specified)")] = None,
+        rating: Annotated[int, Field(ge=0, description="Rating cutoff (0, 1500, 1630, or 1760); use 1760 for high-level play")] = 0,
+        limit: Annotated[int, Field(ge=1, description="Number of Pokemon to return")] = 20
     ) -> dict:
-        """
-        Get the top used Pokemon in the current VGC format.
+        """Get the top used Pokemon in the current VGC format.
 
-        Args:
-            format_name: VGC format (auto-detects latest if not specified)
-            rating: Rating cutoff (0, 1500, 1630, or 1760). Default 1760 for high-level play.
-            limit: Number of Pokemon to return
-
-        Returns:
-            List of top Pokemon with usage percentages
+        Returns a list of top Pokemon with usage percentages.
         """
         try:
             stats = await smogon.get_usage_stats(format_name, rating)
@@ -189,28 +200,25 @@ def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Compare Usage Month over Month",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def compare_pokemon_month_over_month(
-        pokemon_name: str,
-        format_name: Optional[str] = None,
-        rating: int = 0
+        pokemon_name: Annotated[str, Field(description="Name of the Pokemon to analyze", min_length=1)],
+        format_name: Annotated[Optional[str], Field(description="VGC format (auto-detects latest if not specified)")] = None,
+        rating: Annotated[int, Field(ge=0, description="Rating cutoff (0, 1500, 1630, or 1760); use 1760 for high-level play")] = 0
     ) -> dict:
-        """
-        Compare a Pokemon's usage between current and previous month.
+        """Compare a Pokemon's usage between the current and previous month.
 
-        Identifies meta shifts like:
-        - Usage percentage changes
-        - Speed tier shifts (e.g., "Ogerpon was slower last month but faster this month")
-        - Item preference changes
-        - Move popularity changes
-
-        Args:
-            pokemon_name: Name of the Pokemon to analyze
-            format_name: VGC format (auto-detects latest if not specified)
-            rating: Rating cutoff (0, 1500, 1630, or 1760). Default 1760 for high-level play.
-
-        Returns:
-            Comparison data showing current vs previous month with identified changes
+        Returns comparison data with identified meta shifts: usage percentage
+        changes, speed tier shifts, item preference changes, and move
+        popularity changes.
         """
         try:
             comparison = await smogon.compare_pokemon_usage(pokemon_name, format_name, rating)

@@ -1,8 +1,10 @@
 """MCP tools for comprehensive team matchup analysis."""
 
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
@@ -25,24 +27,25 @@ def _detect_champions(pokemon_names: Optional[List[str]] = None) -> bool:
 def register_team_matchup_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[SmogonStatsClient], team_manager: TeamManager):
     """Register comprehensive team matchup analysis tools."""
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Analyze Team Matchup",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def analyze_team_matchup(
-        team_pokemon: List[str],
-        opponent_pokemon: Optional[List[str]] = None,
-        vs_meta: bool = True,
-        format: str = "reg_h"
+        team_pokemon: Annotated[List[str], Field(description="List of your 6 Pokemon names")],
+        opponent_pokemon: Annotated[Optional[List[str]], Field(description="Optional specific opponent team (6 Pokemon)")] = None,
+        vs_meta: Annotated[bool, Field(description="If True, compare against the top 20 meta threats")] = True,
+        format: Annotated[str, Field(description="VGC format (e.g. 'reg_h')")] = "reg_h"
     ) -> dict:
-        """
-        Analyze how your full team matches up against opponents.
+        """Analyze how your full team matches up against opponents.
 
-        Args:
-            team_pokemon: List of your 6 Pokemon names
-            opponent_pokemon: Optional specific opponent team (6 Pokemon)
-            vs_meta: If True, compare against top 20 meta threats
-            format: VGC format (default: "reg_h")
-
-        Returns:
-            Comprehensive matchup analysis with ratings and recommendations
+        Returns an overall rating, per-threat coverage with the team's best
+        answer to each meta threat, and identified weaknesses.
         """
         try:
             if len(team_pokemon) != 6:

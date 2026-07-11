@@ -6,9 +6,11 @@ turn 1 analysis, threat assessment, and bring-4 recommendations.
 """
 
 import asyncio
-from typing import Optional
+from typing import Annotated, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
@@ -177,33 +179,32 @@ def register_game_plan_tools(
     global _smogon_client
     _smogon_client = smogon
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Generate Game Plan",
+        annotations=ToolAnnotations(
+            # Not readOnly: calls auto_detect_regulation, which may set the
+            # session regulation as a side effect (same rule as
+            # suggest_ev_spread / add_pokemon_smart in workflow_tools).
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def generate_game_plan(
-        opponent_team: list[str],
-        your_team: Optional[list[str]] = None,
-        format: str = "reg_h",
-        known_items: Optional[dict[str, str]] = None,
-        known_abilities: Optional[dict[str, str]] = None,
+        opponent_team: Annotated[list[str], Field(description="4-6 opponent Pokemon names (from team preview)")],
+        your_team: Annotated[Optional[list[str]], Field(description="Your Pokemon names (up to 6). If omitted, uses your loaded team.")] = None,
+        format: Annotated[str, Field(description="VGC format (e.g. 'reg_h')")] = "reg_h",
+        known_items: Annotated[Optional[dict[str, str]], Field(description="Optional items you've seen (e.g. {'tornadus': 'covert-cloak'})")] = None,
+        known_abilities: Annotated[Optional[dict[str, str]], Field(description="Optional abilities you've identified (e.g. {'tornadus': 'prankster'})")] = None,
     ) -> dict:
         """Generate a comprehensive game plan against a specific opponent team.
 
-        Produces an opponent-aware strategy with:
-        - Lead recommendations considering Fake Out speed, Prankster priority, Intimidate
-        - Turn 1 priority order (correctly handles Prankster +1, Fake Out +3, etc.)
-        - Threat assessment ranked by danger to YOUR team
-        - Win condition analysis
-        - Speed control matchup (Tailwind, Trick Room, Prankster interactions)
-        - Bring 4 / Leave 2 recommendations
-
-        Args:
-            opponent_team: 4-6 opponent Pokemon names (from team preview)
-            your_team: Your 6 Pokemon names. If omitted, uses your loaded team.
-            format: VGC format (default "reg_h")
-            known_items: Optional items you've seen (e.g. {"tornadus": "covert-cloak"})
-            known_abilities: Optional abilities you've identified (e.g. {"tornadus": "prankster"})
-
-        Returns:
-            Complete game plan with markdown_summary for display
+        Produces an opponent-aware strategy with lead recommendations (Fake Out
+        speed, Prankster priority, Intimidate), turn 1 priority order, threat
+        assessment ranked by danger to YOUR team, win condition analysis, speed
+        control matchup (Tailwind, Trick Room, Prankster), and Bring 4 / Leave 2
+        recommendations. Returns the complete plan with a markdown_summary for display.
         """
         known_items = known_items or {}
         known_abilities = known_abilities or {}

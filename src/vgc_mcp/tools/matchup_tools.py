@@ -1,6 +1,10 @@
 """MCP tools for matchup analysis."""
 
+from typing import Annotated
+
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.calc.matchup import (
     COMMON_THREATS,
@@ -16,23 +20,26 @@ from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 def register_matchup_tools(mcp: FastMCP, team_manager: TeamManager):
     """Register matchup analysis tools with the MCP server."""
 
-    @mcp.tool()
-    async def analyze_matchup(threat_name: str) -> dict:
-        """
-        Analyze how the current team handles a specific threat Pokemon.
+    @mcp.tool(
+        title="Analyze Threat Matchup",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def analyze_matchup(
+        threat_name: Annotated[str, Field(
+            description="Threat Pokemon name from the common-threats list (e.g. 'flutter-mane', 'dragapult'); use get_available_threats to list valid names",
+            min_length=1,
+        )],
+    ) -> dict:
+        """Analyze how the current team handles a specific common threat Pokemon.
 
-        Shows:
-        - Which team members can OHKO the threat
-        - Which team members can 2HKO
-        - Which are checks (outspeed + KO)
-        - Which are counters (survive + KO)
-        - Which team members are threatened by it
-
-        Args:
-            threat_name: Name of the threat Pokemon (e.g., "flutter-mane", "dragapult")
-
-        Returns:
-            Detailed matchup analysis
+        Shows which team members can OHKO/2HKO the threat, which are checks
+        (outspeed + KO) or counters (survive + KO), and which are threatened by
+        it. Requires Pokemon on the current team.
         """
         try:
             if team_manager.size == 0:
@@ -67,18 +74,21 @@ def register_matchup_tools(mcp: FastMCP, team_manager: TeamManager):
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Find Threats to Team",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def find_threats_to_team() -> dict:
-        """
-        Identify the biggest threats to the current team.
+        """Identify the biggest metagame threats to the current team.
 
-        Analyzes all common metagame threats and identifies:
-        - Major threats (OHKO 4+ team members)
-        - Moderate threats (OHKO 2-3 team members)
-        - Available checks and counters for each threat
-
-        Returns:
-            Team threat summary with severity rankings
+        Scans all common threats and reports major threats (OHKO 4+ team
+        members), moderate threats (OHKO 2-3), coverage gaps, and the checks
+        and counters available for each. Requires Pokemon on the current team.
         """
         try:
             if team_manager.size == 0:
@@ -105,19 +115,25 @@ def register_matchup_tools(mcp: FastMCP, team_manager: TeamManager):
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
-    async def check_offensive_coverage(target_type: str) -> dict:
-        """
-        Check if the team can hit a specific type super effectively.
+    @mcp.tool(
+        title="Check Offensive Type Coverage",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def check_offensive_coverage(
+        target_type: Annotated[str, Field(
+            description="Defending type to check coverage against (e.g. 'Steel', 'Fairy')",
+            min_length=1,
+        )],
+    ) -> dict:
+        """Check whether the current team can hit a specific type super effectively.
 
-        Useful for ensuring you have answers to common defensive types
-        like Steel, Fairy, etc.
-
-        Args:
-            target_type: The type to check coverage against (e.g., "Steel", "Fairy")
-
-        Returns:
-            Which Pokemon can hit super effectively and with what
+        Useful for ensuring answers to common defensive types like Steel or
+        Fairy. Requires Pokemon on the current team.
         """
         try:
             if team_manager.size == 0:
@@ -144,18 +160,25 @@ def register_matchup_tools(mcp: FastMCP, team_manager: TeamManager):
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
-    async def check_defensive_matchup(attacking_type: str) -> dict:
-        """
-        Check how well the team resists a specific attacking type.
+    @mcp.tool(
+        title="Check Defensive Type Matchup",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def check_defensive_matchup(
+        attacking_type: Annotated[str, Field(
+            description="Attacking type to check the team against (e.g. 'Ground', 'Water')",
+            min_length=1,
+        )],
+    ) -> dict:
+        """Check how well the current team resists a specific attacking type.
 
-        Shows immunities, resistances, and weaknesses across the team.
-
-        Args:
-            attacking_type: The attacking type to check (e.g., "Ground", "Water")
-
-        Returns:
-            Defensive breakdown for the type
+        Shows immunities, resistances, weaknesses, and safe switch-ins across
+        the team. Requires Pokemon on the current team.
         """
         try:
             if team_manager.size == 0:
@@ -183,13 +206,20 @@ def register_matchup_tools(mcp: FastMCP, team_manager: TeamManager):
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="List Available Threats",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def get_available_threats() -> dict:
-        """
-        List all common threats available for matchup analysis.
+        """List all common threat Pokemon available for matchup analysis.
 
-        Returns:
-            List of threat Pokemon with basic info
+        Returns each threat's name, types, item, and ability — use these names
+        with analyze_matchup.
         """
         threats = []
         for name, data in COMMON_THREATS.items():
@@ -205,19 +235,21 @@ def register_matchup_tools(mcp: FastMCP, team_manager: TeamManager):
             "threats": threats
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Full Matchup Report",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def full_matchup_report() -> dict:
-        """
-        Generate a comprehensive matchup report for the team.
+        """Generate a comprehensive matchup report for the current team.
 
-        Includes:
-        - All major and moderate threats
-        - Coverage gaps
-        - Defensive weaknesses
-        - Recommendations
-
-        Returns:
-            Full matchup analysis report
+        Combines major/moderate threats, coverage gaps, defensive weaknesses
+        against common attacking types, and actionable recommendations.
+        Requires Pokemon on the current team.
         """
         try:
             if team_manager.size == 0:

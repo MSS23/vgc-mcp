@@ -1,8 +1,10 @@
 """MCP tools for priority move and turn order analysis."""
 
-from typing import Optional
+from typing import Annotated, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.calc.priority import (
     FAKE_OUT_POKEMON,
@@ -20,43 +22,32 @@ from vgc_mcp_core.calc.priority import (
 def register_priority_tools(mcp: FastMCP, team_manager):
     """Register priority move analysis tools with the MCP server."""
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Analyze Turn Order",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def analyze_turn_order(
-        pokemon1_name: str,
-        pokemon1_move: str,
-        pokemon1_speed: int,
-        pokemon2_name: str,
-        pokemon2_move: str,
-        pokemon2_speed: int,
-        pokemon1_ability: Optional[str] = None,
-        pokemon2_ability: Optional[str] = None,
-        trick_room: bool = False,
-        terrain: Optional[str] = None
+        pokemon1_name: Annotated[str, Field(description="First Pokemon's name", min_length=1)],
+        pokemon1_move: Annotated[str, Field(description="Move being used by the first Pokemon", min_length=1)],
+        pokemon1_speed: Annotated[int, Field(description="First Pokemon's final speed stat")],
+        pokemon2_name: Annotated[str, Field(description="Second Pokemon's name", min_length=1)],
+        pokemon2_move: Annotated[str, Field(description="Move being used by the second Pokemon", min_length=1)],
+        pokemon2_speed: Annotated[int, Field(description="Second Pokemon's final speed stat")],
+        pokemon1_ability: Annotated[Optional[str], Field(description="First Pokemon's ability (for Prankster, etc.)")] = None,
+        pokemon2_ability: Annotated[Optional[str], Field(description="Second Pokemon's ability")] = None,
+        trick_room: Annotated[bool, Field(description="Whether Trick Room is active")] = False,
+        terrain: Annotated[Optional[str], Field(description="Active terrain: 'grassy', 'electric', 'psychic', or 'misty'")] = None,
     ) -> dict:
-        """
-        Determine which Pokemon moves first considering priority.
+        """Determine which Pokemon moves first considering priority.
 
-        Accounts for:
-        - Move priority brackets (+5 to -7)
-        - Speed stats
-        - Trick Room (reverses speed order)
-        - Prankster ability (+1 to status)
-        - Terrain effects (Grassy Glide)
-
-        Args:
-            pokemon1_name: First Pokemon's name
-            pokemon1_move: Move being used by first Pokemon
-            pokemon1_speed: First Pokemon's speed stat
-            pokemon2_name: Second Pokemon's name
-            pokemon2_move: Move being used by second Pokemon
-            pokemon2_speed: Second Pokemon's speed stat
-            pokemon1_ability: First Pokemon's ability (for Prankster, etc.)
-            pokemon2_ability: Second Pokemon's ability
-            trick_room: Whether Trick Room is active
-            terrain: Active terrain (grassy, electric, psychic, misty)
-
-        Returns:
-            Turn order analysis with reasoning
+        Accounts for move priority brackets (+5 to -7), speed stats, Trick Room
+        (reverses speed order), Prankster (+1 to status moves), and terrain
+        effects (Grassy Glide). Returns the first mover with reasoning.
         """
         result = determine_turn_order(
             pokemon1_name=pokemon1_name,
@@ -91,16 +82,21 @@ def register_priority_tools(mcp: FastMCP, team_manager):
             "message": f"{result.first_mover} moves first - {result.reason}"
         }
 
-    @mcp.tool()
-    async def get_move_priority_info(move_name: str) -> dict:
-        """
-        Get priority information for a specific move.
+    @mcp.tool(
+        title="Get Move Priority Info",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def get_move_priority_info(
+        move_name: Annotated[str, Field(description="Name of the move", min_length=1)],
+    ) -> dict:
+        """Get priority information for a specific move.
 
-        Args:
-            move_name: Name of the move
-
-        Returns:
-            Priority value and category
+        Returns the move's priority value, bracket, and category.
         """
         info = categorize_priority_move(move_name)
 
@@ -116,13 +112,19 @@ def register_priority_tools(mcp: FastMCP, team_manager):
             )
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="List Team Priority Moves",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def list_team_priority_moves() -> dict:
-        """
-        List all priority moves available on the current team.
+        """List all priority moves available on the current team.
 
-        Returns:
-            Priority moves for each team member
+        Reads the session's current team and returns priority moves per member.
         """
         team = team_manager.get_current_team()
 
@@ -164,49 +166,43 @@ def register_priority_tools(mcp: FastMCP, team_manager):
             )
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Check Fake Out Interaction",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def check_fake_out_interaction(
-        your_speed: int,
-        opponent_pokemon: str,
-        opponent_speed: int,
-        trick_room: bool = False
+        your_speed: Annotated[int, Field(description="Your Fake Out user's final speed stat")],
+        opponent_pokemon: Annotated[str, Field(description="Opponent's Pokemon name", min_length=1)],
+        opponent_speed: Annotated[int, Field(description="Opponent's final speed stat (relevant if they also have Fake Out)")],
+        trick_room: Annotated[bool, Field(description="Whether Trick Room is active")] = False,
     ) -> dict:
-        """
-        Analyze Fake Out speed interaction with an opponent.
+        """Analyze Fake Out speed interaction with an opponent.
 
-        Fake Out is a +3 priority move that only works on turn 1.
-        Speed determines who Fake Outs first if both have it.
-
-        Args:
-            your_speed: Your Fake Out user's speed
-            opponent_pokemon: Opponent's Pokemon name
-            opponent_speed: Opponent's speed (if they have Fake Out)
-            trick_room: Whether Trick Room is active
-
-        Returns:
-            Fake Out interaction analysis
+        Fake Out is a +3 priority move that only works on turn 1; speed
+        determines who Fake Outs first if both Pokemon have it.
         """
         return analyze_fake_out_matchup(your_speed, opponent_pokemon, opponent_speed, trick_room)
 
-    @mcp.tool()
-    async def list_priority_bracket(bracket: int) -> dict:
-        """
-        List all moves at a specific priority bracket.
+    @mcp.tool(
+        title="List Priority Bracket Moves",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def list_priority_bracket(
+        bracket: Annotated[int, Field(description="Priority bracket, -7 to +5 (e.g. +5 Helping Hand, +4 Protect, +3 Fake Out, +2 Extreme Speed, +1 Aqua Jet, 0 most moves, -7 Trick Room)")],
+    ) -> dict:
+        """List all moves at a specific priority bracket.
 
-        Common brackets:
-        - +5: Helping Hand
-        - +4: Protect, Detect
-        - +3: Fake Out, Quick Guard
-        - +2: Extreme Speed, First Impression
-        - +1: Aqua Jet, Bullet Punch, Mach Punch, etc.
-        - 0: Most moves
-        - Negative: Trick Room (-7), Counter (-6), etc.
-
-        Args:
-            bracket: Priority bracket (-7 to +5)
-
-        Returns:
-            List of moves at that priority
+        Returns the moves at that priority level along with a count.
         """
         moves = get_priority_moves_by_bracket(bracket)
 
@@ -218,15 +214,19 @@ def register_priority_tools(mcp: FastMCP, team_manager):
             "message": f"Found {len(moves)} moves at priority {bracket}"
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Get Priority Overview",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def get_priority_overview() -> dict:
-        """
-        Get a complete overview of all priority brackets and moves.
+        """Get a complete overview of all priority brackets and their moves.
 
         Useful for understanding the full priority system.
-
-        Returns:
-            All priority brackets with their moves
         """
         brackets = get_priority_bracket_summary()
 
@@ -246,13 +246,19 @@ def register_priority_tools(mcp: FastMCP, team_manager):
             ]
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Find Priority Threats",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def find_priority_threats() -> dict:
-        """
-        Identify common priority move threats in the VGC meta.
+        """Identify common priority move threats in the VGC meta.
 
-        Returns:
-            List of common priority threats and their moves
+        Returns Fake Out users, Prankster users, and common priority attackers.
         """
         threats = {
             "fake_out_users": {
@@ -283,25 +289,24 @@ def register_priority_tools(mcp: FastMCP, team_manager):
             "message": "Common priority threats in VGC meta"
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Check Prankster Interaction",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def check_prankster_interaction(
-        target_types: list[str],
-        move_name: str,
-        user_ability: str
+        target_types: Annotated[list[str], Field(description="Types of the target Pokemon")],
+        move_name: Annotated[str, Field(description="Name of the move being used", min_length=1)],
+        user_ability: Annotated[str, Field(description="Ability of the user (should be Prankster)", min_length=1)],
     ) -> dict:
-        """
-        Check if a Prankster-boosted move will affect the target.
+        """Check if a Prankster-boosted move will affect the target.
 
-        Dark-type Pokemon are immune to moves that gained priority
-        from Prankster.
-
-        Args:
-            target_types: Types of the target Pokemon
-            move_name: Name of the move being used
-            user_ability: Ability of the user (should be Prankster)
-
-        Returns:
-            Whether the move will work
+        Dark-type Pokemon are immune to moves that gained priority from
+        Prankster. Returns whether the move is blocked.
         """
         is_prankster = user_ability.lower().replace(" ", "-") == "prankster"
         has_dark = "dark" in [t.lower() for t in target_types]

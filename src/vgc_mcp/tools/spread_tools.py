@@ -2,9 +2,11 @@
 
 import time
 from dataclasses import dataclass
-from typing import Optional
+from typing import Annotated, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
@@ -1573,27 +1575,31 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             ),
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Check Spread Efficiency",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def check_spread_efficiency(
-        pokemon_name: str,
-        nature: str,
-        hp_evs: int = 0,
-        atk_evs: int = 0,
-        def_evs: int = 0,
-        spa_evs: int = 0,
-        spd_evs: int = 0,
-        spe_evs: int = 0
+        pokemon_name: Annotated[str, Field(description="Pokemon name", min_length=1)],
+        nature: Annotated[str, Field(description="Pokemon's nature (e.g. 'timid', 'adamant')", min_length=1)],
+        hp_evs: Annotated[int, Field(ge=0, le=252, description="HP EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0,
+        atk_evs: Annotated[int, Field(ge=0, le=252, description="Attack EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0,
+        def_evs: Annotated[int, Field(ge=0, le=252, description="Defense EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0,
+        spa_evs: Annotated[int, Field(ge=0, le=252, description="Special Attack EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0,
+        spd_evs: Annotated[int, Field(ge=0, le=252, description="Special Defense EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0,
+        spe_evs: Annotated[int, Field(ge=0, le=252, description="Speed EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0
     ) -> dict:
-        """
-        Check an EV spread for efficiency (wasted EVs, optimal distribution).
+        """Check an EV spread for efficiency (wasted EVs, optimal distribution).
 
-        Args:
-            pokemon_name: Pokemon name
-            nature: Pokemon's nature
-            hp_evs through spe_evs: Current EV spread
-
-        Returns:
-            Analysis of spread efficiency with suggestions
+        Returns issues (over-cap totals, non-multiple-of-4 waste), suggestions,
+        final stats, and a Showdown paste for the analyzed spread. In a
+        Champions (Reg MA) session the inputs are validated on the Stat Point
+        grain (0-32 per stat, 66 total) instead of 508/4.
         """
         try:
             base_stats = await pokeapi.get_base_stats(pokemon_name)
@@ -1712,30 +1718,31 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Suggest Nature Optimization",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def suggest_nature_optimization(
-        pokemon_name: str,
-        current_nature: str,
-        hp_evs: int,
-        atk_evs: int,
-        def_evs: int,
-        spa_evs: int,
-        spd_evs: int,
-        spe_evs: int,
-        moves: Optional[list[str]] = None
+        pokemon_name: Annotated[str, Field(description="Pokemon name", min_length=1)],
+        current_nature: Annotated[str, Field(description="Current nature (e.g. 'serious', 'timid')", min_length=1)],
+        hp_evs: Annotated[int, Field(ge=0, le=252, description="Current HP EVs (0-252); Stat Points 0-32 in Champions sessions")],
+        atk_evs: Annotated[int, Field(ge=0, le=252, description="Current Attack EVs (0-252); Stat Points 0-32 in Champions sessions")],
+        def_evs: Annotated[int, Field(ge=0, le=252, description="Current Defense EVs (0-252); Stat Points 0-32 in Champions sessions")],
+        spa_evs: Annotated[int, Field(ge=0, le=252, description="Current Special Attack EVs (0-252); Stat Points 0-32 in Champions sessions")],
+        spd_evs: Annotated[int, Field(ge=0, le=252, description="Current Special Defense EVs (0-252); Stat Points 0-32 in Champions sessions")],
+        spe_evs: Annotated[int, Field(ge=0, le=252, description="Current Speed EVs (0-252); Stat Points 0-32 in Champions sessions")],
+        moves: Annotated[Optional[list[str]], Field(description="Optional list of moves used to determine physical/special preference")] = None
     ) -> dict:
-        """
-        Suggest a nature change that achieves same stats with fewer EVs.
-        Like Showdown's "Use a different nature to save X EVs" feature.
+        """Suggest a nature change that achieves the same stats with fewer EVs.
 
-        Args:
-            pokemon_name: Pokemon name
-            current_nature: Current nature (e.g., "serious", "timid")
-            hp_evs through spe_evs: Current EV spread
-            moves: Optional list of moves to determine physical/special preference
-
-        Returns:
-            Nature optimization suggestion with EV savings
+        Like Showdown's "Use a different nature to save X EVs" feature. Returns
+        current vs optimized spreads (with Showdown pastes) and the EV savings.
+        In a Champions (Reg MA) session the search runs on the Stat Point grain.
         """
         try:
             base_stats = await pokeapi.get_base_stats(pokemon_name)
@@ -2012,26 +2019,26 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             logger.error(f"Error in suggest_nature_optimization: {e}", exc_info=True)
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Optimize Bulk EVs",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def optimize_bulk(
-        pokemon_name: str,
-        nature: str,
-        total_bulk_evs: int = 252,
-        defense_bias: float = 0.5,
-        item: Optional[str] = None,
+        pokemon_name: Annotated[str, Field(description="Pokemon name", min_length=1)],
+        nature: Annotated[str, Field(description="Pokemon's nature", min_length=1)],
+        total_bulk_evs: Annotated[int, Field(ge=0, description="Total EVs to allocate to bulk; in Champions sessions the default (252) maps to the full 66 Stat Point budget")] = 252,
+        defense_bias: Annotated[float, Field(description="0.5 = balanced, 1.0 = physical, 0.0 = special")] = 0.5,
+        item: Annotated[Optional[str], Field(description="Held item for HP number optimization (e.g. 'leftovers', 'life-orb')")] = None,
     ) -> dict:
-        """
-        Optimize HP/Def/SpD EVs for maximum bulk.
+        """Optimize HP/Def/SpD EVs for maximum effective bulk.
 
-        Args:
-            pokemon_name: Pokemon name
-            nature: Pokemon's nature
-            total_bulk_evs: Total EVs to allocate to bulk (default 252)
-            defense_bias: 0.5 = balanced, 1.0 = physical, 0.0 = special
-            item: Held item for HP number optimization (e.g., "leftovers", "life-orb")
-
-        Returns:
-            Optimal HP/Def/SpD distribution
+        Searches distributions to maximize HP*Def / HP*SpD weighted by
+        defense_bias and returns the optimal spread with a Showdown paste.
         """
         try:
             base_stats = await pokeapi.get_base_stats(pokemon_name)
@@ -2170,25 +2177,26 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Suggest EV Spread",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def suggest_spread(
-        pokemon_name: str,
-        role: str = "offensive",
-        speed_target: Optional[int] = None,
-        item: Optional[str] = None,
+        pokemon_name: Annotated[str, Field(description="Pokemon name", min_length=1)],
+        role: Annotated[str, Field(description="'offensive' (max offensive stat + speed), 'bulky' (HP + defenses), 'bulky_offense' (some bulk + offense), or 'support' (bulk focused)")] = "offensive",
+        speed_target: Annotated[Optional[int], Field(description="Optional specific final Speed stat to hit (offensive role only)")] = None,
+        item: Annotated[Optional[str], Field(description="Held item for HP number optimization (e.g. 'leftovers', 'life-orb')")] = None,
     ) -> dict:
-        """
-        Suggest an EV spread based on role.
+        """Suggest an EV spread based on role, with a Showdown paste.
 
-        Args:
-            pokemon_name: Pokemon name
-            role: "offensive" (max offensive stat + speed), "bulky" (HP + defenses),
-                  "bulky_offense" (some bulk + offense), "support" (bulk focused)
-            speed_target: Optional specific speed stat to hit
-            item: Held item for HP number optimization (e.g., "leftovers", "life-orb")
-
-        Returns:
-            Suggested spread with reasoning
+        Offensive role uses intelligent nature auto-selection. In a Champions
+        (Reg MA) session the suggestion is returned on the Stat Point scale
+        (0-32 per stat, 66 total) as an 'SPs:' paste.
         """
         try:
             base_stats = await pokeapi.get_base_stats(pokemon_name)
@@ -2352,34 +2360,29 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Optimize Bulk (Mathematical)",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def optimize_bulk_math(
-        pokemon_name: str,
-        nature: str,
-        total_bulk_evs: int = 252,
-        defense_weight: float = 0.5,
-        item: Optional[str] = None,
+        pokemon_name: Annotated[str, Field(description="Pokemon name", min_length=1)],
+        nature: Annotated[str, Field(description="Pokemon's nature (e.g. 'Bold', 'Calm', 'Careful')", min_length=1)],
+        total_bulk_evs: Annotated[int, Field(ge=0, description="Total EVs to distribute; in Champions sessions the default (252) maps to the full 66 Stat Point budget")] = 252,
+        defense_weight: Annotated[float, Field(description="0.0 = all SpD, 0.5 = balanced, 1.0 = all Def")] = 0.5,
+        item: Annotated[Optional[str], Field(description="Held item for HP number optimization (e.g. 'leftovers', 'life-orb')")] = None,
     ) -> dict:
-        """
-        Find mathematically optimal HP/Def/SpD using diminishing returns analysis.
+        """Find the mathematically optimal HP/Def/SpD split using diminishing returns analysis.
 
-        This uses the principle that Effective Bulk = HP * Defense, and optimal
-        distribution is when marginal gains are equal across stats.
-
-        Key insights:
-        - High base HP Pokemon should invest more in defenses
-        - High base Def/SpD Pokemon should invest more in HP
-        - Nature boosts reduce EV investment needed in that stat
-
-        Args:
-            pokemon_name: Pokemon name
-            nature: Pokemon's nature (e.g., "Bold", "Calm", "Careful")
-            total_bulk_evs: Total EVs to distribute (default 252)
-            defense_weight: 0.0 = all SpD, 0.5 = balanced, 1.0 = all Def
-            item: Held item for HP number optimization (e.g., "leftovers", "life-orb")
-
-        Returns:
-            Optimal distribution with efficiency comparison vs naive allocation
+        Uses the principle that Effective Bulk = HP * Defense and equalizes
+        marginal gains across stats: high base HP Pokemon should invest more
+        in defenses, high base Def/SpD Pokemon more in HP, and nature boosts
+        reduce the EVs needed in that stat. Returns the optimal distribution
+        with an efficiency comparison vs naive allocation.
         """
         try:
             base_stats = await pokeapi.get_base_stats(pokemon_name)
@@ -2473,23 +2476,24 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Analyze Bulk Diminishing Returns",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def analyze_bulk_diminishing_returns(
-        pokemon_name: str,
-        nature: str
+        pokemon_name: Annotated[str, Field(description="Pokemon name", min_length=1)],
+        nature: Annotated[str, Field(description="Pokemon's nature", min_length=1)]
     ) -> dict:
-        """
-        Analyze diminishing returns for HP, Def, and SpD investment.
+        """Analyze diminishing returns for HP, Def, and SpD investment.
 
-        Shows how the value of each additional EV investment decreases
-        as you invest more in a stat, helping you understand optimal breakpoints.
-
-        Args:
-            pokemon_name: Pokemon name
-            nature: Pokemon's nature
-
-        Returns:
-            Marginal gain analysis for each stat at different EV thresholds
+        Shows how the value of each additional EV decreases as you invest more
+        in a stat, with marginal-gain data at each threshold and recommendations
+        for optimal breakpoints.
         """
         try:
             base_stats = await pokeapi.get_base_stats(pokemon_name)
@@ -2536,76 +2540,52 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         1: 3/2, 2: 4/2, 3: 5/2, 4: 6/2, 5: 7/2, 6: 8/2
     }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Design Spread With Benchmarks",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def design_spread_with_benchmarks(
-        pokemon_name: str,
-        nature: Optional[str] = None,
-        outspeed_pokemon: Optional[str] = None,
-        outspeed_pokemon_nature: str = "jolly",
-        outspeed_pokemon_evs: int = 252,
-        outspeed_at_speed_stage: int = 0,
-        outspeed_target_has_booster: bool = False,
-        outspeed_target_has_tailwind: bool = False,
-        my_pokemon_has_booster: bool = False,
-        my_pokemon_has_tailwind: bool = False,
-        survive_pokemon: Optional[str] = None,
-        survive_move: Optional[str] = None,
-        survive_pokemon_nature: str = "adamant",
-        survive_pokemon_evs: int = 252,
-        survive_pokemon_ability: Optional[str] = None,
-        survive_pokemon_item: Optional[str] = None,
-        survive_pokemon_tera_type: Optional[str] = None,
-        defender_tera_type: Optional[str] = None,
-        prioritize: str = "bulk",
-        offensive_evs: int = 0,
-        item: Optional[str] = None,
-        ability: Optional[str] = None,
+        pokemon_name: Annotated[str, Field(description="Your Pokemon", min_length=1)],
+        nature: Annotated[Optional[str], Field(description="Your Pokemon's nature (optional - auto-selects the optimal nature if not provided)")] = None,
+        outspeed_pokemon: Annotated[Optional[str], Field(description="Pokemon to outspeed")] = None,
+        outspeed_pokemon_nature: Annotated[str, Field(description="Speed target's nature")] = "jolly",
+        outspeed_pokemon_evs: Annotated[int, Field(ge=0, le=252, description="Speed target's Speed EVs (0-252)")] = 252,
+        outspeed_at_speed_stage: Annotated[int, Field(ge=-6, le=6, description="Target's speed stage (-1 = after Icy Wind, -2 = after 2x Icy Wind, etc.)")] = 0,
+        outspeed_target_has_booster: Annotated[bool, Field(description="True if the target has a Protosynthesis/Quark Drive speed boost active (1.5x)")] = False,
+        outspeed_target_has_tailwind: Annotated[bool, Field(description="True if the target has Tailwind active (2x speed)")] = False,
+        my_pokemon_has_booster: Annotated[bool, Field(description="True if YOUR Pokemon has a Protosynthesis/Quark Drive speed boost (1.5x)")] = False,
+        my_pokemon_has_tailwind: Annotated[bool, Field(description="True if YOUR Pokemon has Tailwind active (2x speed)")] = False,
+        survive_pokemon: Annotated[Optional[str], Field(description="Attacker to survive")] = None,
+        survive_move: Annotated[Optional[str], Field(description="Move to survive")] = None,
+        survive_pokemon_nature: Annotated[str, Field(description="Attacker's nature")] = "adamant",
+        survive_pokemon_evs: Annotated[int, Field(ge=0, le=252, description="Attacker's offensive EVs (0-252)")] = 252,
+        survive_pokemon_ability: Annotated[Optional[str], Field(description="Attacker's ability if relevant")] = None,
+        survive_pokemon_item: Annotated[Optional[str], Field(description="Attacker's item (e.g. 'choice-band')")] = None,
+        survive_pokemon_tera_type: Annotated[Optional[str], Field(description="Attacker's Tera type if Terastallized - ASK THE USER FIRST!")] = None,
+        defender_tera_type: Annotated[Optional[str], Field(description="Your Pokemon's Tera type if Terastallizing - ASK THE USER FIRST!")] = None,
+        prioritize: Annotated[str, Field(description="'bulk' (max bulk after speed) or 'offense' (specified offensive EVs)")] = "bulk",
+        offensive_evs: Annotated[int, Field(ge=0, le=252, description="Attack/SpA EVs when prioritize='offense'")] = 0,
+        item: Annotated[Optional[str], Field(description="Your Pokemon's held item")] = None,
+        ability: Annotated[Optional[str], Field(description="Your Pokemon's ability")] = None,
     ) -> dict:
-        """
-        Design an EV spread that meets specific speed and SINGLE survival benchmarks.
+        """Design an EV spread that meets specific speed and SINGLE survival benchmarks.
 
-        Use this when asked questions like:
-        - "I need Entei to survive Surging Strikes and outspeed Chien-Pao"
-        - "Make my Flutter Mane live Sacred Sword while being faster than Rillaboom"
-        - "Build a max Attack Entei that outspeeds Chien-Pao after Icy Wind"
+        Use this for questions like "I need Entei to survive Surging Strikes and
+        outspeed Chien-Pao" or "Build a max Attack Entei that outspeeds Chien-Pao
+        after Icy Wind". For surviving TWO DIFFERENT attacks, use
+        optimize_dual_survival_spread instead. Returns a complete EV spread with
+        final stats and the survival calc.
 
-        For surviving TWO DIFFERENT attacks, use optimize_dual_survival_spread instead.
-
-        IMPORTANT - ASK ABOUT TERA BEFORE CALLING:
-        Before using this tool for survival calculations, ASK the user:
-        1. "Is the attacking Pokemon Terastallized? If so, what type?"
-        2. "Is your Pokemon Terastallizing? If so, what type?"
-
-        Tera significantly changes damage calculations:
-        - Same-type Tera boosts STAB moves by 33% (1.5x -> 2.0x)
-        - Tera changes defensive typing (e.g., Tera Normal removes all weaknesses)
-
-        Do NOT assume no Tera - always clarify with the user first.
-
-        Args:
-            pokemon_name: Your Pokemon
-            nature: Your Pokemon's nature (optional - auto-selects optimal if not provided)
-            outspeed_pokemon: Pokemon to outspeed
-            outspeed_pokemon_nature: Target's nature (default: jolly)
-            outspeed_pokemon_evs: Target's speed EVs (default: 252)
-            outspeed_at_speed_stage: Target's speed stage (-1 = after Icy Wind, -2 = after 2x Icy Wind, etc.)
-            outspeed_target_has_booster: True if target has Protosynthesis/Quark Drive speed boost active (1.5x)
-            outspeed_target_has_tailwind: True if target has Tailwind active (2x speed)
-            my_pokemon_has_booster: True if YOUR Pokemon has Protosynthesis/Quark Drive speed boost (1.5x)
-            my_pokemon_has_tailwind: True if YOUR Pokemon has Tailwind active (2x speed)
-            survive_pokemon: Attacker to survive
-            survive_move: Move to survive
-            survive_pokemon_nature: Attacker's nature (default: adamant)
-            survive_pokemon_evs: Attacker's offensive EVs (default: 252)
-            survive_pokemon_ability: Attacker's ability if relevant
-            survive_pokemon_item: Attacker's item (e.g., "choice-band")
-            survive_pokemon_tera_type: Attacker's Tera type if Terastallized - ASK USER FIRST!
-            defender_tera_type: Your Pokemon's Tera type if Terastallizing - ASK USER FIRST!
-            prioritize: "bulk" (max bulk after speed) or "offense" (specified offensive EVs)
-            offensive_evs: Attack/SpA EVs if prioritize="offense"
-
-        Returns:
-            Complete EV spread with final stats and survival calc
+        IMPORTANT - ASK ABOUT TERA BEFORE CALLING: ask the user whether the
+        attacker is Terastallized and whether their own Pokemon is
+        Terastallizing (and the types). Tera significantly changes damage
+        (same-type Tera boosts STAB 1.5x -> 2.0x; Tera changes defensive
+        typing). Do NOT assume no Tera - always clarify first.
         """
         try:
             # Auto-assign fixed Tera types (Ogerpon forms, Terapagos)
@@ -3300,95 +3280,62 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         ("sassy", {"speed": 0.9, "attack": 1.0, "defense": 1.0, "special_attack": 1.0, "special_defense": 1.1}),
     ]
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Optimize Dual Survival Spread",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def optimize_dual_survival_spread(
-        pokemon_name: str,
-        survive_hit1_attacker: str,
-        survive_hit1_move: str,
-        survive_hit2_attacker: str,
-        survive_hit2_move: str,
-        nature: Optional[str] = None,
-        outspeed_pokemon: Optional[str] = None,
-        outspeed_pokemon_nature: str = "timid",
-        outspeed_pokemon_evs: int = 252,
-        outspeed_at_speed_stage: int = 0,
-        outspeed_target_has_booster: bool = False,
-        outspeed_target_has_tailwind: bool = False,
-        my_pokemon_has_booster: bool = False,
-        my_pokemon_has_tailwind: bool = False,
-        speed_evs: Optional[int] = None,
-        survive_hit1_nature: Optional[str] = None,
-        survive_hit1_evs: Optional[int] = None,
-        survive_hit1_item: Optional[str] = None,
-        survive_hit1_ability: Optional[str] = None,
-        survive_hit1_tera_type: Optional[str] = None,
-        survive_hit2_nature: Optional[str] = None,
-        survive_hit2_evs: Optional[int] = None,
-        survive_hit2_item: Optional[str] = None,
-        survive_hit2_ability: Optional[str] = None,
-        survive_hit2_tera_type: Optional[str] = None,
-        defender_tera_type: Optional[str] = None,
-        target_survival: float = 100.0,
-        item: Optional[str] = None,
-        ability: Optional[str] = None,
+        pokemon_name: Annotated[str, Field(description="Your Pokemon (e.g. 'ogerpon-wellspring')", min_length=1)],
+        survive_hit1_attacker: Annotated[str, Field(description="First attacker to survive (e.g. 'urshifu') - MUST be different from hit2", min_length=1)],
+        survive_hit1_move: Annotated[str, Field(description="First move to survive (e.g. 'wicked-blow')", min_length=1)],
+        survive_hit2_attacker: Annotated[str, Field(description="Second attacker to survive (e.g. 'landorus-incarnate') - MUST be different from hit1", min_length=1)],
+        survive_hit2_move: Annotated[str, Field(description="Second move to survive (e.g. 'sludge-bomb')", min_length=1)],
+        nature: Annotated[Optional[str], Field(description="Your Pokemon's nature (optional - auto-selects the best nature if not provided)")] = None,
+        outspeed_pokemon: Annotated[Optional[str], Field(description="Pokemon to outspeed (optional)")] = None,
+        outspeed_pokemon_nature: Annotated[str, Field(description="Speed target's nature")] = "timid",
+        outspeed_pokemon_evs: Annotated[int, Field(ge=0, le=252, description="Speed target's Speed EVs (0-252)")] = 252,
+        outspeed_at_speed_stage: Annotated[int, Field(ge=-6, le=6, description="Target's speed stage (-1 = after Icy Wind, -2 = after 2x Icy Wind)")] = 0,
+        outspeed_target_has_booster: Annotated[bool, Field(description="True if the target has a Protosynthesis/Quark Drive speed boost (1.5x)")] = False,
+        outspeed_target_has_tailwind: Annotated[bool, Field(description="True if the target has Tailwind active (2x speed)")] = False,
+        my_pokemon_has_booster: Annotated[bool, Field(description="True if YOUR Pokemon has a Protosynthesis/Quark Drive speed boost (1.5x)")] = False,
+        my_pokemon_has_tailwind: Annotated[bool, Field(description="True if YOUR Pokemon has Tailwind active (2x speed)")] = False,
+        speed_evs: Annotated[Optional[int], Field(ge=0, le=252, description="Override Speed EVs directly instead of calculating from the outspeed target")] = None,
+        survive_hit1_nature: Annotated[Optional[str], Field(description="First attacker's nature (auto-fetched from Smogon if not specified)")] = None,
+        survive_hit1_evs: Annotated[Optional[int], Field(ge=0, le=252, description="First attacker's offensive EVs (auto-fetched if not specified)")] = None,
+        survive_hit1_item: Annotated[Optional[str], Field(description="First attacker's item")] = None,
+        survive_hit1_ability: Annotated[Optional[str], Field(description="First attacker's ability")] = None,
+        survive_hit1_tera_type: Annotated[Optional[str], Field(description="First attacker's Tera type if Terastallized")] = None,
+        survive_hit2_nature: Annotated[Optional[str], Field(description="Second attacker's nature (auto-fetched from Smogon if not specified)")] = None,
+        survive_hit2_evs: Annotated[Optional[int], Field(ge=0, le=252, description="Second attacker's offensive EVs (auto-fetched if not specified)")] = None,
+        survive_hit2_item: Annotated[Optional[str], Field(description="Second attacker's item")] = None,
+        survive_hit2_ability: Annotated[Optional[str], Field(description="Second attacker's ability")] = None,
+        survive_hit2_tera_type: Annotated[Optional[str], Field(description="Second attacker's Tera type if Terastallized")] = None,
+        defender_tera_type: Annotated[Optional[str], Field(description="Your Pokemon's Tera type if Terastallizing")] = None,
+        target_survival: Annotated[float, Field(ge=0, le=100, description="Minimum survival % to consider 'surviving' (93.75 = 15/16 rolls)")] = 100.0,
+        item: Annotated[Optional[str], Field(description="Your Pokemon's held item")] = None,
+        ability: Annotated[Optional[str], Field(description="Your Pokemon's ability")] = None,
     ) -> dict:
-        """
-        Find optimal EV spread to survive TWO DIFFERENT attacks while meeting a speed benchmark.
+        """Find the optimal EV spread to survive TWO DIFFERENT attacks while meeting a speed benchmark.
 
-        PRIORITY ORDER: Speed EVs first (minimum needed), then bulk optimization, nature selected last.
+        PRIORITY ORDER: Speed EVs first (minimum needed), then bulk
+        optimization, nature selected last. If nature is not specified, the
+        tool automatically selects the best nature that needs minimum Speed
+        EVs, still survives both attacks, and leaves maximum EVs for
+        bulk/offense. Searches ALL valid (HP, Def, SpD) combinations and
+        returns the optimal spread with a per-attack survival breakdown, or
+        reports "IMPOSSIBLE" if no valid spread exists.
 
-        If nature is not specified, the tool automatically selects the best nature that:
-        1. Requires minimum Speed EVs to outspeed the target
-        2. Can still survive both attacks at 100%
-        3. Leaves maximum EVs for bulk/offense
-
-        IMPORTANT - WHEN TO USE THIS TOOL:
-        - Use ONLY when the user wants to survive TWO DIFFERENT attacks from TWO DIFFERENT attackers
-        - Examples: "survive Wicked Blow AND Sludge Bomb", "live both Moonblast and Sacred Sword"
-
-        DO NOT USE THIS TOOL when:
-        - User only mentions ONE attacker or ONE move (use design_spread_with_benchmarks instead)
-        - User wants to survive the same attack twice (that's a 2HKO check, not dual survival)
-        - User is asking about max Attack/SpA builds (use design_spread_with_benchmarks with prioritize="offense")
-
-        Use this when asked questions like:
-        - "I want my Ogerpon-Wellspring to survive Tera Dark Wicked Blow AND Sludge Bomb"
-        - "Can Rillaboom live both Moonblast from Flutter Mane AND Heat Wave from Tornadus?"
-
-        This tool searches ALL valid (HP, Def, SpD) combinations to find the optimal spread,
-        or reports if the benchmarks are mathematically impossible.
-
-        Args:
-            pokemon_name: Your Pokemon (e.g., "ogerpon-wellspring")
-            nature: Your Pokemon's nature (optional - auto-selects best if not provided)
-            survive_hit1_attacker: First attacker to survive (e.g., "urshifu") - MUST be different from hit2
-            survive_hit1_move: First move to survive (e.g., "wicked-blow")
-            survive_hit2_attacker: Second attacker to survive (e.g., "landorus-incarnate") - MUST be different from hit1
-            survive_hit2_move: Second move to survive (e.g., "sludge-bomb")
-            outspeed_pokemon: Pokemon to outspeed (optional)
-            outspeed_pokemon_nature: Target's nature (default "timid")
-            outspeed_pokemon_evs: Target's speed EVs (default 252)
-            outspeed_at_speed_stage: Target's speed stage (-1 = after Icy Wind, -2 = after 2x Icy Wind)
-            outspeed_target_has_booster: True if target has Protosynthesis/Quark Drive speed boost (1.5x)
-            outspeed_target_has_tailwind: True if target has Tailwind active (2x speed)
-            my_pokemon_has_booster: True if YOUR Pokemon has Protosynthesis/Quark Drive speed boost (1.5x)
-            my_pokemon_has_tailwind: True if YOUR Pokemon has Tailwind active (2x speed)
-            speed_evs: Override speed EVs directly instead of calculating from outspeed target
-            survive_hit1_nature: First attacker's nature (auto-fetched from Smogon if not specified)
-            survive_hit1_evs: First attacker's offensive EVs
-            survive_hit1_item: First attacker's item
-            survive_hit1_ability: First attacker's ability
-            survive_hit1_tera_type: First attacker's Tera type if Terastallized
-            survive_hit2_nature: Second attacker's nature
-            survive_hit2_evs: Second attacker's offensive EVs
-            survive_hit2_item: Second attacker's item
-            survive_hit2_ability: Second attacker's ability
-            survive_hit2_tera_type: Second attacker's Tera type if Terastallized
-            defender_tera_type: Your Pokemon's Tera type if Terastallizing
-            target_survival: Minimum survival % to consider "surviving" (default 93.75 = 15/16 rolls)
-
-        Returns:
-            Optimal spread with survival breakdown for each attack, or "IMPOSSIBLE" if no valid spread exists
+        Use ONLY when the user wants to survive TWO DIFFERENT attacks from TWO
+        DIFFERENT attackers (e.g. "survive Wicked Blow AND Sludge Bomb"). Do
+        NOT use when only ONE attacker/move is mentioned (use
+        design_spread_with_benchmarks), when surviving the same attack twice
+        (that's a 2HKO check), or for max Attack/SpA builds (use
+        design_spread_with_benchmarks with prioritize='offense').
         """
         try:
             # Auto-assign fixed Tera types (Ogerpon forms, Terapagos)
@@ -4174,72 +4121,44 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Optimize Multi-Threat Survival Spread",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def optimize_multi_survival_spread(
-        pokemon_name: str,
-        threats: list[dict],
-        nature: Optional[str] = None,
-        outspeed_pokemon: Optional[str] = None,
-        outspeed_pokemon_nature: str = "timid",
-        outspeed_pokemon_evs: int = 252,
-        outspeed_at_speed_stage: int = 0,
-        outspeed_target_has_booster: bool = False,
-        outspeed_target_has_tailwind: bool = False,
-        my_pokemon_has_booster: bool = False,
-        my_pokemon_has_tailwind: bool = False,
-        speed_evs: Optional[int] = None,
-        defender_tera_type: Optional[str] = None,
-        target_survival: float = 93.75,
-        item: Optional[str] = None,
-        ability: Optional[str] = None,
+        pokemon_name: Annotated[str, Field(description="Your Pokemon (e.g. 'ogerpon-hearthflame')", min_length=1)],
+        threats: Annotated[list[dict], Field(description="List of 3-6 threat dicts, each with required 'attacker' and 'move' plus optional 'nature', 'evs', 'item', 'ability' (auto-fetched from Smogon if omitted) and 'tera_type' (None = no Tera)")],
+        nature: Annotated[Optional[str], Field(description="Your Pokemon's nature (auto-selected if None)")] = None,
+        outspeed_pokemon: Annotated[Optional[str], Field(description="Pokemon to outspeed (optional)")] = None,
+        outspeed_pokemon_nature: Annotated[str, Field(description="Speed target's nature")] = "timid",
+        outspeed_pokemon_evs: Annotated[int, Field(ge=0, le=252, description="Speed target's Speed EVs (0-252)")] = 252,
+        outspeed_at_speed_stage: Annotated[int, Field(ge=-6, le=6, description="Target's speed stage (e.g. -1 after Icy Wind)")] = 0,
+        outspeed_target_has_booster: Annotated[bool, Field(description="True if the target has Protosynthesis/Quark Drive active (1.5x speed)")] = False,
+        outspeed_target_has_tailwind: Annotated[bool, Field(description="True if the target has Tailwind (2x speed)")] = False,
+        my_pokemon_has_booster: Annotated[bool, Field(description="True if YOUR Pokemon has Protosynthesis/Quark Drive active (1.5x speed)")] = False,
+        my_pokemon_has_tailwind: Annotated[bool, Field(description="True if YOUR Pokemon has Tailwind (2x speed)")] = False,
+        speed_evs: Annotated[Optional[int], Field(ge=0, le=252, description="Override Speed EVs directly")] = None,
+        defender_tera_type: Annotated[Optional[str], Field(description="Your Tera type if Terastallizing")] = None,
+        target_survival: Annotated[float, Field(ge=0, le=100, description="Minimum survival % (default 93.75 = 15/16 rolls)")] = 93.75,
+        item: Annotated[Optional[str], Field(description="Your Pokemon's held item")] = None,
+        ability: Annotated[Optional[str], Field(description="Your Pokemon's ability")] = None,
     ) -> dict:
-        """
-        Find optimal EV spread to survive 3-6 different attacks while meeting speed benchmark.
+        """Find the optimal EV spread to survive 3-6 different attacks while meeting a speed benchmark.
 
-        This tool extends optimize_dual_survival_spread to handle multiple threats (3-6 Pokemon).
-        Uses a hybrid algorithm: HP-first optimization for 3 threats, hill climbing for 4-6.
+        Extends optimize_dual_survival_spread to multiple threats using a
+        hybrid algorithm (HP-first optimization for 3 threats, hill climbing
+        for 4-6). Use when the user wants to survive THREE OR MORE different
+        attacks (e.g. "survive Urshifu, Flutter Mane, AND Chi-Yu"); for 2
+        threats use optimize_dual_survival_spread instead (faster).
 
-        IMPORTANT - WHEN TO USE THIS TOOL:
-        - Use when the user wants to survive THREE OR MORE different attacks
-        - Examples: "survive Urshifu, Flutter Mane, AND Chi-Yu"
-        - For 2 threats, use optimize_dual_survival_spread instead (faster)
-
-        Args:
-            pokemon_name: Your Pokemon (e.g., "ogerpon-hearthflame")
-            threats: List of 3-6 threat dicts, each with:
-                {
-                    "attacker": str,              # Required
-                    "move": str,                  # Required
-                    "nature": Optional[str],      # Auto-fetched if None
-                    "evs": Optional[int],         # Auto-fetched if None
-                    "item": Optional[str],        # Auto-fetched if None
-                    "ability": Optional[str],     # Auto-fetched if None
-                    "tera_type": Optional[str]    # None = no Tera
-                }
-            nature: Your Pokemon's nature (auto-selected if None)
-            outspeed_pokemon: Pokemon to outspeed (optional)
-            outspeed_pokemon_nature: Target's nature (default "timid")
-            outspeed_pokemon_evs: Target's speed EVs (default 252)
-            outspeed_at_speed_stage: Target's speed stage (e.g., -1 after Icy Wind)
-            outspeed_target_has_booster: True if target has Protosynthesis/Quark Drive active
-            outspeed_target_has_tailwind: True if target has Tailwind
-            my_pokemon_has_booster: True if YOUR Pokemon has Protosynthesis/Quark Drive active
-            my_pokemon_has_tailwind: True if YOUR Pokemon has Tailwind
-            speed_evs: Override speed EVs directly
-            defender_tera_type: Your Tera type if Terastallizing
-            target_survival: Minimum survival % (default 93.75 = 15/16 rolls)
-
-        Returns:
-            {
-                "success": bool,
-                "optimal_spread": {...} or None,
-                "threat_survival_analysis": [...],
-                "impossible": bool,
-                "partial_solutions": [...] if impossible,
-                "tera_suggestion": {...} if impossible,
-                "showdown_paste": str,
-                "computation_stats": {...}
-            }
+        Returns the optimal spread with per-threat survival analysis and a
+        Showdown paste, or partial solutions plus a Tera suggestion when the
+        benchmarks are impossible.
         """
         start_time = time.time()
 
@@ -4685,28 +4604,27 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Analyze HP Number",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def analyze_hp_number(
-        pokemon_name: str,
-        item: str,
-        current_hp_evs: int = 0,
+        pokemon_name: Annotated[str, Field(description="Pokemon name (e.g. 'incineroar')", min_length=1)],
+        item: Annotated[str, Field(description="Held item (e.g. 'leftovers', 'life-orb', 'sitrus-berry')", min_length=1)],
+        current_hp_evs: Annotated[int, Field(ge=0, le=252, description="Current HP EVs (0-252) to compare against")] = 0,
     ) -> dict:
-        """
-        Analyze HP EV options for optimal item-based recovery or recoil.
+        """Analyze HP EV options for optimal item-based recovery or recoil.
 
         Shows which HP EV values produce the best HP numbers for a given item:
-        - Leftovers / Black Sludge: HP divisible by 16 maximizes 1/16 recovery
-        - Grassy Terrain: Same 1/16 optimization as Leftovers
-        - Life Orb: HP = 10n-1 (ending in 9) minimizes 1/10 recoil per attack
-        - Sitrus Berry: HP divisible by 4 maximizes 25% heal
-
-        Args:
-            pokemon_name: Pokemon name (e.g., "incineroar")
-            item: Held item (e.g., "leftovers", "life-orb", "sitrus-berry")
-            current_hp_evs: Current HP EVs to compare against (default 0)
-
-        Returns:
-            Analysis with optimal HP EV options and recommendation
+        Leftovers/Black Sludge and Grassy Terrain want HP divisible by 16
+        (maximizes 1/16 recovery), Life Orb wants HP = 10n-1 (minimizes 1/10
+        recoil), Sitrus Berry wants HP divisible by 4 (maximizes 25% heal).
+        Returns optimal HP EV options and a recommendation.
         """
         try:
             from vgc_mcp_core.calc.hp_optimization import (

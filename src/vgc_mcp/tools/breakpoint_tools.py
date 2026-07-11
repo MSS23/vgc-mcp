@@ -18,9 +18,11 @@ The benchmark types supported:
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Annotated, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
@@ -79,32 +81,43 @@ def register_breakpoint_tools(
     smogon: Optional[SmogonStatsClient] = None,
 ):
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Find Spread Breakpoint",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def find_breakpoint(
-        pokemon_name: str,
-        benchmark_type: str,
-        target_pokemon: str,
-        target_move: Optional[str] = None,
-        target_stat: Optional[str] = None,
-        survival_chance: float = 93.75,
-        target_spread_overrides: Optional[dict] = None,
+        pokemon_name: Annotated[str, Field(
+            description="Your Pokemon (e.g. 'flutter-mane')",
+            min_length=1,
+        )],
+        benchmark_type: Annotated[str, Field(
+            description="Benchmark to hit: 'ko' | 'outspeed' | 'survive'",
+            min_length=1,
+        )],
+        target_pokemon: Annotated[str, Field(
+            description="The opponent Pokemon",
+            min_length=1,
+        )],
+        target_move: Annotated[Optional[str], Field(
+            description="For 'ko' — your move. For 'survive' — the opponent's move. Ignored for 'outspeed'.",
+        )] = None,
+        target_stat: Annotated[Optional[str], Field(
+            description="For 'outspeed' — defaults to 'speed' but can be any stat if you want to outpace something else (rare)",
+        )] = None,
+        survival_chance: Annotated[float, Field(
+            ge=0, le=100,
+            description="For 'survive' — survival percentage: 93.75 (default), 87.5, 75, 100, etc.",
+        )] = 93.75,
+        target_spread_overrides: Annotated[Optional[dict], Field(
+            description="Override the opponent's auto-fetched spread ({'nature': 'adamant', 'evs': {...}, 'item': '...', 'ability': '...'}). The ability key wins over Smogon — pass it explicitly to test alt abilities like Multiscale vs Inner Focus on Dragonite.",
+        )] = None,
     ) -> dict:
         """Find the cheapest spread change to hit a specific benchmark.
-
-        Args:
-            pokemon_name: Your Pokémon (e.g. "flutter-mane")
-            benchmark_type: "ko" | "outspeed" | "survive"
-            target_pokemon: The opponent
-            target_move: For "ko" — your move. For "survive" — opponent's move.
-                         Ignored for "outspeed".
-            target_stat: For "outspeed" — defaults to "speed" but can be any stat
-                         if you want to outpace something else (rare).
-            survival_chance: For "survive" — 93.75 (default), 87.5, 75, 100, etc.
-            target_spread_overrides: Override the opponent's auto-fetched spread
-                                     ({"nature":"adamant", "evs":{...}, "item":"...",
-                                      "ability":"..."}). The ability key wins over
-                                     Smogon — pass it explicitly to test alt abilities
-                                     like Multiscale vs Inner Focus on Dragonite.
 
         Ability awareness: BOTH sides have abilities resolved automatically
         (mega-form > Smogon > pokeapi). All offensive abilities (Sheer Force,

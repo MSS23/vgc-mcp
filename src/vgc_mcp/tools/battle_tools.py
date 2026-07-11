@@ -21,9 +21,11 @@ The agent can drive a real game with these tools:
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Annotated, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.calc.priority import normalize_move_name
 from vgc_mcp_core.state import BattleStateManager
@@ -35,27 +37,37 @@ logger = logging.getLogger(__name__)
 def register_battle_tools(mcp: FastMCP, battle_manager: BattleStateManager):
     """Live battle copilot tools — keep state across turns."""
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Start Battle",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=True,
+            idempotentHint=False,
+            openWorldHint=False,
+        ),
+    )
     async def start_battle(
-        my_team: list[str],
-        opp_team: list[str],
-        format: Optional[str] = None,
-        my_lead: Optional[list[str]] = None,
-        opp_lead: Optional[list[str]] = None,
+        my_team: Annotated[list[str], Field(
+            description="4-6 Pokemon names on YOUR side (full party)",
+        )],
+        opp_team: Annotated[list[str], Field(
+            description="4-6 Pokemon names on OPPONENT'S side (revealed at team preview)",
+        )],
+        format: Annotated[Optional[str], Field(
+            description="Active VGC regulation. Defaults to the current regulation from the regulation config when omitted.",
+        )] = None,
+        my_lead: Annotated[Optional[list[str]], Field(
+            description="Your two leads. If omitted, no Pokemon are marked on-field yet.",
+        )] = None,
+        opp_lead: Annotated[Optional[list[str]], Field(
+            description="Opponent's two leads. If omitted, none are marked on-field yet.",
+        )] = None,
     ) -> dict:
         """Begin a new battle. Replaces any active battle.
 
-        Args:
-            my_team: 4-6 Pokémon names on YOUR side (full party).
-            opp_team: 4-6 Pokémon names on OPPONENT'S side (revealed at team preview).
-            format: Active VGC regulation. Defaults to the current regulation
-                from the regulation config when omitted.
-            my_lead: Your two leads. If omitted, no Pokémon are marked on-field yet.
-            opp_lead: Opponent's two leads. Same default.
-
-        Returns the battle's initial state including suggested lead matchup
-        thoughts. Call `record_turn` after each turn to advance state, and
-        `suggest_next_move` any time for an updated recommendation.
+        Returns the battle's initial state. Call `record_turn` after each turn
+        to advance state, and `suggest_next_move` any time for an updated
+        recommendation.
         """
         if not (4 <= len(my_team) <= 6) or not (4 <= len(opp_team) <= 6):
             return error_response(
@@ -86,49 +98,70 @@ def register_battle_tools(mcp: FastMCP, battle_manager: BattleStateManager):
             ),
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Record Battle Turn",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=False,
+        ),
+    )
     async def record_turn(
-        my_lead: Optional[list[str]] = None,
-        opp_lead: Optional[list[str]] = None,
-        events: str = "",
-        hp_changes: Optional[dict[str, float]] = None,
-        status_changes: Optional[dict[str, str]] = None,
-        revealed_items: Optional[dict[str, str]] = None,
-        revealed_abilities: Optional[dict[str, str]] = None,
-        revealed_moves: Optional[dict[str, str]] = None,
-        teras: Optional[list[str]] = None,
-        weather: Optional[str] = None,
-        terrain: Optional[str] = None,
-        tailwind: Optional[str] = None,
-        trick_room: bool = False,
-        screens: Optional[list[str]] = None,
-        stage_changes: Optional[dict[str, dict[str, int]]] = None,
-        coaching_used: str = "",
+        my_lead: Annotated[Optional[list[str]], Field(
+            description="Your new on-field pair if you switched in",
+        )] = None,
+        opp_lead: Annotated[Optional[list[str]], Field(
+            description="Opponent's new on-field pair if they switched in",
+        )] = None,
+        events: Annotated[str, Field(
+            description="Free-form turn description ('Intimidate dropped Urshifu, Incineroar used Fake Out...'). Parsed loosely — prefer the structured fields when possible.",
+        )] = "",
+        hp_changes: Annotated[Optional[dict[str, float]], Field(
+            description="New HP percentages keyed by 'side/pokemon', e.g. {'opp/incineroar': 65, 'me/flutter-mane': 90}",
+        )] = None,
+        status_changes: Annotated[Optional[dict[str, str]], Field(
+            description="Status conditions keyed by 'side/pokemon', e.g. {'me/amoonguss': 'burn'}",
+        )] = None,
+        revealed_items: Annotated[Optional[dict[str, str]], Field(
+            description="Items revealed this turn keyed by 'side/pokemon', e.g. {'opp/tornadus': 'covert-cloak'}",
+        )] = None,
+        revealed_abilities: Annotated[Optional[dict[str, str]], Field(
+            description="Abilities revealed this turn keyed by 'side/pokemon', e.g. {'opp/incineroar': 'intimidate'}",
+        )] = None,
+        revealed_moves: Annotated[Optional[dict[str, str]], Field(
+            description="Moves revealed this turn keyed by 'side/pokemon', e.g. {'opp/rillaboom': 'fake-out'}",
+        )] = None,
+        teras: Annotated[Optional[list[str]], Field(
+            description="Tera activations as 'side/pokemon:type', e.g. ['me/flutter-mane:fairy', 'opp/incineroar:ghost']",
+        )] = None,
+        weather: Annotated[Optional[str], Field(
+            description="'rain' | 'sun' | 'sand' | 'snow' if weather started this turn",
+        )] = None,
+        terrain: Annotated[Optional[str], Field(
+            description="'grassy' | 'psychic' | 'electric' | 'misty' if terrain started this turn",
+        )] = None,
+        tailwind: Annotated[Optional[str], Field(
+            description="'me' | 'opp' if Tailwind started for that side this turn",
+        )] = None,
+        trick_room: Annotated[bool, Field(
+            description="True if Trick Room was set this turn",
+        )] = False,
+        screens: Annotated[Optional[list[str]], Field(
+            description="Screens set up as 'side/screen', e.g. ['me/light-screen', 'opp/reflect']",
+        )] = None,
+        stage_changes: Annotated[Optional[dict[str, dict[str, int]]], Field(
+            description="Net stat stage deltas keyed by 'side/pokemon', e.g. {'me/urshifu': {'attack': -1}}",
+        )] = None,
+        coaching_used: Annotated[str, Field(
+            description="Optional record of what advice was followed this turn",
+        )] = "",
     ) -> dict:
         """Record one turn of an active battle.
 
-        Identifier format: "side/pokemon" — e.g. `me/flutter-mane`, `opp/incineroar`.
-
-        Args:
-            my_lead / opp_lead: New lead pairs if you switched in.
-            events: Free-form description ("Intimidate dropped Urshifu, Incineroar
-                used Fake Out on Flutter Mane, my Urshifu Surging Strikes KO'd Incin").
-                Parsed loosely — prefer structured fields when possible.
-            hp_changes: { "opp/incineroar": 65, "me/flutter-mane": 90 } — new HP %.
-            status_changes: { "me/amoonguss": "burn" }.
-            revealed_items: { "opp/tornadus": "covert-cloak" } — when an item activates.
-            revealed_abilities: { "opp/incineroar": "intimidate" }.
-            revealed_moves: { "opp/rillaboom": "fake-out" }.
-            teras: ["me/flutter-mane:fairy", "opp/incineroar:ghost"] — Tera activations.
-            weather: "rain" | "sun" | "sand" | "snow" if started this turn.
-            terrain: "grassy" | "psychic" | "electric" | "misty" if started.
-            tailwind: "me" | "opp" if Tailwind started for that side.
-            trick_room: True if Trick Room was set this turn.
-            screens: ["me/light-screen", "opp/reflect"] — screens set up.
-            stage_changes: { "me/urshifu": {"attack": -1} } — net stage deltas.
-            coaching_used: optional record of what advice was followed.
-
-        Auto-decays existing weather/terrain/tailwind/trick-room/screen timers.
+        Identifier format is "side/pokemon" — e.g. `me/flutter-mane`,
+        `opp/incineroar`. Auto-decays existing weather/terrain/tailwind/
+        trick-room/screen timers and appends a turn-history record.
         """
         if not battle_manager.has_active():
             return error_response(
@@ -230,7 +263,15 @@ def register_battle_tools(mcp: FastMCP, battle_manager: BattleStateManager):
             "next_step": "Call `suggest_next_move` for the recommendation, or `get_battle_state` for the full snapshot.",
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Suggest Next Move",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def suggest_next_move() -> dict:
         """Recommend the next turn given the remembered battle state.
 
@@ -347,7 +388,15 @@ def register_battle_tools(mcp: FastMCP, battle_manager: BattleStateManager):
             ),
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Get Battle State",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
     async def get_battle_state() -> dict:
         """Return the full structured snapshot of the active battle."""
         if not battle_manager.has_active():
@@ -357,13 +406,24 @@ def register_battle_tools(mcp: FastMCP, battle_manager: BattleStateManager):
             )
         return {"success": True, **battle_manager.serialize()}
 
-    @mcp.tool()
-    async def end_battle(outcome: str = "unknown", notes: str = "") -> dict:
+    @mcp.tool(
+        title="End Battle",
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=True,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def end_battle(
+        outcome: Annotated[str, Field(
+            description="'win' | 'loss' | 'draw' | 'unknown'",
+        )] = "unknown",
+        notes: Annotated[str, Field(
+            description="Free-form post-game notes for the agent's coaching summary",
+        )] = "",
+    ) -> dict:
         """Close the active battle and return its final state.
-
-        Args:
-            outcome: "win" | "loss" | "draw" | "unknown".
-            notes: Free-form post-game notes for the agent's coaching summary.
 
         Returns the archived battle plus a coaching summary template the agent
         should fill in (key turning points, what worked, what to revisit).

@@ -26,11 +26,18 @@
 > - **Docs/deploy:** tool-count SSOT (208), smithery `/mcp` + count, `requirements.txt`,
 >   `test_deploy.py`→tests/, dedup `validate_regulations`, removed spent codemod.
 >
+> **Update (2026-07-11):** **2.3 annotations** is now DONE — all 208 tools carry
+> `Annotated[..., Field(...)]` param schemas, `title`, and `ToolAnnotations`
+> hints (see CHANGELOG "Unreleased"). Champions SP formula verified against
+> Bulbapedia's official closed form; EVs-line Champions paste import added;
+> Champions no-IV rule enforced in speed output. Resources/output schemas from
+> 2.3 remain open.
+>
 > **Deliberately deferred (need staged rollout / their own focused effort):**
 > - **1.4 tool consolidation (209→~70)** and **1.5 param renames** — change the
 >   public contract of ~200 live tools; require deprecation across releases.
 > - **2.2 O(n²)→bisect solver perf** — risky numeric refactor; needs broad validation.
-> - **2.1 weight-based move plumbing**, **2.3 annotations/resources/output schemas**,
+> - **2.1 weight-based move plumbing**, **2.3 (remaining) resources/output schemas**,
 >   **2.4 large mainline/champions allocation-grain dedup**.
 > - **P3 features** beyond the adapter (offline snapshot, turn-order trees,
 >   defensive-backbone solver, legal-set generator, meta-drift, tournament data).

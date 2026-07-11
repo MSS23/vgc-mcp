@@ -5,9 +5,11 @@ This module provides tools to generate build reports documenting
 the team building journey. Returns structured data (no HTML UI).
 """
 
-from typing import Optional
+from typing import Annotated, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.pokepaste import PokePasteClient, PokePasteError
@@ -18,46 +20,50 @@ from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 def register_report_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
     """Register report generation tools with the MCP server."""
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Generate Build Report",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def generate_build_report(
-        initial_pokepaste_url: Optional[str] = None,
-        initial_team: Optional[list[dict]] = None,
-        final_pokepaste_url: Optional[str] = None,
-        final_team: Optional[list[dict]] = None,
-        conversation: Optional[list[dict]] = None,
-        changes: Optional[list[dict]] = None,
-        takeaways: Optional[list[str]] = None,
-        title: Optional[str] = None,
+        initial_pokepaste_url: Annotated[Optional[str], Field(
+            description="Pokepaste URL for the starting team (optional if initial_team provided)",
+        )] = None,
+        initial_team: Annotated[Optional[list[dict]], Field(
+            description="List of Pokemon dicts for the starting team (alternative to initial_pokepaste_url)",
+        )] = None,
+        final_pokepaste_url: Annotated[Optional[str], Field(
+            description="Pokepaste URL for the final team (optional if final_team provided)",
+        )] = None,
+        final_team: Annotated[Optional[list[dict]], Field(
+            description="List of Pokemon dicts for the final team (alternative to final_pokepaste_url); defaults to the initial team if omitted",
+        )] = None,
+        conversation: Annotated[Optional[list[dict]], Field(
+            description="Q&A exchanges, each dict with 'question' (the question asked) and 'answer' (the answer given)",
+        )] = None,
+        changes: Annotated[Optional[list[dict]], Field(
+            description=(
+                "Changes made, each dict with 'pokemon' (species name), 'field' "
+                "(what changed, e.g. 'Speed EVs', 'Tera Type'), 'before' (old value), "
+                "'after' (new value), and 'reason' (why the change was made)"
+            ),
+        )] = None,
+        takeaways: Annotated[Optional[list[str]], Field(
+            description="Key conclusion strings",
+        )] = None,
+        title: Annotated[Optional[str], Field(
+            description="Report title (defaults to 'VGC Team Build Report')",
+        )] = None,
     ) -> dict:
-        """
-        Generate a shareable team build report showing the building journey.
+        """Generate a shareable team build report showing the building journey.
 
-        Creates a structured report that documents the team building process:
-        - Starting team state
-        - Discussion points (Q&A exchanges)
-        - Changes made with reasoning
-        - Final team state
-        - Key takeaways and conclusions
-
-        Args:
-            initial_pokepaste_url: Pokepaste URL for starting team (optional if initial_team provided)
-            initial_team: List of pokemon dicts for starting team (alternative to URL)
-            final_pokepaste_url: Pokepaste URL for final team (optional if final_team provided)
-            final_team: List of pokemon dicts for final team (alternative to URL)
-            conversation: List of Q&A exchanges, each dict with:
-                - question: str (the question asked)
-                - answer: str (the answer given)
-            changes: List of changes made, each dict with:
-                - pokemon: str (species name)
-                - field: str (what changed, e.g., "Speed EVs", "Tera Type")
-                - before: str (old value)
-                - after: str (new value)
-                - reason: str (why the change was made)
-            takeaways: List of key conclusion strings
-            title: Optional report title (defaults to "VGC Team Build Report")
-
-        Returns:
-            Dict with structured report data
+        Documents the team building process — starting team state, discussion
+        points, changes made with reasoning, final team state, and key
+        takeaways — and returns structured report data with a markdown report.
         """
         try:
             pokepaste_client = PokePasteClient()

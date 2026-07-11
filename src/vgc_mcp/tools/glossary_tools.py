@@ -1,6 +1,10 @@
 """MCP tools for VGC glossary and term explanations."""
 
+from typing import Annotated
+
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.config import logger
 from vgc_mcp_core.data.glossary_data import VGC_GLOSSARY
@@ -10,16 +14,23 @@ from vgc_mcp_core.utils.errors import ErrorCodes, api_error, error_response
 def register_glossary_tools(mcp: FastMCP):
     """Register VGC glossary tools."""
 
-    @mcp.tool()
-    async def explain_vgc_term(term: str) -> dict:
-        """
-        Explain a VGC/Pokemon competitive term in simple language.
+    @mcp.tool(
+        title="Explain VGC Term",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def explain_vgc_term(
+        term: Annotated[str, Field(description="The term to explain (e.g. 'EVs', 'STAB', 'OHKO', 'Tailwind')", min_length=1)]
+    ) -> dict:
+        """Explain a VGC/Pokemon competitive term in simple language.
 
-        Args:
-            term: The term to explain (e.g., "EVs", "STAB", "OHKO", "Tailwind")
-
-        Returns:
-            Detailed explanation with examples and related terms
+        Returns a detailed glossary explanation with why it matters, common
+        patterns, an example, and related terms. Fuzzy-matches the term and
+        suggests alternatives when it isn't found.
         """
         try:
             term_lower = term.lower().strip()

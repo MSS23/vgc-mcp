@@ -1,8 +1,10 @@
 """MCP tools for checking Pokemon builds for common mistakes."""
 
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.config import logger
@@ -15,28 +17,42 @@ from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name
 def register_build_checker_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
     """Register build checker tools."""
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Check Build for Mistakes",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def check_build_for_mistakes(
-        pokemon_name: str,
-        nature: str,
-        evs: dict,
-        moves: List[str],
-        item: Optional[str] = None,
-        ability: Optional[str] = None
+        pokemon_name: Annotated[str, Field(
+            description="Pokemon name (e.g. 'flutter-mane')",
+            min_length=1,
+        )],
+        nature: Annotated[str, Field(
+            description="Nature (e.g. 'timid', 'adamant')",
+            min_length=1,
+        )],
+        evs: Annotated[dict, Field(
+            description="EV dict with hp, attack, defense, special_attack, special_defense, speed keys",
+        )],
+        moves: Annotated[List[str], Field(
+            description="List of move names",
+        )],
+        item: Annotated[Optional[str], Field(
+            description="Held item name",
+        )] = None,
+        ability: Annotated[Optional[str], Field(
+            description="Ability name",
+        )] = None,
     ) -> dict:
-        """
-        Check a Pokemon build for common beginner mistakes.
+        """Check a Pokemon build for common beginner mistakes.
 
-        Args:
-            pokemon_name: Pokemon name
-            nature: Nature (e.g., "timid", "adamant")
-            evs: Dict with hp, attack, defense, special_attack, special_defense, speed
-            moves: List of move names
-            item: Optional item name
-            ability: Optional ability name
-
-        Returns:
-            Build analysis with issues found and recommendations
+        Flags nature/move mismatches, EVs not in multiples of 4, missing
+        Protect on non-Choice sets, and EV totals over/under 508. Returns
+        issues, recommendations, a letter rating, and a markdown summary.
         """
         try:
             # Fetch Pokemon data

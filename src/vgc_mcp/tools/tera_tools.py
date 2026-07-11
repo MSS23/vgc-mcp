@@ -1,8 +1,10 @@
 """MCP tools for Tera type optimization."""
 
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.config import logger
@@ -32,26 +34,26 @@ ALL_TYPES = [
 def register_tera_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
     """Register Tera type optimization tools."""
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Optimize Tera Type",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def optimize_tera_type(
-        pokemon_name: str,
-        spread: dict,
-        role: str = "attacker",
-        team_pokemon: Optional[List[str]] = None,
-        meta_threats: Optional[List[str]] = None
+        pokemon_name: Annotated[str, Field(description="Pokemon name", min_length=1)],
+        spread: Annotated[dict, Field(description="Build dict with 'nature', 'evs', 'item', 'ability' (in Champions sessions an 'sps' dict, or 'evs' interpreted on the 0-32 SP scale)")],
+        role: Annotated[str, Field(description="Build role: 'attacker', 'support', or 'tank'")] = "attacker",
+        team_pokemon: Annotated[Optional[List[str]], Field(description="Optional list of team members for synergy scoring")] = None,
+        meta_threats: Annotated[Optional[List[str]], Field(description="Optional list of meta threats to optimize against")] = None
     ) -> dict:
-        """
-        Find the optimal Tera type for a Pokemon build.
+        """Find the optimal Tera type for a Pokemon build.
 
-        Args:
-            pokemon_name: Pokemon name
-            spread: Dict with nature, evs, item, ability
-            role: "attacker", "support", or "tank"
-            team_pokemon: Optional list of team members for synergy
-            meta_threats: Optional list of meta threats to optimize against
-
-        Returns:
-            Ranked list of Tera types with scores and reasoning
+        Scores all 18 types on offensive (STAB) and defensive utility and
+        returns a ranked list with reasoning plus a recommended type.
         """
         try:
             # Fetch Pokemon data

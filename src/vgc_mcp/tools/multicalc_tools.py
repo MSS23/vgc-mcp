@@ -9,9 +9,11 @@ Tools for batch damage calculations:
 import asyncio
 import logging
 import time
-from typing import Optional
+from typing import Annotated, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
@@ -153,43 +155,34 @@ def register_multicalc_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
     global _smogon_client
     _smogon_client = smogon
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Calculate Offensive Coverage",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def calculate_offensive_coverage(
-        attacker_name: str,
-        attacker_move: str,
-        defender_names: list[str],
-        use_smogon_spreads: bool = True,
-        attacker_nature: Optional[str] = None,
-        attacker_evs: Optional[dict] = None,
-        attacker_item: Optional[str] = None,
-        attacker_ability: Optional[str] = None,
-        attacker_sps: Optional[dict] = None,
-        weather: Optional[str] = None,
-        terrain: Optional[str] = None,
-        attacker_tera_type: Optional[str] = None
+        attacker_name: Annotated[str, Field(description="Your Pokemon (e.g. 'landorus-therian')", min_length=1)],
+        attacker_move: Annotated[str, Field(description="Attack to test (e.g. 'earthquake')", min_length=1)],
+        defender_names: Annotated[list[str], Field(description="List of 5-10 Pokemon to test against (max 10, e.g. ['incineroar', 'rillaboom', 'flutter-mane'])")],
+        use_smogon_spreads: Annotated[bool, Field(description="Auto-fetch spreads from Smogon")] = True,
+        attacker_nature: Annotated[Optional[str], Field(description="Attacker's nature (auto-fetched if not specified)")] = None,
+        attacker_evs: Annotated[Optional[dict], Field(description="Attacker's EVs dict (auto-fetched if not specified)")] = None,
+        attacker_item: Annotated[Optional[str], Field(description="Attacker's item (auto-fetched if not specified)")] = None,
+        attacker_ability: Annotated[Optional[str], Field(description="Attacker's ability (auto-fetched if not specified)")] = None,
+        attacker_sps: Annotated[Optional[dict], Field(description="Attacker's Stat Points dict for Champions (Reg MA) sessions")] = None,
+        weather: Annotated[Optional[str], Field(description="Weather: 'sun', 'rain', 'sand', or 'snow'")] = None,
+        terrain: Annotated[Optional[str], Field(description="Terrain: 'electric', 'grassy', 'psychic', or 'misty'")] = None,
+        attacker_tera_type: Annotated[Optional[str], Field(description="Attacker's Tera type if Terastallized")] = None,
     ) -> dict:
-        """
-        Calculate damage from one attacker vs multiple different Pokemon (offensive coverage analysis).
+        """Calculate damage from one attacker vs multiple defenders (offensive coverage analysis).
 
-        Useful for understanding how well your Pokemon's attack covers common meta threats.
-        Shows damage ranges and KO probabilities for each defender.
-
-        Args:
-            attacker_name: Your Pokemon (e.g., "landorus-therian")
-            attacker_move: Attack to test (e.g., "earthquake")
-            defender_names: List of 5-10 Pokemon to test against (e.g., ["incineroar", "rillaboom", "flutter-mane"])
-            use_smogon_spreads: Auto-fetch spreads from Smogon (default: True)
-            attacker_nature: Attacker's nature (auto-fetched if not specified)
-            attacker_evs: Attacker's EVs dict (auto-fetched if not specified)
-            attacker_item: Attacker's item (auto-fetched if not specified)
-            attacker_ability: Attacker's ability (auto-fetched if not specified)
-            attacker_sps: Attacker's Stat Points dict for Champions (Reg MA) sessions
-            weather: "sun", "rain", "sand", or "snow"
-            terrain: "electric", "grassy", "psychic", or "misty"
-            attacker_tera_type: Attacker's Tera type if Terastallized
-
-        Returns:
-            Coverage analysis with damage ranges and KO verdicts for each defender
+        Useful for understanding how well your Pokemon's attack covers common meta
+        threats. Returns damage ranges, KO verdicts per defender, a summary of
+        OHKO/2HKO counts, Showdown pastes, and a markdown table.
         """
         try:
             if len(defender_names) > 10:
@@ -326,37 +319,31 @@ def register_multicalc_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Calculate Defensive Threats",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def calculate_defensive_threats(
-        defender_name: str,
-        attacker_configs: list[dict],
-        defender_nature: Optional[str] = None,
-        defender_evs: Optional[dict] = None,
-        defender_item: Optional[str] = None,
-        defender_ability: Optional[str] = None,
-        defender_tera_type: Optional[str] = None,
-        defender_sps: Optional[dict] = None,
-        use_smogon_spreads: bool = True
+        defender_name: Annotated[str, Field(description="Your Pokemon (e.g. 'ogerpon-hearthflame')", min_length=1)],
+        attacker_configs: Annotated[list[dict], Field(description="List of attacker configs (max 10), each with 'name' and 'move' plus optional 'nature', 'evs', 'item', 'ability', 'tera_type' (e.g. {'name': 'urshifu', 'move': 'surging-strikes', 'item': 'choice-scarf'})")],
+        defender_nature: Annotated[Optional[str], Field(description="Defender's nature (auto-fetched if not specified)")] = None,
+        defender_evs: Annotated[Optional[dict], Field(description="Defender's EVs dict (auto-fetched if not specified)")] = None,
+        defender_item: Annotated[Optional[str], Field(description="Defender's item (auto-fetched if not specified)")] = None,
+        defender_ability: Annotated[Optional[str], Field(description="Defender's ability (auto-fetched if not specified)")] = None,
+        defender_tera_type: Annotated[Optional[str], Field(description="Defender's Tera type if Terastallizing")] = None,
+        defender_sps: Annotated[Optional[dict], Field(description="Defender's Stat Points dict for Champions (Reg MA) sessions")] = None,
+        use_smogon_spreads: Annotated[bool, Field(description="Auto-fetch spreads from Smogon")] = True,
     ) -> dict:
-        """
-        Calculate damage from multiple attackers vs one defender (threat analysis).
+        """Calculate damage from multiple attackers vs one defender (threat analysis).
 
-        Shows which threats can OHKO or 2HKO your Pokemon, helping identify defensive gaps.
-
-        Args:
-            defender_name: Your Pokemon (e.g., "ogerpon-hearthflame")
-            attacker_configs: List of attacker configs, each with:
-                {"name": "urshifu", "move": "surging-strikes", "item": "choice-scarf", ...}
-            defender_nature: Defender's nature (auto-fetched if not specified)
-            defender_evs: Defender's EVs dict (auto-fetched if not specified)
-            defender_item: Defender's item (auto-fetched if not specified)
-            defender_ability: Defender's ability (auto-fetched if not specified)
-            defender_tera_type: Defender's Tera type if Terastallizing
-            defender_sps: Defender's Stat Points dict for Champions (Reg MA) sessions
-            use_smogon_spreads: Auto-fetch spreads from Smogon (default: True)
-
-        Returns:
-            Threat analysis showing damage and survival for each attacker
+        Shows which threats can OHKO or 2HKO your Pokemon, helping identify
+        defensive gaps. Returns per-attacker damage, survival chances, and a
+        summary of guaranteed OHKOs vs survivable hits.
         """
         try:
             if len(attacker_configs) > 10:
@@ -485,27 +472,25 @@ def register_multicalc_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Calculate Team Coverage Matrix",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def calculate_team_coverage_matrix(
-        team_pokemon: list[dict],
-        meta_threats: Optional[list[str]] = None,
-        use_smogon_spreads: bool = True
+        team_pokemon: Annotated[list[dict], Field(description="List of team member configs (max 6), each with 'name' and 'move' plus optional 'nature', 'evs', 'item', 'ability' (e.g. {'name': 'landorus', 'move': 'earthquake'}). In a Champions (Reg MA) session a member may carry an 'sps' dict (Stat Points) instead of 'evs'")],
+        meta_threats: Annotated[Optional[list[str]], Field(description="List of meta threats to test against, capped at 15 (default: built-in top 15)")] = None,
+        use_smogon_spreads: Annotated[bool, Field(description="Auto-fetch spreads from Smogon")] = True,
     ) -> dict:
-        """
-        Calculate team coverage matrix: team of 6 vs meta threats.
+        """Calculate a team coverage matrix: team of up to 6 vs meta threats.
 
-        Shows which team members can OHKO/2HKO which threats, identifying coverage gaps.
-
-        Args:
-            team_pokemon: List of team member configs, each with:
-                {"name": "landorus", "move": "earthquake", ...}.
-                In a Champions (Reg MA) session a member may carry an "sps" dict
-                (Stat Points) instead of "evs".
-            meta_threats: List of meta threats to test against (default: top 15 from Smogon)
-            use_smogon_spreads: Auto-fetch spreads from Smogon (default: True)
-
-        Returns:
-            Coverage matrix showing damage output for each team member vs each threat
+        Shows which team members can OHKO/2HKO which threats, identifying
+        coverage gaps. Returns the matrix, best answers per threat, gap list,
+        and a markdown table.
         """
         try:
             if len(team_pokemon) > 6:

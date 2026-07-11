@@ -1,8 +1,10 @@
 """MCP tools for move legality and learnset validation."""
 
-from typing import Optional
+from typing import Annotated, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from vgc_mcp_core.validation.learnset import (
     categorize_learn_method,
@@ -16,23 +18,28 @@ from vgc_mcp_core.validation.learnset import (
 def register_move_tools(mcp: FastMCP, pokeapi, smogon, team_manager):
     """Register move validation tools with the MCP server."""
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Validate Pokemon Moveset",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def validate_pokemon_moveset(
-        pokemon_name: str,
-        moves: list[str]
+        pokemon_name: Annotated[str, Field(
+            description="Name of the Pokemon (e.g. 'rillaboom')",
+            min_length=1,
+        )],
+        moves: Annotated[list[str], Field(
+            description="Moves to validate (up to 4, e.g. ['fake-out', 'grassy-glide'])",
+        )],
     ) -> dict:
-        """
-        Check if all moves are legal for a Pokemon.
+        """Check if all moves are legal for a Pokemon.
 
-        Validates against PokeAPI learnset data to ensure moves
-        can actually be learned by this Pokemon.
-
-        Args:
-            pokemon_name: Name of the Pokemon
-            moves: List of moves to validate (up to 4)
-
-        Returns:
-            Validation result for each move with learn methods
+        Validates against PokeAPI learnset data. Returns a per-move validation
+        result with learn methods and a list of any illegal moves.
         """
         result = await validate_moveset(pokemon_name, moves, pokeapi)
 
@@ -56,20 +63,27 @@ def register_move_tools(mcp: FastMCP, pokeapi, smogon, team_manager):
             )
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Get Pokemon Learnable Moves",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def get_pokemon_learnable_moves(
-        pokemon_name: str,
-        method: Optional[str] = None
+        pokemon_name: Annotated[str, Field(
+            description="Name of the Pokemon",
+            min_length=1,
+        )],
+        method: Annotated[Optional[str], Field(
+            description="Optional filter by learn method: 'level-up', 'machine', 'egg', or 'tutor'",
+        )] = None,
     ) -> dict:
-        """
-        Get all moves a Pokemon can learn.
+        """Get all moves a Pokemon can learn, grouped by learn method.
 
-        Args:
-            pokemon_name: Name of the Pokemon
-            method: Optional filter by learn method (level-up, machine, egg, tutor)
-
-        Returns:
-            Dict of move names with their learn methods
+        Returns the total move count and moves categorized by how they are learned.
         """
         result = await get_learnable_moves(pokemon_name, pokeapi, method)
 
@@ -94,23 +108,30 @@ def register_move_tools(mcp: FastMCP, pokeapi, smogon, team_manager):
             "message": f"{result['pokemon']} can learn {result['move_count']} moves"
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Suggest Competitive Moves",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def suggest_competitive_moves(
-        pokemon_name: str,
-        limit: int = 10
+        pokemon_name: Annotated[str, Field(
+            description="Name of the Pokemon",
+            min_length=1,
+        )],
+        limit: Annotated[int, Field(
+            ge=1,
+            description="Number of suggestions to return",
+        )] = 10,
     ) -> dict:
-        """
-        Suggest competitive moves for a Pokemon based on usage data.
+        """Suggest competitive moves for a Pokemon based on usage data.
 
-        Combines Smogon usage data with learnset validation to ensure
-        suggested moves are both popular AND legal.
-
-        Args:
-            pokemon_name: Name of the Pokemon
-            limit: Number of suggestions to return (default 10)
-
-        Returns:
-            List of suggested moves with usage rates and learn methods
+        Combines Smogon usage data with learnset validation so suggested moves
+        are both popular AND legal. Returns moves with usage rates and learn
+        methods.
         """
         result = await suggest_legal_moves(pokemon_name, pokeapi, smogon, limit)
 
@@ -133,16 +154,20 @@ def register_move_tools(mcp: FastMCP, pokeapi, smogon, team_manager):
             "message": f"Top {len(formatted_suggestions)} competitive moves for {result['pokemon']}"
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Check Team Movesets",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def check_team_movesets() -> dict:
-        """
-        Validate movesets for all Pokemon on the current team.
+        """Validate movesets for all Pokemon on the current team.
 
-        Checks that every move on every team member is actually
-        learnable by that Pokemon.
-
-        Returns:
-            Validation results for each team member
+        Checks that every move on every team member is actually learnable by
+        that Pokemon. Returns per-member validation results.
         """
         team = team_manager.get_current_team()
 
@@ -166,19 +191,25 @@ def register_move_tools(mcp: FastMCP, pokeapi, smogon, team_manager):
             )
         }
 
-    @mcp.tool()
-    async def check_egg_moves(pokemon_name: str) -> dict:
-        """
-        Check which moves require breeding (egg moves) for a Pokemon.
+    @mcp.tool(
+        title="Check Egg Moves",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
+    async def check_egg_moves(
+        pokemon_name: Annotated[str, Field(
+            description="Name of the Pokemon",
+            min_length=1,
+        )],
+    ) -> dict:
+        """Check which moves require breeding (egg moves) for a Pokemon.
 
-        Egg moves require specific breeding setups and cannot be
-        learned through TMs or level-up.
-
-        Args:
-            pokemon_name: Name of the Pokemon
-
-        Returns:
-            List of egg moves with breeding info
+        Egg moves require specific breeding setups and cannot be learned
+        through TMs or level-up.
         """
         result = await get_learnable_moves(pokemon_name, pokeapi, method="egg")
 
@@ -195,18 +226,24 @@ def register_move_tools(mcp: FastMCP, pokeapi, smogon, team_manager):
             "message": f"{result['pokemon']} has {len(egg_moves)} egg moves"
         }
 
-    @mcp.tool()
-    async def check_tm_moves(pokemon_name: str) -> dict:
-        """
-        Check which moves can be learned via TM/TR for a Pokemon.
+    @mcp.tool(
+        title="Check TM Moves",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
+    async def check_tm_moves(
+        pokemon_name: Annotated[str, Field(
+            description="Name of the Pokemon",
+            min_length=1,
+        )],
+    ) -> dict:
+        """Check which moves a Pokemon can learn via TM/TR.
 
         TM/TR moves are the most accessible competitive moves.
-
-        Args:
-            pokemon_name: Name of the Pokemon
-
-        Returns:
-            List of TM/TR learnable moves
         """
         result = await get_learnable_moves(pokemon_name, pokeapi, method="machine")
 
@@ -222,20 +259,29 @@ def register_move_tools(mcp: FastMCP, pokeapi, smogon, team_manager):
             "message": f"{result['pokemon']} can learn {len(tm_moves)} moves via TM/TR"
         }
 
-    @mcp.tool()
+    @mcp.tool(
+        title="Find Move Learners",
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
     async def find_move_learners(
-        move_name: str,
-        team_only: bool = False
+        move_name: Annotated[str, Field(
+            description="Name of the move to search for (e.g. 'fake-out')",
+            min_length=1,
+        )],
+        team_only: Annotated[bool, Field(
+            description="If True, only check current team members; a full-dex search is not supported, so False returns guidance instead",
+        )] = False,
     ) -> dict:
-        """
-        Find which Pokemon can learn a specific move.
+        """Find which Pokemon can learn a specific move.
 
-        Args:
-            move_name: Name of the move to search for
-            team_only: If True, only check current team members
-
-        Returns:
-            List of Pokemon that can learn the move
+        With team_only=True, checks each current team member's learnset and
+        returns the learners with their learn methods. Without it, returns
+        guidance on how to search instead.
         """
         if team_only:
             team = team_manager.get_current_team()

@@ -123,21 +123,32 @@ Located in `vgc_mcp_core/calc/modifiers.py`. Key mechanics:
 - Champions Reg MA: 66 max total Stat Points, 32 per stat
 - Doubles format (spread moves get 0.75x multiplier)
 
-### Pokemon Champions Reg MA — Stat Point System
+### Pokemon Champions Reg MA/MB — Stat Point System
 
 Champions builds use `StatPointSpread` (in `models/pokemon.py`) instead of
-`EVSpread`. Field names match canonical stat names; the NCP setdex JSON
-abbreviations (`hp/at/df/sa/sd/sp`) round-trip via
-`StatPointSpread.from_sps_dict()` / `.to_sps_dict()`.
+`EVSpread`. Field names match canonical stat names; the NCP (Nimbasa City Post
+damage calculator) setdex JSON abbreviations (`hp/at/df/sa/sd/sp`) round-trip
+via `StatPointSpread.from_sps_dict()` / `.to_sps_dict()`.
 
-**Stat formula** (level 50): the SP slot maps to "8 EVs of effectiveness" — i.e.
-substituted into the EV formula as `SP*2`. So 32 SP saturates to the same stat
-as 252 EV (Flutter Mane Timid 32 SP = 205 Speed, identical to mainline).
+**Stat formula** (level 50, official closed form per Bulbapedia):
+`HP = Base + SP + 75`, `Stat = floor((Base + SP + 20) × Nature)`. Our
+implementation substitutes `SP*2` into the `floor(EV/4)` slot of the mainline
+formula with IV=31 — bit-for-bit identical. 1 SP = 8 EVs of effectiveness;
+32 SP is exactly 252 EVs (Flutter Mane Timid 32 SP = 205 Speed, identical to
+mainline); HOME transfer conversion is `SP = (EVs+4)/8`.
+
+**Champions has no IVs** — every Pokemon acts as 31 IV in all stats, and they
+cannot be lowered (no 0-Spe Trick Room / 0-Atk confusion tech). Natures are
+called "Stat Alignments" in-game but work identically (+10%/-10%). Champions
+has **Mega Evolution** (one per battle) and **no Terastallization**.
 
 **Where to dispatch by format**:
 - `calc/stats.py::calculate_all_stats(pokemon)` — automatic, reads `pokemon.format_system`
 - `calc/damage.py::calculate_damage(...)` — automatic via `calculate_all_stats`
-- Showdown paste: parser detects `SPs:` vs `EVs:`; exporter emits `SPs:` for champions builds
+- Showdown paste: parser detects `SPs:` vs `EVs:`; exporter emits `SPs:` for
+  champions builds. Official Showdown Champions pastes reuse the `EVs:` line
+  with SP-scale numbers — `parsed_to_pokemon_build` reinterprets such a line as
+  SPs when the format resolves to Champions (see `evs_line_looks_like_sps`)
 - Smogon usage: `SmogonStatsClient` collects each format's declared
   `default_smogon_rating` from `regulations.json` and always falls back to rating
   1500 then 0. (Every regulation, including `reg_ma_champs`, currently declares
@@ -152,10 +163,12 @@ as 252 EV (Flutter Mane Timid 32 SP = 205 Speed, identical to mainline).
 - `find_attack_sps_for_ko(...)` → minimum offensive SP to clear damage floor
 - `validate_sp_allocation(dict)` → 32/66 cap enforcement
 
-**Reg MA legality**: `regulations.json::reg_ma_champs` uses an explicit
-`legal_pokemon` allowlist (186 species from Serebii). Use
-`RegulationConfig.is_pokemon_legal(name, "reg_ma_champs")` rather than
-`is_pokemon_banned`, since banlist mode doesn't apply to allowlist regulations.
+**Reg MA/MB legality**: `regulations.json::reg_ma_champs` uses an explicit
+`legal_pokemon` allowlist (186 species from Serebii); `reg_mb_champs` extends
+it (208 species). Use `RegulationConfig.is_pokemon_legal(name, "reg_ma_champs")`
+rather than `is_pokemon_banned`, since banlist mode doesn't apply to allowlist
+regulations. Both regulations enforce item clause, level 50, and the 32/66 SP
+caps (`sp_per_stat_max` / `sp_total_max`).
 
 ### Critical Hits and Ruin Abilities
 
