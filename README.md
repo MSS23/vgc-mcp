@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-green.svg)](https://modelcontextprotocol.io/)
 [![Live](https://img.shields.io/badge/live-vgc--mcp.onrender.com-brightgreen)](https://vgc-mcp.onrender.com/health)
-[![Tests](https://img.shields.io/badge/tests-1469%20passing-success)](#)
+[![Tests](https://img.shields.io/badge/tests-1475%20passing-success)](#)
 [![Tools](https://img.shields.io/badge/MCP%20tools-208-blueviolet)](docs/tools-catalog.md)
 
 A **Model Context Protocol** server that turns any LLM into a competitive Pokémon VGC coach. **208 tools** spanning the full Gen 9 damage formula, Smogon usage data, multi-threat EV optimization, replay analysis, and a turn-by-turn live battle copilot.
@@ -136,7 +136,7 @@ Damage calc is verified against **Pokémon Showdown** — the source of truth us
 | Pokémon Showdown  | 149-177   | 78.4 - 93.1%  | guaranteed 2HKO   |
 | **VGC MCP**       | **149-177** | **78.4-93.1%** | **guaranteed 2HKO** |
 
-**1,469 tests** cover the damage formula across all generations of items / abilities / Tera / weather / multi-hit interactions, plus end-to-end MCP tool registration and 6 production-bug regression tests for known-tricky interactions (Sword of Ruin + crits, Sheer Force + Life Orb, Ogerpon mask routing).
+**1,475 tests** cover the damage formula across all generations of items / abilities / Tera / weather / multi-hit interactions, plus end-to-end MCP tool registration and production-bug regression tests for known-tricky interactions (Sword of Ruin + crits, Sheer Force + Life Orb, Ogerpon mask routing).
 
 ---
 
@@ -173,6 +173,10 @@ src/
 Auto-discovery means **adding a tool requires zero edits** to `server.py` — drop a `<area>_tools.py` in `vgc_mcp/tools/` exposing `register_<area>_tools(mcp, ...)` and it's picked up.
 
 **Stack:** Python 3.11+, `mcp`, `httpx`, `pydantic`, `diskcache`, `openpyxl`, `fpdf2`. No MCP-UI dependency — works with every Claude / ChatGPT MCP transport today.
+
+Interactive VGC views are a strong fit, but they will be delivered as an
+optional sibling MCP Apps server so this endpoint stays universal. See the
+[MCP-UI / MCP Apps architecture decision](docs/mcp-ui-decision.md).
 
 [**Full architecture writeup →**](docs/technical-guide.md)
 

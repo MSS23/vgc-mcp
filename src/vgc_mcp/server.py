@@ -187,7 +187,7 @@ session_registry, team_manager, build_manager, battle_manager = make_scoped_mana
 # Each register_*_tools function is introspected and given the deps it asks for.
 # To add a new tool category: drop a `<area>_tools.py` file in tools/ exposing
 # `register_<area>_tools(mcp, ...)` — no edit to this file required.
-register_all_tools(
+REGISTERED_TOOL_MODULE_COUNT = register_all_tools(
     mcp,
     pokeapi=pokeapi,
     smogon=smogon,
@@ -197,6 +197,7 @@ register_all_tools(
     build_manager=build_manager,
     battle_manager=battle_manager,
 )
+REGISTERED_TOOL_COUNT = len(mcp._tool_manager._tools)
 
 
 def _build_middleware(cors_cls, middleware_wrapper):
@@ -341,6 +342,7 @@ def create_http_app():
         return JSONResponse({
             "status": "healthy",
             "service": "vgc-mcp",
+            "tool_modules": REGISTERED_TOOL_MODULE_COUNT,
             "tools": tool_count,
             "active_sessions": session_registry.session_count(),
         })
@@ -358,6 +360,7 @@ def create_http_app():
             "name": "vgc-mcp",
             "version": version,
             "description": "Pokemon VGC MCP Server - damage calcs, spreads, team building",
+            "tool_modules": REGISTERED_TOOL_MODULE_COUNT,
             "tools": tool_count,
             "endpoints": {
                 "mcp": "/mcp",

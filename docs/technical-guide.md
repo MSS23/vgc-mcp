@@ -369,78 +369,34 @@ The user gets a clear, natural language response with all the details they need!
 ```
 vgc-mcp/
 ├── src/
-│   ├── vgc_mcp/                    # Main MCP server package
-│   │   ├── server.py               # Entry point, registers all 157 tools
-│   │   ├── tools/                  # Tool definitions (47 modules)
-│   │   │   ├── damage_tools.py     # Damage calculations (15 tools)
-│   │   │   ├── speed_tools.py      # Speed analysis (12 tools)
-│   │   │   ├── spread_tools.py     # EV optimization (10 tools)
-│   │   │   ├── team_tools.py       # Team building (14 tools)
-│   │   │   ├── usage_tools.py      # Smogon stats (8 tools)
-│   │   │   └── ...                 # 42 more tool modules
+│   ├── vgc_mcp/                    # Plain, client-agnostic MCP server
+│   │   ├── server.py               # Stdio + HTTP entrypoints
+│   │   ├── http_middleware.py      # Optional auth and rate limiting
+│   │   ├── tools/                  # 51 auto-discovered registration modules
 │   │   └── __main__.py             # CLI entry point
 │   │
-│   ├── vgc_mcp_core/               # Shared calculation engine
+│   └── vgc_mcp_core/               # Shared calculation/data/state library
 │   │   ├── api/                    # External API clients
-│   │   │   ├── pokeapi.py          # Pokemon stats, moves, abilities
-│   │   │   ├── smogon.py           # Usage data, common sets
-│   │   │   └── cache.py            # DiskCache wrapper
-│   │   │
 │   │   ├── calc/                   # Pure calculation functions
-│   │   │   ├── damage.py           # Gen 9 damage formula
-│   │   │   ├── stats.py            # Stat calculations (EVs, IVs, nature)
-│   │   │   ├── speed.py            # Speed comparisons, tiers
-│   │   │   ├── modifiers.py        # Type chart, weather, terrain, items
-│   │   │   ├── abilities.py        # Ability effects on damage/speed
-│   │   │   └── ...                 # 13 calculation modules
-│   │   │
 │   │   ├── models/                 # Pydantic data models
-│   │   │   ├── pokemon.py          # PokemonBuild, Nature, EVSpread
-│   │   │   ├── move.py             # Move with multi-hit support
-│   │   │   ├── team.py             # Team with legality validation
-│   │   │   └── battle_context.py   # Weather, terrain, screens
-│   │   │
 │   │   ├── rules/                  # VGC format rules
-│   │   │   ├── legality.py         # Species clause, item clause
-│   │   │   ├── regulations.py      # Reg F/G/H restricted lists
-│   │   │   └── learnsets.py        # Move legality checking
-│   │   │
 │   │   ├── team/                   # Team management
-│   │   │   ├── manager.py          # In-memory team storage
-│   │   │   ├── builder.py          # Team building suggestions
-│   │   │   └── analysis.py         # Team synergy, coverage
-│   │   │
 │   │   ├── formats/                # Import/export
-│   │   │   ├── showdown.py         # Showdown paste parsing/generation
-│   │   │   └── json.py             # JSON team format
-│   │   │
-│   │   ├── utils/                  # Utilities
-│   │   │   ├── errors.py           # Structured error messages
-│   │   │   ├── fuzzy.py            # Fuzzy name matching
-│   │   │   └── validation.py       # Input validation
-│   │   │
-│   │   └── data/                   # Static data
-│   │       ├── glossary.json       # VGC term definitions
-│   │       └── presets.json        # Common team archetypes
-│   │
-│   ├── vgc_mcp_lite/               # Lite version (49 tools)
-│   │   ├── tools/                  # Essential tools only
-│   │   ├── ui/                     # MCP-UI components
-│   │   └── server.py               # Lite server entry
-│   │
-│   └── vgc_mcp_micro/              # Micro version (minimal)
+│   │   ├── state/                  # Session-scoped build/battle managers
+│   │   ├── tools/                  # Reusable pure/shared handlers
+│   │   ├── utils/                  # Errors, normalization, fuzzy matching
+│   │   └── data/                   # Regulations, presets, glossary
 │
-├── tests/                          # Test suite (337+ tests)
-│   ├── conftest.py                 # Shared fixtures
-│   ├── test_damage.py              # Damage calculation tests
-│   ├── test_speed.py               # Speed analysis tests
-│   └── ...                         # 30+ test modules
-│
-├── data/
-│   └── cache/                      # DiskCache storage (gitignored)
-│
+├── tests/                          # Mainline, Champions, transport tests
+├── docs/                           # Setup, deployment, API, UI decisions
+├── render.yaml                     # Render web-service blueprint
+├── Dockerfile                      # HTTP deployment image
 └── pyproject.toml                  # Package configuration
 ```
+
+There are no lite, micro, or MCP-UI packages in this repository. Interactive
+views are intentionally planned as an optional sibling that imports the same
+core library; see [MCP-UI / MCP Apps Architecture Decision](mcp-ui-decision.md).
 
 ### Data Flow
 

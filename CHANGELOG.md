@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Tool discovery is now fail-fast: import failures, misnamed registration
+  functions, unresolved required dependencies, empty tool modules, and
+  duplicate tool names abort startup instead of exposing a silently partial
+  service. `/health` and `/` now report both the 51 discovered modules and 208
+  registered tools.
+- Added an MCP-UI/MCP Apps architecture decision. Interactive views are a good
+  fit for damage, speed, team, spread, and battle workflows, but will live in
+  an optional sibling server so the public plain-MCP endpoint remains compatible
+  with every client.
+- Render and self-host deployment documentation now uses the real
+  `vgc-mcp-http` entrypoint and matches the live health response.
 - Package version bumped to **1.0.0** (the root endpoint previously hardcoded
   "1.0.0" while the package said 0.1.0; both now agree, and the endpoint
   reads the real installed version).

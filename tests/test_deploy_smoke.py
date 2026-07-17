@@ -29,10 +29,20 @@ def test_nature_optimization_imports():
 
 
 def test_server_module_loads_with_tools():
-    from vgc_mcp.server import mcp
+    from vgc_mcp.server import (
+        REGISTERED_TOOL_COUNT,
+        REGISTERED_TOOL_MODULE_COUNT,
+        mcp,
+    )
+    from vgc_mcp.tools import discover_register_functions
 
     tools = mcp._tool_manager._tools
-    assert len(tools) > 150, f"expected the full tool surface, got {len(tools)}"
+    discovered_modules = discover_register_functions()
+    assert REGISTERED_TOOL_MODULE_COUNT == len(discovered_modules)
+    assert REGISTERED_TOOL_COUNT == len(tools)
+    assert REGISTERED_TOOL_MODULE_COUNT == 51
+    assert REGISTERED_TOOL_COUNT == 208
+    assert len(tools) == len(set(tools)), "tool names must be unique"
 
 
 def test_main_http_entrypoint_is_callable():

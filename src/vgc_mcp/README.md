@@ -1,14 +1,14 @@
-# vgc_mcp - Main Package
+# vgc_mcp - Plain MCP Server
 
-The core VGC MCP server package. This folder contains the entry points and configuration.
+The client-agnostic MCP server package. Calculation, data, model, and state
+logic lives in `vgc_mcp_core`; this package contains the transport entrypoints
+and thin MCP tool registration wrappers.
 
 ## Files
 
 | File | Purpose |
 |------|---------|
-| `server.py` | Full MCP server with 157 tools |
-| `server_lite.py` | Lite MCP server with 49 essential tools |
-| `config.py` | Settings (API URLs, timeouts, VGC defaults) |
+| `server.py` | Stdio and HTTP entrypoints for the 208-tool server |
 | `__init__.py` | Package exports |
 | `__main__.py` | `python -m vgc_mcp` entry point |
 
@@ -16,16 +16,7 @@ The core VGC MCP server package. This folder contains the entry points and confi
 
 | Folder | Purpose |
 |--------|---------|
-| `api/` | External API clients (PokeAPI, Smogon, PokePaste) |
-| `calc/` | Pure calculation functions (damage, stats, speed) |
-| `models/` | Pydantic data models (Pokemon, Move, Team) |
-| `tools/` | MCP tool definitions (22 modules, 157 tools) |
-| `rules/` | VGC format rules and legality checking |
-| `team/` | Team management and analysis |
-| `formats/` | Import/export (Showdown paste) |
-| `ui/` | MCP-UI templates for interactive displays |
-| `utils/` | Error handling, fuzzy matching |
-| `validation/` | Input validation |
+| `tools/` | 51 auto-discovered MCP registration modules (208 tools) |
 
 ## Architecture
 
@@ -42,6 +33,13 @@ server.py
     └── Registers tools from tools/*_tools.py
         └── Each tool module exports register_*_tools(mcp, ...)
 ```
+
+Discovery is fail-fast: a missing registration function, unresolved required
+dependency, empty module, import failure, or duplicate tool name prevents
+startup rather than exposing a partially healthy service.
+
+MCP Apps/MCP-UI views belong in an optional sibling that imports
+`vgc_mcp_core`; see `docs/mcp-ui-decision.md` at the repository root.
 
 ## Key Design Patterns
 

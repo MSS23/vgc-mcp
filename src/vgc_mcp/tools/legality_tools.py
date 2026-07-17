@@ -487,7 +487,7 @@ def register_legality_tools(mcp: FastMCP, team_manager):
             return error_response(
                 ErrorCodes.INTERNAL_ERROR,
                 f"Unknown regulation: {regulation!r}. "
-                f"Try 'Reg F', 'Reg G', 'Reg H', 'Reg I', or 'Champions' / 'Reg MA'.",
+                f"Try 'Reg F', 'Reg G', 'Reg H', 'Reg I', 'Champions' / 'Reg MB', or 'Reg MA'.",
                 available=available,
             )
 
@@ -530,7 +530,7 @@ def register_legality_tools(mcp: FastMCP, team_manager):
         - Returns action ("set" | "skipped" | "low_confidence"), the regulation
           code, format_system, stat units, confidence, and the reasoning so you
           can mention it to the user (e.g. "I noticed you have a Mega — using
-          Champions Reg MA").
+          Champions Reg MB").
 
         Use when the user pastes a team, asks about a specific Pokemon or
         damage matchup, or anytime the active regulation is unclear.
@@ -569,10 +569,10 @@ def register_legality_tools(mcp: FastMCP, team_manager):
         session can be set with `set_session_regulation` to the inferred code.
 
         Detection rules (in order of confidence):
-        - Any Mega form -> Champions Reg MA (Megas only exist in Champions).
-        - Any Pokemon legal in Champions but banned in mainline -> Champions Reg MA.
+        - Any Mega form -> Champions Reg MB (the current Champions default).
+        - Any Pokemon legal in Champions but banned in mainline -> Champions Reg MB.
         - 1 restricted Pokemon -> Reg G; 2+ restricteds -> Reg I (Reg F fallback).
-        - 0 restricteds + no Mega -> Reg F primary, Reg MA as alternative.
+        - 0 restricteds + no Mega -> Reg F primary, Reg MB as alternative.
 
         Returns the inferred regulation, confidence, reasons, alternatives,
         restricted/illegal Pokemon seen, format system, stat units, and a

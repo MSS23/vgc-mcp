@@ -9,7 +9,7 @@ Edit this file when you want to change how the server presents results.
 """
 
 PRESENTATION_INSTRUCTIONS = """VGC Pokemon team building server (damage calcs, usage stats, team analysis).
-Supports both mainline VGC (EVs, 252/508) and Pokemon Champions Reg MA (Stat Points, 32/66).
+Supports mainline VGC (EVs, 252/508) and Pokemon Champions Reg MA/MB (Stat Points, 32/66).
 
 ═══════════════════════════════════════════════════════════════════════════
 FORMAT DETECTION — ZERO-CONFIG WORKFLOW (the user shouldn't have to ask)
@@ -24,10 +24,10 @@ the FIRST TIME you see Pokemon names in a conversation. It:
 - Infers the regulation from the names (Mega → Champions, restricteds → Reg G/I, etc.)
 - Auto-sets the session regulation if confidence is high or medium
 - Skips silently if the user already picked a regulation explicitly
-- Returns what it inferred so you can mention it ("I noticed Mega Manectric — using Champions Reg MA")
+- Returns what it inferred so you can mention it ("I noticed Mega Manectric — using Champions Reg MB")
 
-**When you also have a wording signal** ("Reg F", "Champions", "Reg MA",
-"M-A", etc.), call `set_session_regulation` with that exact phrase — explicit
+**When you also have a wording signal** ("Reg F", "Champions", "Reg MB",
+"Reg MA", etc.), call `set_session_regulation` with that exact phrase — explicit
 user wording always wins over inference.
 
 **Adding Pokemon to a team auto-detects too.** `add_pokemon_smart` and the
@@ -38,10 +38,10 @@ Common signals the inference uses:
 
    | What they mention | Inferred regulation |
    |---|---|
-   | Any Mega form (Mega Manectric, Charizard-Mega-Y, etc.) | Champions Reg MA |
+   | Any Mega form (Mega Manectric, Charizard-Mega-Y, etc.) | Champions Reg MB (current default) |
    | 1 restricted (Kyogre, Calyrex-Ice, Miraidon, etc.) alone | Reg G |
    | 2 restricteds (Calyrex-Shadow + Koraidon, etc.) | Reg I |
-   | 0 restricteds, no Megas | Reg F (or Reg MA — ask if all are also Champions-legal) |
+   | 0 restricteds, no Megas | Reg F (or Reg MB — ask if all are also Champions-legal) |
 
 If the auto-detect returns `action: "low_confidence"` or surfaces alternatives,
 ASK the user which regulation they meant before continuing. Don't guess silently.
@@ -49,7 +49,7 @@ ASK the user which regulation they meant before continuing. Don't guess silently
 **Format system implications** — once a regulation is set, the entire
 server dispatches accordingly. You don't need to track this manually:
    - Mainline regs (F/G/H/I) → builds use EVs (0-252/stat, 508 total)
-   - Champions Reg MA → builds use Stat Points (0-32/stat, 66 total)
+   - Champions Reg MA/MB → builds use Stat Points (0-32/stat, 66 total)
    - Damage calcs, stat displays, Showdown pastes, and usage stats all
      branch automatically based on the build's `format_system` flag.
 
@@ -245,7 +245,7 @@ SURVIVAL % DEFAULTS (interpret user intent)
 CHAMPIONS-SPECIFIC OUTPUT (when format_system="champions")
 ──────────────────────────────────────────────────────────────────────────
 
-When the active regulation is Reg MA Champions, all spread output uses
+When the active regulation is Reg MA or Reg MB Champions, all spread output uses
 Stat Points (SPs), not EVs:
 
 - Showdown paste line: `SPs: 4 HP / 32 Atk / 30 Spe` (NOT `EVs:`)

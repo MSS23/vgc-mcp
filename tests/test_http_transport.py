@@ -120,7 +120,8 @@ def test_health_endpoint(http_client):
     assert resp.status_code == 200
     body = resp.json()
     assert body["status"] == "healthy"
-    assert body["tools"] > 150
+    assert body["tool_modules"] == 51
+    assert body["tools"] == 208
     assert "active_sessions" in body
 
 
@@ -129,7 +130,8 @@ def test_root_endpoint(http_client):
     assert resp.status_code == 200
     body = resp.json()
     assert body["endpoints"]["mcp"] == "/mcp"
-    assert body["tools"] > 150
+    assert body["tool_modules"] == 51
+    assert body["tools"] == 208
 
 
 def test_mcp_endpoint_exists(http_client):

@@ -172,9 +172,10 @@ FROM python:3.11-slim
 
 WORKDIR /app
 COPY --from=builder /app/dist/*.whl .
-RUN pip install --no-cache-dir *.whl[remote]
+RUN pip install --no-cache-dir "uvicorn>=0.30.0" "starlette>=0.38.0" && \
+    pip install --no-cache-dir ./*.whl
 
-CMD ["python", "-m", "vgc_mcp_http"]
+CMD ["vgc-mcp-http"]
 ```
 
 **Build:**
@@ -333,12 +334,13 @@ Add DNS records as instructed, then:
 2. **Configure service:**
    - Name: `vgc-mcp`
    - Environment: `Python 3`
-   - Build Command: `pip install -e ".[remote]"`
-   - Start Command: `python -m vgc_mcp_http`
+   - Build Command: `python -m pip install -e ".[remote]"`
+   - Start Command: `vgc-mcp-http`
 
 3. **Set environment variables:**
-   - `PORT`: `8000`
-   - `LOG_LEVEL`: `info`
+   - Render supplies `PORT` automatically; do not hardcode it.
+   - Optional: `VGC_MCP_API_KEY` to require bearer authentication.
+   - Optional: `VGC_MCP_RATE_LIMIT` and `VGC_MCP_RATE_WINDOW` for per-IP limits.
 
 4. **Deploy**
 
@@ -350,15 +352,14 @@ Add DNS records as instructed, then:
 services:
   - type: web
     name: vgc-mcp
-    env: python
+    runtime: python
     plan: free
-    buildCommand: "pip install -e '.[remote]'"
-    startCommand: "python -m vgc_mcp_http"
+    buildCommand: python -m pip install -e ".[remote]"
+    startCommand: vgc-mcp-http
+    healthCheckPath: /health
     envVars:
-      - key: PORT
-        value: 8000
-      - key: LOG_LEVEL
-        value: info
+      - key: PYTHON_VERSION
+        value: "3.12"
 ```
 
 Push to GitHub, then connect repository in Render dashboard.
@@ -431,7 +432,7 @@ MCP endpoint: `https://vgc-mcp.onrender.com/mcp`
    User=www-data
    WorkingDirectory=/opt/vgc-mcp
    Environment="PATH=/opt/vgc-mcp/venv/bin"
-   ExecStart=/opt/vgc-mcp/venv/bin/python -m vgc_mcp_http
+   ExecStart=/opt/vgc-mcp/venv/bin/vgc-mcp-http
    Restart=always
    RestartSec=10
 
@@ -508,17 +509,16 @@ sudo certbot renew --dry-run
 
 ### Performance Tuning
 
-**Run multiple workers (Gunicorn):**
+**Run multiple workers (Uvicorn):**
 
 ```bash
-pip install gunicorn
-gunicorn -w 4 -k uvicorn.workers.UvicornWorker vgc_mcp_http:app
+uvicorn --factory vgc_mcp.server:create_http_app --host 0.0.0.0 --port 8000 --workers 4
 ```
 
 **Update systemd service:**
 
 ```ini
-ExecStart=/opt/vgc-mcp/venv/bin/gunicorn -w 4 -k uvicorn.workers.UvicornWorker vgc_mcp_http:app --bind 0.0.0.0:8000
+ExecStart=/opt/vgc-mcp/venv/bin/uvicorn --factory vgc_mcp.server:create_http_app --host 0.0.0.0 --port 8000 --workers 4
 ```
 
 **Nginx worker processes:**
@@ -545,10 +545,11 @@ curl https://your-server.com/health
 
 ```json
 {
-  "status": "ok",
-  "version": "0.1.0",
-  "uptime": 3600,
-  "cache_size": 1024
+  "status": "healthy",
+  "service": "vgc-mcp",
+  "tool_modules": 51,
+  "tools": 208,
+  "active_sessions": 0
 }
 ```
 
@@ -669,20 +670,10 @@ server {
 
 ### Rate Limiting
 
-**Protect APIs from abuse:**
-
-```python
-from fastapi import Request
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-
-limiter = Limiter(key_func=get_remote_address)
-
-@app.route("/mcp")
-@limiter.limit("100/minute")
-async def sse_endpoint(request: Request):
-    # ...
-```
+**Protect public MCP endpoints from abuse:** set `VGC_MCP_RATE_LIMIT` to the
+maximum requests per client IP in each `VGC_MCP_RATE_WINDOW` (60 seconds by
+default). For example, `VGC_MCP_RATE_LIMIT=120`. Health and root endpoints are
+always exempt so Render monitoring remains reliable.
 
 ### Database for State
 
