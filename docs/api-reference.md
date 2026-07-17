@@ -447,21 +447,25 @@ Import a team from Pokemon Showdown paste format.
 Get Pokemon usage percentages from Smogon Stats.
 
 **Parameters:**
-- `format` (string, default: "gen9vgc2026regfbo3")
-- `rating` (integer, default: 0): ELO rating cutoff (0 = all competitive players)
-- `top_n` (integer, default: 20): Number of Pokemon to return
+- `pokemon_name` (string): Pokemon to look up
+- `format_name` (string, optional): Explicit Smogon format; defaults to the active regulation
+- `rating` (0, 1500, 1630, or 1760; optional): defaults to 1630 competitive weighting
+- `month` (string, optional): `YYYY-MM`; defaults to the latest available month
 
 **Returns:**
 ```json
 {
-  "format": "gen9vgc2026regfbo3",
-  "rating": 0,
-  "month": "2026-01",
-  "top_pokemon": [
-    {"rank": 1, "pokemon": "flutter-mane", "usage": 45.2},
-    {"rank": 2, "pokemon": "incineroar", "usage": 42.1},
-    {"rank": 3, "pokemon": "rillaboom", "usage": 38.5}
-  ]
+  "name": "Garchomp",
+  "usage_percent": 21.4,
+  "items": {"Clear Amulet": 34.2},
+  "moves": {"Earthquake": 81.7},
+  "spreads": [{"nature": "Jolly", "sps": {"speed": 32}}],
+  "_meta": {
+    "format": "gen9championsvgc2026regmb",
+    "rating": 1630,
+    "month": "2026-06",
+    "source_url": "https://www.smogon.com/stats/2026-06/chaos/gen9championsvgc2026regmb-1630.json"
+  }
 }
 ```
 

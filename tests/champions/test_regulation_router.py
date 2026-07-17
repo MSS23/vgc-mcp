@@ -14,64 +14,94 @@ def cfg():
     return RegulationConfig()
 
 
-@pytest.mark.parametrize("phrase", [
-    "Reg F", "reg_f", "regulation F", "regulation_f", "F", " f ", "REG-F",
-])
+@pytest.mark.parametrize(
+    "phrase",
+    [
+        "Reg F",
+        "reg_f",
+        "regulation F",
+        "regulation_f",
+        "F",
+        " f ",
+        "REG-F",
+    ],
+)
 def test_reg_f_phrasings(cfg, phrase):
     assert resolve_regulation(phrase, cfg) == "reg_f"
 
 
-@pytest.mark.parametrize("phrase", [
-    "Reg G", "reg_g", "regulation G", "G",
-])
+@pytest.mark.parametrize(
+    "phrase",
+    [
+        "Reg G",
+        "reg_g",
+        "regulation G",
+        "G",
+    ],
+)
 def test_reg_g_phrasings(cfg, phrase):
     assert resolve_regulation(phrase, cfg) == "reg_g"
 
 
-@pytest.mark.parametrize("phrase", [
-    "Reg H", "reg_h", "regulation H", "H",
-])
+@pytest.mark.parametrize(
+    "phrase",
+    [
+        "Reg H",
+        "reg_h",
+        "regulation H",
+        "H",
+    ],
+)
 def test_reg_h_phrasings(cfg, phrase):
     assert resolve_regulation(phrase, cfg) == "reg_h"
 
 
-@pytest.mark.parametrize("phrase", [
-    # Generic Champions phrasing now resolves to the current default reg (MB).
-    "Champions",
-    "champions",
-    "Pokemon Champions",
-    "pokemon champions",
-    "champs",
-    "NCP",
-    "gen 10",
-])
+@pytest.mark.parametrize(
+    "phrase",
+    [
+        # Generic Champions phrasing now resolves to the current default reg (MB).
+        "Champions",
+        "champions",
+        "Pokemon Champions",
+        "pokemon champions",
+        "champs",
+        "NCP",
+        "gen 10",
+    ],
+)
 def test_generic_champions_phrasings_default_to_mb(cfg, phrase):
     assert resolve_regulation(phrase, cfg) == "reg_mb_champs"
 
 
-@pytest.mark.parametrize("phrase", [
-    "Reg MA",
-    "regulation MA",
-    "regulation M-A",
-    "MA",
-    "M-A",
-    "ma",
-    "Champions Reg MA",
-])
+@pytest.mark.parametrize(
+    "phrase",
+    [
+        "Reg MA",
+        "regulation MA",
+        "regulation M-A",
+        "MA",
+        "M-A",
+        "ma",
+        "Champions Reg MA",
+    ],
+)
 def test_reg_ma_explicit_phrasings(cfg, phrase):
     # MA stays reachable only via explicit MA wording.
     assert resolve_regulation(phrase, cfg) == "reg_ma_champs"
 
 
-@pytest.mark.parametrize("phrase", [
-    "Reg MB",
-    "regulation MB",
-    "regulation M-B",
-    "MB",
-    "M-B",
-    "mb",
-    "Champions Reg MB",
-])
+@pytest.mark.parametrize(
+    "phrase",
+    [
+        "Reg MB",
+        "regulation MB",
+        "regulation M-B",
+        "MB",
+        "M-B",
+        "mb",
+        "Champions Reg MB",
+    ],
+)
 def test_reg_mb_explicit_phrasings(cfg, phrase):
     assert resolve_regulation(phrase, cfg) == "reg_mb_champs"
 
@@ -106,7 +136,7 @@ def test_describe_champions(cfg):
     assert info["max_per_stat"] == 32
     assert info["max_total"] == 66
     assert info["legality_mode"] == "allowlist"
-    assert info["default_smogon_rating"] == 1500
+    assert info["default_smogon_rating"] == 1630
     assert "gen9championsvgc2026regma" in info["smogon_formats"]
 
 
@@ -117,7 +147,7 @@ def test_describe_champions_mb(cfg):
     assert info["max_per_stat"] == 32
     assert info["max_total"] == 66
     assert info["legality_mode"] == "allowlist"
-    assert info["default_smogon_rating"] == 1500
+    assert info["default_smogon_rating"] == 1630
     assert "gen9championsvgc2026regmb" in info["smogon_formats"]
 
 

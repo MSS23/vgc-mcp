@@ -59,7 +59,7 @@ class Settings:
     # the battle copilot's starting format — so it never drifts from the
     # Smogon DEFAULT_FORMAT above.
     DEFAULT_REGULATION: str = "reg_f"
-    DEFAULT_RATING: int = 0  # 0 = all competitive data (broadest dataset)
+    DEFAULT_RATING: int = 1630  # Standard competitive Smogon weighting
 
     # Team settings
     MAX_TEAM_SIZE: int = 6

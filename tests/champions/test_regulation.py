@@ -30,16 +30,16 @@ def test_reg_ma_sp_limits(cfg):
     assert limits == {"per_stat_max": 32, "total_max": 66}
 
 
-def test_reg_ma_default_smogon_rating_is_1500(cfg):
-    assert cfg.get_default_smogon_rating("reg_ma_champs") == 1500
+def test_reg_ma_default_smogon_rating_is_1630(cfg):
+    assert cfg.get_default_smogon_rating("reg_ma_champs") == 1630
 
 
-def test_mainline_default_smogon_rating_is_1500(cfg):
-    # All regs (mainline + champions) standardize on 1500 so cross-format
-    # usage comparisons are apples-to-apples.
-    assert cfg.get_default_smogon_rating("reg_f") == 1500
-    assert cfg.get_default_smogon_rating("reg_g") == 1500
-    assert cfg.get_default_smogon_rating("reg_h") == 1500
+def test_mainline_default_smogon_rating_is_1630(cfg):
+    # Smogon calls 1630 the standard competitive weighting. All formats use
+    # it by default so cross-format comparisons remain apples-to-apples.
+    assert cfg.get_default_smogon_rating("reg_f") == 1630
+    assert cfg.get_default_smogon_rating("reg_g") == 1630
+    assert cfg.get_default_smogon_rating("reg_h") == 1630
 
 
 def test_reg_ma_uses_allowlist(cfg):

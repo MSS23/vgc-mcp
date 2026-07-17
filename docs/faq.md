@@ -181,16 +181,19 @@ If you get different results than Showdown, check:
 
 ### Where does the usage data come from?
 
-**Smogon Stats** at 0 ELO rating (all competitive players).
+**Smogon Stats** monthly chaos JSON, using the active session regulation.
 
 - **Source**: https://www.smogon.com/stats/
-- **Format**: `{YYYY-MM}/chaos/gen9vgc2026regfbo3-0.json`
-- **Rating**: 0 (all competitive players, broadest dataset)
+- **Format**: `{YYYY-MM}/chaos/{format}-{rating}.json`
+- **Default rating**: 1630 (Smogon's standard competitive weighting)
 - **Available ratings**: 0, 1500, 1630, 1760
 - **Update frequency**: Monthly
 - **Auto-detection**: Automatically finds latest available month
+- **Transparency**: Responses include the exact format, month, rating, and URL
 
-This data represents all competitive players across all skill levels.
+Use rating 0 for unweighted ladder data, 1500 for the average ladder
+experience, 1630 for the standard competitive metagame, and 1760 for elite
+players. You can also request a specific month such as `2026-06`.
 
 ---
 

@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Smogon chaos data now defaults to the 1630 standard competitive weighting;
+  callers can explicitly select 0, 1500, 1630, or 1760 and a `YYYY-MM` month.
+  Usage results expose the resolved format, month, rating, and exact source URL.
 - Tool discovery is now fail-fast: import failures, misnamed registration
   functions, unresolved required dependencies, empty tool modules, and
   duplicate tool names abort startup instead of exposing a silently partial
@@ -39,6 +42,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   32 SP == 252 EVs exactly; HOME conversion `SP = (EVs + 4) / 8`.
 
 ### Fixed
+- The shared Smogon HTTP/cache client now resolves regulation and freshness
+  metadata per MCP session instead of retaining the first caller's config.
+  Automatic usage lookups search only the active regulation's formats, so
+  Reg I, Champions MA, and Champions MB sets cannot silently cross-contaminate.
 - Regulation overrides are now isolated per MCP session, alongside team,
   build, and battle state, so one hosted user cannot change another user's
   active format. Auto-detected session formats are also retained by later

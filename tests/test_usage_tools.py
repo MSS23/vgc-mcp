@@ -12,37 +12,49 @@ from vgc_mcp.tools.usage_tools import register_usage_tools
 def mock_smogon():
     """Create a mock Smogon client."""
     client = AsyncMock()
-    client.get_pokemon_usage = AsyncMock(return_value={
-        "name": "flutter-mane",
-        "usage_percent": 25.5,
-        "moves": {"moonblast": 85, "shadow-ball": 72},
-        "items": {"Choice Specs": 45},
-        "abilities": {"Protosynthesis": 99},
-        "spreads": [{"nature": "Timid", "evs": {"spa": 252, "spe": 252}}],
-        "_meta": {"format": "gen9vgc2024regh", "month": "2024-12"}
-    })
-    client.get_common_sets = AsyncMock(return_value={
-        "pokemon": "flutter-mane",
-        "items": [{"name": "Choice Specs", "usage": 45}],
-        "abilities": [{"name": "Protosynthesis", "usage": 99}]
-    })
-    client.suggest_teammates = AsyncMock(return_value={
-        "pokemon": "flutter-mane",
-        "teammates": [{"name": "incineroar", "usage": 35}]
-    })
-    client.get_usage_stats = AsyncMock(return_value={
-        "data": {
-            "flutter-mane": {"usage": 0.255},
-            "incineroar": {"usage": 0.22},
-        },
-        "_meta": {"format": "gen9vgc2024regh", "month": "2024-12"}
-    })
-    client.compare_pokemon_usage = AsyncMock(return_value={
-        "pokemon": "flutter-mane",
-        "current_usage": 25.5,
-        "previous_usage": 23.0,
-        "change": 2.5
-    })
+    client.get_pokemon_usage = AsyncMock(
+        return_value={
+            "name": "flutter-mane",
+            "usage_percent": 25.5,
+            "moves": {"moonblast": 85, "shadow-ball": 72},
+            "items": {"Choice Specs": 45},
+            "abilities": {"Protosynthesis": 99},
+            "spreads": [{"nature": "Timid", "evs": {"spa": 252, "spe": 252}}],
+            "_meta": {"format": "gen9vgc2024regh", "month": "2024-12", "rating": 1630},
+        }
+    )
+    client.get_common_sets = AsyncMock(
+        return_value={
+            "pokemon": "flutter-mane",
+            "items": [{"name": "Choice Specs", "usage": 45}],
+            "abilities": [{"name": "Protosynthesis", "usage": 99}],
+        }
+    )
+    client.suggest_teammates = AsyncMock(
+        return_value={"pokemon": "flutter-mane", "teammates": [{"name": "incineroar", "usage": 35}]}
+    )
+    client.get_usage_stats = AsyncMock(
+        return_value={
+            "data": {
+                "flutter-mane": {"usage": 0.255},
+                "incineroar": {"usage": 0.22},
+            },
+            "_meta": {
+                "format": "gen9vgc2024regh",
+                "month": "2024-12",
+                "rating": 1630,
+                "source_url": "https://www.smogon.com/stats/2024-12/chaos/gen9vgc2024regh-1630.json",
+            },
+        }
+    )
+    client.compare_pokemon_usage = AsyncMock(
+        return_value={
+            "pokemon": "flutter-mane",
+            "current_usage": 25.5,
+            "previous_usage": 23.0,
+            "change": 2.5,
+        }
+    )
     client.current_format = "gen9vgc2024regh"
     client.current_month = "2024-12"
     client.current_regulation_from_data = "H"
@@ -53,6 +65,7 @@ def mock_smogon():
     client.regulation_config = reg_config
 
     client.VGC_FORMATS = ["gen9vgc2024regh", "gen9vgc2024regg"]
+    client.ACTIVE_VGC_FORMATS = ["gen9vgc2024regh"]
     client.RATING_CUTOFFS = [0, 1500, 1630, 1760]
     client.check_data_freshness = MagicMock(return_value=None)
     return client
@@ -153,6 +166,12 @@ class TestGetTopPokemon:
         result = await fn()
         usages = [p["usage_percent"] for p in result["top_pokemon"]]
         assert usages == sorted(usages, reverse=True)
+
+    async def test_reports_resolved_rating_and_source(self, tools):
+        fn = tools["get_top_pokemon"].fn
+        result = await fn()
+        assert result["rating"] == 1630
+        assert result["source_url"].endswith("gen9vgc2024regh-1630.json")
 
 
 class TestComparePokemonMonthOverMonth:

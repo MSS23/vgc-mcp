@@ -1,7 +1,10 @@
 """Smogon usage stats client with caching and retry logic."""
 
+import threading
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
+from weakref import WeakKeyDictionary
 
 import httpx
 
@@ -36,39 +39,64 @@ FORM_ALIASES = {
 
 class SmogonStatsError(Exception):
     """Error fetching Smogon stats."""
+
     pass
+
+
+@dataclass
+class _SmogonSessionState:
+    """Mutable Smogon metadata isolated to one MCP regulation session."""
+
+    current_format: Optional[str] = None
+    current_month: Optional[str] = None
+    first_month: Optional[str] = None
+    data_upgraded: bool = False
+    upgrade_notice: Optional[str] = None
 
 
 class SmogonStatsClient:
     """Client for Smogon usage stats (chaos JSON format)."""
 
     def __init__(
-        self,
-        cache: Optional[APICache] = None,
-        regulation_config: Optional[RegulationConfig] = None
+        self, cache: Optional[APICache] = None, regulation_config: Optional[RegulationConfig] = None
     ):
         """Initialize client with optional cache and regulation config."""
         self.cache = cache or APICache()
         self._regulation_config = regulation_config
         self._client: Optional[httpx.AsyncClient] = None
-        self._current_format: Optional[str] = None
-        self._current_month: Optional[str] = None
-        # Session-level data freshness tracking
-        self._session_first_month: Optional[str] = None
-        self._data_upgraded: bool = False
-        self._upgrade_notice: Optional[str] = None
+        self._state_lock = threading.Lock()
+        self._session_states: WeakKeyDictionary[RegulationConfig, _SmogonSessionState] = (
+            WeakKeyDictionary()
+        )
 
     @property
     def regulation_config(self) -> RegulationConfig:
-        """Get regulation config, using global singleton if not provided."""
-        if self._regulation_config is None:
-            self._regulation_config = get_regulation_config()
-        return self._regulation_config
+        """Get the caller's session config unless one was explicitly injected."""
+        return self._regulation_config or get_regulation_config()
+
+    def _session_state(self) -> _SmogonSessionState:
+        config = self.regulation_config
+        with self._state_lock:
+            state = self._session_states.get(config)
+            if state is None:
+                state = _SmogonSessionState()
+                self._session_states[config] = state
+            return state
+
+    @property
+    def ACTIVE_VGC_FORMATS(self) -> list[str]:  # noqa: N802
+        """Smogon formats for the calling session's active regulation."""
+        cfg = self.regulation_config
+        formats = cfg.get_smogon_formats(cfg.current_regulation)
+        return formats or cfg.get_all_smogon_formats()
 
     @property
     def VGC_FORMATS(self) -> list[str]:  # noqa: N802 — legacy constant-style API, callers depend on the name
-        """Get VGC formats dynamically from current regulation config."""
-        return self.regulation_config.get_all_smogon_formats()
+        """List formats with the active regulation first, then fallbacks."""
+        active = self.ACTIVE_VGC_FORMATS
+        return active + [
+            fmt for fmt in self.regulation_config.get_all_smogon_formats() if fmt not in active
+        ]
 
     @property
     def RATING_CUTOFFS(self) -> list[int]:  # noqa: N802 — legacy constant-style API, callers depend on the name
@@ -76,10 +104,10 @@ class SmogonStatsClient:
 
         Returns:
             List of available ratings: [0, 1500, 1630, 1760]
-            - 0: All players (broadest data)
-            - 1500: 1500+ ELO players
-            - 1630: 1630+ ELO players
-            - 1760: Top competitive players (default)
+            - 0: Unweighted ladder data
+            - 1500: Average ladder weighting
+            - 1630: Standard competitive weighting (default)
+            - 1760: Elite-player weighting
         """
         return settings.SMOGON_RATING_CUTOFFS
 
@@ -87,15 +115,17 @@ class SmogonStatsClient:
     def current_regulation_from_data(self) -> Optional[str]:
         """Extract regulation letter from the current format string.
 
-        e.g., 'gen9vgc2025regh' -> 'H', 'gen9vgc2026regf' -> 'F'
+        e.g., 'gen9vgc2026regi' -> 'I', Champions Reg MB -> 'MB'
 
         Returns:
             Single uppercase letter (e.g., 'F', 'G', 'H') or None if not detected
         """
-        if not self._current_format:
+        current_format = self._session_state().current_format
+        if not current_format:
             return None
         import re
-        match = re.search(r'reg([a-z])', self._current_format.lower())
+
+        match = re.search(r"reg([a-z]{1,2})(?:bo3)?$", current_format.lower())
         if match:
             return match.group(1).upper()
         return None
@@ -107,7 +137,7 @@ class SmogonStatsClient:
                 timeout=httpx.Timeout(settings.API_TIMEOUT_SECONDS),
                 headers={"User-Agent": "VGC-MCP-Server/0.1.0"},
                 follow_redirects=True,
-                limits=httpx.Limits(max_keepalive_connections=5, max_connections=10)
+                limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
             )
         return self._client
 
@@ -132,12 +162,7 @@ class SmogonStatsClient:
             months.append(f"{year:04d}-{month:02d}")
         return months
 
-    async def _try_fetch_stats(
-        self,
-        month: str,
-        format_name: str,
-        rating: int
-    ) -> Optional[dict]:
+    async def _try_fetch_stats(self, month: str, format_name: str, rating: int) -> Optional[dict]:
         """Try to fetch stats for a specific month/format/rating combination."""
         cache_key = f"{month}/{format_name}/{rating}"
         cached = self.cache.get("smogon", cache_key)
@@ -166,18 +191,21 @@ class SmogonStatsClient:
         """True if this Smogon format string is for Pokemon Champions."""
         return "champions" in (fmt or "").lower()
 
-    def _ratings_to_try(self, rating: int, formats: list[str]) -> list[int]:
+    def _ratings_to_try(
+        self,
+        rating: Optional[int],
+        formats: list[str],
+    ) -> list[int]:
         """Resolve which rating cutoffs to try.
 
-        When the caller passes `rating=0` (the function default), we look up
-        each format's regulation in regulations.json and prepend its
-        `default_smogon_rating`. All current regs (Reg F/G/H, Reg MA Champions)
-        declare 1500 — keeping cross-regulation comparisons apples-to-apples.
+        When the caller omits ``rating``, we look up each format's regulation
+        and prepend its configured `default_smogon_rating`. Current VGC formats
+        declare 1630, Smogon's standard competitive weighting.
 
         Always falls back to 1500 then 0 so we still find data if a regulation
         somehow lacks a default and the user didn't pass an explicit cutoff.
         """
-        if rating != 0:
+        if rating is not None:
             return [rating]
 
         ratings: list[int] = []
@@ -193,7 +221,7 @@ class SmogonStatsClient:
                         ratings.append(default)
                         seen.add(default)
                     break
-        # Fallback chain: 1500 (the project-wide convention) then 0 (broadest)
+        # Fallback chain: average ladder, then the unweighted baseline.
         for fallback in (1500, 0):
             if fallback not in seen:
                 ratings.append(fallback)
@@ -203,22 +231,23 @@ class SmogonStatsClient:
     async def get_usage_stats(
         self,
         format_name: Optional[str] = None,
-        rating: int = 0,
-        month: Optional[str] = None
+        rating: Optional[int] = None,
+        month: Optional[str] = None,
     ) -> dict:
         """
         Fetch chaos.json usage stats with auto-detection.
 
         Args:
             format_name: e.g., "gen9vgc2025regg". If None, auto-detect latest.
-            rating: Rating cutoff (0, 1500, 1630, 1760)
+            rating: Rating cutoff; omit for 1630 competitive weighting.
+                Explicit 0 requests unweighted data.
             month: Format "YYYY-MM", defaults to latest available
 
         Returns:
             Usage stats data with metadata about source
         """
-        months = [month] if month else self._get_recent_months(3)
-        formats = [format_name] if format_name else self.VGC_FORMATS
+        months = [month] if month else self._get_recent_months(12)
+        formats = [format_name] if format_name else self.ACTIVE_VGC_FORMATS
         ratings = self._ratings_to_try(rating, formats)
 
         # Try combinations until we find one that works
@@ -227,14 +256,21 @@ class SmogonStatsClient:
                 for r in ratings:
                     data = await self._try_fetch_stats(m, fmt, r)
                     if data:
-                        rating = r  # remember which cutoff actually returned data
+                        resolved_rating = r
                         break
                 else:
                     continue
                 if data:
-                    self._current_format = fmt
-                    self._current_month = m
+                    state = self._session_state()
+                    state.current_format = fmt
+                    state.current_month = m
                     self._check_for_data_upgrade(m)  # Track data freshness
+
+                    # Cache entries are shared across MCP sessions. Copy the
+                    # top-level payload before attaching request-specific
+                    # metadata so one caller cannot overwrite another
+                    # session's requested cutoff or source information.
+                    data = dict(data)
 
                     # Format month for display (e.g., "2025-12" -> "December 2025")
                     try:
@@ -246,7 +282,12 @@ class SmogonStatsClient:
                         "format": fmt,
                         "month": m,
                         "month_display": f"{month_display} Usage Stats",
-                        "rating": rating
+                        "rating": resolved_rating,
+                        "requested_rating": rating,
+                        "source_url": (
+                            f"{settings.SMOGON_STATS_BASE_URL}/{m}/chaos/"
+                            f"{fmt}-{resolved_rating}.json"
+                        ),
                     }
 
                     # Add notice if data source upgraded mid-session
@@ -264,10 +305,11 @@ class SmogonStatsClient:
         self,
         pokemon_name: str,
         format_name: Optional[str] = None,
-        rating: int = 0
+        rating: Optional[int] = None,
+        month: Optional[str] = None,
     ) -> Optional[dict]:
         """Get usage stats for a specific Pokemon."""
-        stats = await self.get_usage_stats(format_name, rating)
+        stats = await self.get_usage_stats(format_name, rating, month)
 
         # Reorder a leading "Mega X" into Smogon's "X-Mega" key order before
         # applying form aliases / stripping hyphens. Without this, "Mega
@@ -351,7 +393,7 @@ class SmogonStatsClient:
                     "spreads": spreads_processed[:10],
                     "teammates": teammates_pct,
                     "tera_types": tera_pct,
-                    "_meta": stats.get("_meta", {})
+                    "_meta": stats.get("_meta", {}),
                 }
 
         return None
@@ -395,11 +437,12 @@ class SmogonStatsClient:
         self,
         pokemon_name: str,
         format_name: Optional[str] = None,
-        rating: int = 0,
-        limit: int = 5
+        rating: Optional[int] = None,
+        limit: int = 5,
+        month: Optional[str] = None,
     ) -> Optional[dict]:
         """Get the most common competitive sets for a Pokemon."""
-        usage = await self.get_pokemon_usage(pokemon_name, format_name, rating)
+        usage = await self.get_pokemon_usage(pokemon_name, format_name, rating, month)
         if not usage:
             return None
 
@@ -422,18 +465,19 @@ class SmogonStatsClient:
             "top_moves": [{"name": k, "usage": v} for k, v in top_moves],
             "top_spreads": top_spreads,
             "top_tera_types": [{"type": k, "usage": v} for k, v in top_tera],
-            "_meta": usage.get("_meta", {})
+            "_meta": usage.get("_meta", {}),
         }
 
     async def suggest_teammates(
         self,
         pokemon_name: str,
         format_name: Optional[str] = None,
-        rating: int = 0,
-        limit: int = 10
+        rating: Optional[int] = None,
+        limit: int = 10,
+        month: Optional[str] = None,
     ) -> Optional[dict]:
         """Get suggested teammates based on usage data."""
-        usage = await self.get_pokemon_usage(pokemon_name, format_name, rating)
+        usage = await self.get_pokemon_usage(pokemon_name, format_name, rating, month)
         if not usage:
             return None
 
@@ -441,22 +485,19 @@ class SmogonStatsClient:
 
         return {
             "pokemon": usage["name"],
-            "suggested_teammates": [
-                {"name": name, "usage_with": rate}
-                for name, rate in teammates
-            ],
-            "_meta": usage.get("_meta", {})
+            "suggested_teammates": [{"name": name, "usage_with": rate} for name, rate in teammates],
+            "_meta": usage.get("_meta", {}),
         }
 
     @property
     def current_format(self) -> Optional[str]:
         """Get the last successfully used format."""
-        return self._current_format
+        return self._session_state().current_format
 
     @property
     def current_month(self) -> Optional[str]:
         """Get the last successfully used month."""
-        return self._current_month
+        return self._session_state().current_month
 
     def check_data_freshness(self) -> Optional[str]:
         """Check if newer data became available since session started.
@@ -465,9 +506,10 @@ class SmogonStatsClient:
             Notice message if newer data was found, None otherwise.
             Notice is cleared after being read (shown once per upgrade).
         """
-        if self._data_upgraded and self._upgrade_notice:
-            notice = self._upgrade_notice
-            self._upgrade_notice = None  # Clear after reading (show once)
+        state = self._session_state()
+        if state.data_upgraded and state.upgrade_notice:
+            notice = state.upgrade_notice
+            state.upgrade_notice = None  # Clear after reading (show once)
             return notice
         return None
 
@@ -477,32 +519,31 @@ class SmogonStatsClient:
         Called each time stats are fetched. If the month is newer than
         the first month used in this session, sets a notification.
         """
-        if self._session_first_month is None:
-            self._session_first_month = new_month
-        elif new_month > self._session_first_month and not self._data_upgraded:
-            self._data_upgraded = True
+        state = self._session_state()
+        if state.first_month is None:
+            state.first_month = new_month
+        elif new_month > state.first_month and not state.data_upgraded:
+            state.data_upgraded = True
             # Format: "2024-12" -> "December 2024"
             try:
                 month_name = datetime.strptime(new_month, "%Y-%m").strftime("%B %Y")
-                prev_name = datetime.strptime(
-                    self._session_first_month, "%Y-%m"
-                ).strftime("%B %Y")
-                self._upgrade_notice = (
+                prev_name = datetime.strptime(state.first_month, "%Y-%m").strftime("%B %Y")
+                state.upgrade_notice = (
                     f"New data available! Now using {month_name} Smogon stats "
                     f"(previously {prev_name}). Spreads and usage rates are updated."
                 )
             except ValueError:
                 # Fallback if date parsing fails
-                self._upgrade_notice = (
+                state.upgrade_notice = (
                     f"New data available! Now using {new_month} stats "
-                    f"(previously {self._session_first_month})."
+                    f"(previously {state.first_month})."
                 )
 
     async def compare_pokemon_usage(
         self,
         pokemon_name: str,
         format_name: Optional[str] = None,
-        rating: int = 0
+        rating: Optional[int] = None,
     ) -> Optional[dict]:
         """
         Compare a Pokemon's usage between current and previous month.
@@ -517,7 +558,7 @@ class SmogonStatsClient:
         Args:
             pokemon_name: The Pokemon to analyze
             format_name: Specific format (auto-detects if None)
-            rating: Rating cutoff (0, 1500, 1630, or 1760). Default 1760 for high-level play.
+            rating: Rating cutoff; omit for 1630 competitive weighting.
 
         Returns:
             Comparison data showing current vs previous month
@@ -535,26 +576,31 @@ class SmogonStatsClient:
         previous_stats = None
 
         try:
-            current_stats = await self.get_pokemon_usage(
-                pokemon_name, format_name, rating
-            )
+            current_stats = await self.get_pokemon_usage(pokemon_name, format_name, rating)
         except SmogonStatsError:
             pass
 
         # Try to get previous month stats
         try:
             # Temporarily override to get previous month
-            formats = [format_name] if format_name else self.VGC_FORMATS
+            formats = [format_name] if format_name else self.ACTIVE_VGC_FORMATS
+            ratings = self._ratings_to_try(rating, formats)
 
             for fmt in formats:
-                data = await self._try_fetch_stats(previous_month, fmt, rating)
+                data = None
+                for resolved_rating in ratings:
+                    data = await self._try_fetch_stats(
+                        previous_month,
+                        fmt,
+                        resolved_rating,
+                    )
+                    if data:
+                        break
                 if data:
                     # Extract Pokemon data from previous month. Reorder a
                     # leading "Mega X" into Smogon's "X-Mega" key order first.
                     name_normalized = (
-                        reorder_mega_prefix(pokemon_name)
-                        .replace(" ", "")
-                        .replace("-", "")
+                        reorder_mega_prefix(pokemon_name).replace(" ", "").replace("-", "")
                     )
 
                     for mon_name, mon_data in data.get("data", {}).items():
@@ -566,7 +612,9 @@ class SmogonStatsClient:
                             spread_total = sum(spreads.values()) or 1
                             spreads_processed = []
                             prev_is_champions = self._is_champions_format(fmt)
-                            for spread_str, weight in sorted(spreads.items(), key=lambda x: -x[1])[:5]:
+                            for spread_str, weight in sorted(spreads.items(), key=lambda x: -x[1])[
+                                :5
+                            ]:
                                 pct = weight / spread_total
                                 parsed = self._parse_spread(spread_str, champions=prev_is_champions)
                                 parsed["usage"] = round(pct * 100, 1)
@@ -585,7 +633,7 @@ class SmogonStatsClient:
                                 "spreads": spreads_processed,
                                 "items": items_pct,
                                 "month": previous_month,
-                                "format": fmt
+                                "format": fmt,
                             }
                             break
                     if previous_stats:
@@ -603,7 +651,7 @@ class SmogonStatsClient:
             "previous_month": previous_month,
             "current": current_stats,
             "previous": previous_stats,
-            "changes": []
+            "changes": [],
         }
 
         if current_stats and previous_stats:
@@ -618,8 +666,12 @@ class SmogonStatsClient:
 
             # Compare top spreads for speed tier shifts
             if current_stats.get("spreads") and previous_stats.get("spreads"):
-                current_top_spread = current_stats["spreads"][0] if current_stats["spreads"] else None
-                prev_top_spread = previous_stats["spreads"][0] if previous_stats["spreads"] else None
+                current_top_spread = (
+                    current_stats["spreads"][0] if current_stats["spreads"] else None
+                )
+                prev_top_spread = (
+                    previous_stats["spreads"][0] if previous_stats["spreads"] else None
+                )
 
                 if current_top_spread and prev_top_spread:
                     is_champ = (
@@ -648,7 +700,7 @@ class SmogonStatsClient:
         pokemon_name: str,
         base_speed: int,
         format_name: Optional[str] = None,
-        rating: int = 0
+        rating: Optional[int] = None,
     ) -> Optional[dict]:
         """
         Get speed distribution from Smogon spreads.
@@ -660,7 +712,7 @@ class SmogonStatsClient:
             pokemon_name: Pokemon name to look up
             base_speed: Pokemon's base speed stat (from PokeAPI)
             format_name: Specific format (auto-detects if None)
-            rating: Rating cutoff (default 1760)
+            rating: Rating cutoff (default 1630 competitive weighting)
 
         Returns:
             Distribution data or None if not found:
@@ -684,14 +736,30 @@ class SmogonStatsClient:
 
         # Nature name -> Nature enum mapping
         NATURE_MAP = {
-            "adamant": Nature.ADAMANT, "bashful": Nature.BASHFUL, "bold": Nature.BOLD,
-            "brave": Nature.BRAVE, "calm": Nature.CALM, "careful": Nature.CAREFUL,
-            "docile": Nature.DOCILE, "gentle": Nature.GENTLE, "hardy": Nature.HARDY,
-            "hasty": Nature.HASTY, "impish": Nature.IMPISH, "jolly": Nature.JOLLY,
-            "lax": Nature.LAX, "lonely": Nature.LONELY, "mild": Nature.MILD,
-            "modest": Nature.MODEST, "naive": Nature.NAIVE, "naughty": Nature.NAUGHTY,
-            "quiet": Nature.QUIET, "quirky": Nature.QUIRKY, "rash": Nature.RASH,
-            "relaxed": Nature.RELAXED, "sassy": Nature.SASSY, "serious": Nature.SERIOUS,
+            "adamant": Nature.ADAMANT,
+            "bashful": Nature.BASHFUL,
+            "bold": Nature.BOLD,
+            "brave": Nature.BRAVE,
+            "calm": Nature.CALM,
+            "careful": Nature.CAREFUL,
+            "docile": Nature.DOCILE,
+            "gentle": Nature.GENTLE,
+            "hardy": Nature.HARDY,
+            "hasty": Nature.HASTY,
+            "impish": Nature.IMPISH,
+            "jolly": Nature.JOLLY,
+            "lax": Nature.LAX,
+            "lonely": Nature.LONELY,
+            "mild": Nature.MILD,
+            "modest": Nature.MODEST,
+            "naive": Nature.NAIVE,
+            "naughty": Nature.NAUGHTY,
+            "quiet": Nature.QUIET,
+            "quirky": Nature.QUIRKY,
+            "rash": Nature.RASH,
+            "relaxed": Nature.RELAXED,
+            "sassy": Nature.SASSY,
+            "serious": Nature.SERIOUS,
             "timid": Nature.TIMID,
         }
 
@@ -771,7 +839,7 @@ class SmogonStatsClient:
                 "iqr_low": iqr_low,
                 "iqr_high": iqr_high,
             },
-            "_meta": usage.get("_meta", {})
+            "_meta": usage.get("_meta", {}),
         }
 
     async def close(self) -> None:

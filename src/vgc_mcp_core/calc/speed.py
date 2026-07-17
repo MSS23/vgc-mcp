@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 @dataclass
 class SpeedComparison:
     """Result of comparing two Pokemon speeds."""
+
     pokemon1_name: str
     pokemon1_speed: int
     pokemon2_name: str
@@ -99,7 +100,7 @@ def compare_speeds(
         pokemon2_speed=speed2,
         difference=abs(effective_speed1 - effective_speed2),
         result=result,
-        notes=notes
+        notes=notes,
     )
 
 
@@ -109,7 +110,7 @@ def find_speed_evs_to_outspeed(
     nature: Nature = Nature.SERIOUS,
     iv: int = 31,
     level: int = 50,
-    by: int = 1
+    by: int = 1,
 ) -> Optional[int]:
     """
     Find minimum EVs to outspeed a target by at least 'by' points.
@@ -133,7 +134,7 @@ def find_speed_evs_to_underspeed(
     target_speed: int,
     nature: Nature = Nature.SERIOUS,
     iv: int = 31,
-    level: int = 50
+    level: int = 50,
 ) -> Optional[int]:
     """
     Find maximum EVs while staying slower than target (for Trick Room).
@@ -239,9 +240,8 @@ META_SPEED_TIERS = {
             {"nature": "Timid", "evs": 252, "usage": 60},
             {"nature": "Modest", "evs": 252, "usage": 30},
             {"nature": "Timid", "evs": 0, "usage": 10},
-        ]
+        ],
     },
-
     # Very fast (135-150)
     "electrode-hisui": {
         "base": 150,
@@ -249,7 +249,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Timid", "evs": 252, "usage": 70},
             {"nature": "Modest", "evs": 252, "usage": 30},
-        ]
+        ],
     },
     "dragapult": {
         "base": 142,
@@ -258,7 +258,7 @@ META_SPEED_TIERS = {
             {"nature": "Jolly", "evs": 252, "usage": 50},
             {"nature": "Timid", "evs": 252, "usage": 30},
             {"nature": "Adamant", "evs": 252, "usage": 20},
-        ]
+        ],
     },
     "iron-bundle": {
         "base": 136,
@@ -268,7 +268,7 @@ META_SPEED_TIERS = {
             {"nature": "Timid", "evs": 252, "usage": 50},
             {"nature": "Modest", "evs": 252, "usage": 40},
             {"nature": "Modest", "evs": 0, "usage": 10},
-        ]
+        ],
     },
     "flutter-mane": {
         "base": 135,
@@ -279,7 +279,7 @@ META_SPEED_TIERS = {
             {"nature": "Modest", "evs": 252, "usage": 30},
             {"nature": "Timid", "evs": 100, "usage": 18},
             {"nature": "Timid", "evs": 0, "usage": 8},
-        ]
+        ],
     },
     "miraidon": {
         "base": 135,
@@ -287,7 +287,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Timid", "evs": 252, "usage": 60},
             {"nature": "Modest", "evs": 252, "usage": 40},
-        ]
+        ],
     },
     "koraidon": {
         "base": 135,
@@ -295,7 +295,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Jolly", "evs": 252, "usage": 60},
             {"nature": "Adamant", "evs": 252, "usage": 40},
-        ]
+        ],
     },
     "meowscarada": {
         "base": 123,
@@ -303,7 +303,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Jolly", "evs": 252, "usage": 80},
             {"nature": "Adamant", "evs": 252, "usage": 20},
-        ]
+        ],
     },
     "chien-pao": {
         "base": 135,
@@ -311,7 +311,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Jolly", "evs": 252, "usage": 70},
             {"nature": "Adamant", "evs": 252, "usage": 30},
-        ]
+        ],
     },
     "calyrex-shadow": {
         "base": 150,
@@ -319,9 +319,8 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Timid", "evs": 252, "usage": 70},
             {"nature": "Modest", "evs": 252, "usage": 30},
-        ]
+        ],
     },
-
     # Fast (100-120)
     "iron-moth": {
         "base": 110,
@@ -330,7 +329,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Timid", "evs": 252, "usage": 50},
             {"nature": "Modest", "evs": 252, "usage": 50},
-        ]
+        ],
     },
     "raging-bolt": {
         "base": 110,
@@ -341,7 +340,7 @@ META_SPEED_TIERS = {
             {"nature": "Modest", "evs": 252, "usage": 40},
             {"nature": "Modest", "evs": 0, "usage": 25},
             {"nature": "Quiet", "evs": 0, "usage": 10},
-        ]
+        ],
     },
     "gouging-fire": {
         "base": 110,
@@ -351,7 +350,7 @@ META_SPEED_TIERS = {
             {"nature": "Jolly", "evs": 252, "usage": 40},
             {"nature": "Adamant", "evs": 252, "usage": 40},
             {"nature": "Adamant", "evs": 100, "usage": 20},
-        ]
+        ],
     },
     "walking-wake": {
         "base": 109,
@@ -360,7 +359,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Timid", "evs": 252, "usage": 40},
             {"nature": "Modest", "evs": 252, "usage": 60},
-        ]
+        ],
     },
     "ogerpon": {
         "base": 110,
@@ -368,7 +367,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Jolly", "evs": 252, "usage": 60},
             {"nature": "Adamant", "evs": 252, "usage": 40},
-        ]
+        ],
     },
     "ogerpon-wellspring": {
         "base": 110,
@@ -376,7 +375,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Jolly", "evs": 252, "usage": 60},
             {"nature": "Adamant", "evs": 252, "usage": 40},
-        ]
+        ],
     },
     "ogerpon-hearthflame": {
         "base": 110,
@@ -384,7 +383,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Jolly", "evs": 252, "usage": 60},
             {"nature": "Adamant", "evs": 252, "usage": 40},
-        ]
+        ],
     },
     "ogerpon-cornerstone": {
         "base": 110,
@@ -392,7 +391,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Jolly", "evs": 252, "usage": 40},
             {"nature": "Adamant", "evs": 252, "usage": 60},
-        ]
+        ],
     },
     "tornadus": {
         "base": 111,
@@ -400,7 +399,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Timid", "evs": 252, "usage": 70},
             {"nature": "Modest", "evs": 252, "usage": 30},
-        ]
+        ],
     },
     "entei": {
         "base": 100,
@@ -410,7 +409,7 @@ META_SPEED_TIERS = {
             {"nature": "Adamant", "evs": 252, "usage": 30},
             {"nature": "Jolly", "evs": 0, "usage": 8},
             {"nature": "Adamant", "evs": 0, "usage": 5},
-        ]
+        ],
     },
     "urshifu": {
         "base": 97,
@@ -418,7 +417,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Jolly", "evs": 252, "usage": 60},
             {"nature": "Adamant", "evs": 252, "usage": 40},
-        ]
+        ],
     },
     "urshifu-rapid-strike": {
         "base": 97,
@@ -426,7 +425,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Jolly", "evs": 252, "usage": 60},
             {"nature": "Adamant", "evs": 252, "usage": 40},
-        ]
+        ],
     },
     "landorus": {
         "base": 101,
@@ -434,7 +433,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Timid", "evs": 252, "usage": 50},
             {"nature": "Modest", "evs": 252, "usage": 50},
-        ]
+        ],
     },
     "landorus-therian": {
         "base": 91,
@@ -443,7 +442,7 @@ META_SPEED_TIERS = {
             {"nature": "Jolly", "evs": 252, "usage": 40},
             {"nature": "Adamant", "evs": 252, "usage": 50},
             {"nature": "Adamant", "evs": 100, "usage": 10},
-        ]
+        ],
     },
     "garchomp": {
         "base": 102,
@@ -451,7 +450,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Jolly", "evs": 252, "usage": 50},
             {"nature": "Adamant", "evs": 252, "usage": 50},
-        ]
+        ],
     },
     "arcanine": {
         "base": 95,
@@ -460,7 +459,7 @@ META_SPEED_TIERS = {
             {"nature": "Jolly", "evs": 252, "usage": 30},
             {"nature": "Adamant", "evs": 252, "usage": 40},
             {"nature": "Adamant", "evs": 0, "usage": 30},
-        ]
+        ],
     },
     "arcanine-hisui": {
         "base": 90,
@@ -469,7 +468,7 @@ META_SPEED_TIERS = {
             {"nature": "Jolly", "evs": 252, "usage": 25},
             {"nature": "Adamant", "evs": 252, "usage": 40},
             {"nature": "Adamant", "evs": 0, "usage": 35},
-        ]
+        ],
     },
     "palafin": {
         "base": 100,
@@ -477,7 +476,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Jolly", "evs": 252, "usage": 60},
             {"nature": "Adamant", "evs": 252, "usage": 40},
-        ]
+        ],
     },
     "indeedee-f": {
         "base": 95,
@@ -486,9 +485,8 @@ META_SPEED_TIERS = {
             {"nature": "Timid", "evs": 252, "usage": 30},
             {"nature": "Modest", "evs": 252, "usage": 40},
             {"nature": "Bold", "evs": 0, "usage": 30},
-        ]
+        ],
     },
-
     # Medium (70-95)
     "annihilape": {
         "base": 90,
@@ -496,7 +494,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Jolly", "evs": 252, "usage": 40},
             {"nature": "Adamant", "evs": 252, "usage": 60},
-        ]
+        ],
     },
     "gholdengo": {
         "base": 84,
@@ -504,7 +502,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Timid", "evs": 252, "usage": 40},
             {"nature": "Modest", "evs": 252, "usage": 60},
-        ]
+        ],
     },
     "rillaboom": {
         "base": 85,
@@ -513,7 +511,7 @@ META_SPEED_TIERS = {
             {"nature": "Jolly", "evs": 252, "usage": 20},
             {"nature": "Adamant", "evs": 252, "usage": 50},
             {"nature": "Adamant", "evs": 0, "usage": 30},
-        ]
+        ],
     },
     "dragonite": {
         "base": 80,
@@ -522,7 +520,7 @@ META_SPEED_TIERS = {
             {"nature": "Jolly", "evs": 252, "usage": 20},
             {"nature": "Adamant", "evs": 252, "usage": 60},
             {"nature": "Adamant", "evs": 0, "usage": 20},
-        ]
+        ],
     },
     "gyarados": {
         "base": 81,
@@ -530,7 +528,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Jolly", "evs": 252, "usage": 40},
             {"nature": "Adamant", "evs": 252, "usage": 60},
-        ]
+        ],
     },
     "kyogre": {
         "base": 90,
@@ -538,7 +536,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Timid", "evs": 252, "usage": 30},
             {"nature": "Modest", "evs": 252, "usage": 70},
-        ]
+        ],
     },
     "groudon": {
         "base": 90,
@@ -546,7 +544,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Jolly", "evs": 252, "usage": 30},
             {"nature": "Adamant", "evs": 252, "usage": 70},
-        ]
+        ],
     },
     "glimmora": {
         "base": 70,
@@ -554,7 +552,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Timid", "evs": 252, "usage": 50},
             {"nature": "Modest", "evs": 252, "usage": 50},
-        ]
+        ],
     },
     "great-tusk": {
         "base": 87,
@@ -563,7 +561,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Jolly", "evs": 252, "usage": 50},
             {"nature": "Adamant", "evs": 252, "usage": 50},
-        ]
+        ],
     },
     "roaring-moon": {
         "base": 119,
@@ -572,7 +570,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Jolly", "evs": 252, "usage": 60},
             {"nature": "Adamant", "evs": 252, "usage": 40},
-        ]
+        ],
     },
     "iron-valiant": {
         "base": 116,
@@ -582,9 +580,8 @@ META_SPEED_TIERS = {
             {"nature": "Jolly", "evs": 252, "usage": 40},
             {"nature": "Timid", "evs": 252, "usage": 30},
             {"nature": "Naive", "evs": 252, "usage": 30},
-        ]
+        ],
     },
-
     # Slow (50-70)
     "pelipper": {
         "base": 65,
@@ -592,7 +589,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Bold", "evs": 252, "usage": 30},
             {"nature": "Modest", "evs": 0, "usage": 70},
-        ]
+        ],
     },
     "incineroar": {
         "base": 60,
@@ -601,7 +598,7 @@ META_SPEED_TIERS = {
             {"nature": "Adamant", "evs": 252, "usage": 20},
             {"nature": "Careful", "evs": 100, "usage": 40},
             {"nature": "Careful", "evs": 0, "usage": 40},
-        ]
+        ],
     },
     "porygon2": {
         "base": 60,
@@ -609,7 +606,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Relaxed", "evs": 0, "usage": 50},
             {"nature": "Sassy", "evs": 0, "usage": 50},
-        ]
+        ],
     },
     "farigiraf": {
         "base": 60,
@@ -617,9 +614,8 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Modest", "evs": 252, "usage": 30},
             {"nature": "Calm", "evs": 0, "usage": 70},
-        ]
+        ],
     },
-
     # Very Slow / Trick Room (under 50)
     "kingambit": {
         "base": 50,
@@ -627,7 +623,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Adamant", "evs": 0, "usage": 80},
             {"nature": "Brave", "evs": 0, "usage": 20},
-        ]
+        ],
     },
     "iron-hands": {
         "base": 50,
@@ -636,7 +632,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Adamant", "evs": 0, "usage": 70},
             {"nature": "Brave", "evs": 0, "usage": 30},
-        ]
+        ],
     },
     "ursaluna": {
         "base": 50,
@@ -644,7 +640,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Adamant", "evs": 0, "usage": 60},
             {"nature": "Brave", "evs": 0, "usage": 40},
-        ]
+        ],
     },
     "ursaluna-bloodmoon": {
         "base": 52,
@@ -652,7 +648,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Modest", "evs": 0, "usage": 60},
             {"nature": "Quiet", "evs": 0, "usage": 40},
-        ]
+        ],
     },
     "calyrex-ice": {
         "base": 50,
@@ -660,7 +656,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Adamant", "evs": 0, "usage": 50},
             {"nature": "Brave", "evs": 0, "usage": 50},
-        ]
+        ],
     },
     "dondozo": {
         "base": 35,
@@ -668,7 +664,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Adamant", "evs": 252, "usage": 30},
             {"nature": "Careful", "evs": 0, "usage": 70},
-        ]
+        ],
     },
     "amoonguss": {
         "base": 30,
@@ -676,7 +672,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Relaxed", "evs": 0, "usage": 50},
             {"nature": "Sassy", "evs": 0, "usage": 50},
-        ]
+        ],
     },
     "hatterene": {
         "base": 29,
@@ -684,7 +680,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Quiet", "evs": 0, "usage": 80},
             {"nature": "Modest", "evs": 0, "usage": 20},
-        ]
+        ],
     },
     "torkoal": {
         "base": 20,
@@ -692,7 +688,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Quiet", "evs": 0, "usage": 80},
             {"nature": "Modest", "evs": 0, "usage": 20},
-        ]
+        ],
     },
     "iron-treads": {
         "base": 106,
@@ -701,7 +697,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Jolly", "evs": 252, "usage": 50},
             {"nature": "Adamant", "evs": 252, "usage": 50},
-        ]
+        ],
     },
     "iron-thorns": {
         "base": 72,
@@ -710,7 +706,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Jolly", "evs": 252, "usage": 40},
             {"nature": "Adamant", "evs": 252, "usage": 60},
-        ]
+        ],
     },
     "iron-jugulis": {
         "base": 108,
@@ -719,7 +715,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Timid", "evs": 252, "usage": 50},
             {"nature": "Modest", "evs": 252, "usage": 50},
-        ]
+        ],
     },
     "scream-tail": {
         "base": 111,
@@ -728,7 +724,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Timid", "evs": 252, "usage": 30},
             {"nature": "Calm", "evs": 252, "usage": 70},
-        ]
+        ],
     },
     "brute-bonnet": {
         "base": 55,
@@ -737,7 +733,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Adamant", "evs": 252, "usage": 60},
             {"nature": "Brave", "evs": 0, "usage": 40},
-        ]
+        ],
     },
     "sandy-shocks": {
         "base": 101,
@@ -746,7 +742,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Timid", "evs": 252, "usage": 50},
             {"nature": "Modest", "evs": 252, "usage": 50},
-        ]
+        ],
     },
     "slither-wing": {
         "base": 81,
@@ -755,7 +751,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Jolly", "evs": 252, "usage": 40},
             {"nature": "Adamant", "evs": 252, "usage": 60},
-        ]
+        ],
     },
     "iron-leaves": {
         "base": 108,
@@ -764,7 +760,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Jolly", "evs": 252, "usage": 60},
             {"nature": "Adamant", "evs": 252, "usage": 40},
-        ]
+        ],
     },
     "iron-boulder": {
         "base": 108,
@@ -773,7 +769,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Jolly", "evs": 252, "usage": 60},
             {"nature": "Adamant", "evs": 252, "usage": 40},
-        ]
+        ],
     },
     "iron-crown": {
         "base": 108,
@@ -782,7 +778,7 @@ META_SPEED_TIERS = {
         "spreads": [
             {"nature": "Timid", "evs": 252, "usage": 50},
             {"nature": "Modest", "evs": 252, "usage": 50},
-        ]
+        ],
     },
 }
 
@@ -832,14 +828,30 @@ def get_meta_speed_tier(pokemon_name: str) -> Optional[dict]:
 
         # Nature name -> Nature enum mapping
         NATURE_MAP = {
-            "adamant": Nature.ADAMANT, "bashful": Nature.BASHFUL, "bold": Nature.BOLD,
-            "brave": Nature.BRAVE, "calm": Nature.CALM, "careful": Nature.CAREFUL,
-            "docile": Nature.DOCILE, "gentle": Nature.GENTLE, "hardy": Nature.HARDY,
-            "hasty": Nature.HASTY, "impish": Nature.IMPISH, "jolly": Nature.JOLLY,
-            "lax": Nature.LAX, "lonely": Nature.LONELY, "mild": Nature.MILD,
-            "modest": Nature.MODEST, "naive": Nature.NAIVE, "naughty": Nature.NAUGHTY,
-            "quiet": Nature.QUIET, "quirky": Nature.QUIRKY, "rash": Nature.RASH,
-            "relaxed": Nature.RELAXED, "sassy": Nature.SASSY, "serious": Nature.SERIOUS,
+            "adamant": Nature.ADAMANT,
+            "bashful": Nature.BASHFUL,
+            "bold": Nature.BOLD,
+            "brave": Nature.BRAVE,
+            "calm": Nature.CALM,
+            "careful": Nature.CAREFUL,
+            "docile": Nature.DOCILE,
+            "gentle": Nature.GENTLE,
+            "hardy": Nature.HARDY,
+            "hasty": Nature.HASTY,
+            "impish": Nature.IMPISH,
+            "jolly": Nature.JOLLY,
+            "lax": Nature.LAX,
+            "lonely": Nature.LONELY,
+            "mild": Nature.MILD,
+            "modest": Nature.MODEST,
+            "naive": Nature.NAIVE,
+            "naughty": Nature.NAUGHTY,
+            "quiet": Nature.QUIET,
+            "quirky": Nature.QUIRKY,
+            "rash": Nature.RASH,
+            "relaxed": Nature.RELAXED,
+            "sassy": Nature.SASSY,
+            "serious": Nature.SERIOUS,
             "timid": Nature.TIMID,
         }
 
@@ -864,9 +876,9 @@ def get_meta_speed_tier(pokemon_name: str) -> Optional[dict]:
 async def get_competitive_speed_benchmarks(
     smogon_client: "SmogonStatsClient",
     format_name: Optional[str] = None,
-    rating: int = 0,
+    rating: Optional[int] = None,
     top_n_pokemon: int = 30,
-    top_n_speeds: int = 3
+    top_n_speeds: int = 3,
 ) -> dict[str, list[dict]]:
     """
     Get competitive speed benchmarks from Smogon usage data.
@@ -877,7 +889,7 @@ async def get_competitive_speed_benchmarks(
     Args:
         smogon_client: SmogonStatsClient instance for fetching usage data
         format_name: Format name (auto-detects if None)
-        rating: Rating cutoff (default 0 for 1500+ ELO)
+        rating: Rating cutoff (default 1630 competitive weighting)
         top_n_pokemon: Number of top Pokemon to fetch (default 30)
         top_n_speeds: Number of top speeds per Pokemon to include (default 3)
 
@@ -906,7 +918,7 @@ async def get_competitive_speed_benchmarks(
     top_pokemon = sorted(
         pokemon_usage.items(),
         key=lambda x: x[1].get("usage", 0) if isinstance(x[1], dict) else 0,
-        reverse=True
+        reverse=True,
     )[:top_n_pokemon]
 
     benchmarks: dict[str, list[dict]] = {}
@@ -923,10 +935,7 @@ async def get_competitive_speed_benchmarks(
 
             # Get speed distribution from Smogon
             speed_dist = await smogon_client.get_speed_distribution(
-                normalized_name,
-                base_speed,
-                format_name,
-                rating
+                normalized_name, base_speed, format_name, rating
             )
 
             if not speed_dist or not speed_dist.get("distribution"):
@@ -946,14 +955,16 @@ async def get_competitive_speed_benchmarks(
                 if pokemon_data and "spreads" in pokemon_data:
                     # Find the spread(s) that produce this speed
                     matching_spreads = [
-                        s for s in pokemon_data["spreads"]
+                        s
+                        for s in pokemon_data["spreads"]
                         if calculate_speed(
                             base_speed,
                             31,
                             s.get("evs", {}).get("speed", 0),
                             50,
-                            Nature[s.get("nature", "SERIOUS").upper()]
-                        ) == speed_value
+                            Nature[s.get("nature", "SERIOUS").upper()],
+                        )
+                        == speed_value
                     ]
 
                     if matching_spreads:
@@ -965,22 +976,26 @@ async def get_competitive_speed_benchmarks(
                         # Create spread description
                         spread_desc = f"{nature} {speed_evs} Spe"
 
-                        speeds.append({
-                            "speed": speed_value,
-                            "nature": nature,
-                            "evs": speed_evs,
-                            "usage": usage_pct,
-                            "spread_desc": spread_desc
-                        })
+                        speeds.append(
+                            {
+                                "speed": speed_value,
+                                "nature": nature,
+                                "evs": speed_evs,
+                                "usage": usage_pct,
+                                "spread_desc": spread_desc,
+                            }
+                        )
                     else:
                         # Fallback: use the speed value without detailed spread info
-                        speeds.append({
-                            "speed": speed_value,
-                            "nature": "Unknown",
-                            "evs": 0,
-                            "usage": usage_pct,
-                            "spread_desc": f"{speed_value} speed"
-                        })
+                        speeds.append(
+                            {
+                                "speed": speed_value,
+                                "nature": "Unknown",
+                                "evs": 0,
+                                "usage": usage_pct,
+                                "spread_desc": f"{speed_value} speed",
+                            }
+                        )
 
             if speeds:
                 benchmarks[normalized_name] = speeds
@@ -999,7 +1014,7 @@ def calculate_speed_tier(
     evs: int,
     iv: int = 31,
     level: int = 50,
-    competitive_benchmarks: Optional[dict] = None
+    competitive_benchmarks: Optional[dict] = None,
 ) -> dict:
     """
     Calculate speed tier information for a specific spread.
@@ -1024,7 +1039,7 @@ def calculate_speed_tier(
     if competitive_benchmarks:
         # Use real Smogon competitive spreads
         for mon_name, speeds in competitive_benchmarks.items():
-            display_name = mon_name.replace('-', ' ').title()
+            display_name = mon_name.replace("-", " ").title()
 
             for entry in speeds:
                 entry_speed = entry["speed"]
