@@ -5,6 +5,7 @@ isn't installed so the default `[dev]` test job doesn't fail.
 """
 
 import importlib.util
+import json
 
 import pytest
 
@@ -163,6 +164,67 @@ def test_streamable_http_initialize_on_mcp(http_client):
     resp = http_client.post("/mcp", json=_INITIALIZE_BODY, headers=_MCP_HEADERS)
     assert resp.status_code == 200
     assert "VGC Team Builder" in resp.text
+
+
+def _start_mcp_session(http_client, request_id):
+    init_body = {
+        **_INITIALIZE_BODY,
+        "id": request_id,
+        "params": {
+            **_INITIALIZE_BODY["params"],
+            "clientInfo": {"name": f"probe-{request_id}", "version": "1.0"},
+        },
+    }
+    response = http_client.post("/mcp", json=init_body, headers=_MCP_HEADERS)
+    assert response.status_code == 200
+    session_id = response.headers["Mcp-Session-Id"]
+    ready_headers = {**_MCP_HEADERS, "Mcp-Session-Id": session_id}
+    ready = http_client.post(
+        "/mcp",
+        json={"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}},
+        headers=ready_headers,
+    )
+    assert ready.status_code == 202
+    return session_id
+
+
+def _call_mcp_tool(http_client, session_id, request_id, name, arguments):
+    response = http_client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "method": "tools/call",
+            "params": {"name": name, "arguments": arguments},
+        },
+        headers={**_MCP_HEADERS, "Mcp-Session-Id": session_id},
+    )
+    assert response.status_code == 200
+    data_line = next(line for line in response.text.splitlines() if line.startswith("data:"))
+    envelope = json.loads(data_line.removeprefix("data:").strip())
+    assert not envelope["result"].get("isError", False)
+    return json.loads(envelope["result"]["content"][0]["text"])
+
+
+def test_streamable_http_sessions_isolate_regulation_choice(http_client):
+    session_a = _start_mcp_session(http_client, 101)
+    session_b = _start_mcp_session(http_client, 102)
+
+    _call_mcp_tool(
+        http_client, session_a, 103, "set_session_regulation", {"regulation": "Reg F"}
+    )
+    _call_mcp_tool(
+        http_client, session_b, 104, "set_session_regulation", {"regulation": "Reg H"}
+    )
+
+    current_a = _call_mcp_tool(
+        http_client, session_a, 105, "get_current_regulation_info", {}
+    )
+    current_b = _call_mcp_tool(
+        http_client, session_b, 106, "get_current_regulation_info", {}
+    )
+    assert current_a["current_regulation"] == "reg_f"
+    assert current_b["current_regulation"] == "reg_h"
 
 
 def test_post_sse_forwards_to_streamable_http(http_client):

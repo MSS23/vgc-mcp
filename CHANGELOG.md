@@ -39,6 +39,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   32 SP == 252 EVs exactly; HOME conversion `SP = (EVs + 4) / 8`.
 
 ### Fixed
+- Regulation overrides are now isolated per MCP session, alongside team,
+  build, and battle state, so one hosted user cannot change another user's
+  active format. Auto-detected session formats are also retained by later
+  calculations instead of being re-inferred from one ambiguous Pokemon.
 - Champions multi-threat bulk optimization now solves physical and special
   defenses independently for each shared HP breakpoint instead of sweeping
   every HP/Defense/SpD combination. The representative regression case drops

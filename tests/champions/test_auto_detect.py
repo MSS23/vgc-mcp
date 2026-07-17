@@ -8,6 +8,7 @@ flips into the right regulation/format system without any explicit
 import pytest
 
 from vgc_mcp_core.models.pokemon import BaseStats, Nature, PokemonBuild
+from vgc_mcp_core.rules.format_detect import detect_champions_format
 from vgc_mcp_core.rules.regulation_loader import RegulationConfig
 from vgc_mcp_core.rules.regulation_router import auto_detect_regulation
 from vgc_mcp_core.team.manager import TeamManager
@@ -25,6 +26,14 @@ def test_mega_mention_auto_sets_champions(cfg):
     assert result["regulation"] == "reg_mb_champs"
     assert cfg.current_regulation == "reg_mb_champs"
     assert cfg.get_format_system() == "champions"
+
+
+def test_auto_detected_session_is_respected_by_later_calc(cfg):
+    auto_detect_regulation(["Mega Manectric"], cfg)
+
+    # Amoonguss is legal in both systems and would be ambiguous in isolation.
+    # Once the session is Champions, a downstream pure calc must keep it there.
+    assert detect_champions_format("amoonguss", cfg=cfg) is True
 
 
 def test_explicit_set_blocks_subsequent_auto_detect(cfg):

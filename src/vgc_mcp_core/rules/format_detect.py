@@ -10,9 +10,10 @@ is correct for the user-surfaced auto-detect tool and import/team/build flows
 but wrong for a plain damage or speed calc — a mainline user shouldn't have
 their session silently rewritten just by mentioning a Pokemon in a calc.
 
-`detect_champions_format` is side-effect free: an explicit session choice
-always wins; otherwise it INFERS the format from the mentioned Pokemon via the
-read-only `infer_format_from_pokemon` without persisting anything.
+`detect_champions_format` is side-effect free: an existing session choice
+(explicit or auto-detected) always wins; otherwise it INFERS the format from
+the mentioned Pokemon via the read-only `infer_format_from_pokemon` without
+persisting anything.
 """
 
 from __future__ import annotations
@@ -32,14 +33,16 @@ def detect_champions_format(
     Read-only: never calls set_session_regulation / record_auto_detection.
 
     Resolution order:
-    1. An explicit user/session regulation always wins.
+    1. An existing user/session regulation always wins.
     2. Otherwise infer (read-only) from the mentioned Pokemon names.
-    3. Otherwise fall back to whatever the session currently resolves to.
+    3. Otherwise fall back to the configured default regulation.
     """
     cfg = cfg or get_regulation_config()
 
-    # 1. Explicit session choice wins outright.
-    if cfg.session_set_explicitly:
+    # 1. A persisted session choice wins outright. This includes the result of
+    # the user-facing auto-detect tool: a later single-Pokemon calculation must
+    # not silently reinterpret that established session as another format.
+    if cfg.session_regulation is not None:
         return (cfg.get_format_system() or "mainline") == "champions"
 
     # 2. Read-only inference from the Pokemon mentioned.

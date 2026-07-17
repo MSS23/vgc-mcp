@@ -2,6 +2,10 @@
 
 from unittest.mock import patch
 
+from vgc_mcp_core.rules.regulation_loader import (
+    get_regulation_config,
+    reset_regulation_config,
+)
 from vgc_mcp_core.state.session_registry import (
     ManagerSet,
     SessionRegistry,
@@ -118,3 +122,23 @@ def test_manager_set_create_produces_independent_instances():
     a = ManagerSet.create()
     b = ManagerSet.create()
     assert a.team_manager is not b.team_manager
+
+
+def test_distinct_sessions_get_isolated_regulation_configs():
+    s1, s2 = FakeSession(), FakeSession()
+    try:
+        with _patch_session(s1):
+            first = get_regulation_config()
+            first.set_session_regulation("reg_mb_champs")
+
+        with _patch_session(s2):
+            second = get_regulation_config()
+            assert second is not first
+            assert second.session_regulation is None
+            second.set_session_regulation("reg_h")
+
+        with _patch_session(s1):
+            assert get_regulation_config() is first
+            assert get_regulation_config().current_regulation == "reg_mb_champs"
+    finally:
+        reset_regulation_config()

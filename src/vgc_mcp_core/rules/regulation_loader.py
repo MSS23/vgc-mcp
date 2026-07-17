@@ -5,6 +5,7 @@ loading from an external JSON file that can be updated without code changes.
 """
 
 import json
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -131,6 +132,11 @@ class RegulationConfig:
     def session_set_explicitly(self) -> bool:
         """True if the user explicitly set the session regulation this run."""
         return getattr(self, "_session_set_explicitly", False)
+
+    @property
+    def session_regulation(self) -> Optional[str]:
+        """The active session override, whether explicit or auto-detected."""
+        return getattr(self, "_session_override", None)
 
     @property
     def last_auto_detection(self) -> Optional[dict]:
@@ -412,19 +418,53 @@ class RegulationConfig:
         return name_normalized in banned
 
 
-# Global singleton for easy access
-_regulation_config: Optional[RegulationConfig] = None
+# Regulation choice is mutable user state. A process-global singleton is safe
+# for stdio, but leaks format choices between users on the hosted HTTP service.
+# Keep one config per MCP session, using the same request context identity as
+# the team/build/battle session registry. The default key preserves the old
+# single-process behavior for stdio, scripts, and unit tests.
+_regulation_configs: dict[object, RegulationConfig] = {}
+_regulation_session_refs: dict[object, object] = {}
+_regulation_lock = threading.Lock()
+_MAX_REGULATION_SESSIONS = 512
+
+
+def _current_session() -> tuple[object, Optional[object]]:
+    try:
+        from mcp.server.lowlevel.server import request_ctx
+
+        ctx = request_ctx.get()
+    except (ImportError, LookupError):
+        return "default", None
+    session = getattr(ctx, "session", None)
+    if session is None:
+        return "default", None
+    return id(session), session
 
 
 def get_regulation_config() -> RegulationConfig:
-    """Get or create the global regulation config singleton."""
-    global _regulation_config
-    if _regulation_config is None:
-        _regulation_config = RegulationConfig()
-    return _regulation_config
+    """Get or create the regulation config for the calling MCP session."""
+    key, session = _current_session()
+    with _regulation_lock:
+        existing = _regulation_configs.get(key)
+        if existing is not None:
+            return existing
+        if len(_regulation_configs) >= _MAX_REGULATION_SESSIONS:
+            for oldest in list(_regulation_configs):
+                if oldest != "default":
+                    _regulation_configs.pop(oldest, None)
+                    _regulation_session_refs.pop(oldest, None)
+                    break
+        config = RegulationConfig()
+        _regulation_configs[key] = config
+        if session is not None:
+            # Prevent id(session) reuse while its config remains cached.
+            _regulation_session_refs[key] = session
+        return config
 
 
 def reset_regulation_config() -> None:
-    """Reset the global config (useful for testing)."""
-    global _regulation_config
-    _regulation_config = None
+    """Reset all cached session configs (useful for testing)."""
+    with _regulation_lock:
+        _regulation_configs.clear()
+        _regulation_session_refs.clear()
