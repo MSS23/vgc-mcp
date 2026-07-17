@@ -208,7 +208,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/development.md](docs/developmen
 ## Status
 
 - ✅ Live at `https://vgc-mcp.onrender.com/mcp` (legacy SSE at `/sse`)
-- ✅ 208 tools registered, 1,469 tests passing
+- ✅ 208 tools registered, 1,475 tests passing
 - ✅ Auto-deploys from `main` on every push (Render)
 - ✅ MIT licensed — fork it, ship it, no strings
 
