@@ -39,6 +39,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   32 SP == 252 EVs exactly; HOME conversion `SP = (EVs + 4) / 8`.
 
 ### Fixed
+- Champions multi-threat bulk optimization now solves physical and special
+  defenses independently for each shared HP breakpoint instead of sweeping
+  every HP/Defense/SpD combination. The representative regression case drops
+  from roughly 85 seconds to under a tenth of a second without changing the
+  minimum-allocation objective; a damage-call budget guards the fast path.
 - **Connection reliability (claude.ai connectors):** `POST /sse` no longer
   returns a bare 405 — it forwards to the Streamable HTTP handler, so a
   streamable client configured with the legacy `/sse` URL completes its

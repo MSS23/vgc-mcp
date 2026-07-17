@@ -155,101 +155,133 @@ def register_multi_threat_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon_cli
             breakpoints = SP_BREAKPOINTS_LV50 if is_champions else EV_BREAKPOINTS_LV50
             total_budget = 66 if is_champions else 508
 
-            # Try different EV/SP combinations to find minimum that survives all threats
+            # Find the minimum defensive allocation. HP affects every matchup,
+            # while Defense and SpD affect disjoint physical/special threat
+            # groups. For each HP breakpoint, solve the minimum relevant
+            # defense for each group independently, then choose the lowest
+            # combined total. This is equivalent to the old 3-D exhaustive
+            # sweep but avoids up to ~36k full damage calculations per call.
             best_spread = None
             best_results = None
 
-            # Try all valid breakpoint combinations
+            physical_threats = [t for t in threat_builds if t["is_physical"]]
+            special_threats = [t for t in threat_builds if not t["is_physical"]]
+
+            def make_defender(hp_value: int, def_value: int, spd_value: int) -> PokemonBuild:
+                if is_champions:
+                    return PokemonBuild(
+                        name=pokemon_name,
+                        base_stats=def_base,
+                        types=def_types,
+                        nature=def_nature,
+                        format_system="champions",
+                        sps=StatPointSpread(
+                            hp=hp_value,
+                            defense=def_value,
+                            special_defense=spd_value,
+                        ),
+                        item=item,
+                        ability=ability,
+                    )
+                return PokemonBuild(
+                    name=pokemon_name,
+                    base_stats=def_base,
+                    types=def_types,
+                    nature=def_nature,
+                    evs=EVSpread(
+                        hp=hp_value,
+                        defense=def_value,
+                        special_defense=spd_value,
+                    ),
+                    item=item,
+                    ability=ability,
+                )
+
+            def evaluate_threat(threat_data: dict, defender: PokemonBuild) -> dict:
+                mods = DamageModifiers(
+                    is_doubles=True,
+                    attack_stage=(
+                        threat_data["intimidate_stage"]
+                        if threat_data["is_physical"]
+                        else 0
+                    ),
+                    attacker_ability=threat_data["attacker_ability"],
+                    attacker_item=threat_data["attacker_item"],
+                )
+                result = calculate_damage(
+                    threat_data["build"],
+                    defender,
+                    threat_data["move"],
+                    mods,
+                )
+                survives = sum(1 for roll in result.rolls if roll < result.defender_hp)
+                survival_pct = (survives / 16) * 100
+                return {
+                    "threat_name": threat_data["name"],
+                    "move_name": threat_data["move_name"],
+                    "damage_range": result.damage_range,
+                    "survival_chance": survival_pct,
+                    "survives": survival_pct >= target_survival_chance,
+                }
+
+            def minimum_group_investment(
+                group: list[dict],
+                hp_value: int,
+                *,
+                physical: bool,
+            ) -> Optional[int]:
+                if not group:
+                    return 0
+                for value in breakpoints:
+                    defender = make_defender(
+                        hp_value,
+                        value if physical else 0,
+                        0 if physical else value,
+                    )
+                    if all(evaluate_threat(threat, defender)["survives"] for threat in group):
+                        return value
+                return None
+
             for hp_ev in breakpoints:
-                for def_ev in breakpoints:
-                    for spd_ev in breakpoints:
-                        total_evs = hp_ev + def_ev + spd_ev
-                        if total_evs > total_budget:
-                            continue
-
-                        # Create test defender build
-                        if is_champions:
-                            test_defender = PokemonBuild(
-                                name=pokemon_name,
-                                base_stats=def_base,
-                                types=def_types,
-                                nature=def_nature,
-                                format_system="champions",
-                                sps=StatPointSpread(hp=hp_ev, defense=def_ev, special_defense=spd_ev),
-                                item=item,
-                                ability=ability
-                            )
-                        else:
-                            test_defender = PokemonBuild(
-                                name=pokemon_name,
-                                base_stats=def_base,
-                                types=def_types,
-                                nature=def_nature,
-                                evs=EVSpread(hp=hp_ev, defense=def_ev, special_defense=spd_ev),
-                                item=item,
-                                ability=ability
-                            )
-
-                        # Test against all threats
-                        threat_results = []
-                        all_survive = True
-
-                        for threat_data in threat_builds:
-                            mods = DamageModifiers(
-                                is_doubles=True,
-                                attack_stage=threat_data["intimidate_stage"] if threat_data["is_physical"] else 0,
-                                attacker_ability=threat_data["attacker_ability"],
-                                attacker_item=threat_data["attacker_item"],
-                            )
-                            result = calculate_damage(
-                                threat_data["build"],
-                                test_defender,
-                                threat_data["move"],
-                                mods,
-                            )
-
-                            # Calculate survival chance
-                            survives = sum(1 for r in result.rolls if r < result.defender_hp)
-                            survival_pct = (survives / 16) * 100
-
-                            threat_results.append({
-                                "threat_name": threat_data["name"],
-                                "move_name": threat_data["move_name"],
-                                "damage_range": result.damage_range,
-                                "survival_chance": survival_pct,
-                                "survives": survival_pct >= target_survival_chance
-                            })
-
-                            if survival_pct < target_survival_chance:
-                                all_survive = False
-                                break
-
-                        # If this spread survives all threats, check if it's better (fewer EVs)
-                        if all_survive:
-                            if best_spread is None or total_evs < sum([
-                                best_spread["hp_evs"],
-                                best_spread["def_evs"],
-                                best_spread["spd_evs"]
-                            ]):
-                                best_spread = {
-                                    "hp_evs": hp_ev,
-                                    "def_evs": def_ev,
-                                    "spd_evs": spd_ev,
-                                    "total_evs": total_evs
-                                }
-                                best_results = threat_results
-
-                                # Early exit if we found a minimal spread (0 EVs)
-                                if total_evs == 0:
-                                    break
-
-                        # Early exit optimization: if we found a good spread, stop searching
-                        if best_spread and total_evs > best_spread["total_evs"] + 100:
-                            break
-
-                # Early exit optimization
-                if best_spread and hp_ev > best_spread["hp_evs"] + 100:
+                if best_spread is not None and hp_ev > best_spread["total_evs"]:
                     break
+
+                def_ev = minimum_group_investment(
+                    physical_threats,
+                    hp_ev,
+                    physical=True,
+                )
+                if def_ev is None:
+                    continue
+
+                spd_ev = minimum_group_investment(
+                    special_threats,
+                    hp_ev,
+                    physical=False,
+                )
+                if spd_ev is None:
+                    continue
+
+                total_evs = hp_ev + def_ev + spd_ev
+                if total_evs > total_budget:
+                    continue
+
+                test_defender = make_defender(hp_ev, def_ev, spd_ev)
+                threat_results = [
+                    evaluate_threat(threat, test_defender)
+                    for threat in threat_builds
+                ]
+                if not all(result["survives"] for result in threat_results):
+                    continue
+
+                if best_spread is None or total_evs < best_spread["total_evs"]:
+                    best_spread = {
+                        "hp_evs": hp_ev,
+                        "def_evs": def_ev,
+                        "spd_evs": spd_ev,
+                        "total_evs": total_evs,
+                    }
+                    best_results = threat_results
 
             if best_spread is None:
                 return error_response(ErrorCodes.POKEMON_NOT_FOUND, 'Could not find a spread that survives all threats with the given constraints', threats=[t['name'] for t in parsed_threats])

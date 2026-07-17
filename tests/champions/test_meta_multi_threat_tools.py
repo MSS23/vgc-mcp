@@ -12,12 +12,13 @@ These call the ACTUAL registered @mcp.tool functions in a Champions session
 """
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.meta_threat_tools import register_meta_threat_tools
+from vgc_mcp.tools.multi_threat_tools import calculate_damage as real_calculate_damage
 from vgc_mcp.tools.multi_threat_tools import register_multi_threat_tools
 from vgc_mcp_core.models.move import Move, MoveCategory
 from vgc_mcp_core.models.pokemon import BaseStats
@@ -231,13 +232,20 @@ class TestFindSurvivalEvsMetaChampions:
 class TestFindMultiThreatBulkEvsChampions:
     def test_sp_units_and_caps(self, champions_session):
         tools = _register_multi(_fake_pokeapi(_close_combat()))
-        res = asyncio.run(tools["find_multi_threat_bulk_evs"](
-            pokemon_name="amoonguss", nature="calm",
-            threats=[{"name": "garchomp", "move": "close-combat",
-                      "spread": {"nature": "adamant", "evs": {"attack": 252}}}],
-            target_survival_chance=93.75,
-        ))
+        with patch(
+            "vgc_mcp.tools.multi_threat_tools.calculate_damage",
+            wraps=real_calculate_damage,
+        ) as damage_mock:
+            res = asyncio.run(tools["find_multi_threat_bulk_evs"](
+                pokemon_name="amoonguss", nature="calm",
+                threats=[{"name": "garchomp", "move": "close-combat",
+                          "spread": {"nature": "adamant", "evs": {"attack": 252}}}],
+                target_survival_chance=93.75,
+            ))
         assert "error" not in res
+        # A separable HP/Defense search should stay far below the previous
+        # 33^3 exhaustive sweep (35,937 damage calculations).
+        assert damage_mock.call_count < 1_500
         assert res["format_system"] == "champions"
         assert res["units"] == "Stat Points"
         rs = res["recommended_spread"]
