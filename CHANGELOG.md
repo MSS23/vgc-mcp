@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with every client.
 - Render and self-host deployment documentation now uses the real
   `vgc-mcp-http` entrypoint and matches the live health response.
+- CI now uses the current Node 24 GitHub Action generations
+  (`actions/checkout@v7` and `actions/setup-python@v6`).
 - Package version bumped to **1.0.0** (the root endpoint previously hardcoded
   "1.0.0" while the package said 0.1.0; both now agree, and the endpoint
   reads the real installed version).
