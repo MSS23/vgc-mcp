@@ -1,0 +1,23 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python scripts/hooks/lint_changed.py"
+          },
+          {
+            "type": "command",
+            "command": "python scripts/hooks/validate_regulations.py"
+          },
+          {
+            "type": "command",
+            "command": "python scripts/hooks/test_hot_paths.py"
+          }
+        ]
+      }
+    ]
+  }
+}
