@@ -73,6 +73,25 @@ class TestNormalizeSmogonName:
 class TestCalculateDamageOutput:
     """Tests for calculate_damage_output."""
 
+    def test_schema_exposes_complete_attacker_and_defender_spreads(self, tools):
+        properties = tools["calculate_damage_output"].parameters["properties"]
+        assert {
+            "attacker_hp_evs",
+            "attacker_def_evs",
+            "attacker_spd_evs",
+            "attacker_spe_evs",
+            "defender_atk_evs",
+            "defender_spa_evs",
+            "defender_spe_evs",
+        } <= properties.keys()
+
+        booster_schema = properties["attacker_booster_energy"]
+        assert booster_schema["default"] is None
+        assert {branch.get("type") for branch in booster_schema["anyOf"]} == {
+            "boolean",
+            "null",
+        }
+
     async def test_pokemon_not_found(self, tools, mock_pokeapi):
         """Test with invalid attacker."""
         mock_pokeapi.get_base_stats = AsyncMock(side_effect=Exception("Not found"))
@@ -106,6 +125,69 @@ class TestCalculateDamageOutput:
         # Should return damage result or structured response
         assert isinstance(result, dict)
         assert "error" not in result or "damage" in str(result).lower()
+
+    async def test_speed_investment_makes_protosynthesis_boost_speed(self, tools):
+        """Timid 252 SpA / 4 SpD / 252 Spe Flutter Mane is Speed-boosted.
+
+        The Speed boost must not inflate Moonblast damage.
+        """
+        fn = tools["calculate_damage_output"].fn
+        common = {
+            "attacker_name": "flutter-mane",
+            "defender_name": "incineroar",
+            "move_name": "moonblast",
+            "attacker_nature": "timid",
+            "attacker_spa_evs": 252,
+            "attacker_spd_evs": 4,
+            "attacker_spe_evs": 252,
+            "attacker_item": "booster-energy",
+            "attacker_ability": "Protosynthesis",
+            "defender_nature": "careful",
+            "defender_hp_evs": 252,
+            "defender_spd_evs": 252,
+            "use_smogon_spreads": False,
+            "num_defender_spreads": 1,
+        }
+
+        boosted = await fn(**common, attacker_booster_energy=True)
+        inactive = await fn(**common, attacker_booster_energy=False)
+
+        assert boosted["damage"] == inactive["damage"]
+        assert boosted["ability_effects"] == [
+            "Protosynthesis: Attacker's Speed boosted (1.3x, 1.5x for Speed)"
+        ]
+        assert "252 SpA / 4 SpD / 252 Spe" in boosted["attacker_showdown_paste"]
+        assert "252 SpA / 4 SpD / 252 Spe" in boosted["attacker_ev_spread"]
+
+    async def test_explicit_false_disables_booster_item_inference(self, tools):
+        """False is authoritative; omission retains convenient item inference."""
+        fn = tools["calculate_damage_output"].fn
+        common = {
+            "attacker_name": "flutter-mane",
+            "defender_name": "incineroar",
+            "move_name": "moonblast",
+            "attacker_nature": "timid",
+            "attacker_spa_evs": 252,
+            "attacker_item": "booster-energy",
+            "attacker_ability": "Protosynthesis",
+            "defender_nature": "careful",
+            "defender_hp_evs": 252,
+            "defender_spd_evs": 252,
+            "use_smogon_spreads": False,
+            "num_defender_spreads": 1,
+        }
+
+        inactive = await fn(**common, attacker_booster_energy=False)
+        active = await fn(**common, attacker_booster_energy=True)
+        inferred = await fn(**common)
+
+        assert "ability_effects" not in inactive
+        assert active["ability_effects"] == [
+            "Protosynthesis: Attacker's Special Attack boosted (1.3x, 1.5x for Speed)"
+        ]
+        assert active["damage"] == inferred["damage"]
+        assert active["damage"]["min"] > inactive["damage"]["min"]
+        assert active["damage"]["max"] > inactive["damage"]["max"]
 
 
 class TestFindKoEvs:

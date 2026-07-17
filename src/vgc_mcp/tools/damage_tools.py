@@ -281,10 +281,17 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         attacker_nature: Annotated[Optional[str], Field(description="Attacker's nature. If None and use_smogon_spreads=True, uses most common.")] = None,
         attacker_atk_evs: Annotated[Optional[int], Field(ge=0, le=252, description="Attacker's Attack EVs (0-252). If None and use_smogon_spreads=True, uses most common. Treated as Stat Points in Champions sessions.")] = None,
         attacker_spa_evs: Annotated[Optional[int], Field(ge=0, le=252, description="Attacker's Sp. Atk EVs (0-252). If None and use_smogon_spreads=True, uses most common. Treated as Stat Points in Champions sessions.")] = None,
+        attacker_hp_evs: Annotated[Optional[int], Field(ge=0, le=252, description="Attacker's HP EVs (0-252). Include for a complete custom spread.")] = None,
+        attacker_def_evs: Annotated[Optional[int], Field(ge=0, le=252, description="Attacker's Defense EVs (0-252). Used when resolving Protosynthesis/Quark Drive's highest stat.")] = None,
+        attacker_spd_evs: Annotated[Optional[int], Field(ge=0, le=252, description="Attacker's Sp. Def EVs (0-252). Used when resolving Protosynthesis/Quark Drive's highest stat.")] = None,
+        attacker_spe_evs: Annotated[Optional[int], Field(ge=0, le=252, description="Attacker's Speed EVs (0-252). Used when resolving Protosynthesis/Quark Drive's highest stat.")] = None,
         defender_nature: Annotated[Optional[str], Field(description="Defender's nature. If None and use_smogon_spreads=True, uses most common.")] = None,
         defender_hp_evs: Annotated[Optional[int], Field(ge=0, le=252, description="Defender's HP EVs (0-252). If None and use_smogon_spreads=True, uses most common. Treated as Stat Points in Champions sessions.")] = None,
         defender_def_evs: Annotated[Optional[int], Field(ge=0, le=252, description="Defender's Defense EVs (0-252). If None and use_smogon_spreads=True, uses most common. Treated as Stat Points in Champions sessions.")] = None,
         defender_spd_evs: Annotated[Optional[int], Field(ge=0, le=252, description="Defender's Sp. Def EVs (0-252). If None and use_smogon_spreads=True, uses most common. Treated as Stat Points in Champions sessions.")] = None,
+        defender_atk_evs: Annotated[Optional[int], Field(ge=0, le=252, description="Defender's Attack EVs (0-252). Include for a complete custom spread.")] = None,
+        defender_spa_evs: Annotated[Optional[int], Field(ge=0, le=252, description="Defender's Sp. Atk EVs (0-252). Used when resolving Protosynthesis/Quark Drive's highest stat.")] = None,
+        defender_spe_evs: Annotated[Optional[int], Field(ge=0, le=252, description="Defender's Speed EVs (0-252). Used when resolving Protosynthesis/Quark Drive's highest stat.")] = None,
         attacker_sps: Annotated[Optional[str], Field(description="Champions (Reg MA) only. Attacker Stat Points as 'HP/Atk/Def/SpA/SpD/Spe' (0-32 per stat, 66 total). Ignored in mainline sessions. When the session is Champions and this is None, falls back to the attacker's EV params (treated as SP) or a Champions Smogon spread.")] = None,
         defender_sps: Annotated[Optional[str], Field(description="Champions (Reg MA) only. Defender Stat Points as 'HP/Atk/Def/SpA/SpD/Spe' (0-32 per stat, 66 total). Ignored in mainline sessions.")] = None,
         use_smogon_spreads: Annotated[bool, Field(description="If True (default), auto-fetch common spreads from Smogon usage data")] = True,
@@ -307,8 +314,8 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         sword_of_ruin: Annotated[bool, Field(description="True if Chien-Pao's Sword of Ruin is active (lowers foe Def to 0.75x)")] = False,
         tablets_of_ruin: Annotated[bool, Field(description="True if Wo-Chien's Tablets of Ruin is active (lowers foe Atk to 0.75x)")] = False,
         vessel_of_ruin: Annotated[bool, Field(description="True if Ting-Lu's Vessel of Ruin is active (lowers foe SpA to 0.75x)")] = False,
-        attacker_booster_energy: Annotated[bool, Field(description="True if attacker used Booster Energy (activates Protosynthesis/Quark Drive)")] = False,
-        defender_booster_energy: Annotated[bool, Field(description="True if defender used Booster Energy")] = False,
+        attacker_booster_energy: Annotated[Optional[bool], Field(description="Whether the attacker's Booster Energy activation is active. Omit to infer from a held Booster Energy; false explicitly disables the item trigger. Sun/electric terrain can still activate the ability.")] = None,
+        defender_booster_energy: Annotated[Optional[bool], Field(description="Whether the defender's Booster Energy activation is active. Omit to infer from the held item; false explicitly disables the item trigger.")] = None,
         attacker_attack_stage: Annotated[int, Field(ge=-6, le=6, description="Attacker's Attack stage (-6 to +6). Use -1 for Intimidate.")] = 0,
         attacker_special_attack_stage: Annotated[int, Field(ge=-6, le=6, description="Attacker's Sp. Atk stage (-6 to +6)")] = 0,
         defender_defense_stage: Annotated[int, Field(ge=-6, le=6, description="Defender's Defense stage (-6 to +6)")] = 0,
@@ -442,8 +449,12 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             if use_smogon_spreads:
                 # Check if user manually specified ANY attacker EVs
                 user_specified_attacker_evs = (
+                    attacker_hp_evs is not None or
                     attacker_atk_evs is not None or
-                    attacker_spa_evs is not None
+                    attacker_def_evs is not None or
+                    attacker_spa_evs is not None or
+                    attacker_spd_evs is not None or
+                    attacker_spe_evs is not None
                 )
 
                 # Only fetch from Smogon if user didn't specify any EVs
@@ -466,6 +477,14 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                             attacker_atk_evs = evs.get("attack", 0)
                         if attacker_spa_evs is None:
                             attacker_spa_evs = evs.get("special_attack", 0)
+                        if attacker_hp_evs is None:
+                            attacker_hp_evs = evs.get("hp", 0)
+                        if attacker_def_evs is None:
+                            attacker_def_evs = evs.get("defense", 0)
+                        if attacker_spd_evs is None:
+                            attacker_spd_evs = evs.get("special_defense", 0)
+                        if attacker_spe_evs is None:
+                            attacker_spe_evs = evs.get("speed", 0)
                         # Champions: pull the Stat-Point allocation (smogon helper
                         # carries 'sps' + format_system) rather than the empty
                         # 'evs' dict.
@@ -480,8 +499,11 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 # Check if user manually specified ANY defender EVs
                 user_specified_defender_evs = (
                     defender_hp_evs is not None or
+                    defender_atk_evs is not None or
                     defender_def_evs is not None or
-                    defender_spd_evs is not None
+                    defender_spa_evs is not None or
+                    defender_spd_evs is not None or
+                    defender_spe_evs is not None
                 )
 
                 # Only fetch from Smogon if user didn't specify any EVs
@@ -506,6 +528,12 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                             defender_def_evs = evs.get("defense", 0)
                         if defender_spd_evs is None:
                             defender_spd_evs = evs.get("special_defense", 0)
+                        if defender_atk_evs is None:
+                            defender_atk_evs = evs.get("attack", 0)
+                        if defender_spa_evs is None:
+                            defender_spa_evs = evs.get("special_attack", 0)
+                        if defender_spe_evs is None:
+                            defender_spe_evs = evs.get("speed", 0)
                         if is_champions and defender_sp_spread is None:
                             defender_sp_spread = _sps_from_smogon_spread(def_spread)
                         if defender_ability is None and def_spread.get("ability"):
@@ -516,12 +544,19 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
 
             # Set defaults for any remaining None values
             attacker_nature = attacker_nature or "serious"
+            attacker_hp_evs = attacker_hp_evs if attacker_hp_evs is not None else 0
             attacker_atk_evs = attacker_atk_evs if attacker_atk_evs is not None else 0
+            attacker_def_evs = attacker_def_evs if attacker_def_evs is not None else 0
             attacker_spa_evs = attacker_spa_evs if attacker_spa_evs is not None else 0
+            attacker_spd_evs = attacker_spd_evs if attacker_spd_evs is not None else 0
+            attacker_spe_evs = attacker_spe_evs if attacker_spe_evs is not None else 0
             defender_nature = defender_nature or "serious"
             defender_hp_evs = defender_hp_evs if defender_hp_evs is not None else 0
+            defender_atk_evs = defender_atk_evs if defender_atk_evs is not None else 0
             defender_def_evs = defender_def_evs if defender_def_evs is not None else 0
+            defender_spa_evs = defender_spa_evs if defender_spa_evs is not None else 0
             defender_spd_evs = defender_spd_evs if defender_spd_evs is not None else 0
+            defender_spe_evs = defender_spe_evs if defender_spe_evs is not None else 0
 
             # Champions fallback: if no SP spread was supplied or fetched, treat
             # the (possibly user-supplied) offensive/defensive EV integers as
@@ -530,14 +565,21 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             if is_champions:
                 if attacker_sp_spread is None:
                     attacker_sp_spread = StatPointSpread(
+                        hp=ev_to_sp(attacker_hp_evs, round_mode="floor"),
                         attack=ev_to_sp(attacker_atk_evs, round_mode="floor"),
+                        defense=ev_to_sp(attacker_def_evs, round_mode="floor"),
                         special_attack=ev_to_sp(attacker_spa_evs, round_mode="floor"),
+                        special_defense=ev_to_sp(attacker_spd_evs, round_mode="floor"),
+                        speed=ev_to_sp(attacker_spe_evs, round_mode="floor"),
                     )
                 if defender_sp_spread is None:
                     defender_sp_spread = StatPointSpread(
                         hp=ev_to_sp(defender_hp_evs, round_mode="ceil"),
+                        attack=ev_to_sp(defender_atk_evs, round_mode="floor"),
                         defense=ev_to_sp(defender_def_evs, round_mode="ceil"),
+                        special_attack=ev_to_sp(defender_spa_evs, round_mode="floor"),
                         special_defense=ev_to_sp(defender_spd_evs, round_mode="ceil"),
+                        speed=ev_to_sp(defender_spe_evs, round_mode="floor"),
                     )
 
             # Auto-fetch abilities if not specified — use Smogon-aware resolver
@@ -550,15 +592,18 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     attacker_name, pokeapi=pokeapi, smogon_client=_smogon_client,
                     use_smogon=use_smogon_spreads,
                 )
-                if attacker_ability:
-                    attacker_ability = attacker_ability.lower().replace(" ", "-")
             if defender_ability is None:
                 defender_ability, _ = await resolve_ability(
                     defender_name, pokeapi=pokeapi, smogon_client=_smogon_client,
                     use_smogon=use_smogon_spreads,
                 )
-                if defender_ability:
-                    defender_ability = defender_ability.lower().replace(" ", "-")
+            # Normalize both inferred and explicitly supplied values so the
+            # tool-level ability routing and explanatory notes stay in sync
+            # with the core calculator's normalized matching.
+            if attacker_ability:
+                attacker_ability = attacker_ability.lower().replace(" ", "-")
+            if defender_ability:
+                defender_ability = defender_ability.lower().replace(" ", "-")
 
             # Auto-detect Ruinous abilities from attacker/defender
             # Create temporary modifiers to use the helper function
@@ -582,11 +627,20 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             tablets_of_ruin = temp_modifiers.tablets_of_ruin
             vessel_of_ruin = temp_modifiers.vessel_of_ruin
 
-            # Auto-detect Booster Energy from item to trigger Protosynthesis/Quark Drive
-            if attacker_item and attacker_item.lower().replace(" ", "-") == "booster-energy":
-                attacker_booster_energy = True
-            if defender_item and defender_item.lower().replace(" ", "-") == "booster-energy":
-                defender_booster_energy = True
+            # Tri-state Booster Energy semantics: an omitted flag auto-detects
+            # from the held item, while an explicit False must remain False.
+            # This lets callers model an unactivated/already-spent item without
+            # losing the held-item information in the returned build.
+            if attacker_booster_energy is None:
+                attacker_booster_energy = bool(
+                    attacker_item
+                    and attacker_item.lower().replace(" ", "-") == "booster-energy"
+                )
+            if defender_booster_energy is None:
+                defender_booster_energy = bool(
+                    defender_item
+                    and defender_item.lower().replace(" ", "-") == "booster-energy"
+                )
 
             # Helper function to determine which stat Protosynthesis/Quark Drive boosts
             def get_paradox_boost_stat(base_stats, nature_enum, evs_dict) -> Optional[str]:
@@ -669,8 +723,12 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     types=atk_types,
                     nature=atk_nature,
                     evs=EVSpread(
+                        hp=attacker_hp_evs,
                         attack=attacker_atk_evs,
-                        special_attack=attacker_spa_evs
+                        defense=attacker_def_evs,
+                        special_attack=attacker_spa_evs,
+                        special_defense=attacker_spd_evs,
+                        speed=attacker_spe_evs,
                     ),
                     item=attacker_item,
                     ability=attacker_ability,
@@ -684,8 +742,11 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     nature=def_nature,
                     evs=EVSpread(
                         hp=defender_hp_evs,
+                        attack=defender_atk_evs,
                         defense=defender_def_evs,
-                        special_defense=defender_spd_evs
+                        special_attack=defender_spa_evs,
+                        special_defense=defender_spd_evs,
+                        speed=defender_spe_evs,
                     ),
                     ability=defender_ability,
                     tera_type=defender_tera_type
@@ -707,7 +768,13 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     if weather == "sun" or attacker_booster_energy:
                         attacker_proto_boost = get_paradox_boost_stat(
                             atk_base, atk_nature,
-                            {"attack": attacker_atk_evs, "special_attack": attacker_spa_evs}
+                            {
+                                "attack": attacker_atk_evs,
+                                "defense": attacker_def_evs,
+                                "special_attack": attacker_spa_evs,
+                                "special_defense": attacker_spd_evs,
+                                "speed": attacker_spe_evs,
+                            }
                         )
 
                 # Check if attacker has Quark Drive and conditions are met
@@ -715,7 +782,13 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     if terrain == "electric" or attacker_booster_energy:
                         attacker_quark_boost = get_paradox_boost_stat(
                             atk_base, atk_nature,
-                            {"attack": attacker_atk_evs, "special_attack": attacker_spa_evs}
+                            {
+                                "attack": attacker_atk_evs,
+                                "defense": attacker_def_evs,
+                                "special_attack": attacker_spa_evs,
+                                "special_defense": attacker_spd_evs,
+                                "speed": attacker_spe_evs,
+                            }
                         )
 
                 # Check if defender has Protosynthesis and conditions are met
@@ -723,7 +796,13 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     if weather == "sun" or defender_booster_energy:
                         defender_proto_boost = get_paradox_boost_stat(
                             def_base, def_nature,
-                            {"hp": defender_hp_evs, "defense": defender_def_evs, "special_defense": defender_spd_evs}
+                            {
+                                "attack": defender_atk_evs,
+                                "defense": defender_def_evs,
+                                "special_attack": defender_spa_evs,
+                                "special_defense": defender_spd_evs,
+                                "speed": defender_spe_evs,
+                            }
                         )
 
                 # Check if defender has Quark Drive and conditions are met
@@ -731,7 +810,13 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     if terrain == "electric" or defender_booster_energy:
                         defender_quark_boost = get_paradox_boost_stat(
                             def_base, def_nature,
-                            {"hp": defender_hp_evs, "defense": defender_def_evs, "special_defense": defender_spd_evs}
+                            {
+                                "attack": defender_atk_evs,
+                                "defense": defender_def_evs,
+                                "special_attack": defender_spa_evs,
+                                "special_defense": defender_spd_evs,
+                                "speed": defender_spe_evs,
+                            }
                         )
 
             # Set up modifiers
@@ -763,6 +848,8 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 quark_drive_boost=attacker_quark_boost,
                 defender_protosynthesis_boost=defender_proto_boost,
                 defender_quark_drive_boost=defender_quark_boost,
+                attacker_booster_energy=attacker_booster_energy,
+                defender_booster_energy=defender_booster_energy,
                 attack_stage=attacker_attack_stage,
                 special_attack_stage=attacker_special_attack_stage,
                 defense_stage=defender_defense_stage,
@@ -853,6 +940,8 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         quark_drive_boost=attacker_quark_boost,
                         defender_protosynthesis_boost=defender_proto_boost,
                         defender_quark_drive_boost=defender_quark_boost,
+                        attacker_booster_energy=attacker_booster_energy,
+                        defender_booster_energy=defender_booster_energy,
                         attack_stage=attacker_attack_stage,
                         special_attack_stage=attacker_special_attack_stage,
                         defense_stage=defender_defense_stage,
@@ -922,8 +1011,9 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 attacker_ev_string = ("SPs: " + " / ".join(sp_parts)) if sp_parts else "0 SPs"
             else:
                 atk_evs_for_string = attacker_spread_info.get("evs", {}) if attacker_spread_info else {
-                    "hp": 0, "attack": attacker_atk_evs, "defense": 0,
-                    "special_attack": attacker_spa_evs, "special_defense": 0, "speed": 0
+                    "hp": attacker_hp_evs, "attack": attacker_atk_evs,
+                    "defense": attacker_def_evs, "special_attack": attacker_spa_evs,
+                    "special_defense": attacker_spd_evs, "speed": attacker_spe_evs
                 }
                 ev_parts = []
                 for stat, abbrev in stat_abbrevs:
@@ -1010,8 +1100,11 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "nature": defender_nature,
                 "evs": {
                     "hp": defender_hp_evs,
+                    "attack": defender_atk_evs,
                     "defense": defender_def_evs,
-                    "special_defense": defender_spd_evs
+                    "special_attack": defender_spa_evs,
+                    "special_defense": defender_spd_evs,
+                    "speed": defender_spe_evs,
                 },
                 "item": defender_item,
                 "ability": defender_ability,
@@ -1063,7 +1156,14 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 """Format EVs as HP/Atk/Def/SpA/SpD/Spe string."""
                 return f"{evs_dict.get('hp', 0)}/{evs_dict.get('attack', 0)}/{evs_dict.get('defense', 0)}/{evs_dict.get('special_attack', 0)}/{evs_dict.get('special_defense', 0)}/{evs_dict.get('speed', 0)}"
 
-            def_evs_dict = {"hp": defender_hp_evs, "defense": defender_def_evs, "special_defense": defender_spd_evs}
+            def_evs_dict = {
+                "hp": defender_hp_evs,
+                "attack": defender_atk_evs,
+                "defense": defender_def_evs,
+                "special_attack": defender_spa_evs,
+                "special_defense": defender_spd_evs,
+                "speed": defender_spe_evs,
+            }
 
             atk_tera_str = f" [Tera {attacker_tera_type.title()}]" if attacker_tera_type else ""
             def_tera_str = f" [Tera {defender_tera_type.title()}]" if defender_tera_type else ""
@@ -1076,7 +1176,14 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 attacker_alloc_str = f"{_format_evs(atk_sp)} SP"
                 defender_alloc_str = f"{_format_evs(def_sp)} SP"
             else:
-                atk_evs_dict = attacker_spread_info.get("evs", {}) if attacker_spread_info else {"attack": attacker_atk_evs, "special_attack": attacker_spa_evs}
+                atk_evs_dict = attacker_spread_info.get("evs", {}) if attacker_spread_info else {
+                    "hp": attacker_hp_evs,
+                    "attack": attacker_atk_evs,
+                    "defense": attacker_def_evs,
+                    "special_attack": attacker_spa_evs,
+                    "special_defense": attacker_spd_evs,
+                    "speed": attacker_spe_evs,
+                }
                 attacker_alloc_str = _format_evs(atk_evs_dict)
                 defender_alloc_str = _format_evs(def_evs_dict)
 

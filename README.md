@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-green.svg)](https://modelcontextprotocol.io/)
 [![Live](https://img.shields.io/badge/live-vgc--mcp.onrender.com-brightgreen)](https://vgc-mcp.onrender.com/health)
-[![Tests](https://img.shields.io/badge/tests-1485%20passing-success)](#)
+[![Tests](https://img.shields.io/badge/tests-1490%20passing-success)](#)
 [![Tools](https://img.shields.io/badge/MCP%20tools-208-blueviolet)](docs/tools-catalog.md)
 
 A **Model Context Protocol** server that turns any LLM into a competitive Pokémon VGC coach. **208 tools** spanning the full Gen 9 damage formula, Smogon usage data, multi-threat EV optimization, replay analysis, and a turn-by-turn live battle copilot.
@@ -136,7 +136,7 @@ Damage calc is verified against **Pokémon Showdown** — the source of truth us
 | Pokémon Showdown  | 149-177   | 78.4 - 93.1%  | guaranteed 2HKO   |
 | **VGC MCP**       | **149-177** | **78.4-93.1%** | **guaranteed 2HKO** |
 
-**1,485 tests** cover the damage formula across all generations of items / abilities / Tera / weather / multi-hit interactions, plus end-to-end MCP tool registration and production-bug regression tests for known-tricky interactions (Sword of Ruin + crits, Sheer Force + Life Orb, Ogerpon mask routing).
+**1,490 tests** cover the damage formula across all generations of items / abilities / Tera / weather / multi-hit interactions, plus end-to-end MCP tool registration and production-bug regression tests for known-tricky interactions (Sword of Ruin + crits, Sheer Force + Life Orb, Ogerpon mask routing).
 
 Meta sets come directly from Smogon's monthly `chaos/*.json` datasets. The
 active MCP regulation selects the matching Reg I / Champions MA / Champions MB
@@ -214,7 +214,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/development.md](docs/developmen
 ## Status
 
 - ✅ Live at `https://vgc-mcp.onrender.com/mcp` (legacy SSE at `/sse`)
-- ✅ 208 tools registered, 1,485 tests passing
+- ✅ 208 tools registered, 1,490 tests passing
 - ✅ Auto-deploys from `main` on every push (Render)
 - ✅ MIT licensed — fork it, ship it, no strings
 

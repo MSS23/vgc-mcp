@@ -51,14 +51,13 @@ Calculate full damage output between two Pokemon with all modifiers.
 - `attacker_name` (string, required): Attacking Pokemon
 - `defender_name` (string, required): Defending Pokemon
 - `move_name` (string, required): Move being used
-- `attacker_nature` (string, default: "serious"): Attacker's nature
-- `attacker_spa_evs` (integer, default: 252): Special Attack EVs
-- `attacker_atk_evs` (integer, default: 0): Attack EVs
-- `defender_nature` (string, default: "serious"): Defender's nature
-- `defender_spd_evs` (integer, default: 0): Special Defense EVs
-- `defender_hp_evs` (integer, default: 252): HP EVs
+- `attacker_nature` (string, optional): Attacker's nature; may be fetched from Smogon
+- `attacker_hp_evs`, `attacker_atk_evs`, `attacker_def_evs`, `attacker_spa_evs`, `attacker_spd_evs`, `attacker_spe_evs` (integer, optional): Complete custom attacker EV spread
+- `defender_nature` (string, optional): Defender's nature; may be fetched from Smogon
+- `defender_hp_evs`, `defender_atk_evs`, `defender_def_evs`, `defender_spa_evs`, `defender_spd_evs`, `defender_spe_evs` (integer, optional): Complete custom defender EV spread
 - `attacker_item` (string, optional): Attacker's held item
 - `defender_item` (string, optional): Defender's held item
+- `attacker_booster_energy`, `defender_booster_energy` (boolean or null, optional): Omit to infer activation from a held Booster Energy; `false` explicitly disables the item trigger while weather/terrain triggers still work
 - `weather` (string, optional): Weather condition
 - `terrain` (string, optional): Terrain type
 - `attacker_tera_type` (string, optional): Attacker's Tera type (if active)
@@ -83,7 +82,7 @@ Calculate full damage output between two Pokemon with all modifiers.
 ```
 
 **Example Usage:**
-> "Does my Timid 252 SpA Flutter Mane OHKO Assault Vest Incineroar with Moonblast?"
+> "Does my Timid 252 SpA / 4 SpD / 252 Spe Booster Energy Flutter Mane OHKO Assault Vest Incineroar with Moonblast?"
 
 ---
 

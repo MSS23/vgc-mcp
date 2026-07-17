@@ -589,9 +589,10 @@ def calculate_damage(
             modifiers = replace(modifiers, has_adaptability=True)
 
     # Auto-derive Protosynthesis / Quark Drive boost stats so callers don't
-    # need to recompute the highest-stat logic per tool. Booster Energy
-    # always activates them; sun activates Protosynthesis; electric terrain
-    # activates Quark Drive. Speed wins ties (Game-mechanic accurate).
+    # need to recompute the highest-stat logic per tool. Booster Energy is
+    # inferred from the item unless a caller explicitly overrides its active
+    # state; sun activates Protosynthesis and electric terrain activates
+    # Quark Drive. Speed wins ties (game-mechanic accurate).
     def _highest_non_hp_stat(p: PokemonBuild) -> str:
         # Format-aware: delegate to calculate_all_stats so Champions builds
         # (which carry SPs, not EVs) pick the actually-invested stat rather
@@ -602,31 +603,62 @@ def calculate_damage(
         tied = [s for s, v in stats.items() if v == max_value]
         return "speed" if "speed" in tied else tied[0]
 
-    def _paradox_active(ability_norm: str, item_norm: str | None, weather: str | None, terrain: str | None) -> bool:
+    def _paradox_active(
+        ability_norm: str,
+        item_norm: str | None,
+        weather: str | None,
+        terrain: str | None,
+        booster_energy: bool | None,
+    ) -> bool:
+        booster_triggered = item_norm == "booster-energy" if booster_energy is None else booster_energy
         if ability_norm == "protosynthesis":
-            return item_norm == "booster-energy" or weather == "sun"
+            return booster_triggered or weather == "sun"
         if ability_norm == "quark-drive":
-            return item_norm == "booster-energy" or terrain == "electric"
+            return booster_triggered or terrain == "electric"
         return False
 
     if modifiers.attacker_ability:
         atk_ab_norm = normalize_ability(modifiers.attacker_ability)
         atk_item_norm = normalize_item(modifiers.attacker_item) if modifiers.attacker_item else None
         if atk_ab_norm == "protosynthesis" and modifiers.protosynthesis_boost is None:
-            if _paradox_active(atk_ab_norm, atk_item_norm, modifiers.weather, modifiers.terrain):
+            if _paradox_active(
+                atk_ab_norm,
+                atk_item_norm,
+                modifiers.weather,
+                modifiers.terrain,
+                modifiers.attacker_booster_energy,
+            ):
                 modifiers = replace(modifiers, protosynthesis_boost=_highest_non_hp_stat(attacker))
         elif atk_ab_norm == "quark-drive" and modifiers.quark_drive_boost is None:
-            if _paradox_active(atk_ab_norm, atk_item_norm, modifiers.weather, modifiers.terrain):
+            if _paradox_active(
+                atk_ab_norm,
+                atk_item_norm,
+                modifiers.weather,
+                modifiers.terrain,
+                modifiers.attacker_booster_energy,
+            ):
                 modifiers = replace(modifiers, quark_drive_boost=_highest_non_hp_stat(attacker))
 
     if modifiers.defender_ability:
         def_ab_norm = normalize_ability(modifiers.defender_ability)
         def_item_norm = normalize_item(modifiers.defender_item) if modifiers.defender_item else None
         if def_ab_norm == "protosynthesis" and modifiers.defender_protosynthesis_boost is None:
-            if _paradox_active(def_ab_norm, def_item_norm, modifiers.weather, modifiers.terrain):
+            if _paradox_active(
+                def_ab_norm,
+                def_item_norm,
+                modifiers.weather,
+                modifiers.terrain,
+                modifiers.defender_booster_energy,
+            ):
                 modifiers = replace(modifiers, defender_protosynthesis_boost=_highest_non_hp_stat(defender))
         elif def_ab_norm == "quark-drive" and modifiers.defender_quark_drive_boost is None:
-            if _paradox_active(def_ab_norm, def_item_norm, modifiers.weather, modifiers.terrain):
+            if _paradox_active(
+                def_ab_norm,
+                def_item_norm,
+                modifiers.weather,
+                modifiers.terrain,
+                modifiers.defender_booster_energy,
+            ):
                 modifiers = replace(modifiers, defender_quark_drive_boost=_highest_non_hp_stat(defender))
 
     # Auto-apply attacker switch-in / Tera-on stat-stage abilities. These are

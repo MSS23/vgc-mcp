@@ -42,6 +42,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   32 SP == 252 EVs exactly; HOME conversion `SP = (EVs + 4) / 8`.
 
 ### Fixed
+- `calculate_damage_output` now accepts complete attacker and defender EV
+  spreads, including Speed, so Protosynthesis and Quark Drive select the true
+  highest non-HP stat. Booster Energy activation is now tri-state: omitted
+  infers from the held item, `true` activates it, and explicit `false` is
+  authoritative without suppressing sun or Electric Terrain activation.
 - The shared Smogon HTTP/cache client now resolves regulation and freshness
   metadata per MCP session instead of retaining the first caller's config.
   Automatic usage lookups search only the active regulation's formats, so

@@ -36,6 +36,20 @@ def _iron_valiant() -> PokemonBuild:
     )
 
 
+def _spa_boosted_iron_valiant() -> PokemonBuild:
+    """No Speed investment: SpA is the highest non-HP stat."""
+    return PokemonBuild(
+        name="iron-valiant",
+        base_stats=BaseStats(
+            hp=74, attack=130, defense=90,
+            special_attack=120, special_defense=60, speed=116,
+        ),
+        nature=Nature.TIMID,
+        evs=EVSpread(hp=4, special_attack=252),
+        types=["Fairy", "Fighting"],
+    )
+
+
 def _neutral_dummy() -> PokemonBuild:
     # Plain 100-across, no investment, Normal type for neutral Fairy damage.
     return PokemonBuild(
@@ -137,3 +151,59 @@ def test_wrongly_boosting_spa_would_raise_damage():
         ),
     )
     assert wrong.max_damage > 91  # ~120: distinct from the correct 91
+
+
+def test_explicit_false_overrides_held_booster_energy():
+    """A held item must not short-circuit an explicit inactive flag."""
+    iv = _spa_boosted_iron_valiant()
+    dummy = _neutral_dummy()
+    moon = _moonblast()
+
+    baseline = calculate_damage(iv, dummy, moon, DamageModifiers())
+    inactive = calculate_damage(
+        iv,
+        dummy,
+        moon,
+        DamageModifiers(
+            attacker_ability="quark-drive",
+            attacker_item="booster-energy",
+            attacker_booster_energy=False,
+        ),
+    )
+    active = calculate_damage(
+        iv,
+        dummy,
+        moon,
+        DamageModifiers(
+            attacker_ability="quark-drive",
+            attacker_item="booster-energy",
+            attacker_booster_energy=True,
+        ),
+    )
+
+    assert (inactive.min_damage, inactive.max_damage) == (
+        baseline.min_damage,
+        baseline.max_damage,
+    )
+    assert active.min_damage > inactive.min_damage
+    assert active.max_damage > inactive.max_damage
+
+
+def test_terrain_still_activates_when_booster_flag_is_false():
+    """False disables only the item trigger, not the ability's field trigger."""
+    iv = _spa_boosted_iron_valiant()
+    boosted = calculate_damage(
+        iv,
+        _neutral_dummy(),
+        _moonblast(),
+        DamageModifiers(
+            attacker_ability="quark-drive",
+            attacker_item="booster-energy",
+            attacker_booster_energy=False,
+            terrain="electric",
+        ),
+    )
+    baseline = calculate_damage(iv, _neutral_dummy(), _moonblast(), DamageModifiers())
+
+    assert boosted.min_damage > baseline.min_damage
+    assert boosted.max_damage > baseline.max_damage

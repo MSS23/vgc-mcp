@@ -218,6 +218,11 @@ class DamageModifiers:
     quark_drive_boost: Optional[str] = None  # Stat being boosted
     defender_protosynthesis_boost: Optional[str] = None
     defender_quark_drive_boost: Optional[str] = None
+    # Tri-state Booster Energy activation. None preserves automatic inference
+    # from the held item; False explicitly means the item has not activated
+    # (for example, it was already consumed); True forces the trigger active.
+    attacker_booster_energy: Optional[bool] = None
+    defender_booster_energy: Optional[bool] = None
 
     # Defender HP status (for Multiscale, Shadow Shield, Tera Shell)
     defender_at_full_hp: bool = True  # Whether defender is at full HP
