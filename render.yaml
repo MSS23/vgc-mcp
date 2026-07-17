@@ -6,10 +6,13 @@ services:
     name: vgc-mcp
     runtime: python
     plan: free
+    branch: main
     buildCommand: python -m pip install -e ".[remote]"
     startCommand: vgc-mcp-http
     healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
         value: "3.12"
-    autoDeploy: true
+    # Deploy only after GitHub CI succeeds on main. `autoDeployTrigger`
+    # replaces Render's deprecated `autoDeploy` field.
+    autoDeployTrigger: checksPass

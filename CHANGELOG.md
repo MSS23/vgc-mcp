@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Render deploys are now pinned to `main` and begin only after GitHub CI passes.
+  A post-deployment workflow waits for the exact commit SHA, initializes a live
+  MCP session, checks all 208 tools, validates the Protosynthesis/Booster Energy
+  input schema, and executes a real tool call before marking production verified.
+- Health and root responses now expose Render's deployed Git revision and branch
+  so releases can be verified end to end instead of relying on deployment timing.
 - Smogon chaos data now defaults to the 1630 standard competitive weighting;
   callers can explicitly select 0, 1500, 1630, or 1760 and a `YYYY-MM` month.
   Usage results expose the resolved format, month, rating, and exact source URL.

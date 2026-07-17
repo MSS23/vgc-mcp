@@ -28,6 +28,8 @@ Usage:
     vgc-mcp (after pip install)
 """
 
+import os
+
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp_core.api.cache import APICache
@@ -342,6 +344,8 @@ def create_http_app():
         return JSONResponse({
             "status": "healthy",
             "service": "vgc-mcp",
+            "revision": os.environ.get("RENDER_GIT_COMMIT"),
+            "branch": os.environ.get("RENDER_GIT_BRANCH"),
             "tool_modules": REGISTERED_TOOL_MODULE_COUNT,
             "tools": tool_count,
             "active_sessions": session_registry.session_count(),
@@ -359,6 +363,8 @@ def create_http_app():
         return JSONResponse({
             "name": "vgc-mcp",
             "version": version,
+            "revision": os.environ.get("RENDER_GIT_COMMIT"),
+            "branch": os.environ.get("RENDER_GIT_BRANCH"),
             "description": "Pokemon VGC MCP Server - damage calcs, spreads, team building",
             "tool_modules": REGISTERED_TOOL_MODULE_COUNT,
             "tools": tool_count,

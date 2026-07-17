@@ -116,7 +116,9 @@ def http_client():
         yield client
 
 
-def test_health_endpoint(http_client):
+def test_health_endpoint(http_client, monkeypatch):
+    monkeypatch.setenv("RENDER_GIT_COMMIT", "abc123")
+    monkeypatch.setenv("RENDER_GIT_BRANCH", "main")
     resp = http_client.get("/health")
     assert resp.status_code == 200
     body = resp.json()
@@ -124,6 +126,8 @@ def test_health_endpoint(http_client):
     assert body["tool_modules"] == 51
     assert body["tools"] == 208
     assert "active_sessions" in body
+    assert body["revision"] == "abc123"
+    assert body["branch"] == "main"
 
 
 def test_root_endpoint(http_client):

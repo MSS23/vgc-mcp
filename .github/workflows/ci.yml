@@ -44,7 +44,9 @@ jobs:
       - name: Lint with ruff (strict)
         # The historical backlog was cleaned up (was ~1,900 findings);
         # ruff is now a hard gate on the whole codebase.
-        run: python -m ruff check src/ tests/ --output-format=github
+        run: >-
+          python -m ruff check src/ tests/ scripts/verify_production.py
+          --output-format=github
 
   typecheck:
     name: Type check (mypy strict)
