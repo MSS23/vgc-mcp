@@ -319,7 +319,9 @@ def create_threat_move(threat_name: str, move_name: str) -> Optional[Move]:
         ),
         power=move_data["power"],
         accuracy=100,
-        is_spread=move_data.get("spread", False)
+        # is_spread is a read-only property derived from `target` — passing it
+        # as a kwarg is silently dropped by Pydantic, so set `target` instead.
+        target="all-opponents" if move_data.get("spread", False) else "selected-pokemon",
     )
 
 

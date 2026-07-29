@@ -24,7 +24,9 @@ from ..utils.errors import (
     invalid_nature_error,
 )
 
-ParsedOrError = Union["Nature", dict]
+# parse_nature returns a Nature; parse_ev_total returns an int total.
+# Either may instead return an error_response dict.
+ParsedOrError = Union["Nature", int, dict]
 
 
 def parse_nature(nature_str: str) -> ParsedOrError:

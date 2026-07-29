@@ -90,7 +90,14 @@ def list_regulations() -> list[dict]:
 def get_current_regulation() -> VGCRegulation:
     """Get the current/default regulation."""
     config = get_regulation_config()
-    return _build_regulation_from_config(config.current_regulation)
+    reg = _build_regulation_from_config(config.current_regulation)
+    if reg is None:
+        # Misconfigured regulations.json — fail loudly here rather than leaking
+        # None into every caller as a confusing AttributeError.
+        raise ValueError(
+            f"current_regulation {config.current_regulation!r} is not defined in regulations.json"
+        )
+    return reg
 
 
 def validate_team_rules(team, regulation_code: str = None) -> dict:
