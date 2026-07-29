@@ -6,6 +6,18 @@ on:
   pull_request:
     branches: [main]
 
+# Least privilege: no job here writes to the repo. Render deploys via its own
+# GitHub App (see render.yaml), not via a token from this workflow.
+permissions:
+  contents: read
+
+# Superseded PR pushes are pointless work — cancel them. main is NEVER
+# cancelled: Render's `autoDeployTrigger: checksPass` waits for a completed
+# successful CI run on the commit, and a cancelled run would strand the deploy.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   test:
     name: Test (Python ${{ matrix.python-version }})
@@ -63,12 +75,25 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
 
-      - name: mypy (strict)
-        # mypy strict is configured in pyproject.toml. It is not yet a hard
-        # gate (continue-on-error) while the existing violations are burned
-        # down; flip this to a blocking check once mypy src/ is clean.
-        continue-on-error: true
-        run: python -m mypy src/vgc_mcp_core src/vgc_mcp
+      - name: mypy (strict, ratcheting)
+        # mypy strict is configured in pyproject.toml. A full clean-up is ~1300
+        # findings (mostly bare dict/list annotations), so instead of an
+        # unenforced continue-on-error this is a ratchet: the count may only go
+        # down. Lower MYPY_BASELINE whenever you burn some down; when it hits 0,
+        # replace this whole step with a plain `python -m mypy ...`.
+        env:
+          MYPY_BASELINE: "1301"
+        run: |
+          count=$(python -m mypy src/vgc_mcp_core src/vgc_mcp 2>&1 | tee /dev/stderr \
+            | grep -cE '^.+: error: ' || true)
+          echo "mypy errors: $count (baseline $MYPY_BASELINE)"
+          if [ "$count" -gt "$MYPY_BASELINE" ]; then
+            echo "::error::mypy errors increased: $count > $MYPY_BASELINE. Fix the new findings."
+            exit 1
+          fi
+          if [ "$count" -lt "$MYPY_BASELINE" ]; then
+            echo "::notice::mypy errors dropped to $count — lower MYPY_BASELINE in ci.yml."
+          fi
 
   catalog-drift:
     name: Tool catalog drift
@@ -120,3 +145,34 @@ jobs:
         # These guard against drift between regulations.json and the router's
         # alias map — silent UX bugs if they go out of sync.
         run: python -m pytest tests/champions/test_alias_consistency.py tests/champions/test_regulation.py -v
+
+  docker:
+    name: Docker image builds and serves
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build image
+        # Dockerfile is a documented deploy path (docs/deploy.md: Docker and
+        # Fly.io, which builds from it via fly.toml). Nothing else in CI
+        # exercised it, so a broken Dockerfile only surfaced at deploy time.
+        run: docker build -t vgc-mcp:ci .
+
+      - name: Boot the container and hit /health
+        # Building proves it compiles; this proves the image actually serves.
+        # Same endpoint Render, Fly and keep-alive.yml use.
+        run: |
+          docker run -d --name vgc-mcp-ci -p 8000:8000 vgc-mcp:ci
+          for i in $(seq 1 30); do
+            if curl -fsS --max-time 5 http://localhost:8000/health; then
+              echo "healthy after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::container failed /health within 30s"
+          docker logs vgc-mcp-ci
+          exit 1
+
+      - name: Tear down
+        if: always()
+        run: docker rm -f vgc-mcp-ci || true

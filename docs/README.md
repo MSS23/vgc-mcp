@@ -17,6 +17,7 @@ files most package managers / tools expect (`README.md`, `CHANGELOG.md`,
 - [`deploy.md`](deploy.md) — deployment guide (general).
 - [`deploy-render.md`](deploy-render.md) — Render-specific steps.
 - [`deploy-checklist.md`](deploy-checklist.md) — pre-flight checklist.
+- [`ci-cd.md`](ci-cd.md) — how CI gates and the Render auto-deploy pipeline work.
 
 ## For developers
 
