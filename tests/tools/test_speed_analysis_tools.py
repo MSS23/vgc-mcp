@@ -108,3 +108,107 @@ class TestAnalyzeSpeedSpread:
             speed_evs=252
         )
         assert "error" not in result or "speed" in str(result).lower()
+
+
+class TestFindSpeedEvsToOutspeed:
+    """Tests for find_speed_evs_to_outspeed (mainline path)."""
+
+    async def test_reachable_target(self, tools):
+        fn = tools["find_speed_evs_to_outspeed"].fn
+        # Base 135 speed, Jolly: 252 EVs reaches 205 — 180 is reachable
+        result = await fn(pokemon_name="flutter-mane", target_speed=180, nature="jolly")
+        assert result["achievable"] is True
+        assert result["actual_speed"] >= 180
+        assert 0 <= result["evs_needed"] <= 252
+        assert result["evs_remaining"] == 508 - result["evs_needed"]
+
+    async def test_unreachable_target(self, tools):
+        fn = tools["find_speed_evs_to_outspeed"].fn
+        result = await fn(pokemon_name="flutter-mane", target_speed=400, nature="jolly")
+        assert result["achievable"] is False
+        assert result["max_speed_with_252_evs"] < 400
+
+    async def test_invalid_nature(self, tools):
+        fn = tools["find_speed_evs_to_outspeed"].fn
+        result = await fn(pokemon_name="flutter-mane", target_speed=150, nature="zesty")
+        assert result["success"] is False
+
+
+class TestFindSpeedBenchmark:
+    """Tests for find_speed_benchmark."""
+
+    async def test_meta_tiers_returned(self, tools):
+        fn = tools["find_speed_benchmark"].fn
+        result = await fn(target_speed=135)
+        for key in ("pokemon_at_this_speed", "pokemon_above", "pokemon_below"):
+            assert key in result
+
+    async def test_with_pokemon_computes_required_evs(self, tools, mock_pokeapi):
+        mock_pokeapi.get_pokemon = AsyncMock(return_value={
+            "base_stats": {"hp": 55, "attack": 55, "defense": 55,
+                           "special_attack": 135, "special_defense": 135, "speed": 135},
+        })
+        fn = tools["find_speed_benchmark"].fn
+        result = await fn(target_speed=170, nature="timid", pokemon_name="flutter-mane")
+        mon = result["your_pokemon"]
+        assert mon["can_reach"] is True
+        assert mon["resulting_speed"] >= 170
+
+    async def test_invalid_nature_falls_back_to_jolly(self, tools):
+        fn = tools["find_speed_benchmark"].fn
+        result = await fn(target_speed=135, nature="not-a-nature")
+        assert "pokemon_at_this_speed" in result  # no error, fallback applied
+
+
+class TestTeamConditionToolsRequireTeam:
+    """All team-wide speed tools must refuse cleanly on an empty team."""
+
+    @pytest.mark.parametrize("tool_name,kwargs", [
+        ("analyze_team_trick_room", {}),
+        ("analyze_team_tailwind", {}),
+        ("analyze_paralysis_matchup", {}),
+        ("analyze_speed_drops", {"stages": -1}),
+    ])
+    async def test_empty_team_is_error(self, tools, tool_name, kwargs):
+        result = await tools[tool_name].fn(**kwargs)
+        assert result["success"] is False
+
+
+class TestTeamConditionToolsWithTeam:
+    """Happy paths against a real TeamManager with real builds."""
+
+    @pytest.fixture
+    def loaded_tools(self, mock_pokeapi, mock_smogon):
+        from vgc_mcp_core.models.pokemon import EVSpread, Nature, PokemonBuild
+
+        manager = TeamManager()
+        manager.add_pokemon(PokemonBuild(
+            name="ursaluna",
+            base_stats=BaseStats(hp=130, attack=140, defense=105,
+                                 special_attack=45, special_defense=80, speed=50),
+            nature=Nature.BRAVE, evs=EVSpread(hp=252, attack=252),
+            types=["ground", "normal"],
+        ))
+        manager.add_pokemon(PokemonBuild(
+            name="flutter-mane",
+            base_stats=BaseStats(hp=55, attack=55, defense=55,
+                                 special_attack=135, special_defense=135, speed=135),
+            nature=Nature.TIMID, evs=EVSpread(special_attack=252, speed=252),
+            types=["ghost", "fairy"],
+        ))
+        mcp = FastMCP("test")
+        register_speed_analysis_tools(mcp, mock_pokeapi, manager, mock_smogon)
+        return {t.name: t.fn for t in mcp._tool_manager._tools.values()}
+
+    async def test_trick_room_orders_slowest_first(self, loaded_tools):
+        result = await loaded_tools["analyze_team_trick_room"]()
+        assert result.get("success", True) is not False
+        assert len(result["speeds"]) == 2
+        # In Trick Room the slow Ursaluna must move before Flutter Mane
+        assert result["move_order"].index("ursaluna") < result["move_order"].index("flutter-mane")
+
+    async def test_speed_drops_reports_team_speeds(self, loaded_tools):
+        result = await loaded_tools["analyze_speed_drops"](stages=-1)
+        assert result.get("success", True) is not False
+        names = {s["name"] for s in result["your_speeds"]}
+        assert names == {"ursaluna", "flutter-mane"}

@@ -747,7 +747,8 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
                     "name": pokemon_name,
                     "base_speed": base_speed,
                     "evs_needed": evs_needed,
-                    "resulting_speed": calculate_speed(base_speed, 31, evs_needed or 252, 50, nature_enum) if evs_needed else None,
+                    # `is not None` — 0 EVs is a valid answer (target already met)
+                    "resulting_speed": calculate_speed(base_speed, 31, evs_needed, 50, nature_enum) if evs_needed is not None else None,
                     "can_reach": evs_needed is not None
                 }
             except Exception as e:

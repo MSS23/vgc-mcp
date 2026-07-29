@@ -96,7 +96,7 @@ def register_archetype_tools(mcp: FastMCP, team_manager: Optional[TeamManager] =
         if paste:
             try:
                 parsed = parse_showdown_team(paste)
-                names = [_normalize(p.name) for p in parsed]
+                names = [_normalize(p.species) for p in parsed]
             except ShowdownParseError as e:
                 return error_response(ErrorCodes.PARSE_ERROR,
                                       f"Could not parse paste: {e}")

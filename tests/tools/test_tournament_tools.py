@@ -105,3 +105,54 @@ class TestAnalyzeVsSpecificTeam:
         )
         assert "error" in result
         assert "available_archetypes" in result
+
+
+def _paste(*names: str) -> str:
+    return "\n\n".join(
+        f"{n}\nLevel: 50\nSerious Nature\n- Protect" for n in names
+    )
+
+
+def _stock_pokeapi(mock_pokeapi):
+    """Give every species the same real base stats/types so builds parse."""
+    from vgc_mcp_core.models.pokemon import BaseStats
+    mock_pokeapi.get_base_stats = AsyncMock(return_value=BaseStats(
+        hp=95, attack=115, defense=90, special_attack=80,
+        special_defense=90, speed=60,
+    ))
+    mock_pokeapi.get_pokemon_types = AsyncMock(return_value=["fire", "dark"])
+
+
+class TestAnalyzeTeamVsMetaFullFlow:
+    async def test_too_few_pokemon_is_parse_error(self, tools, mock_pokepaste, mock_pokeapi):
+        _stock_pokeapi(mock_pokeapi)
+        mock_pokepaste.get_paste = AsyncMock(return_value=_paste("Incineroar", "Rillaboom"))
+        fn = tools["analyze_team_vs_meta"].fn
+        result = await fn(pokepaste_url="https://pokepast.es/abc")
+        assert result["success"] is False
+        assert result["parsed_pokemon"] == ["Incineroar", "Rillaboom"]
+
+    async def test_full_matchup_run_against_one_meta_team(self, tools, mock_pokepaste, mock_pokeapi):
+        _stock_pokeapi(mock_pokeapi)
+        mock_pokepaste.get_paste = AsyncMock(return_value=_paste(
+            "Incineroar", "Rillaboom", "Flutter Mane", "Urshifu"))
+        fn = tools["analyze_team_vs_meta"].fn
+        result = await fn(pokepaste_url="https://pokepast.es/abc", top_n=1)
+        assert result["success"] is True
+        assert result["teams_analyzed"] == 1
+        report = result["matchup_reports"][0]
+        assert 0 <= report["overall_advantage"] <= 100
+        assert result["worst_matchup"] == result["best_matchup"] == report["opponent_name"]
+
+
+class TestCompareTwoTeamsFullFlow:
+    async def test_head_to_head_report(self, tools, mock_pokepaste, mock_pokeapi):
+        _stock_pokeapi(mock_pokeapi)
+        team1 = _paste("Incineroar", "Rillaboom", "Flutter Mane", "Urshifu")
+        team2 = _paste("Tornadus", "Amoonguss", "Chi-Yu", "Landorus")
+        mock_pokepaste.get_paste = AsyncMock(side_effect=[team1, team2])
+        fn = tools["compare_two_teams"].fn
+        result = await fn(
+            team1_url="https://pokepast.es/t1", team2_url="https://pokepast.es/t2")
+        assert result.get("success", True) is not False
+        assert "advantage" in str(result).lower()
