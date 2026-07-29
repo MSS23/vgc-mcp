@@ -195,7 +195,7 @@ vgc-mcp/
 | Data model | `src/vgc_mcp_core/models/` |
 | API client | `src/vgc_mcp_core/api/` |
 | Utility function | `src/vgc_mcp_core/utils/` |
-| Test | `tests/test_feature.py` |
+| Test | `tests/<layer>/test_feature.py` |
 
 ---
 
@@ -210,13 +210,13 @@ python -m pytest tests/ -v
 ### Run Specific Test File
 
 ```bash
-python -m pytest tests/test_damage.py -v
+python -m pytest tests/calc/test_damage.py -v
 ```
 
 ### Run Specific Test Function
 
 ```bash
-python -m pytest tests/test_damage.py::TestDamageCalculation::test_stab_boost -v
+python -m pytest tests/calc/test_damage.py::TestDamageCalculation::test_stab_boost -v
 ```
 
 ### Run Tests Matching Pattern
@@ -226,7 +226,7 @@ python -m pytest tests/test_damage.py::TestDamageCalculation::test_stab_boost -v
 python -m pytest tests/ -k "speed" -v
 
 # Run all tests in speed_tools
-python -m pytest tests/test_speed_tools.py -v
+python -m pytest tests/tools/test_speed_tools.py -v
 ```
 
 ### Run with Coverage
@@ -252,7 +252,7 @@ python -m pytest tests/ -n auto  # Auto-detect CPU count
 **Test Structure:**
 
 ```python
-# tests/test_new_feature.py
+# tests/tools/test_new_feature.py
 import pytest
 from vgc_mcp_core.calc.new_feature import new_calculation
 
@@ -536,7 +536,7 @@ def main():
 **Step 3: Write tests**
 
 ```python
-# tests/test_nature_tools.py
+# tests/tools/test_nature_tools.py
 import pytest
 from vgc_mcp.tools.nature_tools import register_nature_tools
 
@@ -624,7 +624,7 @@ When Smogon changes stats URL format:
 SMOGON_URL = "https://www.smogon.com/stats/{YYYY-MM}/chaos/{format}-{rating}.json"
 
 # Update in code, then test
-python -m pytest tests/test_smogon.py -v
+python -m pytest tests/api/test_smogon_routing.py -v
 ```
 
 ### Add Support for New Generation
@@ -660,7 +660,7 @@ When a new generation is released:
 
 4. **Update tests**:
    ```python
-   # tests/test_new_gen.py
+   # tests/calc/test_new_gen.py
    def test_new_ability():
        # Test new generation features
    ```

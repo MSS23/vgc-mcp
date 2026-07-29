@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-VGC MCP Server - A Model Context Protocol server for Pokemon VGC (Video Game Championships) team building. Provides 120+ tools for damage calculations, stat analysis, team management, and competitive play optimization.
+VGC MCP Server - A Model Context Protocol server for Pokemon VGC (Video Game Championships) team building. Provides 208 tools for damage calculations, stat analysis, team management, and competitive play optimization. (The count is pinned in `tests/server/test_deploy_smoke.py` and the CI catalog-drift gate — update both when adding/removing tools.)
 
 Supports two parallel format systems:
 - **Mainline VGC** (Reg F/G/H/I) — classic EV system, 0-252 per stat / 508 total
@@ -29,10 +29,10 @@ vgc-mcp
 python -m pytest tests/ -v
 
 # Run single test file
-python -m pytest tests/test_damage.py -v
+python -m pytest tests/calc/test_damage.py -v
 
 # Run specific test
-python -m pytest tests/test_matchup.py::TestSingleMatchup::test_type_advantage_improves_matchup -v
+python -m pytest tests/calc/test_matchup.py::TestSingleMatchup::test_type_advantage_improves_matchup -v
 
 # Run with coverage
 python -m pytest tests/ --cov=vgc_mcp
@@ -41,8 +41,11 @@ python -m pytest tests/ --cov=vgc_mcp
 ruff check src/
 ruff format src/
 
-# Type checking
-mypy src/vgc_mcp
+# Type checking (strict; CI enforces a ratcheting error-count baseline in ci.yml)
+mypy src/vgc_mcp_core src/vgc_mcp
+
+# Regenerate tool catalog (CI catalog-drift job fails if out of date)
+python scripts/build_catalog.py
 ```
 
 ## Architecture
@@ -71,7 +74,7 @@ src/
 │   ├── presentation.py   # MCP server `instructions=` block (table format rules)
 │   └── config.py         # Settings (API URLs, VGC defaults, EV limits)
 │
-└── vgc_mcp/              # MCP server (200+ tools) — entry: vgc-mcp / vgc-mcp-http
+└── vgc_mcp/              # MCP server (208 tools) — entry: vgc-mcp / vgc-mcp-http
     ├── server.py         # FastMCP setup + tool registration loop
     └── tools/            # Thin register_*_tools(mcp, deps) wrappers
                           # Auto-discovered by tools/__init__.py
@@ -206,13 +209,23 @@ def make_pokemon(name, types, base_hp=80, ...):
 - `pydantic` - Data validation
 - `diskcache` - Persistent API caching
 
+## Deployment
+
+Production runs on Render (`render.yaml`): `vgc-mcp-http` on the `main` branch,
+auto-deploying only after GitHub CI passes (`autoDeployTrigger: checksPass`).
+`scripts/verify_production.py` smoke-tests the live MCP endpoint after deploy.
+
 ## Smogon Data Source
 
 Usage stats are pulled from Smogon's chaos JSON files:
 - **URL**: `https://www.smogon.com/stats/{YYYY-MM}/chaos/{format}-{rating}.json`
-- **Rating**: 0 (all competitive players - broadest dataset)
+- **Rating**: routed by the active regulation's `default_smogon_rating` in
+  `regulations.json` (currently 1500 for every regulation), with fallback
+  1500 → 0 if that rating has no data
 - **Available ratings**: 0, 1500, 1630, 1760
 - **Auto-detection**: Finds latest available month automatically
+- **Regulation state is per-MCP-session** — switching regulation in one
+  session does not affect others
 
 ## Damage Calculation Output Format
 

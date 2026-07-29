@@ -12,13 +12,6 @@ class TestGetCompetitiveSpeedBenchmarks:
     """Tests for get_competitive_speed_benchmarks() function."""
 
     @pytest.mark.asyncio
-    async def test_get_competitive_speed_benchmarks_basic(self):
-        """Test fetching competitive speed benchmarks from Smogon."""
-        # This test is skipped for now due to complex mocking requirements.
-        # The function is tested indirectly through calculate_speed_tier tests.
-        pytest.skip("Complex async mocking - tested indirectly through calculate_speed_tier")
-
-    @pytest.mark.asyncio
     async def test_get_competitive_speed_benchmarks_empty_data(self):
         """Test handling of empty Smogon data."""
         mock_smogon = AsyncMock()

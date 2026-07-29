@@ -13,7 +13,7 @@ only flag literal ``return {"error"`` statements.
 import re
 from pathlib import Path
 
-TOOLS_DIR = Path(__file__).resolve().parents[1] / "src" / "vgc_mcp" / "tools"
+TOOLS_DIR = Path(__file__).resolve().parents[2] / "src" / "vgc_mcp" / "tools"
 
 # Matches a `return {"error"` / `return {'error'` possibly across the newline
 # that Black/ruff may put after the brace.

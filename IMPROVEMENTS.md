@@ -110,7 +110,7 @@ These are bugs or unsafe behavior in the *deployed* server. Fix before adding fe
   burn down violations, then flip to blocking.
 - **The `integration` marker is decorative.** `pyproject.toml` documents it as "skipped by
   default in CI" but `ci.yml:38` runs plain `pytest tests/ -q`, so
-  `tests/test_pokeapi_forms.py:118` hits live PokeAPI on every CI run (flaky gate). Add
+  `tests/api/test_pokeapi_forms.py:118` hits live PokeAPI on every CI run (flaky gate). Add
   `addopts = "-m 'not integration'"` to `[tool.pytest.ini_options]` and a separate
   nightly/manual job for `-m integration`.
 - **CI installs deps ad-hoc** (`pip install pytest pytest-asyncio ruff`) instead of
@@ -134,7 +134,7 @@ it. Delete it, or generate it from `pyproject.toml`.
   Starlette `TestClient` smoke tests (initialize handshake, health JSON, tool count).
 - Move root-level `test_deploy.py` under `tests/` (pytest's `testpaths = ["tests"]` means it
   currently runs nowhere) and unskip the 4 stubbed learnset tests
-  (`tests/test_learnset.py:129-144`).
+  (`tests/team/test_learnset.py:129-144`).
 
 ### 1.4 Consolidate the tool surface: 209 → ~70–90 tools
 209 tools blows past what LLM clients select well — the project even ships

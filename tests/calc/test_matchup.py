@@ -75,6 +75,18 @@ class TestThreatCreation:
         assert move.type == "Fairy"
         assert move.category == MoveCategory.SPECIAL
 
+    def test_threat_spread_moves_are_marked_spread(self):
+        """Spread-flagged threat moves must set a spread target.
+
+        Regression: `is_spread` is a read-only property derived from `target`,
+        so passing it as a Move(...) kwarg was silently dropped by Pydantic and
+        every threat move came out single-target — dropping the 0.75x doubles
+        multiplier and inflating threat damage by ~33%.
+        """
+        assert create_threat_move("chi-yu", "heat-wave").is_spread is True
+        assert create_threat_move("ting-lu", "earthquake").is_spread is True
+        assert create_threat_move("flutter-mane", "moonblast").is_spread is False
+
 
 class TestSingleMatchup:
     """Test single Pokemon matchup analysis."""

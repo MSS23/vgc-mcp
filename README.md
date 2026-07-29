@@ -205,7 +205,7 @@ PRs welcome. The fastest way to ship value is to add a new tool module:
 
 1. Drop `vgc_mcp/tools/<area>_tools.py` exposing `register_<area>_tools(mcp, ...)`
 2. Auto-discovery picks it up — no `server.py` edit
-3. Add tests in `tests/test_<area>_tools.py`
+3. Add tests in `tests/tools/test_<area>_tools.py`
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/development.md](docs/development.md) for the full pattern (handlers in `vgc_mcp_core/tools/`, error contracts, presentation rules).
 

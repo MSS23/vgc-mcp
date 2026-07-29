@@ -27,7 +27,7 @@ HOT_PATHS: dict[str, list[str]] = {
     ],
     "src/vgc_mcp_core/calc/stats.py": [
         "tests/champions/test_stat_calc.py",
-        "tests/test_stats.py",
+        "tests/calc/test_stats.py",
     ],
     "src/vgc_mcp_core/calc/stats_champions.py": [
         "tests/champions/test_stat_calc.py",

@@ -29,10 +29,10 @@ vgc-mcp
 python -m pytest tests/ -v
 
 # Run single test file
-python -m pytest tests/test_damage.py -v
+python -m pytest tests/calc/test_damage.py -v
 
 # Run specific test
-python -m pytest tests/test_matchup.py::TestSingleMatchup::test_type_advantage_improves_matchup -v
+python -m pytest tests/calc/test_matchup.py::TestSingleMatchup::test_type_advantage_improves_matchup -v
 
 # Run with coverage
 python -m pytest tests/ --cov=vgc_mcp

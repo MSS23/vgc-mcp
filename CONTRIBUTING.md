@@ -104,7 +104,7 @@ Run tests before committing:
 python -m pytest tests/ -v
 
 # Run specific test file
-python -m pytest tests/test_damage.py -v
+python -m pytest tests/calc/test_damage.py -v
 
 # Run with coverage
 python -m pytest tests/ --cov=vgc_mcp
@@ -119,7 +119,7 @@ git add .
 git commit -m "Add support for new Gen 9 ability: Opportunist
 
 - Implement ability logic in calc/abilities.py
-- Add tests in tests/test_abilities.py
+- Add tests in tests/calc/test_abilities.py
 - Update ability reference in docs
 "
 ```
@@ -205,7 +205,7 @@ def calculate_damage(
 ### Test Structure
 
 ```python
-# tests/test_new_feature.py
+# tests/tools/test_new_feature.py
 import pytest
 from vgc_mcp_core.calc.damage import calculate_damage
 
@@ -230,7 +230,7 @@ class TestNewFeature:
 python -m pytest tests/ -v
 
 # Run specific test
-python -m pytest tests/test_damage.py::TestDamageCalculation::test_stab -v
+python -m pytest tests/calc/test_damage.py::TestDamageCalculation::test_stab -v
 
 # Run with coverage
 python -m pytest tests/ --cov=vgc_mcp --cov-report=html

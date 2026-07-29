@@ -9,7 +9,7 @@
 > - **Fix 3 (done):** `POST /sse` now forwards to the Streamable HTTP handler
 >   (Option A, `StreamableHTTPCompat` in `server.py`) — a streamable client
 >   pointed at the legacy URL just works. `DELETE /sse` (session teardown)
->   forwards too. Covered by tests in `tests/test_http_transport.py`.
+>   forwards too. Covered by tests in `tests/server/test_http_transport.py`.
 > - **Fix 2 (done):** all docs + `smithery.yaml` now present `/mcp` as the
 >   primary URL; `/sse` labeled legacy-only. Root endpoint returns a
 >   `connect` hint.

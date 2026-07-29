@@ -757,7 +757,7 @@ def main():
 **Step 3: Test**
 
 ```python
-# tests/test_item_tools.py
+# tests/tools/test_item_tools.py
 async def test_find_best_item_offense():
     result = await find_best_item("flutter-mane", role="offense")
     assert result["item"] in ["choice-scarf", "choice-specs", "life-orb"]
@@ -818,7 +818,7 @@ async def get_pikalytics_usage(format: str = "vgc2024"):
 ### 4. Testing New Tools
 
 ```python
-# tests/test_new_tool.py
+# tests/tools/test_new_tool.py
 import pytest
 from vgc_mcp.tools.new_tools import new_tool_function
 
