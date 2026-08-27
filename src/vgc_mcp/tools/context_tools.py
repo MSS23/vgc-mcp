@@ -290,21 +290,47 @@ def register_context_tools(mcp: FastMCP, pokeapi, team_manager):
             except ValueError:
                 return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {nature}')
 
-        # Update EVs if provided
-        new_evs = {
-            "hp": hp_evs if hp_evs is not None else pokemon.evs.hp,
-            "attack": atk_evs if atk_evs is not None else pokemon.evs.attack,
-            "defense": def_evs if def_evs is not None else pokemon.evs.defense,
-            "special_attack": spa_evs if spa_evs is not None else pokemon.evs.special_attack,
-            "special_defense": spd_evs if spd_evs is not None else pokemon.evs.special_defense,
-            "speed": spe_evs if spe_evs is not None else pokemon.evs.speed
-        }
+        # Update the spread if provided. Champions builds carry SPs (0-32 per
+        # stat, 66 total), not EVs — writing pokemon.evs there would be a
+        # silent no-op, so interpret the stat args as Stat Points instead.
+        is_champions = getattr(pokemon, "format_system", "mainline") == "champions"
+        if is_champions:
+            from vgc_mcp_core.models.pokemon import StatPointSpread
+            cur = pokemon.sps or StatPointSpread()
+            new_evs = {
+                "hp": hp_evs if hp_evs is not None else cur.hp,
+                "attack": atk_evs if atk_evs is not None else cur.attack,
+                "defense": def_evs if def_evs is not None else cur.defense,
+                "special_attack": spa_evs if spa_evs is not None else cur.special_attack,
+                "special_defense": spd_evs if spd_evs is not None else cur.special_defense,
+                "speed": spe_evs if spe_evs is not None else cur.speed
+            }
+            over = {s: v for s, v in new_evs.items() if v > 32}
+            if over:
+                return error_response(
+                    ErrorCodes.INVALID_PARAMETER,
+                    f'Champions Stat Points are capped at 32 per stat; got {over}')
+            total = sum(new_evs.values())
+            if total > 66:
+                return error_response(
+                    ErrorCodes.INVALID_PARAMETER,
+                    f'Total Stat Points ({total}) exceeds the Champions maximum of 66')
+            pokemon.sps = StatPointSpread(**new_evs)
+        else:
+            new_evs = {
+                "hp": hp_evs if hp_evs is not None else pokemon.evs.hp,
+                "attack": atk_evs if atk_evs is not None else pokemon.evs.attack,
+                "defense": def_evs if def_evs is not None else pokemon.evs.defense,
+                "special_attack": spa_evs if spa_evs is not None else pokemon.evs.special_attack,
+                "special_defense": spd_evs if spd_evs is not None else pokemon.evs.special_defense,
+                "speed": spe_evs if spe_evs is not None else pokemon.evs.speed
+            }
 
-        total = sum(new_evs.values())
-        if total > 508:
-            return error_response(ErrorCodes.INVALID_PARAMETER, f'Total EVs ({total}) exceeds maximum of 508')
+            total = sum(new_evs.values())
+            if total > 508:
+                return error_response(ErrorCodes.INVALID_PARAMETER, f'Total EVs ({total}) exceeds maximum of 508')
 
-        pokemon.evs = EVSpread(**new_evs)
+            pokemon.evs = EVSpread(**new_evs)
 
         # Update other attributes
         if ability is not None:
@@ -317,18 +343,24 @@ def register_context_tools(mcp: FastMCP, pokeapi, team_manager):
         # Calculate updated stats
         final_stats = calculate_all_stats(pokemon)
 
-        return {
+        result = {
             "success": True,
             "message": f"Updated {pokemon.name}",
             "pokemon": pokemon.name,
             "nature": pokemon.nature.value.title(),
-            "evs": new_evs,
-            "ev_total": total,
+            ("sps" if is_champions else "evs"): new_evs,
+            ("sp_total" if is_champions else "ev_total"): total,
             "final_stats": final_stats,
             "ability": pokemon.ability,
             "item": pokemon.item,
             "tera_type": pokemon.tera_type
         }
+        if is_champions and tera_type is not None:
+            result["warning"] = (
+                "Pokemon Champions has no Terastallization — tera_type was "
+                "stored but will not apply in Champions battles."
+            )
+        return result
 
     @mcp.tool(
         title="Reset Session",

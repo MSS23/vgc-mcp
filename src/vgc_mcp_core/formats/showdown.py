@@ -706,6 +706,8 @@ def parsed_to_pokemon_build(
         kwargs["format_system"] = "champions"
         kwargs["sps"] = sps
         kwargs["evs"] = EVSpread()
+        # Champions has no IVs (everything acts as 31); ignore any IVs: line.
+        kwargs["ivs"] = IVSpread()
     else:
         kwargs["format_system"] = "mainline"
         kwargs["evs"] = parsed_to_ev_spread(parsed)

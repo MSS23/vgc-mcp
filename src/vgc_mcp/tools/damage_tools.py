@@ -1022,6 +1022,15 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         ev_parts.append(f"{ev_val} {abbrev}")
                 attacker_ev_string = " / ".join(ev_parts) if ev_parts else "0 EVs"
 
+            # Champions has no Terastallization — still compute, but flag it.
+            champions_tera_warning = None
+            if is_champions and (attacker_tera_type or defender_tera_type):
+                champions_tera_warning = (
+                    "Pokemon Champions (Reg MA/MB) has no Terastallization — "
+                    "this calc applied Tera anyway because it was requested, "
+                    "but it cannot happen in a real Champions battle."
+                )
+
             # Build response
             response = {
                 "attacker": attacker_name,
@@ -1062,6 +1071,9 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     calculation_steps
                 )
             }
+
+            if champions_tera_warning:
+                response["champions_tera_warning"] = champions_tera_warning
 
             # Add multi-spread results if available
             if results_by_spread:

@@ -206,6 +206,12 @@ def register_tera_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 "markdown_summary": "\n".join(markdown_lines)
             }
 
+            if is_champions:
+                response["champions_warning"] = (
+                    "Pokemon Champions (Reg MA/MB) has no Terastallization — "
+                    "these rankings only apply to mainline VGC formats."
+                )
+
             return response
 
         except Exception as e:

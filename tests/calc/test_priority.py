@@ -47,8 +47,8 @@ class TestMovePriority:
         assert get_move_priority("trick-room") == -7
 
     def test_counter_priority(self):
-        """Counter should have -6 priority."""
-        assert get_move_priority("counter") == -6
+        """Counter should have -5 priority (Gen 4+)."""
+        assert get_move_priority("counter") == -5
 
 
 class TestGrassyGlide:

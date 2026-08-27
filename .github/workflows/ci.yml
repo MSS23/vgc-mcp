@@ -82,7 +82,7 @@ jobs:
         # down. Lower MYPY_BASELINE whenever you burn some down; when it hits 0,
         # replace this whole step with a plain `python -m mypy ...`.
         env:
-          MYPY_BASELINE: "1301"
+          MYPY_BASELINE: "1298"
         run: |
           count=$(python -m mypy src/vgc_mcp_core src/vgc_mcp 2>&1 | tee /dev/stderr \
             | grep -cE '^.+: error: ' || true)

@@ -18,7 +18,7 @@ The benchmark types supported:
 
 from __future__ import annotations
 
-from typing import Annotated, Optional
+from typing import Annotated, Any, Optional
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
@@ -39,6 +39,7 @@ from vgc_mcp_core.calc.stats_champions import (
 )
 from vgc_mcp_core.formats.showdown import pokemon_build_to_showdown
 from vgc_mcp_core.models.pokemon import (
+    BaseStats,
     EVSpread,
     IVSpread,
     Nature,
@@ -198,14 +199,19 @@ def register_breakpoint_tools(
 def _find_speed_breakpoint(me_base, tgt_base, tgt_spread, me_name, tgt_name, stat,
                            is_champions=False):
     """Find min EVs (or SP, for Champions) to outspeed a target's stat."""
-    tgt_evs = (tgt_spread.get("evs") or {}).get(stat, 0)
     tgt_nature_str = tgt_spread.get("nature", "serious").lower()
     try:
         tgt_nature = Nature(tgt_nature_str)
     except ValueError:
         tgt_nature = Nature.SERIOUS
-    tgt_speed = calculate_speed(getattr(tgt_base, stat),
-                                ev=tgt_evs, iv=31, nature=tgt_nature)
+    if tgt_spread.get("format_system") == "champions" or tgt_spread.get("sps"):
+        tgt_sps = (tgt_spread.get("sps") or {}).get(stat, 0)
+        tgt_speed = calculate_speed_sp(getattr(tgt_base, stat),
+                                       sp=tgt_sps, nature=tgt_nature)
+    else:
+        tgt_evs = (tgt_spread.get("evs") or {}).get(stat, 0)
+        tgt_speed = calculate_speed(getattr(tgt_base, stat),
+                                    ev=tgt_evs, iv=31, nature=tgt_nature)
     target_min = tgt_speed + 1
 
     if is_champions:
@@ -597,7 +603,20 @@ async def _find_survival_breakpoint(pokeapi, me_base, me_types, tgt_base, tgt_ty
     return result_dict
 
 
-def _build_from_spread(base, types, name, spread):
+def _build_from_spread(
+    base: BaseStats, types: list[str], name: str, spread: dict[str, Any]
+) -> PokemonBuild:
+    # Champions Smogon spreads carry `sps` (no `evs`) — build an SP build so
+    # the target's stats aren't silently computed at zero investment.
+    if spread.get("format_system") == "champions" or spread.get("sps"):
+        return PokemonBuild(
+            name=name, base_stats=base, types=types,
+            nature=Nature((spread.get("nature") or "serious").lower()),
+            format_system="champions",
+            sps=StatPointSpread.from_sps_dict(spread.get("sps") or {}),
+            item=spread.get("item"),
+            ability=spread.get("ability"),
+        )
     evs = spread.get("evs") or {}
     return PokemonBuild(
         name=name, base_stats=base, types=types,

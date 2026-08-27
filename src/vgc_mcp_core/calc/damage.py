@@ -193,19 +193,21 @@ MOLD_BREAKER_ABILITIES = {
 
 # Wind moves for Wind Rider ability
 WIND_MOVES = {
-    "bleakwind-storm", "fairy-wind", "gust", "hurricane", "petal-blizzard",
-    "sandstorm", "tailwind", "twister", "whirlwind", "wildbolt-storm",
+    "air-cutter", "blizzard", "bleakwind-storm", "fairy-wind", "gust",
+    "heat-wave", "hurricane", "icy-wind", "petal-blizzard", "sandsear-storm",
+    "sandstorm", "springtide-storm", "tailwind", "twister", "whirlwind",
+    "wildbolt-storm",
 }
 
 # Sound moves for Soundproof ability
 SOUND_MOVES = {
-    "boomburst", "bug-buzz", "chatter", "clanging-scales", "clangorous-soul",
-    "clangorous-soulblaze", "confide", "disarming-voice", "echoed-voice",
-    "eerie-spell", "grass-whistle", "growl", "heal-bell", "howl", "hyper-voice",
-    "metal-sound", "noble-roar", "overdrive", "parting-shot", "perish-song",
-    "relic-song", "roar", "round", "screech", "shadow-force", "sing",
-    "snarl", "snore", "sonic-boom", "sparkling-aria", "supersonic",
-    "torch-song", "uproar",
+    "alluring-voice", "boomburst", "bug-buzz", "chatter", "clanging-scales",
+    "clangorous-soul", "clangorous-soulblaze", "confide", "disarming-voice",
+    "echoed-voice", "eerie-spell", "grass-whistle", "growl", "heal-bell",
+    "howl", "hyper-voice", "metal-sound", "noble-roar", "overdrive",
+    "parting-shot", "perish-song", "psychic-noise", "relic-song", "roar",
+    "round", "screech", "sing", "snarl", "snore", "sonic-boom",
+    "sparkling-aria", "supersonic", "torch-song", "uproar",
 }
 
 # Ball/Bomb moves for Bulletproof ability
@@ -1047,6 +1049,17 @@ def calculate_damage(
         defender_types = [modifiers.defender_tera_type]
     type_eff = get_type_effectiveness(effective_move_type, defender_types)
 
+    # Weather defensive boosts: sand gives Rock-types 1.5x SpD, snow gives
+    # Ice-types 1.5x Def. Applied to the stat like Assault Vest, so Psyshock
+    # (targets Defense) correctly skips the sand SpD boost.
+    weather_norm = (modifiers.weather or "").lower().replace("-", "_")
+    if weather_norm in ("sand", "sandstorm") and "Rock" in defender_types \
+            and defense_stat_name == "special_defense":
+        defense_stat = apply_mod(defense_stat, MOD_WEATHER_BOOST)
+    elif weather_norm in ("snow", "hail") and "Ice" in defender_types \
+            and defense_stat_name == "defense":
+        defense_stat = apply_mod(defense_stat, MOD_WEATHER_BOOST)
+
     # Tera Shell (all hits not very effective at full HP) - Terapagos
     if modifiers.defender_ability:
         def_ability_pre = normalize_ability(modifiers.defender_ability)
@@ -1090,9 +1103,9 @@ def calculate_damage(
             bp_mods.append(MOD_STRONG_JAW)
         # Supreme Overlord (+10% per fainted ally, up to +50%) - Kingambit
         elif ability == "supreme-overlord" and modifiers.supreme_overlord_count > 0:
-            # +10% per ally = 410/4096 per ally
-            boost = 4096 + (410 * min(5, modifiers.supreme_overlord_count))
-            bp_mods.append(boost)
+            # Showdown's exact 4096-values per fainted-ally count (1-5)
+            overlord_mods = [4506, 4915, 5325, 5734, 6144]
+            bp_mods.append(overlord_mods[min(5, modifiers.supreme_overlord_count) - 1])
         # Tinted Lens (2x damage on resisted hits) - handled in final modifiers
         elif ability == "tinted-lens":
             pass  # Applied as a FINAL modifier after type effectiveness
@@ -1170,6 +1183,16 @@ def calculate_damage(
         if att_item_bp == "punching-glove" and move_name_normalized in PUNCH_MOVES:
             bp_mods.append(MOD_PUNCHING_GLOVE)
 
+    # Terrain-conditional base power edits (raw BP, before the bp-mod chain):
+    # Expanding Force 80 -> 120 in Psychic Terrain (grounded attacker);
+    # Rising Voltage 70 -> 140 vs a grounded target in Electric Terrain.
+    if (move_name_normalized == "expanding-force"
+            and modifiers.terrain == "psychic" and modifiers.attacker_grounded):
+        power = math.floor(power * 1.5)
+    elif (move_name_normalized == "rising-voltage"
+            and modifiers.terrain == "electric" and modifiers.defender_grounded):
+        power = power * 2
+
     # Terrain boost / Misty nerf / Psyblade override are ALL base-power mods in
     # Showdown (gen789.ts) — they must multiply `power` before the base-damage
     # formula, not the post-formula base_damage.
@@ -1215,7 +1238,9 @@ def calculate_damage(
         applied_mods.append("Spread (0.75x)")
 
     # 2. Weather modifier (6144/4096 = 1.5x boost, 2048/4096 = 0.5x nerf)
-    weather_mod_4096 = _get_weather_mod_4096(modifiers.weather, effective_move_type)
+    weather_mod_4096 = _get_weather_mod_4096(
+        modifiers.weather, effective_move_type, move_name_normalized
+    )
     if weather_mod_4096 != MOD_NEUTRAL:
         base_damage = apply_mod(base_damage, weather_mod_4096)
         weather_mult = weather_mod_4096 / 4096
@@ -1224,10 +1249,14 @@ def calculate_damage(
     # NOTE: Terrain (boost / Misty nerf / Psyblade override) is now applied as a
     # BASE-POWER modifier earlier in this function (Showdown gen789.ts), not here.
 
-    # 3. Critical hit (6144/4096 = 1.5x in Gen 9)
+    # 3. Critical hit (6144/4096 = 1.5x in Gen 9; Sniper crits are 2.25x)
     if modifiers.is_critical:
-        base_damage = apply_mod(base_damage, MOD_CRIT)
-        applied_mods.append("Critical (1.5x)")
+        is_sniper = (
+            modifiers.attacker_ability
+            and normalize_ability(modifiers.attacker_ability) == "sniper"
+        )
+        base_damage = apply_mod(base_damage, MOD_SNIPER_CRIT if is_sniper else MOD_CRIT)
+        applied_mods.append("Critical (2.25x, Sniper)" if is_sniper else "Critical (1.5x)")
 
     # Pre-calculate STAB modifier (4096-based)
     # Pass effective_move_type to account for type-changing abilities
@@ -1551,11 +1580,12 @@ def calculate_damage(
 # 4096-based modifier helper functions
 # =============================================================================
 
-def _get_weather_mod_4096(weather: str | None, move_type: str) -> int:
+def _get_weather_mod_4096(weather: str | None, move_type: str, move_name: str = "") -> int:
     """Get weather modifier as 4096-based value.
 
     Handles regular weather (sun, rain) and primal weather (harsh_sun, heavy_rain).
     Primal weather completely nullifies opposing type moves (returns 0).
+    Hydro Steam is BOOSTED 1.5x in sun instead of being nerfed.
     """
     if not weather:
         return MOD_NEUTRAL
@@ -1564,6 +1594,8 @@ def _get_weather_mod_4096(weather: str | None, move_type: str) -> int:
     move_type = move_type.capitalize()
 
     if weather == "sun":
+        if move_name == "hydro-steam":
+            return MOD_WEATHER_BOOST  # unique: 1.5x Water move in sun
         if move_type == "Fire":
             return MOD_WEATHER_BOOST  # 6144/4096 = 1.5x
         elif move_type == "Water":

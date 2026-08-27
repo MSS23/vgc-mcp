@@ -155,7 +155,7 @@ has **Mega Evolution** (one per battle) and **no Terastallization**.
 - Smogon usage: `SmogonStatsClient` collects each format's declared
   `default_smogon_rating` from `regulations.json` and always falls back to rating
   1500 then 0. (Every regulation, including `reg_ma_champs`, currently declares
-  1500, so Champions usage resolves at 1500.) Champions spreads are tagged with
+  1630.) Champions spreads are tagged with
   `format_system: "champions"` and stored under the `sps` key
 
 **Champions optimization primitives** live in `calc/champions_optimization.py`
@@ -167,8 +167,8 @@ has **Mega Evolution** (one per battle) and **no Terastallization**.
 - `validate_sp_allocation(dict)` → 32/66 cap enforcement
 
 **Reg MA/MB legality**: `regulations.json::reg_ma_champs` uses an explicit
-`legal_pokemon` allowlist (186 species from Serebii); `reg_mb_champs` extends
-it (208 species). Use `RegulationConfig.is_pokemon_legal(name, "reg_ma_champs")`
+`legal_pokemon` allowlist (186 species from Serebii); `reg_mb_champs` is a
+standalone 208-species list (a superset of MA's — 22 MB-only additions). Use `RegulationConfig.is_pokemon_legal(name, "reg_ma_champs")`
 rather than `is_pokemon_banned`, since banlist mode doesn't apply to allowlist
 regulations. Both regulations enforce item clause, level 50, and the 32/66 SP
 caps (`sp_per_stat_max` / `sp_total_max`).
@@ -220,7 +220,7 @@ auto-deploying only after GitHub CI passes (`autoDeployTrigger: checksPass`).
 Usage stats are pulled from Smogon's chaos JSON files:
 - **URL**: `https://www.smogon.com/stats/{YYYY-MM}/chaos/{format}-{rating}.json`
 - **Rating**: routed by the active regulation's `default_smogon_rating` in
-  `regulations.json` (currently 1500 for every regulation), with fallback
+  `regulations.json` (currently 1630 for every regulation), with fallback
   1500 → 0 if that rating has no data
 - **Available ratings**: 0, 1500, 1630, 1760
 - **Auto-detection**: Finds latest available month automatically

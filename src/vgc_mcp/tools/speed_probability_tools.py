@@ -146,11 +146,9 @@ def register_speed_probability_tools(mcp: FastMCP, smogon, pokeapi, team_manager
             return error_response(ErrorCodes.INTERNAL_ERROR, 'No stored Pokemon found', hint='Use set_my_pokemon first to store a Pokemon', stored_pokemon=[p['reference'] for p in stored])
 
         your_base_speed = pokemon.base_stats.speed
-        your_speed = calculate_speed(
-            your_base_speed,
-            ev=pokemon.evs.speed,
-            nature=pokemon.nature
-        )
+        # Format-aware (Champions builds carry SPs, not EVs)
+        from vgc_mcp_core.calc.stats import calculate_all_stats
+        your_speed = calculate_all_stats(pokemon)["speed"]
 
         # Get target Pokemon's base stats
         try:

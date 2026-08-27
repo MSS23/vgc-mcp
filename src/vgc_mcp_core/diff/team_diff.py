@@ -43,6 +43,7 @@ def pokemon_to_dict(pokemon: ParsedPokemon) -> dict:
         "level": pokemon.level,
         "tera_type": pokemon.tera_type,
         "evs": pokemon.evs.copy(),
+        "sps": pokemon.sps.copy() if pokemon.sps else None,
         "ivs": pokemon.ivs.copy(),
         "nature": pokemon.nature,
         "moves": pokemon.moves.copy(),
@@ -243,8 +244,8 @@ def compare_pokemon(v1: ParsedPokemon, v2: ParsedPokemon) -> list[FieldChange]:
             reason=explain_nature_change(v1.nature, v2.nature),
         ))
 
-    # EVs
-    ev_change = compare_evs(v1.evs, v2.evs)
+    # EVs (Champions pastes carry the spread in `sps` instead)
+    ev_change = compare_evs(v1.sps or v1.evs, v2.sps or v2.evs)
     if ev_change:
         changes.append(ev_change)
 

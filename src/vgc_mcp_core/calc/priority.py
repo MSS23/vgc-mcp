@@ -18,8 +18,8 @@ class PriorityBracket(IntEnum):
     VITAL_THROW = -1
     FOCUS_PUNCH = -3
     REVENGE = -4
-    AFTER_YOU = -5
-    COUNTER = -6
+    COUNTER = -5
+    ROAR = -6
     TRICK_ROOM = -7
 
 
@@ -45,12 +45,14 @@ PRIORITY_MOVES: dict[str, int] = {
     "quick-guard": 3,
     "wide-guard": 3,
     "crafty-shield": 3,
-    "mat-block": 3,
 
     # +2 Priority
     "extreme-speed": 2,
     "first-impression": 2,
     "feint": 2,
+    "follow-me": 2,
+    "rage-powder": 2,
+    "ally-switch": 2,
 
     # +1 Priority
     "aqua-jet": 1,
@@ -81,20 +83,18 @@ PRIORITY_MOVES: dict[str, int] = {
     "revenge": -4,
 
     # -5 Priority
-    "after-you": -5,
+    "counter": -5,
+    "mirror-coat": -5,
 
     # -6 Priority
-    "counter": -6,
-    "mirror-coat": -6,
-    "metal-burst": -6,
-
-    # -7 Priority
-    "trick-room": -7,
-    "teleport": -7,
     "roar": -6,
     "whirlwind": -6,
     "dragon-tail": -6,
     "circle-throw": -6,
+    "teleport": -6,
+
+    # -7 Priority
+    "trick-room": -7,
 }
 
 # Moves that are conditionally priority
@@ -350,7 +350,7 @@ def categorize_priority_move(move: str) -> PriorityMoveInfo:
     protection_moves = {"protect", "detect", "endure", "kings-shield", "spiky-shield",
                        "baneful-bunker", "silk-trap", "burning-bulwark", "obstruct", "max-guard"}
     support_moves = {"helping-hand", "quick-guard", "wide-guard", "crafty-shield",
-                    "mat-block", "after-you", "trick-room"}
+                    "follow-me", "rage-powder", "ally-switch", "trick-room"}
 
     if normalized in protection_moves:
         category = "defensive"

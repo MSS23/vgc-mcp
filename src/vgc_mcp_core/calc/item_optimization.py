@@ -89,14 +89,9 @@ def compare_items_damage(
         recoil = 0
         recoil_percent = 0.0
         if item == "life-orb":
-            from ..calc.stats import calculate_hp
-            # Use calculated HP, not base HP
-            max_hp = calculate_hp(
-                attacker.base_stats.hp,
-                attacker.ivs.hp,
-                attacker.evs.hp,
-                attacker.level
-            )
+            from ..calc.stats import calculate_all_stats
+            # Format-aware HP (dispatches to SP formula for Champions builds)
+            max_hp = calculate_all_stats(attacker)["hp"]
             life_orb_data = calculate_life_orb_effect(damage_result.max_damage, max_hp)
             recoil = life_orb_data["recoil"]
             recoil_percent = life_orb_data["recoil_percent"]
@@ -108,14 +103,7 @@ def compare_items_damage(
 
         # Calculate sustainability (how many attacks before fainting)
         if recoil > 0:
-            from ..calc.stats import calculate_hp
-            max_hp_calc = calculate_hp(
-                attacker.base_stats.hp,
-                attacker.ivs.hp,
-                attacker.evs.hp,
-                attacker.level
-            )
-            turns_sustainable = (max_hp_calc // recoil) if recoil > 0 else 999
+            turns_sustainable = max_hp // recoil
         else:
             turns_sustainable = 999
 
