@@ -1,0 +1,831 @@
+{
+  "oracle": "@smogon/calc 0.11.0",
+  "source": "https://github.com/smogon/damage-calc",
+  "cases": [
+    {
+      "id": "thick-fat",
+      "base": {
+        "hp": 100,
+        "atk": 101,
+        "def": 99,
+        "spa": 103,
+        "spd": 97,
+        "spe": 101
+      },
+      "level": 50,
+      "mods": {
+        "defender_ability": "Thick Fat"
+      },
+      "move": {
+        "name": "Flamethrower",
+        "type": "Fire",
+        "category": "special",
+        "power": 90
+      },
+      "rolls": [
+        18,
+        18,
+        19,
+        19,
+        19,
+        19,
+        20,
+        20,
+        20,
+        20,
+        20,
+        21,
+        21,
+        21,
+        21,
+        22
+      ]
+    },
+    {
+      "id": "heatproof",
+      "base": {
+        "hp": 100,
+        "atk": 101,
+        "def": 99,
+        "spa": 103,
+        "spd": 97,
+        "spe": 101
+      },
+      "level": 50,
+      "mods": {
+        "defender_ability": "Heatproof"
+      },
+      "move": {
+        "name": "Flamethrower",
+        "type": "Fire",
+        "category": "special",
+        "power": 90
+      },
+      "rolls": [
+        18,
+        18,
+        19,
+        19,
+        19,
+        19,
+        20,
+        20,
+        20,
+        20,
+        20,
+        21,
+        21,
+        21,
+        21,
+        22
+      ]
+    },
+    {
+      "id": "water-bubble",
+      "base": {
+        "hp": 100,
+        "atk": 101,
+        "def": 99,
+        "spa": 103,
+        "spd": 97,
+        "spe": 101
+      },
+      "level": 50,
+      "mods": {
+        "defender_ability": "Water Bubble"
+      },
+      "move": {
+        "name": "Flamethrower",
+        "type": "Fire",
+        "category": "special",
+        "power": 90
+      },
+      "rolls": [
+        18,
+        18,
+        19,
+        19,
+        19,
+        19,
+        20,
+        20,
+        20,
+        20,
+        20,
+        21,
+        21,
+        21,
+        21,
+        22
+      ]
+    },
+    {
+      "id": "purifying-salt",
+      "base": {
+        "hp": 100,
+        "atk": 101,
+        "def": 99,
+        "spa": 103,
+        "spd": 97,
+        "spe": 101
+      },
+      "level": 50,
+      "mods": {
+        "defender_ability": "Purifying Salt"
+      },
+      "move": {
+        "name": "Shadow Ball",
+        "type": "Ghost",
+        "category": "special",
+        "power": 80
+      },
+      "rolls": [
+        17,
+        17,
+        17,
+        17,
+        17,
+        18,
+        18,
+        18,
+        18,
+        18,
+        19,
+        19,
+        19,
+        19,
+        19,
+        20
+      ],
+      "types": [
+        "Water"
+      ]
+    },
+    {
+      "id": "dry-skin",
+      "base": {
+        "hp": 100,
+        "atk": 101,
+        "def": 99,
+        "spa": 103,
+        "spd": 97,
+        "spe": 101
+      },
+      "level": 50,
+      "mods": {
+        "defender_ability": "Dry Skin"
+      },
+      "move": {
+        "name": "Flamethrower",
+        "type": "Fire",
+        "category": "special",
+        "power": 90
+      },
+      "rolls": [
+        45,
+        45,
+        46,
+        46,
+        47,
+        47,
+        48,
+        48,
+        49,
+        49,
+        50,
+        50,
+        51,
+        51,
+        52,
+        53
+      ]
+    },
+    {
+      "id": "fur-coat",
+      "base": {
+        "hp": 100,
+        "atk": 101,
+        "def": 99,
+        "spa": 103,
+        "spd": 97,
+        "spe": 101
+      },
+      "level": 50,
+      "mods": {
+        "defender_ability": "Fur Coat"
+      },
+      "move": {
+        "name": "Tackle",
+        "type": "Normal",
+        "category": "physical",
+        "power": 40
+      },
+      "rolls": [
+        12,
+        12,
+        12,
+        12,
+        12,
+        13,
+        13,
+        13,
+        13,
+        13,
+        13,
+        13,
+        13,
+        13,
+        13,
+        15
+      ]
+    },
+    {
+      "id": "sniper",
+      "base": {
+        "hp": 100,
+        "atk": 101,
+        "def": 99,
+        "spa": 103,
+        "spd": 97,
+        "spe": 101
+      },
+      "level": 50,
+      "mods": {
+        "attacker_ability": "Sniper",
+        "is_critical": true
+      },
+      "move": {
+        "name": "Flamethrower",
+        "type": "Fire",
+        "category": "special",
+        "power": 90
+      },
+      "rolls": [
+        81,
+        82,
+        82,
+        84,
+        84,
+        85,
+        87,
+        87,
+        88,
+        90,
+        90,
+        91,
+        93,
+        93,
+        94,
+        96
+      ]
+    },
+    {
+      "id": "choice-thick-fat",
+      "base": {
+        "hp": 100,
+        "atk": 101,
+        "def": 99,
+        "spa": 103,
+        "spd": 97,
+        "spe": 101
+      },
+      "level": 50,
+      "mods": {
+        "attacker_item": "Choice Specs",
+        "defender_ability": "Thick Fat"
+      },
+      "move": {
+        "name": "Flamethrower",
+        "type": "Fire",
+        "category": "special",
+        "power": 90
+      },
+      "rolls": [
+        28,
+        28,
+        28,
+        29,
+        29,
+        29,
+        30,
+        30,
+        30,
+        31,
+        31,
+        31,
+        32,
+        32,
+        32,
+        33
+      ]
+    },
+    {
+      "id": "psyshock-assault-vest",
+      "base": {
+        "hp": 100,
+        "atk": 101,
+        "def": 99,
+        "spa": 103,
+        "spd": 97,
+        "spe": 101
+      },
+      "level": 50,
+      "mods": {
+        "defender_item": "Assault Vest",
+        "defense_stage": 2,
+        "special_defense_stage": -2
+      },
+      "move": {
+        "name": "Psyshock",
+        "type": "Psychic",
+        "category": "special",
+        "power": 80
+      },
+      "rolls": [
+        17,
+        17,
+        17,
+        17,
+        17,
+        18,
+        18,
+        18,
+        18,
+        18,
+        19,
+        19,
+        19,
+        19,
+        19,
+        20
+      ]
+    },
+    {
+      "id": "psyshock-fur-coat",
+      "base": {
+        "hp": 100,
+        "atk": 101,
+        "def": 99,
+        "spa": 103,
+        "spd": 97,
+        "spe": 101
+      },
+      "level": 50,
+      "mods": {
+        "defender_ability": "Fur Coat"
+      },
+      "move": {
+        "name": "Psyshock",
+        "type": "Psychic",
+        "category": "special",
+        "power": 80
+      },
+      "rolls": [
+        17,
+        17,
+        17,
+        17,
+        17,
+        18,
+        18,
+        18,
+        18,
+        18,
+        19,
+        19,
+        19,
+        19,
+        19,
+        20
+      ]
+    },
+    {
+      "id": "psyshock-sword-ruin",
+      "base": {
+        "hp": 100,
+        "atk": 101,
+        "def": 99,
+        "spa": 103,
+        "spd": 97,
+        "spe": 101
+      },
+      "level": 50,
+      "mods": {
+        "sword_of_ruin": true
+      },
+      "move": {
+        "name": "Psyshock",
+        "type": "Psychic",
+        "category": "special",
+        "power": 80
+      },
+      "rolls": [
+        42,
+        43,
+        43,
+        44,
+        44,
+        45,
+        45,
+        46,
+        46,
+        47,
+        47,
+        48,
+        48,
+        49,
+        49,
+        50
+      ]
+    },
+    {
+      "id": "psyshock-beads-ruin",
+      "base": {
+        "hp": 100,
+        "atk": 101,
+        "def": 99,
+        "spa": 103,
+        "spd": 97,
+        "spe": 101
+      },
+      "level": 50,
+      "mods": {
+        "beads_of_ruin": true
+      },
+      "move": {
+        "name": "Psyshock",
+        "type": "Psychic",
+        "category": "special",
+        "power": 80
+      },
+      "rolls": [
+        32,
+        32,
+        33,
+        33,
+        33,
+        34,
+        34,
+        34,
+        35,
+        35,
+        36,
+        36,
+        36,
+        37,
+        37,
+        38
+      ]
+    },
+    {
+      "id": "ruin-crit",
+      "base": {
+        "hp": 100,
+        "atk": 101,
+        "def": 99,
+        "spa": 103,
+        "spd": 97,
+        "spe": 101
+      },
+      "level": 50,
+      "mods": {
+        "sword_of_ruin": true,
+        "is_critical": true,
+        "attack_stage": -1,
+        "defense_stage": 2
+      },
+      "move": {
+        "name": "Tackle",
+        "type": "Normal",
+        "category": "physical",
+        "power": 40
+      },
+      "rolls": [
+        46,
+        46,
+        48,
+        48,
+        48,
+        49,
+        49,
+        51,
+        51,
+        51,
+        52,
+        52,
+        52,
+        54,
+        54,
+        55
+      ]
+    },
+    {
+      "id": "ruin-holder",
+      "base": {
+        "hp": 100,
+        "atk": 101,
+        "def": 99,
+        "spa": 103,
+        "spd": 97,
+        "spe": 101
+      },
+      "level": 50,
+      "mods": {
+        "sword_of_ruin": true,
+        "defender_ability": "Sword of Ruin"
+      },
+      "move": {
+        "name": "Tackle",
+        "type": "Normal",
+        "category": "physical",
+        "power": 40
+      },
+      "rolls": [
+        24,
+        24,
+        24,
+        24,
+        24,
+        25,
+        25,
+        25,
+        25,
+        25,
+        27,
+        27,
+        27,
+        27,
+        27,
+        28
+      ]
+    },
+    {
+      "id": "paradox-tie",
+      "base": {
+        "hp": 100,
+        "atk": 100,
+        "def": 100,
+        "spa": 100,
+        "spd": 100,
+        "spe": 100
+      },
+      "level": 50,
+      "mods": {
+        "attacker_ability": "Quark Drive",
+        "attacker_item": "Booster Energy"
+      },
+      "move": {
+        "name": "Tackle",
+        "type": "Normal",
+        "category": "physical",
+        "power": 40
+      },
+      "rolls": [
+        30,
+        30,
+        30,
+        31,
+        31,
+        31,
+        31,
+        33,
+        33,
+        33,
+        33,
+        34,
+        34,
+        34,
+        34,
+        36
+      ]
+    },
+    {
+      "id": "level-1",
+      "base": {
+        "hp": 100,
+        "atk": 101,
+        "def": 99,
+        "spa": 103,
+        "spd": 97,
+        "spe": 101
+      },
+      "level": 1,
+      "mods": {},
+      "move": {
+        "name": "Tackle",
+        "type": "Normal",
+        "category": "physical",
+        "power": 40
+      },
+      "rolls": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        4
+      ]
+    },
+    {
+      "id": "level-20",
+      "base": {
+        "hp": 100,
+        "atk": 101,
+        "def": 99,
+        "spa": 103,
+        "spd": 97,
+        "spe": 101
+      },
+      "level": 20,
+      "mods": {},
+      "move": {
+        "name": "Tackle",
+        "type": "Normal",
+        "category": "physical",
+        "power": 40
+      },
+      "rolls": [
+        12,
+        12,
+        12,
+        12,
+        12,
+        13,
+        13,
+        13,
+        13,
+        13,
+        13,
+        13,
+        13,
+        13,
+        13,
+        15
+      ]
+    },
+    {
+      "id": "level-50",
+      "base": {
+        "hp": 100,
+        "atk": 101,
+        "def": 99,
+        "spa": 103,
+        "spd": 97,
+        "spe": 101
+      },
+      "level": 50,
+      "mods": {},
+      "move": {
+        "name": "Tackle",
+        "type": "Normal",
+        "category": "physical",
+        "power": 40
+      },
+      "rolls": [
+        24,
+        24,
+        24,
+        24,
+        24,
+        25,
+        25,
+        25,
+        25,
+        25,
+        27,
+        27,
+        27,
+        27,
+        27,
+        28
+      ]
+    },
+    {
+      "id": "level-100",
+      "base": {
+        "hp": 100,
+        "atk": 101,
+        "def": 99,
+        "spa": 103,
+        "spd": 97,
+        "spe": 101
+      },
+      "level": 100,
+      "mods": {},
+      "move": {
+        "name": "Tackle",
+        "type": "Normal",
+        "category": "physical",
+        "power": 40
+      },
+      "rolls": [
+        45,
+        45,
+        46,
+        46,
+        48,
+        48,
+        48,
+        49,
+        49,
+        49,
+        51,
+        51,
+        51,
+        52,
+        52,
+        54
+      ]
+    },
+    {
+      "id": "commander-intimidate",
+      "base": {
+        "hp": 100,
+        "atk": 101,
+        "def": 99,
+        "spa": 103,
+        "spd": 97,
+        "spe": 101
+      },
+      "level": 50,
+      "mods": {
+        "commander_active": true,
+        "attack_stage": -1
+      },
+      "move": {
+        "name": "Tackle",
+        "type": "Normal",
+        "category": "physical",
+        "power": 40
+      },
+      "rolls": [
+        34,
+        36,
+        36,
+        36,
+        36,
+        37,
+        37,
+        37,
+        39,
+        39,
+        39,
+        39,
+        40,
+        40,
+        40,
+        42
+      ]
+    },
+    {
+      "id": "commander-defender-crit",
+      "base": {
+        "hp": 100,
+        "atk": 101,
+        "def": 99,
+        "spa": 103,
+        "spd": 97,
+        "spe": 101
+      },
+      "level": 50,
+      "mods": {
+        "defender_commander_active": true,
+        "is_critical": true
+      },
+      "move": {
+        "name": "Tackle",
+        "type": "Normal",
+        "category": "physical",
+        "power": 40
+      },
+      "rolls": [
+        34,
+        36,
+        36,
+        36,
+        36,
+        37,
+        37,
+        37,
+        39,
+        39,
+        39,
+        39,
+        40,
+        40,
+        40,
+        42
+      ]
+    }
+  ]
+}

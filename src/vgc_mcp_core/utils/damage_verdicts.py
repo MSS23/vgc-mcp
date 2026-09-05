@@ -4,6 +4,7 @@ This module provides mathematically correct KO analysis descriptions,
 avoiding misleading statements like "clean 2HKO" when the math doesn't add up.
 """
 
+from collections import Counter
 from dataclasses import dataclass
 from typing import Optional
 
@@ -58,36 +59,12 @@ def calculate_ko_probability(
             guaranteed_ko=None, rolls_that_ohko=0, verdict="No damage"
         )
 
-    # OHKO: Count rolls that deal >= HP
-    ohko_count = sum(1 for r in damage_rolls if r >= defender_hp)
-    ohko_chance = (ohko_count / n_rolls) * 100
-
-    # 2HKO: Check all 256 combinations (16 x 16)
-    twohko_count = 0
-    for r1 in damage_rolls:
-        for r2 in damage_rolls:
-            if r1 + r2 >= defender_hp:
-                twohko_count += 1
-    twohko_chance = (twohko_count / (n_rolls ** 2)) * 100
-
-    # 3HKO: Check all 4096 combinations (16^3)
-    threehko_count = 0
-    for r1 in damage_rolls:
-        for r2 in damage_rolls:
-            for r3 in damage_rolls:
-                if r1 + r2 + r3 >= defender_hp:
-                    threehko_count += 1
-    threehko_chance = (threehko_count / (n_rolls ** 3)) * 100
-
-    # 4HKO: Check all 65536 combinations (16^4)
-    fourhko_count = 0
-    for r1 in damage_rolls:
-        for r2 in damage_rolls:
-            for r3 in damage_rolls:
-                for r4 in damage_rolls:
-                    if r1 + r2 + r3 + r4 >= defender_hp:
-                        fourhko_count += 1
-    fourhko_chance = (fourhko_count / (n_rolls ** 4)) * 100
+    counts = _ko_combination_counts(damage_rolls, 1, defender_hp)
+    ohko_count = counts[0]
+    ohko_chance, twohko_chance, threehko_chance, fourhko_chance = (
+        count / n_rolls ** attacks * 100
+        for attacks, count in enumerate(counts, 1)
+    )
 
     # Determine guaranteed KO (using minimum roll)
     min_damage = min(damage_rolls)
@@ -113,8 +90,32 @@ def calculate_ko_probability(
         fourhko_chance=round(fourhko_chance, 2),
         guaranteed_ko=guaranteed_ko,
         rolls_that_ohko=ohko_count,
-        verdict=verdict
+        verdict=verdict,
+        total_combinations=n_rolls,
     )
+
+
+def _ko_combination_counts(damage_rolls: list[int], hits_per_attack: int, hp: int) -> list[int]:
+    """Count KOs after 1-4 uses, retaining exact multiplicities of equal sums.
+
+    KO is an absorbing bucket: once total damage reaches HP it stays there.
+    The state space is bounded by HP instead of enumerating 16**hits outcomes.
+    """
+    distribution = {0: 1}
+    frequencies = Counter(damage_rolls)
+    counts = []
+    for hit in range(1, hits_per_attack * 4 + 1):
+        next_distribution: dict[int, int] = {}
+        for total, count in distribution.items():
+            for damage, frequency in frequencies.items():
+                new_total = min(hp, total + damage)
+                next_distribution[new_total] = (
+                    next_distribution.get(new_total, 0) + count * frequency
+                )
+        distribution = next_distribution
+        if hit % hits_per_attack == 0:
+            counts.append(distribution.get(hp, 0))
+    return counts
 
 
 def calculate_multi_hit_ko_probability(
@@ -125,8 +126,8 @@ def calculate_multi_hit_ko_probability(
     """
     Calculate exact KO probability for multi-hit moves.
 
-    Each hit has independent random roll, so we must check all
-    16^hit_count combinations.
+    Each hit has an independent random roll. Count their summed distribution
+    exactly without enumerating every combination (16^10 for Population Bomb).
 
     Args:
         damages_per_hit: 16 possible damage values per hit (one per random factor)
@@ -136,42 +137,32 @@ def calculate_multi_hit_ko_probability(
     Returns:
         KOProbability with exact percentages
     """
-    from itertools import product
-
-    combos_that_ko = 0
-    total_combos = len(damages_per_hit) ** hit_count
-
-    # Generate all possible damage combinations
-    for combo in product(damages_per_hit, repeat=hit_count):
-        total_damage = sum(combo)
-        if total_damage >= defender_hp:
-            combos_that_ko += 1
-
-    ohko_chance = (combos_that_ko / total_combos) * 100
-
-    # Determine if it's a guaranteed KO
-    guaranteed_ko = 1 if combos_that_ko == total_combos else None
-
-    # Generate verdict
-    if guaranteed_ko == 1:
-        verdict = "Guaranteed OHKO"
-    elif ohko_chance >= 99.9:
-        verdict = "Guaranteed OHKO"
-    elif ohko_chance > 0:
-        verdict = f"{ohko_chance:.2f}% chance to OHKO"
-    else:
-        verdict = "Does not KO"
-
-    # For multi-hit moves, 2HKO/3HKO don't apply (it's all-or-nothing)
+    if not damages_per_hit or hit_count < 1:
+        raise ValueError("Multi-hit probabilities require damage rolls and at least one hit")
+    outcomes_per_attack = len(damages_per_hit) ** hit_count
+    counts = _ko_combination_counts(damages_per_hit, hit_count, defender_hp)
+    probabilities = [
+        count / outcomes_per_attack ** attacks * 100
+        for attacks, count in enumerate(counts, 1)
+    ]
+    guaranteed_ko = next(
+        (attacks for attacks in range(1, 5)
+         if min(damages_per_hit) * hit_count * attacks >= defender_hp),
+        None,
+    )
+    # 2HKO means two uses of the entire move, including all of its hits.
+    verdict = _format_ko_verdict(
+        probabilities[0], probabilities[1], probabilities[2], probabilities[3], guaranteed_ko
+    )
     return KOProbability(
-        ohko_chance=round(ohko_chance, 2),
-        twohko_chance=0.0,
-        threehko_chance=0.0,
-        fourhko_chance=0.0,
+        ohko_chance=round(probabilities[0], 2),
+        twohko_chance=round(probabilities[1], 2),
+        threehko_chance=round(probabilities[2], 2),
+        fourhko_chance=round(probabilities[3], 2),
         guaranteed_ko=guaranteed_ko,
-        rolls_that_ohko=combos_that_ko,
+        rolls_that_ohko=counts[0],
         verdict=verdict,
-        total_combinations=total_combos
+        total_combinations=outcomes_per_attack,
     )
 
 
@@ -183,30 +174,27 @@ def _format_ko_verdict(
     guaranteed: Optional[int]
 ) -> str:
     """Format KO probabilities into a human-readable verdict."""
+    def chance(value: float, label: str) -> str:
+        # A rounded display must not turn a possible failure into certainty.
+        shown = ">99.99" if value >= 99.995 else f"{value:.2f}"
+        return f"{shown}% chance to {label}"
+
     if guaranteed == 1:
         return "Guaranteed OHKO"
-    elif ohko >= 99.9:
-        return "Guaranteed OHKO"
     elif ohko > 0:
-        return f"{ohko:.2f}% chance to OHKO"
+        return chance(ohko, "OHKO")
     elif guaranteed == 2:
         return "Guaranteed 2HKO"
-    elif twohko >= 99.9:
-        return "Guaranteed 2HKO"
     elif twohko > 0:
-        return f"{twohko:.2f}% chance to 2HKO"
+        return chance(twohko, "2HKO")
     elif guaranteed == 3:
         return "Guaranteed 3HKO"
-    elif threehko >= 99.9:
-        return "Guaranteed 3HKO"
     elif threehko > 0:
-        return f"{threehko:.2f}% chance to 3HKO"
+        return chance(threehko, "3HKO")
     elif guaranteed == 4:
         return "Guaranteed 4HKO"
-    elif fourhko >= 99.9:
-        return "Guaranteed 4HKO"
     elif fourhko > 0:
-        return f"{fourhko:.2f}% chance to 4HKO"
+        return chance(fourhko, "4HKO")
     else:
         return "5+ HKO"
 

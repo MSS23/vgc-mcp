@@ -352,7 +352,7 @@ class TestStatDoublingAbilities:
         mods = DamageModifiers(commander_active=True)
         result = calculate_damage(dondozo, defender, wave_crash, mods)
 
-        assert "Commander (2x all stats)" in result.details.get("modifiers_applied", [])
+        assert "Commander (+2 stat stages)" in result.details.get("modifiers_applied", [])
 
     def test_huge_power_doubles_physical_attack(self):
         """Huge Power doubles the attack stat for physical moves."""

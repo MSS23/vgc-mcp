@@ -175,7 +175,14 @@ class SmogonStatsClient:
         try:
             response = await client.get(url)
             if response.status_code == 200:
-                data = response.json()
+                try:
+                    data = response.json()
+                except ValueError:
+                    logger.warning(f"Invalid Smogon JSON for {url}")
+                    return None
+                if not isinstance(data, dict) or not isinstance(data.get("data"), dict):
+                    logger.warning(f"Invalid Smogon chaos payload for {url}")
+                    return None
                 self.cache.set("smogon", cache_key, value=data)
                 logger.debug(f"Fetched Smogon stats: {month}/{format_name}/{rating}")
                 return data
@@ -335,13 +342,23 @@ class SmogonStatsClient:
                     if v / item_total > 0.01
                 }
 
+                # Chaos stores weighted Pokemon occurrences, not percentages.
+                # Each Pokemon contributes one ability/item/spread, up to four
+                # moves and up to five teammates. Normalize all inclusion rates
+                # by Pokemon weight (never by the number of move/team slots).
+                pokemon_weight = (
+                    sum(mon_data.get("Abilities", {}).values())
+                    or sum(items.values())
+                    or sum(mon_data.get("Spreads", {}).values())
+                    or 1
+                )
+
                 # Process moves
                 moves = mon_data.get("Moves", {})
-                move_total = sum(moves.values()) or 1
                 moves_pct = {
-                    k: round(v / move_total * 100, 1)
+                    k: round(v / pokemon_weight * 100, 1)
                     for k, v in sorted(moves.items(), key=lambda x: -x[1])
-                    if v / move_total > 0.01
+                    if v / pokemon_weight > 0.01 and k.lower() not in ("", "nothing")
                 }
 
                 # Process abilities
@@ -368,11 +385,10 @@ class SmogonStatsClient:
 
                 # Process teammates
                 teammates = mon_data.get("Teammates", {})
-                teammate_total = sum(teammates.values()) or 1
                 teammates_pct = {
-                    k: round(v / teammate_total * 100, 1)
+                    k: round(v / pokemon_weight * 100, 1)
                     for k, v in sorted(teammates.items(), key=lambda x: -x[1])[:15]
-                    if v / teammate_total > 0.01
+                    if v / pokemon_weight > 0.01
                 }
 
                 # Process Tera types
@@ -465,6 +481,10 @@ class SmogonStatsClient:
             "top_moves": [{"name": k, "usage": v} for k, v in top_moves],
             "top_spreads": top_spreads,
             "top_tera_types": [{"type": k, "usage": v} for k, v in top_tera],
+            "set_methodology": (
+                "Independent usage rankings from Smogon chaos stats. Items, abilities, "
+                "moves and spreads are marginal frequencies, not observed complete sets."
+            ),
             "_meta": usage.get("_meta", {}),
         }
 
@@ -563,86 +583,43 @@ class SmogonStatsClient:
         Returns:
             Comparison data showing current vs previous month
         """
-        months = self._get_recent_months(2)
-
-        if len(months) < 2:
-            return None
-
-        current_month = months[0]
-        previous_month = months[1]
-
-        # Get current month stats
-        current_stats = None
-        previous_stats = None
-
+        # Resolve the actual latest dataset first. During publication delays,
+        # the previous calendar month may be unavailable; comparing against a
+        # guessed month could otherwise compare the same dataset to itself.
         try:
             current_stats = await self.get_pokemon_usage(pokemon_name, format_name, rating)
         except SmogonStatsError:
-            pass
-
-        # Try to get previous month stats
-        try:
-            # Temporarily override to get previous month
-            formats = [format_name] if format_name else self.ACTIVE_VGC_FORMATS
-            ratings = self._ratings_to_try(rating, formats)
-
-            for fmt in formats:
-                data = None
-                for resolved_rating in ratings:
-                    data = await self._try_fetch_stats(
-                        previous_month,
-                        fmt,
-                        resolved_rating,
-                    )
-                    if data:
-                        break
-                if data:
-                    # Extract Pokemon data from previous month. Reorder a
-                    # leading "Mega X" into Smogon's "X-Mega" key order first.
-                    name_normalized = (
-                        reorder_mega_prefix(pokemon_name).replace(" ", "").replace("-", "")
-                    )
-
-                    for mon_name, mon_data in data.get("data", {}).items():
-                        if mon_name.lower().replace(" ", "").replace("-", "") == name_normalized:
-                            # Process previous month data
-                            usage_raw = mon_data.get("usage", 0)
-
-                            spreads = mon_data.get("Spreads", {})
-                            spread_total = sum(spreads.values()) or 1
-                            spreads_processed = []
-                            prev_is_champions = self._is_champions_format(fmt)
-                            for spread_str, weight in sorted(spreads.items(), key=lambda x: -x[1])[
-                                :5
-                            ]:
-                                pct = weight / spread_total
-                                parsed = self._parse_spread(spread_str, champions=prev_is_champions)
-                                parsed["usage"] = round(pct * 100, 1)
-                                spreads_processed.append(parsed)
-
-                            items = mon_data.get("Items", {})
-                            item_total = sum(items.values()) or 1
-                            items_pct = {
-                                k: round(v / item_total * 100, 1)
-                                for k, v in sorted(items.items(), key=lambda x: -x[1])[:5]
-                            }
-
-                            previous_stats = {
-                                "name": mon_name,
-                                "usage_percent": round(usage_raw * 100, 2),
-                                "spreads": spreads_processed,
-                                "items": items_pct,
-                                "month": previous_month,
-                                "format": fmt,
-                            }
-                            break
-                    if previous_stats:
-                        break
-        except Exception:
-            pass
-
-        if not current_stats and not previous_stats:
             return None
+        if not current_stats:
+            return None
+
+        meta = current_stats["_meta"]
+        current_month = meta["month"]
+        year, month_number = map(int, current_month.split("-"))
+        if month_number == 1:
+            year, month_number = year - 1, 12
+        else:
+            month_number -= 1
+        previous_month = f"{year:04d}-{month_number:02d}"
+
+        # Compare like-for-like: the same ladder and resolved rating, with an
+        # explicit month. Reuse normal parsing so form aliases and SPs work too.
+        previous_stats = None
+        state = self._session_state()
+        try:
+            previous_stats = await self.get_pokemon_usage(
+                pokemon_name, meta["format"], meta["rating"], previous_month
+            )
+            if previous_stats:
+                previous_stats = dict(previous_stats)
+                previous_stats["month"] = previous_month
+                previous_stats["format"] = meta["format"]
+        except SmogonStatsError:
+            pass
+        finally:
+            # Historical comparisons must not change the session's active source.
+            state.current_format = meta["format"]
+            state.current_month = current_month
 
         # Build comparison
         comparison = {

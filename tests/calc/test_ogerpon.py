@@ -210,16 +210,21 @@ class TestOgerponEmbodyAspect:
         mods_no_aspect = DamageModifiers(defender_item="cornerstone-mask")
         result_no_aspect = calculate_damage(attacker, ogerpon_cornerstone, surging_strikes, mods_no_aspect)
 
-        # With Embody Aspect (+1 Defense = 0.67x damage taken)
+        # Surging Strikes always crits: positive Defense stages are ignored.
         mods_aspect = DamageModifiers(
             defender_ability="embody-aspect",
             defender_item="cornerstone-mask"
         )
         result_aspect = calculate_damage(attacker, ogerpon_cornerstone, surging_strikes, mods_aspect)
 
-        # Should take less damage (defense +1 stage = 1.5x defense = 0.67x damage)
-        ratio = result_aspect.max_damage / result_no_aspect.max_damage
-        assert 0.60 <= ratio <= 0.72, f"Expected ~0.67x ratio, got {ratio}"
+        assert result_aspect.rolls == result_no_aspect.rolls
+
+        # An ordinary physical hit still benefits from the Defense stage.
+        liquidation = Move(name="liquidation", type="Water", category=MoveCategory.PHYSICAL,
+                           power=85, accuracy=100, pp=10)
+        normal = calculate_damage(attacker, ogerpon_cornerstone, liquidation, mods_no_aspect)
+        boosted = calculate_damage(attacker, ogerpon_cornerstone, liquidation, mods_aspect)
+        assert 0.60 <= boosted.max_damage / normal.max_damage <= 0.72
 
     def test_wellspring_embody_aspect_spdef_boost(self):
         """Embody Aspect (Wellspring) gives +1 Special Defense stage when Tera'd."""

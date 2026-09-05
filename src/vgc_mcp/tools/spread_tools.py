@@ -353,8 +353,7 @@ class DamageCache:
             result = self.get_damage(i, hp_ev, def_ev, spd_ev, nature, defender_tera_type)
 
             # Calculate survival percentage (count rolls that don't KO)
-            survive_rolls = sum(1 for roll in result.rolls if roll < result.defender_hp)
-            survival_pct = (survive_rolls / 16) * 100
+            survival_pct = result.survival_percent
 
             survives = survival_pct >= target_survival
             results.append((survives, result))
@@ -555,8 +554,7 @@ def _find_min_bulk_for_threat(
         result = cache.get_damage(threat_idx, hp_ev, def_ev, spd_ev, nature, defender_tera_type)
 
         # Calculate survival percentage
-        survive_rolls = sum(1 for roll in result.rolls if roll < result.defender_hp)
-        survival_pct = (survive_rolls / 16) * 100
+        survival_pct = result.survival_percent
 
         if survival_pct >= target_survival:
             return test_ev
@@ -1455,12 +1453,11 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         for spec in prepared:
             defender = optimized_pokemon
             result = calculate_damage(spec["attacker"], defender, spec["move"], spec["modifiers"])
-            survive_rolls = sum(1 for r in result.rolls if r < result.defender_hp)
             breakdown.append({
                 "attacker": spec["attacker"].name,
                 "move": spec["move"].name,
                 "damage_percent": f"{format_percent(result.min_percent)}-{format_percent(result.max_percent)}%",
-                "survival_pct": (survive_rolls / 16) * 100,
+                "survival_pct": result.survival_percent,
                 "survives": result.max_percent < 100,
             })
 
@@ -3717,10 +3714,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         attack_stage=intim2_stage if is_physical2 else 0,
                     )
                     result2 = calculate_damage(attacker2, defender, move2, modifiers2)
-                    survive_rolls1 = sum(1 for r in result1.rolls if r < result1.defender_hp)
-                    survive_rolls2 = sum(1 for r in result2.rolls if r < result2.defender_hp)
-                    survival_pct1 = (survive_rolls1 / 16) * 100
-                    survival_pct2 = (survive_rolls2 / 16) * 100
+                    survival_pct1 = result1.survival_percent
+                    survival_pct2 = result2.survival_percent
                     survives1 = survival_pct1 >= target_survival
                     survives2 = survival_pct2 >= target_survival
                     margin = min(100 - result1.max_percent, 100 - result2.max_percent)
@@ -3854,10 +3849,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         attack_stage=intim2_stage if is_physical2 else 0,
                     )
                     result2 = calculate_damage(attacker2, defender, move2, modifiers2)
-                    survive_rolls1 = sum(1 for r in result1.rolls if r < result1.defender_hp)
-                    survive_rolls2 = sum(1 for r in result2.rolls if r < result2.defender_hp)
-                    survival_pct1 = (survive_rolls1 / 16) * 100
-                    survival_pct2 = (survive_rolls2 / 16) * 100
+                    survival_pct1 = result1.survival_percent
+                    survival_pct2 = result2.survival_percent
                     survives1 = survival_pct1 >= target_survival
                     survives2 = survival_pct2 >= target_survival
                     margin = min(100 - result1.max_percent, 100 - result2.max_percent)
@@ -4517,8 +4510,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 threat_analysis = []
                 for i, (survives, result) in enumerate(best_results):
                     threat = prepared_threats[i]
-                    survive_rolls = sum(1 for roll in result.rolls if roll < result.defender_hp)
-                    survival_pct = (survive_rolls / 16) * 100
+                    survival_pct = result.survival_percent
 
                     # Format attacker spread
                     atk_ev_str = f"{threat.evs}"

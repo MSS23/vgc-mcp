@@ -1,7 +1,7 @@
 # tests/ — Test Suite
 
-~1,500 tests in ~45s. Almost everything is pure-function testing with no
-network; the 10 tests that hit live PokeAPI/Smogon are marked
+Over 1,600 offline tests. Almost everything is pure-function testing with no
+network; the 12 tests that hit live PokeAPI/Smogon are marked
 `@pytest.mark.integration` and **excluded by default** (`addopts` in
 `pyproject.toml`). Run them explicitly with `python -m pytest -m integration`.
 
@@ -38,6 +38,21 @@ Directories mirror the architecture — find the code, find its tests:
 code under test. If a refactor changes any of these numbers, the refactor is
 wrong, full stop. When you fix a damage bug, add the Showdown-verified value
 here.
+
+`calc/test_damage_audit.py` adds 21 exact-roll cases from `@smogon/calc 0.11.0`
+and regressions for multi-hit optimization. The oracle inputs and expected rolls
+are stored in `calc/damage_audit_cases.json`. To refresh expectations using an
+independently installed calculator (never the implementation under test):
+
+```bash
+node scripts/generate_damage_audit.cjs /absolute/path/to/node_modules/@smogon/calc
+```
+
+`calc/test_stat_formula_audit.py` checks more than 400,000 stat equations against
+integer formulas. `calc/test_ko_probability_accuracy.py` checks exact independent
+roll counts, ten-hit performance, and certainty labels. The opt-in
+`api/test_smogon_live.py` verifies both EV and SP common sets reach the shared
+calculation helper from real chaos datasets using a fresh temporary cache.
 
 ## Running
 

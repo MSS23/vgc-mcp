@@ -669,8 +669,7 @@ def _min_total_invest_for_survival(me_base, me_types, me_name, def_stat,
                                     defender_ability=me_ability,
                                     attack_stage=intim_stage if is_physical else 0),
                 )
-                survived = sum(1 for r in result.rolls if r < result.defender_hp)
-                if survived >= threshold_rolls:
+                if result.survival_percent >= threshold_rolls / 16 * 100:
                     best = (hp_sp, def_sp)
                     best_total = total
                     break
@@ -697,9 +696,7 @@ def _min_total_invest_for_survival(me_base, me_types, me_name, def_stat,
                                 defender_ability=me_ability,
                                 attack_stage=intim_stage if is_physical else 0),
             )
-            # Count rolls that don't KO
-            survived = sum(1 for r in result.rolls if r < result.defender_hp)
-            if survived >= threshold_rolls:
+            if result.survival_percent >= threshold_rolls / 16 * 100:
                 best = (hp_ev, def_ev)
                 best_total = hp_ev + def_ev
                 # Found a winner at this hp_ev — increasing def_ev only worsens cost

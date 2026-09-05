@@ -214,8 +214,7 @@ def register_multi_threat_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon_cli
                     threat_data["move"],
                     mods,
                 )
-                survives = sum(1 for roll in result.rolls if roll < result.defender_hp)
-                survival_pct = (survives / 16) * 100
+                survival_pct = result.survival_percent
                 return {
                     "threat_name": threat_data["name"],
                     "move_name": threat_data["move_name"],

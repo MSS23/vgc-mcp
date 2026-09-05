@@ -136,13 +136,19 @@ Damage calc is verified against **Pokémon Showdown** — the source of truth us
 | Pokémon Showdown  | 149-177   | 78.4 - 93.1%  | guaranteed 2HKO   |
 | **VGC MCP**       | **149-177** | **78.4-93.1%** | **guaranteed 2HKO** |
 
-**1,493 tests** cover the damage formula across all generations of items / abilities / Tera / weather / multi-hit interactions, plus end-to-end MCP tool registration and production-bug regression tests for known-tricky interactions (Sword of Ruin + crits, Sheer Force + Life Orb, Ogerpon mask routing).
+The test suite covers Gen 9 damage, stats, items, abilities, Tera, weather, multi-hit probabilities, and MCP tool registration. An additional independent oracle suite pins exact rolls from `@smogon/calc`; an integer-formula grid checks mainline EVs and Champions Stat Points. See the [September 2026 audit](docs/audit-2026-09-05.md) for results and remaining calculation limits.
 
 Meta sets come directly from Smogon's monthly `chaos/*.json` datasets. The
 active MCP regulation selects the matching Reg I / Champions MA / Champions MB
 format, with 1630 as the default competitive weighting. Every usage response
 reports its resolved format, month, rating, and source URL; callers may request
 0 (unweighted), 1500 (average ladder), 1630 (competitive), or 1760 (elite).
+
+Common-set components are independent usage rankings: chaos data does not
+identify which complete item/ability/moves/spread combination was used together.
+Move and teammate percentages measure inclusion among that Pokemon's weighted
+occurrences. Trend comparisons use the actual resolved month and the same ladder
+and rating for the preceding month.
 
 ---
 
@@ -152,7 +158,7 @@ Full list: [`docs/tools-catalog.md`](docs/tools-catalog.md). The headline tools:
 
 | Category | Key tools |
 |---|---|
-| **Damage** | `calculate_damage_output` ⭐ (handles everything), `calculate_bulk_offensive_calcs`, `find_ko_evs`, `find_breakpoint` |
+| **Damage** | `calculate_damage_output`, `calculate_bulk_offensive_calcs`, `find_ko_evs`, `find_breakpoint` |
 | **Survival** | `find_survival_evs`, `optimize_multi_survival_spread` (3-6 threats), `find_breakpoint` (Pareto-optimal cheapest spread) |
 | **Speed** | `find_speed_evs_to_outspeed`, `find_breakpoint`, `outspeed_probability`, `visualize_speed_tiers` |
 | **Live battle** | `start_battle`, `record_turn`, `suggest_next_move`, `get_battle_state`, `end_battle` |

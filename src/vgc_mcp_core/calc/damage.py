@@ -544,6 +544,21 @@ class DamageResult:
     ko_probability: Optional[KOProbability] = None  # Detailed KO probability analysis
 
     @property
+    def ohko_percent(self) -> float:
+        """Unrounded KO probability; multi-hit display rolls are not equiprobable."""
+        if self.ko_probability is not None:
+            return (
+                100 * self.ko_probability.rolls_that_ohko
+                / self.ko_probability.total_combinations
+            )
+        return 100 * sum(r >= self.defender_hp for r in self.rolls) / len(self.rolls)
+
+    @property
+    def survival_percent(self) -> float:
+        """Probability of remaining above zero HP after the attack."""
+        return 100 - self.ohko_percent
+
+    @property
     def damage_range(self) -> str:
         """Formatted damage range string."""
         min_pct = format_percent(self.min_percent)
@@ -598,12 +613,12 @@ def calculate_damage(
     def _highest_non_hp_stat(p: PokemonBuild) -> str:
         # Format-aware: delegate to calculate_all_stats so Champions builds
         # (which carry SPs, not EVs) pick the actually-invested stat rather
-        # than the highest base stat. Speed wins ties (game-accurate).
+        # than the highest base stat. Ties use Atk, Def, SpA, SpD, Spe order.
         from .stats import calculate_all_stats
         stats = {k: v for k, v in calculate_all_stats(p).items() if k != "hp"}
         max_value = max(stats.values())
         tied = [s for s, v in stats.items() if v == max_value]
-        return "speed" if "speed" in tied else tied[0]
+        return tied[0]
 
     def _paradox_active(
         ability_norm: str,
@@ -884,119 +899,87 @@ def calculate_damage(
         attack_stat = attacker_stats[attack_stat_name]
         defense_stat = defender_stats[defense_stat_name]
 
-    # Apply stat stage modifiers
-    # Critical hits ignore:
-    # - Attacker's negative Attack/SpA stages (e.g., Intimidate drops)
-    # - Defender's positive Defense/SpD stages (boosts)
-    if is_physical:
-        # Crits ignore negative attack stages (Intimidate)
-        if modifiers.is_critical and modifiers.attack_stage < 0:
-            pass  # Don't apply negative attack stage on crit
-        else:
-            attack_stat = apply_stat_stage(attack_stat, modifiers.attack_stage)
-        # Crits ignore positive defense stages
-        if not modifiers.is_critical or modifiers.defense_stage < 0:
-            defense_stat = apply_stat_stage(defense_stat, modifiers.defense_stage)
-    else:
-        # Crits ignore negative special attack stages
-        if modifiers.is_critical and modifiers.special_attack_stage < 0:
-            pass  # Don't apply negative SpA stage on crit
-        else:
-            attack_stat = apply_stat_stage(attack_stat, modifiers.special_attack_stage)
-        # Crits ignore positive special defense stages
-        if not modifiers.is_critical or modifiers.special_defense_stage < 0:
-            defense_stat = apply_stat_stage(defense_stat, modifiers.special_defense_stage)
+    # Critical hits ignore negative offensive stages and positive defensive
+    # stages. Psyshock/Psystrike/Secret Sword use Defense despite being special.
+    attack_stage = modifiers.attack_stage if is_physical else modifiers.special_attack_stage
+    if modifiers.commander_active:
+        attack_stage += 2
+    defense_stage = (
+        modifiers.defense_stage if defense_stat_name == "defense"
+        else modifiers.special_defense_stage
+    )
+    if modifiers.defender_commander_active:
+        defense_stage += 2
+    defender_ability = normalize_ability(modifiers.defender_ability or "")
+    defender_item = normalize_item(modifiers.defender_item or "")
+    if defender_ability in ("embody-aspect", "embody-aspect-wellspring", "embody-aspect-cornerstone"):
+        if (
+            (defense_stat_name == "special_defense" and defender_item == "wellspring-mask")
+            or (defense_stat_name == "defense" and defender_item == "cornerstone-mask")
+        ):
+            defense_stage += 1
+    if not modifiers.is_critical or attack_stage > 0:
+        attack_stat = apply_stat_stage(attack_stat, attack_stage)
+    if not modifiers.is_critical or defense_stage < 0:
+        defense_stat = apply_stat_stage(defense_stat, defense_stage)
+
+    attack_mods: list[int] = []
+    defense_mods: list[int] = []
 
     # Apply Choice Band/Specs (to stat, not damage)
     if modifiers.attacker_item:
         item = normalize_item(modifiers.attacker_item)
         if item == "choice-band" and is_physical:
-            attack_stat = apply_mod(attack_stat, MOD_CHOICE_BOOST)
+            attack_mods.append(MOD_CHOICE_BOOST)
         elif item == "choice-specs" and not is_physical:
-            attack_stat = apply_mod(attack_stat, MOD_CHOICE_BOOST)
+            attack_mods.append(MOD_CHOICE_BOOST)
 
     # Apply stat-modifying abilities
     if modifiers.attacker_ability:
         ability = normalize_ability(modifiers.attacker_ability)
         # Huge Power / Pure Power double Attack stat
         if ability in ("huge-power", "pure-power") and is_physical:
-            attack_stat = apply_mod(attack_stat, MOD_STAT_DOUBLE)
+            attack_mods.append(MOD_STAT_DOUBLE)
         # Guts (1.5x Attack when statused) - Ursaluna, Conkeldurr, Heracross
         elif ability == "guts" and modifiers.attacker_statused and is_physical:
-            attack_stat = apply_mod(attack_stat, MOD_GUTS)
+            attack_mods.append(MOD_GUTS)
         # Gorilla Tactics (1.5x Attack, locked into move) - Darmanitan-Galar
         elif ability == "gorilla-tactics" and is_physical:
-            attack_stat = apply_mod(attack_stat, MOD_CHOICE_BOOST)
+            attack_mods.append(MOD_CHOICE_BOOST)
         # Flare Boost (1.5x SpA when burned) - Drifloon/Drifblim
         elif ability == "flare-boost" and modifiers.attacker_burned and not is_physical:
-            attack_stat = apply_mod(attack_stat, MOD_CHOICE_BOOST)
+            attack_mods.append(MOD_CHOICE_BOOST)
         # Toxic Boost (1.5x Atk when poisoned) - Zangoose
         elif ability == "toxic-boost" and modifiers.attacker_statused and is_physical:
             # Note: Toxic Boost is specifically for poison, but we use attacker_statused for simplicity
-            attack_stat = apply_mod(attack_stat, MOD_CHOICE_BOOST)
+            attack_mods.append(MOD_CHOICE_BOOST)
         # Orichalcum Pulse (1.333x Attack in Sun) - Koraidon
         elif ability == "orichalcum-pulse" and modifiers.weather == "sun":
             if is_physical:
-                attack_stat = apply_mod(attack_stat, MOD_ORICHALCUM)
+                attack_mods.append(MOD_ORICHALCUM)
         # Hadron Engine (1.333x SpA in Electric Terrain) - Miraidon
         elif ability == "hadron-engine" and modifiers.terrain == "electric":
             if not is_physical:
-                attack_stat = apply_mod(attack_stat, MOD_HADRON)
-
-    # Embody Aspect (Ogerpon): +1 to a specific stat based on mask form
-    # This is a stat stage boost that activates on entry
-    # - Teal Mask: +1 Speed (doesn't affect damage calc directly)
-    # - Hearthflame Mask: +1 Attack
-    # - Wellspring Mask: +1 Special Defense
-    # - Cornerstone Mask: +1 Defense
-    #
-    # NOTE: Hearthflame's +1 Attack is applied EXACTLY ONCE via the automatic
-    # attack_stage bump near the top of this function (see "Embody Aspect" stage
-    # bump). It must NOT also be applied here, or it would be double-counted
-    # (~2.24x instead of 1.5x). Only the defender-side masks (Wellspring SpD /
-    # Cornerstone Def) are applied here, since there is no stage bump for those.
-    if modifiers.defender_ability:
-        def_ability = normalize_ability(modifiers.defender_ability)
-        if def_ability == "embody-aspect":
-            def_item = normalize_item(modifiers.defender_item or "")
-            if def_item == "wellspring-mask" and not is_physical:
-                # +1 Special Defense stage = floor(stat * 3 / 2)
-                defense_stat = apply_stat_stage(defense_stat, 1)
-            elif def_item == "cornerstone-mask" and is_physical:
-                # +1 Defense stage = floor(stat * 3 / 2)
-                defense_stat = apply_stat_stage(defense_stat, 1)
-
-    # Commander ability (Dondozo + Tatsugiri combo)
-    # When Commander is active, Dondozo's Attack, Defense, SpA, SpD, and Speed are doubled
-    # For offensive calcs: doubles Dondozo's attacking stat (Attack or SpA)
-    # For defensive calcs: doubles Dondozo's defensive stat (Defense or SpD)
-    commander_boost_applied = False
-    if modifiers.commander_active:
-        attack_stat = apply_mod(attack_stat, MOD_STAT_DOUBLE)
-        commander_boost_applied = True
-
-    # Defender has Commander active - doubles their defensive stat
-    if modifiers.defender_commander_active:
-        defense_stat = apply_mod(defense_stat, MOD_STAT_DOUBLE)
+                attack_mods.append(MOD_HADRON)
 
     # Apply Ruin abilities (field effects, NOT stat stages).
     # These always apply even on critical hits because crits only ignore
     # stat stage changes, not ability-based multipliers.
     # Sword of Ruin (Chien-Pao): Lowers foe Defense to 0.75x
-    if modifiers.sword_of_ruin and is_physical:
-        defense_stat = apply_mod(defense_stat, MOD_RUIN)
+    if modifiers.sword_of_ruin and defense_stat_name == "defense" and normalize_ability(modifiers.defender_ability or "") != "sword-of-ruin":
+        defense_mods.append(MOD_RUIN)
 
     # Beads of Ruin (Chi-Yu): Lowers foe Special Defense to 0.75x
-    if modifiers.beads_of_ruin and not is_physical:
-        defense_stat = apply_mod(defense_stat, MOD_RUIN)
+    if modifiers.beads_of_ruin and defense_stat_name == "special_defense" and normalize_ability(modifiers.defender_ability or "") != "beads-of-ruin":
+        defense_mods.append(MOD_RUIN)
 
     # Tablets of Ruin (Wo-Chien): Lowers foe Attack to 0.75x
-    if modifiers.tablets_of_ruin and is_physical:
-        attack_stat = apply_mod(attack_stat, MOD_RUIN)
+    if modifiers.tablets_of_ruin and is_physical and normalize_ability(modifiers.attacker_ability or "") != "tablets-of-ruin":
+        attack_mods.append(MOD_RUIN)
 
     # Vessel of Ruin (Ting-Lu): Lowers foe Special Attack to 0.75x
-    if modifiers.vessel_of_ruin and not is_physical:
-        attack_stat = apply_mod(attack_stat, MOD_RUIN)
+    if modifiers.vessel_of_ruin and not is_physical and normalize_ability(modifiers.attacker_ability or "") != "vessel-of-ruin":
+        attack_mods.append(MOD_RUIN)
 
     # Apply Protosynthesis/Quark Drive boosts (1.3x, or 1.5x for Speed)
     # These boost the attacker's relevant stat if it matches the boosted stat
@@ -1004,24 +987,37 @@ def calculate_damage(
         if boost_stat:
             boost_mod = MOD_PARADOX_1_5 if boost_stat == "speed" else MOD_PARADOX_1_3
             if boost_stat == "attack" and is_physical:
-                attack_stat = apply_mod(attack_stat, boost_mod)
+                attack_mods.append(boost_mod)
             elif boost_stat == "special_attack" and not is_physical:
-                attack_stat = apply_mod(attack_stat, boost_mod)
+                attack_mods.append(boost_mod)
 
     # Apply defender's Protosynthesis/Quark Drive boosts
     for boost_stat in [modifiers.defender_protosynthesis_boost, modifiers.defender_quark_drive_boost]:
         if boost_stat:
             boost_mod = MOD_PARADOX_1_5 if boost_stat == "speed" else MOD_PARADOX_1_3
-            if boost_stat == "defense" and is_physical:
-                defense_stat = apply_mod(defense_stat, boost_mod)
-            elif boost_stat == "special_defense" and not is_physical:
-                defense_stat = apply_mod(defense_stat, boost_mod)
+            if boost_stat == "defense" and defense_stat_name == "defense":
+                defense_mods.append(boost_mod)
+            elif boost_stat == "special_defense" and defense_stat_name == "special_defense":
+                defense_mods.append(boost_mod)
 
     # Apply Assault Vest (1.5x SpD for special moves)
     if modifiers.defender_item:
         def_item = normalize_item(modifiers.defender_item)
-        if def_item == "assault-vest" and not is_physical:
-            defense_stat = apply_mod(defense_stat, MOD_ASSAULT_VEST)
+        if def_item == "assault-vest" and defense_stat_name == "special_defense":
+            defense_mods.append(MOD_ASSAULT_VEST)
+
+    # These abilities alter the attacking stat in Gen 9; halving final
+    # damage instead changes rounding and incorrectly halves the formula's +2.
+    defender_ability = normalize_ability(modifiers.defender_ability or "")
+    if not attacker_ignores_abilities:
+        if (
+            (defender_ability == "thick-fat" and effective_move_type in ("Fire", "Ice"))
+            or (defender_ability in ("heatproof", "water-bubble") and effective_move_type == "Fire")
+            or (defender_ability == "purifying-salt" and effective_move_type == "Ghost")
+        ):
+            attack_mods.append(MOD_THICK_FAT)
+        if defender_ability == "fur-coat" and defense_stat_name == "defense":
+            defense_mods.append(MOD_STAT_DOUBLE)
 
     # Get base power (may be variable for special moves)
     power = move.power
@@ -1080,6 +1076,8 @@ def calculate_damage(
     # (each with its own poke_round) produces off-by-one errors when several
     # stack (e.g. Tough Claws + type-boost item).
     bp_mods: list[int] = []
+    if not attacker_ignores_abilities and defender_ability == "dry-skin" and effective_move_type == "Fire":
+        bp_mods.append(MOD_DRY_SKIN_FIRE)
 
     # Apply power modifiers from abilities (Technician, etc.)
     if modifiers.attacker_ability:
@@ -1218,8 +1216,9 @@ def calculate_damage(
         chained_bp = chain_mods(bp_mods)
         power = max(1, poke_round(power * chained_bp / 4096))
 
-    # Level constant for level 50: floor(2*50/5+2) = 22
-    level_factor = 22
+    attack_stat = max(1, apply_mod(attack_stat, chain_mods(attack_mods)))
+    defense_stat = max(1, apply_mod(defense_stat, chain_mods(defense_mods)))
+    level_factor = 2 * attacker.level // 5 + 2
 
     # Base damage formula
     # floor(floor(floor(level_factor * power * atk / def) / 50) + 2)
@@ -1255,7 +1254,7 @@ def calculate_damage(
             modifiers.attacker_ability
             and normalize_ability(modifiers.attacker_ability) == "sniper"
         )
-        base_damage = apply_mod(base_damage, MOD_SNIPER_CRIT if is_sniper else MOD_CRIT)
+        base_damage = apply_mod(base_damage, MOD_CRIT)
         applied_mods.append("Critical (2.25x, Sniper)" if is_sniper else "Critical (1.5x)")
 
     # Pre-calculate STAB modifier (4096-based)
@@ -1279,6 +1278,8 @@ def calculate_damage(
 
     # Pre-calculate final modifier chain (screens, items, abilities)
     final_mods = []
+    if modifiers.is_critical and normalize_ability(modifiers.attacker_ability or "") == "sniper":
+        final_mods.append(MOD_CRIT)
 
     # Screens — IGNORED on a critical hit (Reflect/Light Screen/Aurora Veil).
     if not modifiers.is_critical:
@@ -1331,30 +1332,6 @@ def calculate_damage(
                 final_mods.append(MOD_FLUFFY_CONTACT)
             if effective_move_type == "Fire":
                 final_mods.append(MOD_FLUFFY_FIRE)
-
-        # Thick Fat (0.5x Fire and Ice damage)
-        if def_ability == "thick-fat" and effective_move_type in ("Fire", "Ice"):
-            final_mods.append(MOD_THICK_FAT)
-
-        # Purifying Salt (0.5x Ghost damage) - Garganacl
-        if def_ability == "purifying-salt" and effective_move_type == "Ghost":
-            final_mods.append(MOD_PURIFYING_SALT)
-
-        # Heatproof (0.5x Fire damage) - Bronzong
-        if def_ability == "heatproof" and effective_move_type == "Fire":
-            final_mods.append(MOD_HEATPROOF)
-
-        # Water Bubble (0.5x Fire damage taken) - Araquanid
-        if def_ability == "water-bubble" and effective_move_type == "Fire":
-            final_mods.append(MOD_WATER_BUBBLE_DEF)
-
-        # Dry Skin (1.25x Fire damage taken) - Toxicroak, Heliolisk
-        if def_ability == "dry-skin" and effective_move_type == "Fire":
-            final_mods.append(MOD_DRY_SKIN_FIRE)
-
-        # Fur Coat (0.5x physical damage) - Alolan Persian, Furfrou
-        if def_ability == "fur-coat" and is_physical:
-            final_mods.append(MOD_FUR_COAT)
 
         # Punk Rock (0.5x sound damage taken) - Toxtricity
         if def_ability == "punk-rock" and move_name_normalized in SOUND_MOVES:
@@ -1550,8 +1527,8 @@ def calculate_damage(
         applied_mods.append("Parental Bond (2nd hit 0.25x)")
 
     # Add Commander to mods
-    if commander_boost_applied:
-        applied_mods.append("Commander (2x all stats)")
+    if modifiers.commander_active:
+        applied_mods.append("Commander (+2 stat stages)")
 
     return DamageResult(
         min_damage=min_damage,
@@ -1914,8 +1891,7 @@ def calculate_ko_threshold(
 
             result = calculate_damage(test_attacker, defender, move, modifiers)
 
-            kos = sum(1 for r in result.rolls if r >= result.defender_hp)
-            ko_pct = (kos / 16) * 100
+            ko_pct = result.ohko_percent
 
             if ko_pct >= target_ko_chance:
                 return {
@@ -1942,8 +1918,7 @@ def calculate_ko_threshold(
         result = calculate_damage(test_attacker, defender, move, modifiers)
 
         # Calculate actual KO chance from rolls
-        kos = sum(1 for r in result.rolls if r >= result.defender_hp)
-        ko_pct = (kos / 16) * 100
+        ko_pct = result.ohko_percent
 
         if ko_pct >= target_ko_chance:
             return {
@@ -2007,8 +1982,7 @@ def calculate_bulk_threshold(
 
                 result = calculate_damage(attacker, test_defender, move, modifiers)
 
-                survives = sum(1 for r in result.rolls if r < result.defender_hp)
-                survival_pct = (survives / 16) * 100
+                survival_pct = result.survival_percent
 
                 if survival_pct >= target_survival_chance:
                     # Prefer lower total SP, or higher HP when totals are equal.
@@ -2052,8 +2026,7 @@ def calculate_bulk_threshold(
             result = calculate_damage(attacker, test_defender, move, modifiers)
 
             # Calculate survival chance
-            survives = sum(1 for r in result.rolls if r < result.defender_hp)
-            survival_pct = (survives / 16) * 100
+            survival_pct = result.survival_percent
 
             if survival_pct >= target_survival_chance:
                 # Found a valid solution - check if it's better
