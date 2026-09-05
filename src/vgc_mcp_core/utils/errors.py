@@ -67,8 +67,8 @@ def error_response(
     code: str,
     message: str,
     suggestions: Optional[list[str]] = None,
-    **extra_fields
-) -> dict:
+    **extra_fields: Any
+) -> dict[str, Any]:
     """
     Create a standardized error response.
 
@@ -91,7 +91,7 @@ def error_response(
          'message': "Pokemon 'Charzard' not found",
          'suggestions': ['Did you mean: Charizard, Charmeleon?']}
     """
-    response = {
+    response: dict[str, Any] = {
         "success": False,
         "error": code,
         "message": message,
@@ -106,7 +106,7 @@ def error_response(
     return response
 
 
-def success_response(message: str, **data) -> dict:
+def success_response(message: str, **data: Any) -> dict[str, Any]:
     """
     Create a standardized success response.
 

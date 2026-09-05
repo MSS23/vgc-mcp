@@ -7,10 +7,12 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from vgc_mcp_core.api.smogon import SmogonStatsClient
+from vgc_mcp_core.team.manager import TeamManager
+from vgc_mcp_core.tools.preparation_handlers import reference_sets
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 
-def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
+def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient, team_manager: Optional[TeamManager] = None):
     """Register Smogon usage data tools with the MCP server."""
 
     @mcp.tool(
@@ -119,6 +121,9 @@ def register_usage_tools(mcp: FastMCP, smogon: SmogonStatsClient):
                     ErrorCodes.INTERNAL_ERROR, f"No set data found for {pokemon_name}"
                 )
 
+            sets["complete_sets"] = reference_sets(
+                team_manager, pokemon_name, [sets.get("_meta", {}).get("format", "")]
+            ) if team_manager is not None else []
             return sets
 
         except Exception as e:

@@ -86,6 +86,50 @@ def wait_for_revision(base_url: str, expected_sha: str | None, timeout: int) -> 
     raise TimeoutError(f"Production did not reach the expected revision: {last_error}")
 
 
+def _tool_payload(envelope: dict[str, Any] | None) -> dict[str, Any]:
+    """Require a successful tool payload, including the server's error contract."""
+    result = (envelope or {}).get("result", {})
+    if not result or result.get("isError"):
+        raise RuntimeError(f"Functional MCP call failed: {envelope}")
+    payload = result.get("structuredContent")
+    if payload is None:
+        texts = [c.get("text", "") for c in result.get("content", []) if c.get("type") == "text"]
+        payload = json.loads("".join(texts))
+    if not isinstance(payload, dict) or payload.get("success") is False or payload.get("error"):
+        raise RuntimeError(f"Functional tool returned an error: {payload}")
+    return payload
+
+
+def verify_functional_tools(mcp_url: str, session_id: str) -> None:
+    """Exercise real chaos retrieval and a deterministic calculation after deployment."""
+    common, _ = _post_mcp(mcp_url, {
+        "jsonrpc": "2.0", "id": 4, "method": "tools/call",
+        "params": {"name": "get_common_sets", "arguments": {"pokemon_name": "incineroar"}},
+    }, session_id=session_id)
+    sets = _tool_payload(common)
+    meta = sets.get("_meta", {})
+    if not sets.get("top_spreads") or "/chaos/" not in meta.get("source_url", ""):
+        raise RuntimeError(f"Common sets did not return sourced chaos spreads: {sets}")
+    if not all(key in meta for key in ("month", "format", "rating")):
+        raise RuntimeError(f"Chaos metadata incomplete: {meta}")
+    paste = "Mew\nSerious Nature\n- Tackle"
+    calculation, _ = _post_mcp(mcp_url, {
+        "jsonrpc": "2.0", "id": 5, "method": "tools/call",
+        "params": {"name": "calculate_move_outcomes", "arguments": {
+            "attacker_paste": paste, "defender_paste": paste, "move_name": "tackle",
+            "regulation": "reg_i", "include_accuracy": False, "random_hits": False,
+        }},
+    }, session_id=session_id)
+    damage = _tool_payload(calculation)
+    distribution = damage.get("details", {}).get("outcome_distribution", [])
+    values = [entry["damage"] for entry in distribution]
+    # @smogon/calc 0.11.0: level 50, neutral 0 EV/31 IV Mew, 40 BP Tackle.
+    if not values or min(values) != 16 or max(values) != 19 or damage.get("ohko_percent") != 0:
+        raise RuntimeError(f"Production damage regression: {damage}")
+    if abs(sum(entry["probability"] for entry in distribution) - 1) > 1e-9:
+        raise RuntimeError("Production outcome distribution does not sum to one")
+
+
 def verify_mcp(base_url: str, health: dict[str, Any]) -> None:
     mcp_url = f"{base_url}/mcp"
     initialize, response_headers = _post_mcp(
@@ -147,13 +191,16 @@ def verify_mcp(base_url: str, health: dict[str, Any]) -> None:
         raise RuntimeError(f"Live tool call failed: {welcome}")
 
     try:
-        _request(
-            mcp_url,
-            method="DELETE",
-            headers={"Accept": "application/json, text/event-stream", "Mcp-Session-Id": session_id},
-        )
-    except urllib.error.HTTPError:
-        pass
+        verify_functional_tools(mcp_url, session_id)
+    finally:
+        try:
+            _request(
+                mcp_url,
+                method="DELETE",
+                headers={"Accept": "application/json, text/event-stream", "Mcp-Session-Id": session_id},
+            )
+        except urllib.error.HTTPError:
+            pass
 
 
 def main() -> int:

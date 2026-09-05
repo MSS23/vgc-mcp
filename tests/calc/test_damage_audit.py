@@ -19,6 +19,7 @@ from vgc_mcp_core.models.move import Move
 from vgc_mcp_core.models.pokemon import BaseStats, PokemonBuild
 
 CASES = json.loads(Path(__file__).with_name("damage_audit_cases.json").read_text())["cases"]
+CASES += json.loads(Path(__file__).with_name("damage_oracle_matrix.json").read_text())["cases"]
 STAT_NAMES = {
     "hp": "hp", "atk": "attack", "def": "defense",
     "spa": "special_attack", "spd": "special_defense", "spe": "speed",

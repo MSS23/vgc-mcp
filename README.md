@@ -6,10 +6,10 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-green.svg)](https://modelcontextprotocol.io/)
 [![Live](https://img.shields.io/badge/live-vgc--mcp.onrender.com-brightgreen)](https://vgc-mcp.onrender.com/health)
-[![Tests](https://img.shields.io/badge/tests-1493%20passing-success)](#)
-[![Tools](https://img.shields.io/badge/MCP%20tools-208-blueviolet)](docs/tools-catalog.md)
+[![Tests](https://img.shields.io/badge/tests-3681%20passing-success)](#)
+[![Tools](https://img.shields.io/badge/MCP%20tools-213-blueviolet)](docs/tools-catalog.md)
 
-A **Model Context Protocol** server that turns any LLM into a competitive Pokémon VGC coach. **208 tools** spanning the full Gen 9 damage formula, Smogon usage data, multi-threat EV optimization, replay analysis, and a turn-by-turn live battle copilot.
+A **Model Context Protocol** server that turns any LLM into a competitive Pokémon VGC coach. **213 tools** spanning the full Gen 9 damage formula, Smogon usage data, multi-threat EV optimization, replay analysis, and a turn-by-turn live battle copilot.
 
 ```
 You:    Does Tera-Normal Entei live a Sheer-Force Life-Orb Earth Power
@@ -31,7 +31,7 @@ Claude: [calls calculate_damage_output once]
 
 ## Why this exists
 
-Every VGC team-builder is a wall of UI: type into a calculator, copy-paste a paste, click through tabs, run again. **VGC MCP collapses that loop into a conversation.** Claude does the calc, picks the right tool from 208 (damage, speed, survival, replay, breakpoints, archetype, live battle), and renders results as scannable tables — not prose.
+Every VGC team-builder is a wall of UI: type into a calculator, copy-paste a paste, click through tabs, run again. **VGC MCP collapses that loop into a conversation.** Claude does the calc, picks the right tool from 213 (damage, speed, survival, replay, breakpoints, archetype, live battle), and renders results as scannable tables — not prose.
 
 **Built for:**
 - 🏆 **Competitive players** — pre-tournament prep, live in-game coaching, post-game replay analysis
@@ -46,15 +46,19 @@ Every VGC team-builder is a wall of UI: type into a calculator, copy-paste a pas
 
 **📊 EV optimization** — Find minimum EVs to outspeed / OHKO / survive. Optimize against **3–6 threats simultaneously**. Auto-pick the optimal nature. Showdown paste in every output, ready to copy.
 
+**Team preparation in one MCP call** — `prepare_team` combines a Showdown paste, dated chaos opponents, rules checks, speed tiers, damage comparisons and requested verified spread alternatives. Export the report as Markdown, JSON, Excel or PDF. [Workflow guide](docs/preparation-workflows.md).
+
+**Verified alternatives and move outcomes** — Recheck final spreads, compare minimum-investment/offensive/bulky choices, and calculate misses, variable hit counts, consumed berries and Parental Bond. Complete imported reference sets remain separate from chaos usage components.
+
 **⚡ Live battle copilot** — `start_battle` → `record_turn` → `suggest_next_move`. Persistent state (HP%, status, stat stages, revealed items/abilities, Tera usage, weather/screen timers) across turns so the agent coaches you between turns.
 
 **📼 Replay analyzer** — Paste a `replay.pokemonshowdown.com` URL. Get turn-by-turn breakdown, key moments (KOs, Tera timing, weather wars), and concrete coaching takeaways.
 
-**🎯 Smart routing** — `what_tool_should_i_use(question)` cuts through 208 tools when the agent is unsure. Spread iteration deltas, archetype classification, breakpoint Pareto-optimal options.
+**🎯 Smart routing** — `what_tool_should_i_use(question)` cuts through 213 tools when the agent is unsure. Spread iteration deltas, archetype classification, breakpoint Pareto-optimal options.
 
 **🌐 Live and free** — Hosted at `https://vgc-mcp.onrender.com/mcp` (Streamable HTTP; legacy SSE at `/sse`) ready for any MCP-compatible client.
 
-[**→ Browse the full 208-tool catalog**](docs/tools-catalog.md)
+[**→ Browse the full 213-tool catalog**](docs/tools-catalog.md)
 
 ---
 
@@ -136,7 +140,7 @@ Damage calc is verified against **Pokémon Showdown** — the source of truth us
 | Pokémon Showdown  | 149-177   | 78.4 - 93.1%  | guaranteed 2HKO   |
 | **VGC MCP**       | **149-177** | **78.4-93.1%** | **guaranteed 2HKO** |
 
-The test suite covers Gen 9 damage, stats, items, abilities, Tera, weather, multi-hit probabilities, and MCP tool registration. An additional independent oracle suite pins exact rolls from `@smogon/calc`; an integer-formula grid checks mainline EVs and Champions Stat Points. See the [September 2026 audit](docs/audit-2026-09-05.md) for results and remaining calculation limits.
+The test suite covers Gen 9 damage, stats, items, abilities, Tera, weather, multi-hit probabilities, and MCP tool registration. An independent oracle suite pins 2,037 exact-roll cases from `@smogon/calc 0.11.0`; an integer-formula grid checks mainline EVs and Champions Stat Points. See the [preparation workflow guide](docs/preparation-workflows.md#mathematical-scope) for supported mechanics and limits, and the [original September 2026 audit](docs/audit-2026-09-05.md) for earlier results.
 
 Meta sets come directly from Smogon's monthly `chaos/*.json` datasets. The
 active MCP regulation selects the matching Reg I / Champions MA / Champions MB
@@ -165,7 +169,7 @@ Full list: [`docs/tools-catalog.md`](docs/tools-catalog.md). The headline tools:
 | **Replay** | `analyze_replay` (any Showdown replay URL or ID) |
 | **Iteration** | `compare_build_changes` (delta table for any spread/item/Tera change) |
 | **Team** | `analyze_team`, `classify_team_archetype`, `generate_game_plan`, `analyze_team_matchup` |
-| **Discovery** | `what_tool_should_i_use(question)` — when 208 is too many |
+| **Discovery** | `what_tool_should_i_use(question)` — when 213 is too many |
 
 ---
 
@@ -179,7 +183,7 @@ src/
 │   ├── state/            # BuildStateManager, BattleStateManager
 │   └── ...
 └── vgc_mcp/              # MCP server — auto-discovers tool modules
-    └── tools/            # 51 modules × ~208 tools
+    └── tools/            # 52 modules × ~213 tools
 ```
 
 Auto-discovery means **adding a tool requires zero edits** to `server.py` — drop a `<area>_tools.py` in `vgc_mcp/tools/` exposing `register_<area>_tools(mcp, ...)` and it's picked up.
@@ -220,7 +224,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/development.md](docs/developmen
 ## Status
 
 - ✅ Live at `https://vgc-mcp.onrender.com/mcp` (legacy SSE at `/sse`)
-- ✅ 208 tools registered, 1,493 tests passing
+- ✅ 213 tools registered, 3,681 offline tests passing
 - ✅ CI-gated deploys from `main`, followed by exact-revision production MCP verification
 - ✅ MIT licensed — fork it, ship it, no strings
 

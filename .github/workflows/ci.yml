@@ -82,7 +82,7 @@ jobs:
         # down. Lower MYPY_BASELINE whenever you burn some down; when it hits 0,
         # replace this whole step with a plain `python -m mypy ...`.
         env:
-          MYPY_BASELINE: "1298"
+          MYPY_BASELINE: "1150"
         run: |
           count=$(python -m mypy src/vgc_mcp_core src/vgc_mcp 2>&1 | tee /dev/stderr \
             | grep -cE '^.+: error: ' || true)
@@ -145,6 +145,21 @@ jobs:
         # These guard against drift between regulations.json and the router's
         # alias map — silent UX bugs if they go out of sync.
         run: python -m pytest tests/champions/test_alias_consistency.py tests/champions/test_regulation.py -v
+
+  damage-oracle:
+    name: Independent damage oracle fixture drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Regenerate expectations with pinned Smogon calculator
+        run: |
+          npm install --prefix "$RUNNER_TEMP/vgc-oracle" --ignore-scripts --no-audit --no-fund @smogon/calc@0.11.0
+          node scripts/generate_damage_audit.cjs "$RUNNER_TEMP/vgc-oracle/node_modules/@smogon/calc"
+          node scripts/generate_damage_audit.cjs "$RUNNER_TEMP/vgc-oracle/node_modules/@smogon/calc" --matrix
+          git diff --exit-code -- tests/calc/damage_audit_cases.json tests/calc/damage_oracle_matrix.json
 
   docker:
     name: Docker image builds and serves

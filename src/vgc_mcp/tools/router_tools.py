@@ -22,6 +22,14 @@ from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 # Each rule: (regex pattern, list of suggested tool names, rationale)
 ROUTING_RULES: list[tuple[re.Pattern, list[str], str]] = [
+    (re.compile(r"\b(?:prepare|preparation|tournament.ready)|(?:review|check|analy[sz]e)\s+(?:my|this|the)\s+team", re.I),
+     ["prepare_team"], "One preparation report with dated chaos data, exact spreads, rules checks and optional verified adjustments."),
+    (re.compile(r"\b(?:accuracy|miss(?:es)?|loaded dice|population bomb|parental bond|variable hits)\b", re.I),
+     ["calculate_move_outcomes"], "Move-level probabilities including misses, independent hit rolls and sequential item effects."),
+    (re.compile(r"\b(?:verify|verified|alternatives|tradeoffs)\b.*\b(?:spread|benchmark)|\bbenchmark.*\b(?:verify|verified)", re.I),
+     ["verify_spread_benchmarks", "recommend_verified_spreads"], "Verify exact final builds and offer alternatives with explicit stat tradeoffs."),
+    (re.compile(r"\b(?:import|save)\b.*\b(?:reference|tournament|sourced)\b", re.I),
+     ["import_reference_team"], "Store complete attributed sets separately from chaos marginal usage components."),
     # Damage calculations
     (re.compile(r"\b(?:OHKO|2HKO|3HKO|guaranteed\s+KO|2[-\s]?hit\s+KO)\b", re.I),
      ["calculate_damage_output", "find_ko_evs", "find_breakpoint"],

@@ -2,7 +2,7 @@
 
 import time
 from dataclasses import dataclass
-from typing import Annotated, Optional
+from typing import Annotated, Any, Optional
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
@@ -31,7 +31,7 @@ from vgc_mcp_core.calc.stats_champions import (
 )
 from vgc_mcp_core.config import EV_BREAKPOINTS_LV50, logger, normalize_evs
 from vgc_mcp_core.formats.showdown import pokemon_build_to_showdown
-from vgc_mcp_core.models.move import Move, MoveCategory
+from vgc_mcp_core.models.move import GEN9_SPECIAL_MOVES, Move, MoveCategory
 from vgc_mcp_core.models.pokemon import (
     BaseStats,
     EVSpread,
@@ -44,6 +44,7 @@ from vgc_mcp_core.tools.smogon_helpers import (
     get_common_spread as _shared_get_common_spread,
 )
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
+from vgc_mcp_core.utils.normalize import normalize_move
 
 
 def _detect_champions(pokemon_name: Optional[str] = None) -> bool:
@@ -71,6 +72,7 @@ def _build_champions_pokemon(
     sps: StatPointSpread,
     item: Optional[str] = None,
     tera_type: Optional[str] = None,
+    ability: Optional[str] = None,
 ) -> PokemonBuild:
     """Construct a format-aware Champions PokemonBuild (emits 'SPs:' pastes)."""
     return PokemonBuild(
@@ -81,6 +83,7 @@ def _build_champions_pokemon(
         format_system="champions",
         sps=sps,
         item=item,
+        ability=ability,
         tera_type=tera_type,
     )
 
@@ -1086,105 +1089,40 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         offensive_sps: int = 0,
         offensive_stat: Optional[str] = None,
         target_survival: float = 93.75,
+        speed_sps: int = 0,
     ) -> Optional[dict]:
-        """Search (hp_sp, def_sp, spd_sp) on the SP grain to survive all threats.
-
-        Performance: runs the real damage engine ONCE per threat (at zero
-        defensive SP) to capture the 16-roll spread, then scales each roll by the
-        defensive-stat ratio across candidate SP values — the same linear
-        approximation used by the EV/SP bulk solvers. This keeps the 33×33 grid
-        cheap (no engine call inside the loop) while preserving roll counts, so
-        `target_survival` tiers are respected.
-
-        Returns the minimum-total allocation that survives every threat at
-        `target_survival`, or None.
-        """
-        from math import floor
-
-        def_mod = get_nature_modifier(parsed_nature, "defense")
-        spd_mod = get_nature_modifier(parsed_nature, "special_defense")
-
-        need_def = any(t["is_physical"] for t in threats)
-        need_spd = any(not t["is_physical"] for t in threats)
-
-        # Baseline defensive stats at zero SP, and per-threat zero-SP rolls.
-        base_def_zero = calculate_stat_sp(my_base.defense, 31, 0, 50, def_mod)
-        base_spd_zero = calculate_stat_sp(my_base.special_defense, 31, 0, 50, spd_mod)
-
-        baseline_sp = {"hp": 0, "defense": 0, "special_defense": 0}
-        if offensive_sps and offensive_stat:
-            baseline_sp[offensive_stat] = offensive_sps
-        baseline_defender = PokemonBuild(
-            name=defender_name,
-            base_stats=my_base,
-            types=my_types,
-            nature=parsed_nature,
-            format_system="champions",
-            sps=StatPointSpread(**baseline_sp),
-            ability=defender_ability,
-            item=defender_item,
-            tera_type=defender_tera_type,
-        )
-        threat_rolls = []  # list of (is_physical, sorted rolls at zero def SP)
-        for t in threats:
-            res = calculate_damage(t["attacker"], baseline_defender, t["move"], t["modifiers"])
-            threat_rolls.append((t["is_physical"], sorted(res.rolls)))
-
-        # Precompute defensive stat per SP value (0-32).
-        def_stat_at = [calculate_stat_sp(my_base.defense, 31, s, 50, def_mod) for s in range(33)]
-        spd_stat_at = [calculate_stat_sp(my_base.special_defense, 31, s, 50, spd_mod) for s in range(33)]
-        hp_at = [calculate_hp_sp(my_base.hp, 31, s, 50) for s in range(33)]
-
-        def _survives(is_physical, rolls, hp, def_sp, spd_sp):
-            """Scale zero-SP rolls by the defensive-stat ratio and count survivals."""
-            if is_physical:
-                ratio_num, ratio_den = base_def_zero, def_stat_at[def_sp]
-            else:
-                ratio_num, ratio_den = base_spd_zero, spd_stat_at[spd_sp]
-            survive = 0
-            for r in rolls:
-                scaled = floor(r * ratio_num / ratio_den) if ratio_den else r
-                if scaled < hp:
-                    survive += 1
-            return (survive / 16) * 100
-
+        """Search the legal SP grid with exact final-build damage checks."""
+        def targets_defense(threat: dict[str, Any]) -> bool:
+            return bool(threat["is_physical"] or GEN9_SPECIAL_MOVES.get(
+                normalize_move(threat["move"].name), {}).get("targets_physical_defense"))
+        need_def = any(targets_defense(t) for t in threats)
+        need_spd = any(not targets_defense(t) for t in threats)
         best = None
-        for hp_sp in range(0, min(SP_PER_STAT_MAX, sp_budget) + 1):
-            hp = hp_at[hp_sp]
-            def_range = range(0, SP_PER_STAT_MAX + 1) if need_def else [0]
-            for def_sp in def_range:
-                if hp_sp + def_sp + offensive_sps > sp_budget:
-                    break
-                spd_range = range(0, SP_PER_STAT_MAX + 1) if need_spd else [0]
-                for spd_sp in spd_range:
+        for hp_sp in range(min(SP_PER_STAT_MAX, sp_budget) + 1):
+            for def_sp in (range(SP_PER_STAT_MAX + 1) if need_def else [0]):
+                for spd_sp in (range(SP_PER_STAT_MAX + 1) if need_spd else [0]):
                     total = hp_sp + def_sp + spd_sp + offensive_sps
-                    if total > sp_budget:
+                    if total > sp_budget or (best is not None and total >= best["total_sp"]):
                         break
-                    all_survive = True
-                    worst_max_roll = 0
-                    for is_physical, rolls in threat_rolls:
-                        pct = _survives(is_physical, rolls, hp, def_sp, spd_sp)
-                        if is_physical:
-                            scaled_max = floor(rolls[-1] * base_def_zero / def_stat_at[def_sp])
-                        else:
-                            scaled_max = floor(rolls[-1] * base_spd_zero / spd_stat_at[spd_sp])
-                        worst_max_roll = max(worst_max_roll, (scaled_max / hp) * 100 if hp else 100)
-                        if pct < target_survival:
-                            all_survive = False
+                    allocation = {"hp": hp_sp, "defense": def_sp, "special_defense": spd_sp, "speed": speed_sps}
+                    if offensive_sps and offensive_stat:
+                        allocation[offensive_stat] = offensive_sps
+                    candidate = PokemonBuild(
+                        name=defender_name, base_stats=my_base, types=my_types,
+                        nature=parsed_nature, format_system="champions",
+                        sps=StatPointSpread(**allocation), ability=defender_ability,
+                        item=defender_item, tera_type=defender_tera_type,
+                    )
+                    worst = 0.0
+                    for threat in threats:
+                        result = calculate_damage(threat["attacker"], candidate, threat["move"], threat["modifiers"])
+                        if result.survival_percent < target_survival:
                             break
-                    if all_survive:
-                        cand = {
-                            "hp_sp": hp_sp,
-                            "def_sp": def_sp,
-                            "spd_sp": spd_sp,
-                            "total_sp": total,
-                            "max_percent": round(worst_max_roll, 1),
-                        }
-                        if best is None or cand["total_sp"] < best["total_sp"]:
-                            best = cand
-                        break  # cheapest spd at this (hp,def); try next def
-                if best is not None and need_spd is False:
-                    break
+                        worst = max(worst, result.max_percent)
+                    else:
+                        best = {"hp_sp": hp_sp, "def_sp": def_sp, "spd_sp": spd_sp,
+                                "total_sp": total, "max_percent": worst, "verified": True}
+                        break
         return best
 
     async def _design_spread_with_benchmarks_champions(
@@ -1264,6 +1202,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         # 3. Survival.
         remaining = SP_TOTAL_MAX - speed_sps - off_sps
         hp_sp = def_sp = spd_sp = 0
+        spec = None
+        resolved_ability = ability
         if survive_pokemon and survive_move:
             try:
                 spec = await _prepare_single_threat_build(
@@ -1290,6 +1230,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     offensive_sps=off_sps,
                     offensive_stat=off_stat,
                     target_survival=93.75,
+                    speed_sps=speed_sps,
                 )
                 if alloc is None:
                     results["benchmarks"]["survival"] = {
@@ -1333,8 +1274,17 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         sps = StatPointSpread(**sp_kwargs)
         optimized_pokemon = _build_champions_pokemon(
             pokemon_name, my_base, my_types, parsed_nature, sps,
-            item=item, tera_type=defender_tera_type,
+            item=item, tera_type=defender_tera_type, ability=resolved_ability,
         )
+        if spec is not None:
+            final_damage = calculate_damage(spec["attacker"], optimized_pokemon, spec["move"], spec["modifiers"])
+            results["benchmarks"]["survival"].update({
+                "survives": final_damage.survival_percent >= 93.75,
+                "survival_pct": final_damage.survival_percent,
+                "max_percent": final_damage.max_percent,
+                "attacker_showdown_paste": pokemon_build_to_showdown(spec["attacker"]),
+                "verified": final_damage.survival_percent >= 93.75,
+            })
         final_stats = {
             "hp": calculate_hp_sp(my_base.hp, 31, sps.hp, 50),
             "attack": calculate_stat_sp(my_base.attack, 31, sps.attack, 50, get_nature_modifier(parsed_nature, "attack")),
@@ -1425,6 +1375,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             defender_tera_type=defender_tera_type,
             sp_budget=SP_TOTAL_MAX - speed_sps,
             target_survival=target_survival,
+            speed_sps=speed_sps,
         )
 
         if alloc is None:
@@ -1445,7 +1396,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         )
         optimized_pokemon = _build_champions_pokemon(
             pokemon_name, my_base, my_types, parsed_nature, sps,
-            item=item, tera_type=defender_tera_type,
+            item=item, tera_type=defender_tera_type, ability=resolved_ability,
         )
 
         # Per-threat breakdown.
@@ -1458,7 +1409,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "move": spec["move"].name,
                 "damage_percent": f"{format_percent(result.min_percent)}-{format_percent(result.max_percent)}%",
                 "survival_pct": result.survival_percent,
-                "survives": result.max_percent < 100,
+                "survives": result.survival_percent >= target_survival,
+                "attacker_showdown_paste": pokemon_build_to_showdown(spec["attacker"]),
             })
 
         final_stats = {
@@ -1472,7 +1424,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             "pokemon": pokemon_name,
             "nature": nature,
             "format_system": "champions",
-            "verdict": "SUCCESS",
+            "verdict": "SUCCESS" if all(row["survives"] for row in breakdown) and (speed_info is None or speed_info.get("outspeeds", False)) else "BENCHMARK_NOT_MET",
+            "verified": all(row["survives"] for row in breakdown) and (speed_info is None or speed_info.get("outspeeds", False)),
             "spread": {
                 "hp_sps": sps.hp,
                 "def_sps": sps.defense,

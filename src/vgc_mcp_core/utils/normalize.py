@@ -17,7 +17,9 @@ functions per-file. Import from here:
     )
 """
 
+import json
 from functools import lru_cache
+from pathlib import Path
 
 # Smogon API returns concatenated item names (e.g., "lifeorb")
 # This maps them to hyphenated format for damage calc comparisons.
@@ -310,6 +312,17 @@ ABILITY_ALIASES: dict[str, str] = {
     "technician": "technician",
     "adaptability": "adaptability",
 }
+
+
+def _load_canonical_aliases() -> None:
+    """Offline PokeAPI name snapshot fills gaps in the hand-written aliases."""
+    snapshot = json.loads((Path(__file__).resolve().parents[1] / "data/canonical_names.json").read_text(encoding="utf-8"))
+    for kind, aliases in (("move", MOVE_ALIASES), ("ability", ABILITY_ALIASES), ("item", ITEM_ALIASES)):
+        for name in snapshot[kind]:
+            aliases[name.replace("-", "")] = name
+
+
+_load_canonical_aliases()
 
 
 @lru_cache(maxsize=512)

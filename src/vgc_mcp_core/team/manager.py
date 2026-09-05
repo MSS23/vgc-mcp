@@ -3,6 +3,7 @@
 from typing import Optional
 
 from ..models.pokemon import PokemonBuild, StatPointSpread
+from ..models.preparation import SourcedSet
 from ..models.team import Team, TeamSlot
 
 
@@ -22,6 +23,16 @@ class TeamManager:
         self._pokemon_context: dict[str, PokemonBuild] = {}
         # Track the most recently referenced Pokemon
         self._active_pokemon: Optional[str] = None
+        self.sourced_sets: list[SourcedSet] = []
+
+    def add_sourced_sets(self, sets: list[SourcedSet]) -> int:
+        """Store complete imported sets in the caller's MCP session."""
+        for item in sets:
+            if item not in self.sourced_sets:
+                self.sourced_sets.append(item)
+        # Bound session memory; a source import never writes to another session.
+        self.sourced_sets = self.sourced_sets[-120:]
+        return len(self.sourced_sets)
 
     def get_current_team(self) -> Optional[Team]:
         """Get the current team (for tool access)."""

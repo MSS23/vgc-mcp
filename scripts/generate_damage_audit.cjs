@@ -4,8 +4,20 @@ const fs = require('node:fs');
 const path = require('node:path');
 const oraclePath = process.argv[2] || '@smogon/calc';
 const {Pokemon, Move, Field, calculate, Generations} = require(oraclePath);
-const filename = path.join(__dirname, '../tests/calc/damage_audit_cases.json');
+let filename = path.join(__dirname, '../tests/calc/damage_audit_cases.json');
 const fixture = JSON.parse(fs.readFileSync(filename, 'utf8'));
+const matrix = process.argv.includes('--matrix');
+if (matrix) {
+  // Deterministic rounding stress matrix: 96 stat/level variations per mechanic.
+  let seed = 0x564743;
+  const next = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed; };
+  fixture.seed = '0x564743';
+  fixture.cases = fixture.cases.flatMap(test => Array.from({length: 96}, (_, index) => ({
+    ...test, id: `${test.id}-${index}`, level: [50, 50, 50, 100][index % 4],
+    base: Object.fromEntries(['hp', 'atk', 'def', 'spa', 'spd', 'spe'].map(stat => [stat, 20 + next() % 161])),
+  })));
+  filename = path.join(__dirname, '../tests/calc/damage_oracle_matrix.json');
+}
 const gen = Generations.get(9);
 for (const test of fixture.cases) {
   const m = test.mods;
@@ -35,5 +47,5 @@ for (const test of fixture.cases) {
   test.rolls = typeof result.damage === 'number' ? Array(16).fill(result.damage) : result.damage;
 }
 fixture.oracle = '@smogon/calc ' + require(path.join(oraclePath, 'package.json')).version;
-fs.writeFileSync(filename, JSON.stringify(fixture, null, 2) + '\n');
+fs.writeFileSync(filename, JSON.stringify(fixture, null, matrix ? undefined : 2) + '\n');
 console.log(`Generated ${fixture.cases.length} oracle cases using ${fixture.oracle}`);

@@ -547,8 +547,8 @@ curl https://your-server.com/health
 {
   "status": "healthy",
   "service": "vgc-mcp",
-  "tool_modules": 51,
-  "tools": 208,
+  "tool_modules": 52,
+  "tools": 213,
   "active_sessions": 0
 }
 ```

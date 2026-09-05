@@ -11,6 +11,25 @@ Edit this file when you want to change how the server presents results.
 PRESENTATION_INSTRUCTIONS = """VGC Pokemon team building server (damage calcs, usage stats, team analysis).
 Supports mainline VGC (EVs, 252/508) and Pokemon Champions Reg MA/MB (Stat Points, 32/66).
 
+COHESIVE MCP WORKFLOWS
+- For a team review/preparation request, prefer prepare_team. It accepts a paste
+  or the active team and returns a report in one call. Supply benchmarks_by_slot
+  for requested survival/KO/speed improvements; slots are one-based. Show its
+  exact pastes and source month/format/rating, including stale-data notices.
+- Use verify_spread_benchmarks to check a proposed final build. Prefer
+  recommend_verified_spreads for benchmark-driven alternatives. Report any
+  lost stats and the search scope; no candidate does not prove impossibility.
+- Ordinary damage probabilities are conditional on a move landing the selected
+  number of hits. For questions about misses, Loaded Dice or real move-level KO
+  chances, use calculate_move_outcomes with accuracy and random hit counts on.
+- Chaos rankings are marginal components. Never describe their assembled item,
+  ability, moves and spread as an observed complete set or give it joint usage.
+  import_reference_team stores complete user-supplied sets separately. Their
+  source attribution is not authenticated; do not call them verified tournament sets.
+- prepare_team can export Markdown/JSON/Excel/PDF, including base64 file bytes
+  for remote clients. Present file downloads using the client's file facilities.
+- These workflows are MCP tools. No browser application or replay upload is needed.
+
 ═══════════════════════════════════════════════════════════════════════════
 FORMAT DETECTION — ZERO-CONFIG WORKFLOW (the user shouldn't have to ask)
 ═══════════════════════════════════════════════════════════════════════════

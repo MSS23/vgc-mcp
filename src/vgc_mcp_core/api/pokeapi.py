@@ -16,7 +16,7 @@ from ..models.move import (
     move_makes_contact,
 )
 from ..models.pokemon import BaseStats
-from ..utils.normalize import reorder_mega_prefix
+from ..utils.normalize import normalize_move, reorder_mega_prefix
 from .cache import APICache
 
 # Map base form names to PokeAPI's explicit form naming
@@ -246,7 +246,7 @@ class PokeAPIClient:
             user_name: Optional Pokemon name using the move. Used for form-dependent
                        move types like Ivy Cudgel (changes type based on Ogerpon form).
         """
-        name = self._normalize_name(str(name_or_id), apply_form_aliases=False)
+        name = normalize_move(str(name_or_id))
         data = await self._fetch(f"move/{name}")
 
         target = data.get("target", {}).get("name", "selected-pokemon")

@@ -372,7 +372,7 @@ vgc-mcp/
 │   ├── vgc_mcp/                    # Plain, client-agnostic MCP server
 │   │   ├── server.py               # Stdio + HTTP entrypoints
 │   │   ├── http_middleware.py      # Optional auth and rate limiting
-│   │   ├── tools/                  # 51 auto-discovered registration modules
+│   │   ├── tools/                  # 52 auto-discovered registration modules
 │   │   └── __main__.py             # CLI entry point
 │   │
 │   └── vgc_mcp_core/               # Shared calculation/data/state library

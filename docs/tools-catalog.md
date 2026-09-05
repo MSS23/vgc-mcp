@@ -1,6 +1,6 @@
 # Tool Catalog
 
-Auto-generated from the running server. **208 tools** organized by module.
+Auto-generated from the running server. **213 tools** organized by module.
 
 To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 
@@ -212,6 +212,14 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 - **`analyze_pokepaste`** — Fetch a PokePaste and provide a comprehensive team analysis.
 - **`fetch_pokepaste`** — Fetch a team from a PokePaste URL and parse it.
 - **`optimize_pokepaste_pokemon`** — Analyze a specific Pokemon from a PokePaste and suggest optimizations.
+
+## preparation_tools  (5 tools)
+
+- **`calculate_move_outcomes`** — Calculate independent hit rolls, misses, berries and Parental Bond from exact Showdown pastes.
+- **`import_reference_team`** — Store complete user-supplied sets with attribution in this MCP session.
+- **`prepare_team`** — Prepare a Showdown team or current session team in one MCP call.
+- **`recommend_verified_spreads`** — Offer minimum-investment, offensive and bulky spreads that pass final exact verification.
+- **`verify_spread_benchmarks`** — Recalculate survive, KO and outspeed constraints against exact or chaos opponents.
 
 ## preset_tools  (4 tools)
 

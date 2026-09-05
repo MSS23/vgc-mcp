@@ -178,6 +178,8 @@ class DamageModifiers:
     defense_stage: int = 0
     special_attack_stage: int = 0
     special_defense_stage: int = 0
+    attacker_defense_stage: int = 0  # Body Press offensive stat stages
+    defender_attack_stage: int = 0  # Foul Play's borrowed Attack stages
 
     # Item effects
     attacker_item: Optional[str] = None

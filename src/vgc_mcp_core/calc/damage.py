@@ -322,6 +322,7 @@ MOD_NORMAL_GEM = 6144       # 1.5x (Normal Gem - first Normal move, one-time use
 
 # Resistance berries - reduce super-effective damage by 50%
 RESISTANCE_BERRIES = {
+    "chilan-berry": "Normal",
     "occa-berry": "Fire",
     "passho-berry": "Water",
     "wacan-berry": "Electric",
@@ -570,7 +571,38 @@ def calculate_damage(
     attacker: PokemonBuild,
     defender: PokemonBuild,
     move: Move,
-    modifiers: Optional[DamageModifiers] = None
+    modifiers: Optional[DamageModifiers] = None,
+) -> DamageResult:
+    """Calculate conditional damage, including sequential multi-hit effects.
+
+    Accuracy and random hit-count distributions are explicitly available via
+    calculate_move_outcomes; traditional damage ranges remain conditional on
+    the specified hit count (or maximum hits when omitted).
+    """
+    from .outcomes import calculate_move_outcomes, result_from_outcomes
+
+    mods = modifiers or DamageModifiers()
+    ability = normalize_ability(attacker.ability or "" if mods.attacker_ability is None else mods.attacker_ability)
+    multi = get_multi_hit_info(move.name)
+    parental = ability == "parental-bond" and not move.is_multi_hit and not multi and not (
+        move.is_spread and mods.is_doubles and mods.multiple_targets
+    )
+    if move.is_damaging and (multi or move.is_multi_hit or parental):
+        outcome = calculate_move_outcomes(
+            attacker, defender, move, mods, include_accuracy=False, random_hits=False
+        )
+        return result_from_outcomes(outcome)
+    return _calculate_damage_rolls(attacker, defender, move, mods)
+
+
+def _calculate_damage_rolls(
+    attacker: PokemonBuild,
+    defender: PokemonBuild,
+    move: Move,
+    modifiers: Optional[DamageModifiers] = None,
+    *,
+    single_hit: bool = False,
+    parental_child: bool = False,
 ) -> DamageResult:
     """
     Calculate damage from one Pokemon to another.
@@ -725,6 +757,9 @@ def calculate_damage(
         # Multi-hit moves may have always_crit flag
         if multi_hit_always_crit:
             always_crit = True
+
+    if single_hit:
+        hit_count = 1
 
     # Apply always-crit for moves like Surging Strikes, Wicked Blow, Frost Breath
     if always_crit:
@@ -902,6 +937,10 @@ def calculate_damage(
     # Critical hits ignore negative offensive stages and positive defensive
     # stages. Psyshock/Psystrike/Secret Sword use Defense despite being special.
     attack_stage = modifiers.attack_stage if is_physical else modifiers.special_attack_stage
+    if special_move_data.get("uses_user_defense"):
+        attack_stage = modifiers.attacker_defense_stage
+    elif special_move_data.get("uses_target_attack"):
+        attack_stage = modifiers.defender_attack_stage
     if modifiers.commander_active:
         attack_stage += 2
     defense_stage = (
@@ -1236,6 +1275,9 @@ def calculate_damage(
         base_damage = apply_mod(base_damage, MOD_SPREAD)
         applied_mods.append("Spread (0.75x)")
 
+    if parental_child:
+        base_damage = apply_mod(base_damage, 1024)
+
     # 2. Weather modifier (6144/4096 = 1.5x boost, 2048/4096 = 0.5x nerf)
     weather_mod_4096 = _get_weather_mod_4096(
         modifiers.weather, effective_move_type, move_name_normalized
@@ -1361,8 +1403,9 @@ def calculate_damage(
         # Resistance berries (0.5x super-effective damage of matching type)
         if def_item in RESISTANCE_BERRIES:
             berry_type = RESISTANCE_BERRIES[def_item]
-            if effective_move_type == berry_type and type_eff >= 2.0:
-                final_mods.append(MOD_RESISTANCE_BERRY)
+            if effective_move_type == berry_type and (type_eff >= 2.0 or def_item == "chilan-berry"):
+                if normalize_ability(modifiers.attacker_ability or "") not in ("unnerve", "as-one-glastrier", "as-one-spectrier"):
+                    final_mods.append(1024 if normalize_ability(modifiers.defender_ability or "") == "ripen" else MOD_RESISTANCE_BERRY)
 
     # Chain all final modifiers together
     final_mod_4096 = chain_mods(final_mods) if final_mods else MOD_NEUTRAL
@@ -1444,22 +1487,6 @@ def calculate_damage(
         # Generate representative rolls for display
         rolls = _calculate_multi_hit_rolls(damages_per_hit, hit_count)
 
-    # Parental Bond (Mega Kangaskhan): a single-strike damaging move hits a
-    # second time at 0.25x power. The second hit runs through the same modifier
-    # chain, so it lands at ~0.25x the first hit — model it as a per-roll +25%.
-    # Parental Bond strikes only ONCE on spread moves, and doesn't apply to
-    # status moves, already-multi-hit moves, or immune matchups.
-    parental_bond = (
-        modifiers.attacker_ability is not None
-        and normalize_ability(modifiers.attacker_ability) == "parental-bond"
-        and hit_count == 1
-        and move.category != MoveCategory.STATUS
-        and not move.is_spread
-        and type_eff != 0
-    )
-    if parental_bond:
-        rolls = [r + max(1, r // 4) for r in rolls]
-
     # Calculate results
     min_damage = min(rolls)
     max_damage = max(rolls)
@@ -1523,9 +1550,6 @@ def calculate_damage(
         crit_note = " (always crits)" if always_crit else ""
         applied_mods.append(f"Multi-hit ({hit_count} hits{crit_note})")
 
-    if parental_bond:
-        applied_mods.append("Parental Bond (2nd hit 0.25x)")
-
     # Add Commander to mods
     if modifiers.commander_active:
         applied_mods.append("Commander (+2 stat stages)")
@@ -1545,6 +1569,7 @@ def calculate_damage(
             "defender_stat": defense_stat,
             "base_power": power,
             "type_effectiveness": type_eff,
+            "effective_move_type": effective_move_type,
             "modifiers_applied": applied_mods,
             "hit_count": hit_count,
             "always_crit": always_crit,

@@ -1,7 +1,7 @@
 """Pokemon data models with nature modifiers and stat spreads."""
 
 from enum import Enum
-from typing import ClassVar, Literal, Optional
+from typing import Any, ClassVar, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -218,7 +218,7 @@ class Pokemon(BaseModel):
     abilities: list[str] = Field(default_factory=list)
     species: str = ""  # For species clause (base form name)
 
-    def __init__(self, **data):
+    def __init__(self, **data: Any) -> None:
         super().__init__(**data)
         if not self.species:
             # Extract base species from form name (e.g., "urshifu-rapid-strike" -> "urshifu")
@@ -250,7 +250,7 @@ class PokemonBuild(BaseModel):
     tera_type: Optional[str] = None
     moves: list[str] = Field(default_factory=list, max_length=4)
 
-    def __init__(self, **data):
+    def __init__(self, **data: Any) -> None:
         super().__init__(**data)
         if not self.species:
             self.species = self.name.split("-")[0]

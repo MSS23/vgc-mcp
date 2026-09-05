@@ -123,8 +123,8 @@ def test_health_endpoint(http_client, monkeypatch):
     assert resp.status_code == 200
     body = resp.json()
     assert body["status"] == "healthy"
-    assert body["tool_modules"] == 51
-    assert body["tools"] == 208
+    assert body["tool_modules"] == 52
+    assert body["tools"] == 213
     assert "active_sessions" in body
     assert body["revision"] == "abc123"
     assert body["branch"] == "main"
@@ -135,8 +135,8 @@ def test_root_endpoint(http_client):
     assert resp.status_code == 200
     body = resp.json()
     assert body["endpoints"]["mcp"] == "/mcp"
-    assert body["tool_modules"] == 51
-    assert body["tools"] == 208
+    assert body["tool_modules"] == 52
+    assert body["tools"] == 213
 
 
 def test_mcp_endpoint_exists(http_client):
