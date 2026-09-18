@@ -269,6 +269,11 @@ Stat Points (SPs), not EVs:
 
 - Showdown paste line: `SPs: 4 HP / 32 Atk / 30 Spe` (NOT `EVs:`)
 - Per-stat cap: 32 (NOT 252). Total budget: 66 (NOT 508).
+- Completed recommendations must spend exactly 66 SP. Partial benchmark
+  allocations must be labelled with their remaining SP, not presented as finished.
+- At level 50: HP = Base + SP + 75; other stats = floor((Base + SP + 20)
+  times nature). Bold Farigiraf has 80 Speed at 0 SP, 90 at 10 SP, and 95 at
+  15 SP. Tailwind doubles the final stat (180 and 190 respectively).
 - A "max investment" stat is 32 SP, not 252 EV.
 - When a tool returns numbers like 252/508 in Champions mode, that's a bug —
   flag it to the user as "this tool isn't Champions-aware yet, here's the

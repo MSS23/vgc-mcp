@@ -424,10 +424,13 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         "Stat Points must be 'HP/Atk/Def/SpA/SpD/Spe' (six values)"
                     )
                 vals = [int(p) for p in parts]
-                return StatPointSpread(
+                spread = StatPointSpread(
                     hp=vals[0], attack=vals[1], defense=vals[2],
                     special_attack=vals[3], special_defense=vals[4], speed=vals[5],
                 )
+                if not spread.is_valid():
+                    raise ValueError(f"Total Stat Points ({spread.total}) exceed maximum of 66")
+                return spread
 
             attacker_sp_spread: Optional[StatPointSpread] = None
             defender_sp_spread: Optional[StatPointSpread] = None
@@ -436,7 +439,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     attacker_sp_spread = _parse_sp_string(attacker_sps)
                     defender_sp_spread = _parse_sp_string(defender_sps)
                 except ValueError as ve:
-                    return error_response(ErrorCodes.INVALID_INPUT, str(ve))
+                    return error_response(ErrorCodes.INVALID_PARAMETER, str(ve))
 
             # Track what spreads we used for the response
             attacker_spread_source = "custom"

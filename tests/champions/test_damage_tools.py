@@ -131,6 +131,18 @@ def _close_combat():
     )
 
 
+@pytest.mark.parametrize("spread", ["bad", "33/0/0/0/0/0", "32/32/3/0/0/0"])
+@pytest.mark.parametrize("side", ["attacker_sps", "defender_sps"])
+async def test_invalid_sp_inputs_have_validation_errors(champions_session, spread, side):
+    tools = _register(_fake_pokeapi(_thunderbolt()))
+    result = await tools["calculate_damage_output"](
+        attacker_name="manectric-mega", defender_name="incineroar",
+        move_name="thunderbolt", **{side: spread},
+    )
+    assert result["error"] == "invalid_parameter"
+    assert result["success"] is False
+
+
 # --------------------------------------------------------------------------- #
 # [T3-a] calculate_damage_output
 # --------------------------------------------------------------------------- #

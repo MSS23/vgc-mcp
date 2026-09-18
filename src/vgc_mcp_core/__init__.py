@@ -6,7 +6,7 @@ by the plain-MCP `vgc_mcp` server in this repo (and by any MCP-UI sibling
 project that wants to reuse the same logic).
 """
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 # Re-export commonly used items for convenience
 from .config import logger, settings

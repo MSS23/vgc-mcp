@@ -92,8 +92,8 @@ def calculate_all_stats_champions(
     """Calculate all six stats for a Champions Pokemon build.
 
     Reads from `pokemon.sps` (StatPointSpread). If `pokemon.sps` is None,
-    treats all SPs as zero. IVs and nature are read from the build like
-    mainline.
+    treats all SPs as zero. Champions has no IVs, so legacy IV values on
+    imported or directly constructed builds must not affect the result.
     """
     lvl = level if level is not None else pokemon.level
     base = pokemon.base_stats
@@ -103,38 +103,38 @@ def calculate_all_stats_champions(
         return getattr(sps, name, 0) if sps is not None else 0
 
     return {
-        "hp": calculate_hp_sp(base.hp, pokemon.ivs.hp, _sp("hp"), lvl),
+        "hp": calculate_hp_sp(base.hp, 31, _sp("hp"), lvl),
         "attack": calculate_stat_sp(
             base.attack,
-            pokemon.ivs.attack,
+            31,
             _sp("attack"),
             lvl,
             pokemon.get_nature_modifier("attack"),
         ),
         "defense": calculate_stat_sp(
             base.defense,
-            pokemon.ivs.defense,
+            31,
             _sp("defense"),
             lvl,
             pokemon.get_nature_modifier("defense"),
         ),
         "special_attack": calculate_stat_sp(
             base.special_attack,
-            pokemon.ivs.special_attack,
+            31,
             _sp("special_attack"),
             lvl,
             pokemon.get_nature_modifier("special_attack"),
         ),
         "special_defense": calculate_stat_sp(
             base.special_defense,
-            pokemon.ivs.special_defense,
+            31,
             _sp("special_defense"),
             lvl,
             pokemon.get_nature_modifier("special_defense"),
         ),
         "speed": calculate_stat_sp(
             base.speed,
-            pokemon.ivs.speed,
+            31,
             _sp("speed"),
             lvl,
             pokemon.get_nature_modifier("speed"),

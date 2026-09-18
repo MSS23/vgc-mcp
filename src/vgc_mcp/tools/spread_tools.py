@@ -17,16 +17,18 @@ from vgc_mcp_core.calc.bulk_optimization import (
 from vgc_mcp_core.calc.champions_optimization import (
     SP_PER_STAT_MAX,
     SP_TOTAL_MAX,
+    complete_sp_allocation,
+    design_speed_benchmark_sps,
     find_optimal_hp_sps,
     find_speed_sps_to_outspeed,
     validate_sp_allocation,
 )
+from vgc_mcp_core.calc.conversion import ev_to_sp
 from vgc_mcp_core.calc.damage import DamageResult, calculate_damage, format_percent
 from vgc_mcp_core.calc.modifiers import DamageModifiers
 from vgc_mcp_core.calc.stats import calculate_hp, calculate_stat, find_speed_evs
 from vgc_mcp_core.calc.stats_champions import (
     calculate_hp_sp,
-    calculate_speed_sp,
     calculate_stat_sp,
 )
 from vgc_mcp_core.config import EV_BREAKPOINTS_LV50, logger, normalize_evs
@@ -689,7 +691,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             if needed is not None and needed < SP_PER_STAT_MAX:
                 leftover = SP_PER_STAT_MAX - needed
                 sp_kwargs["speed"] = needed
-                sp_kwargs["hp"] = sp_kwargs.get("hp", 0) + leftover
+                sp_kwargs["hp"] = min(SP_PER_STAT_MAX, sp_kwargs.get("hp", 0) + leftover)
                 description += f" (Speed creep to {speed_target})"
 
         # HP-number optimization for the held item, on the SP grain.
@@ -707,12 +709,11 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         hp_optimization = best_hp
                         sp_kwargs["hp"] = best_hp["sp"]
 
-        # Enforce caps defensively.
-        validation = validate_sp_allocation(sp_kwargs)
-        if not validation["is_valid"]:
-            # Trim overflow from HP (least impactful) to respect the 66-cap.
-            overflow = validation["over_budget"]
-            sp_kwargs["hp"] = max(0, sp_kwargs.get("hp", 0) - overflow)
+        # Preserve the Speed target and any optimized HP number while spending
+        # all 66 points. Defenses absorb both HP overflow and item savings.
+        sp_kwargs = complete_sp_allocation(
+            sp_kwargs, priorities=("defense", "special_defense", off_stat),
+        )
 
         sps = StatPointSpread(**sp_kwargs)
         types = await pokeapi.get_pokemon_types(pokemon_name)
@@ -800,7 +801,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             if _get_item_category(item) is not None:
                 ranked = find_optimal_hp_sps(base_stats.hp, item)
                 cap = best_spread["hp_sps"]
-                viable = [o for o in ranked if o["sp"] <= cap]
+                minimum_hp = max(0, total_bulk_sps - 2 * SP_PER_STAT_MAX)
+                viable = [o for o in ranked if minimum_hp <= o["sp"] <= cap]
                 if viable:
                     best_hp = max(viable, key=lambda o: (o["score"], o["sp"]))
                     if best_hp["sp"] != best_spread["hp_sps"]:
@@ -813,11 +815,20 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         showdown_paste = None
         if best_spread:
             types = await pokeapi.get_pokemon_types(pokemon_name)
-            sps = StatPointSpread(
-                hp=best_spread["hp_sps"],
-                defense=best_spread["def_sps"],
-                special_defense=best_spread["spd_sps"],
-            )
+            sps = StatPointSpread(**complete_sp_allocation(
+                {"hp": best_spread["hp_sps"], "defense": best_spread["def_sps"],
+                 "special_defense": best_spread["spd_sps"]},
+                priorities=("defense", "special_defense") if defense_bias >= 0.5 else ("special_defense", "defense"),
+                budget=total_bulk_sps,
+            ))
+            final_def = calculate_stat_sp(base_stats.defense, 31, sps.defense, 50, def_mod)
+            final_spd = calculate_stat_sp(base_stats.special_defense, 31, sps.special_defense, 50, spd_mod)
+            best_spread.update({
+                "def_sps": sps.defense, "spd_sps": sps.special_defense,
+                "final_def": final_def, "final_spd": final_spd,
+                "physical_bulk": best_spread["final_hp"] * final_def,
+                "special_bulk": best_spread["final_hp"] * final_spd,
+            })
             optimized_pokemon = _build_champions_pokemon(
                 pokemon_name, base_stats, types, parsed_nature, sps, item=item
             )
@@ -935,9 +946,9 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 stats_match = False
             if new_stats["speed"] < current_stats["speed"]:
                 stats_match = False
-            if new_stats["defense"] < current_stats["defense"] - 2:
+            if new_stats["defense"] < current_stats["defense"]:
                 stats_match = False
-            if new_stats["special_defense"] < current_stats["special_defense"] - 2:
+            if new_stats["special_defense"] < current_stats["special_defense"]:
                 stats_match = False
 
             if stats_match and new_total < best_total:
@@ -985,6 +996,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             "suggested_nature": best_nature.value,
             "suggested_sps": best_sps,
             "suggested_total_sps": best_total,
+            "remaining_sps": SP_TOTAL_MAX - best_total,
+            "is_complete": best_total == SP_TOTAL_MAX,
             "suggested_stats": best_stats,
             "optimized_showdown_paste": optimized_showdown,
             "sp_savings": sp_savings,
@@ -1000,7 +1013,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         ability: Optional[str],
         tera_type: Optional[str],
     ) -> dict:
-        """Fetch + build a mainline attacker for a champions survival search.
+        """Fetch and build a Champions attacker using native SP investment.
 
         Returns dict with attacker PokemonBuild, Move, modifiers, is_physical.
         Auto-fetches Smogon spread + meta synergies, same as the EV path.
@@ -1010,13 +1023,16 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         move = await pokeapi.get_move(move_name, user_name=attacker_name)
         is_physical = move.category == MoveCategory.PHYSICAL
 
+        off_stat = "attack" if is_physical else "special_attack"
+        allocation: dict[str, int] = {}
         smogon = await _get_common_spread(attacker_name)
         if smogon:
             if nature_str is None:
                 nature_str = smogon.get("nature")
-            if evs is None:
-                ev_dict = smogon.get("evs", {})
-                evs = ev_dict.get("attack" if is_physical else "special_attack", 252)
+            if smogon.get("sps") is not None:
+                allocation = StatPointSpread.from_sps_dict(smogon["sps"]).model_dump()
+            elif smogon.get("evs"):
+                allocation = {stat: ev_to_sp(value) for stat, value in smogon["evs"].items()}
             if item is None:
                 item = smogon.get("item")
             if ability is None:
@@ -1029,7 +1045,21 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             ability = ability or d_ability
 
         nature_str = nature_str or ("adamant" if is_physical else "modest")
-        evs = evs if evs is not None else 252
+        if evs is not None:
+            if not 0 <= evs <= 252:
+                raise ValueError("Offensive investment must be 0-32 SP or legacy EVs up to 252")
+            allocation[off_stat] = ev_to_sp(evs) if evs > 32 else evs
+        elif not allocation:
+            allocation[off_stat] = SP_PER_STAT_MAX
+        investment = allocation.get(off_stat, 0)
+        # Explicit offense takes precedence; trim other assumed investments
+        # if a sourced spread would otherwise exceed the Champions budget.
+        overflow = max(0, sum(allocation.values()) - SP_TOTAL_MAX)
+        for stat in ("hp", "defense", "special_defense", "speed", "attack", "special_attack"):
+            if stat != off_stat:
+                take = min(allocation.get(stat, 0), overflow)
+                allocation[stat] = allocation.get(stat, 0) - take
+                overflow -= take
 
         sword_of_ruin = beads_of_ruin = tablets_of_ruin = vessel_of_ruin = False
         if ability:
@@ -1044,10 +1074,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             base_stats=atk_base,
             types=atk_types,
             nature=Nature(nature_str.lower()),
-            evs=EVSpread(
-                attack=evs if is_physical else 0,
-                special_attack=0 if is_physical else evs,
-            ),
+            format_system="champions",
+            sps=StatPointSpread(**allocation),
             item=item,
             ability=ability,
             tera_type=tera_type,
@@ -1070,7 +1098,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             "modifiers": modifiers,
             "is_physical": is_physical,
             "nature": nature_str,
-            "evs": evs,
+            "sps": investment,
             "item": item,
             "ability": ability,
             "tera_type": tera_type,
@@ -1142,6 +1170,12 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         item = kw.get("item")
         ability = kw.get("ability")
         defender_tera_type = kw.get("defender_tera_type")
+        if bool(survive_pokemon) != bool(survive_move):
+            return error_response(ErrorCodes.INVALID_PARAMETER, "Provide both survive_pokemon and survive_move")
+        if defender_tera_type or kw.get("survive_pokemon_tera_type"):
+            return error_response(ErrorCodes.INVALID_PARAMETER, "Terastallization is not available in Champions")
+        if prioritize not in ("bulk", "offense"):
+            return error_response(ErrorCodes.INVALID_PARAMETER, "prioritize must be 'bulk' or 'offense'")
 
         is_physical = my_base.attack >= my_base.special_attack
         off_stat = "attack" if is_physical else "special_attack"
@@ -1168,36 +1202,29 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             try:
                 target_base = await pokeapi.get_base_stats(outspeed_pokemon)
                 target_nature = Nature(outspeed_pokemon_nature.lower())
-                target_speed = calculate_stat(
-                    target_base.speed, 31, outspeed_pokemon_evs, 50,
-                    get_nature_modifier(target_nature, "speed"),
+                # Native 0-32 inputs are SP; retain legacy EV-scale defaults.
+                target_sps = ev_to_sp(outspeed_pokemon_evs) if outspeed_pokemon_evs > 32 else outspeed_pokemon_evs
+                benchmark = design_speed_benchmark_sps(
+                    my_base.speed, target_base.speed, target_sps, parsed_nature, target_nature,
+                    target_stage=kw.get("outspeed_at_speed_stage", 0),
+                    target_booster=kw.get("outspeed_target_has_booster", False),
+                    target_tailwind=kw.get("outspeed_target_has_tailwind", False),
+                    booster=kw.get("my_pokemon_has_booster", False),
+                    tailwind=kw.get("my_pokemon_has_tailwind", False),
                 )
-                needed = find_speed_sps_to_outspeed(my_base.speed, target_speed, parsed_nature)
-                if needed is None:
-                    speed_sps = SP_PER_STAT_MAX
-                    results["benchmarks"]["speed"] = {
-                        "target": outspeed_pokemon,
-                        "target_speed": target_speed,
-                        "sps_needed": SP_PER_STAT_MAX,
-                        "outspeeds": False,
-                    }
-                else:
-                    speed_sps = needed
-                    my_speed = calculate_speed_sp(my_base.speed, 31, needed, 50, parsed_nature)
-                    results["benchmarks"]["speed"] = {
-                        "target": outspeed_pokemon,
-                        "target_speed": target_speed,
-                        "sps_needed": needed,
-                        "my_speed": my_speed,
-                        "outspeeds": my_speed > target_speed,
-                    }
+                speed_sps = benchmark["sps_needed"]
+                results["benchmarks"]["speed"] = {
+                    "target": outspeed_pokemon,
+                    **benchmark,
+                }
             except Exception as e:
-                results["benchmarks"]["speed"] = {"error": str(e)}
+                return error_response(ErrorCodes.INVALID_PARAMETER, f"Cannot calculate speed benchmark: {e}")
 
         # 2. Offensive SP allocation.
         off_sps = 0
         if prioritize == "offense":
-            off_sps = SP_PER_STAT_MAX
+            requested = kw.get("offensive_evs", 0)
+            off_sps = (ev_to_sp(requested) if requested > 32 else requested) if requested else SP_PER_STAT_MAX
 
         # 3. Survival.
         remaining = SP_TOTAL_MAX - speed_sps - off_sps
@@ -1247,7 +1274,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         "attacker": survive_pokemon,
                         "move": survive_move,
                         "attacker_nature": spec["nature"],
-                        "attacker_evs": spec["evs"],
+                        "attacker_sps": spec["sps"],
                         "attacker_item": spec["item"],
                         "attacker_ability": spec["ability"],
                         "max_percent": alloc["max_percent"],
@@ -1255,7 +1282,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         "hp_remaining": f"{100 - alloc['max_percent']:.1f}%",
                     }
             except Exception as e:
-                results["benchmarks"]["survival"] = {"error": str(e)}
+                return error_response(ErrorCodes.INVALID_PARAMETER, f"Cannot calculate survival benchmark: {e}")
         else:
             # No survival target — dump remaining into HP/defenses.
             hp_sp = min(SP_PER_STAT_MAX, remaining)
@@ -1266,10 +1293,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         sp_kwargs = {"hp": hp_sp, "defense": def_sp, "special_defense": spd_sp, "speed": speed_sps}
         if off_sps:
             sp_kwargs[off_stat] = off_sps
-        # Final cap enforcement.
-        validation = validate_sp_allocation(sp_kwargs)
-        if not validation["is_valid"] and validation["over_budget"]:
-            sp_kwargs["hp"] = max(0, sp_kwargs["hp"] - validation["over_budget"])
+        sp_kwargs = complete_sp_allocation(sp_kwargs)
 
         sps = StatPointSpread(**sp_kwargs)
         optimized_pokemon = _build_champions_pokemon(
@@ -1282,6 +1306,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "survives": final_damage.survival_percent >= 93.75,
                 "survival_pct": final_damage.survival_percent,
                 "max_percent": final_damage.max_percent,
+                "hp_remaining": f"{100 - final_damage.max_percent:.1f}%",
                 "attacker_showdown_paste": pokemon_build_to_showdown(spec["attacker"]),
                 "verified": final_damage.survival_percent >= 93.75,
             })
@@ -1303,6 +1328,11 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             "total": sps.total,
         }
         results["final_stats"] = final_stats
+        results["verified"] = all(
+            benchmark.get("outspeeds", benchmark.get("verified", False))
+            for benchmark in results["benchmarks"].values()
+        )
+        results["verdict"] = "SUCCESS" if results["verified"] else "BENCHMARK_NOT_MET"
         results["showdown_paste"] = pokemon_build_to_showdown(optimized_pokemon)
         return results
 
@@ -1319,8 +1349,16 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         target_survival: float,
         item: Optional[str],
         ability: Optional[str],
+        target_stage: int = 0,
+        target_booster: bool = False,
+        target_tailwind: bool = False,
+        booster: bool = False,
+        tailwind: bool = False,
+        speed_override: Optional[int] = None,
     ) -> dict:
         """SP-scale multi/dual survival optimizer (cap 32/stat, 66 total)."""
+        if defender_tera_type or any(threat.get("tera_type") for threat in threats):
+            return error_response(ErrorCodes.INVALID_PARAMETER, "Terastallization is not available in Champions")
         is_physical = my_base.attack >= my_base.special_attack
         if nature is None:
             nature = "careful" if is_physical else "calm"
@@ -1330,27 +1368,29 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             return error_response(ErrorCodes.INVALID_NATURE, f"Invalid nature: {nature}")
 
         # Speed benchmark.
-        speed_sps = 0
+        fixed_sps = (ev_to_sp(speed_override) if speed_override > 32 else speed_override) if speed_override is not None else None
+        speed_sps = fixed_sps if fixed_sps is not None else 0
         speed_info = None
         if outspeed_pokemon:
             try:
                 target_base = await pokeapi.get_base_stats(outspeed_pokemon)
-                target_speed = calculate_stat(
-                    target_base.speed, 31, outspeed_pokemon_evs, 50,
-                    get_nature_modifier(Nature(outspeed_pokemon_nature.lower()), "speed"),
+                target_sps = ev_to_sp(outspeed_pokemon_evs) if outspeed_pokemon_evs > 32 else outspeed_pokemon_evs
+                benchmark = design_speed_benchmark_sps(
+                    my_base.speed, target_base.speed, target_sps, parsed_nature,
+                    Nature(outspeed_pokemon_nature.lower()),
+                    target_stage=target_stage, target_booster=target_booster,
+                    target_tailwind=target_tailwind, booster=booster, tailwind=tailwind,
+                    fixed_sps=fixed_sps,
                 )
-                needed = find_speed_sps_to_outspeed(my_base.speed, target_speed, parsed_nature)
-                speed_sps = needed if needed is not None else SP_PER_STAT_MAX
+                speed_sps = benchmark["sps_needed"]
                 speed_info = {
                     "target": outspeed_pokemon,
-                    "target_speed": target_speed,
-                    "sps_needed": speed_sps,
-                    "outspeeds": needed is not None,
+                    **benchmark,
                 }
             except Exception as e:
-                speed_info = {"error": str(e)}
+                return error_response(ErrorCodes.INVALID_PARAMETER, f"Cannot calculate speed benchmark: {e}")
 
-        # Prepare threats (mainline attacker builds).
+        # Prepare threats with the same Champions stat system as the defender.
         prepared = []
         for t in threats:
             spec = await _prepare_single_threat_build(
@@ -1390,10 +1430,10 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 "speed_benchmark": speed_info,
             }
 
-        sps = StatPointSpread(
-            hp=alloc["hp_sp"], defense=alloc["def_sp"],
-            special_defense=alloc["spd_sp"], speed=speed_sps,
-        )
+        sps = StatPointSpread(**complete_sp_allocation({
+            "hp": alloc["hp_sp"], "defense": alloc["def_sp"],
+            "special_defense": alloc["spd_sp"], "speed": speed_sps,
+        }))
         optimized_pokemon = _build_champions_pokemon(
             pokemon_name, my_base, my_types, parsed_nature, sps,
             item=item, tera_type=defender_tera_type, ability=resolved_ability,
@@ -1514,6 +1554,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             "format_system": "champions",
             "total_sps": total,
             "remaining_sps": validation["remaining"],
+            "is_complete": validation["is_complete"],
             "final_stats": final_stats,
             "issues": issues if issues else ["No issues found"],
             "suggestions": suggestions if suggestions else ["Spread looks efficient!"],
@@ -2504,7 +2545,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         nature: Annotated[Optional[str], Field(description="Your Pokemon's nature (optional - auto-selects the optimal nature if not provided)")] = None,
         outspeed_pokemon: Annotated[Optional[str], Field(description="Pokemon to outspeed")] = None,
         outspeed_pokemon_nature: Annotated[str, Field(description="Speed target's nature")] = "jolly",
-        outspeed_pokemon_evs: Annotated[int, Field(ge=0, le=252, description="Speed target's Speed EVs (0-252)")] = 252,
+        outspeed_pokemon_evs: Annotated[int, Field(ge=0, le=252, description="Target Speed EVs in mainline; native SP (0-32) in Champions. Legacy EV values above 32 are converted to SP.")] = 252,
         outspeed_at_speed_stage: Annotated[int, Field(ge=-6, le=6, description="Target's speed stage (-1 = after Icy Wind, -2 = after 2x Icy Wind, etc.)")] = 0,
         outspeed_target_has_booster: Annotated[bool, Field(description="True if the target has a Protosynthesis/Quark Drive speed boost active (1.5x)")] = False,
         outspeed_target_has_tailwind: Annotated[bool, Field(description="True if the target has Tailwind active (2x speed)")] = False,
@@ -2563,6 +2604,11 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     outspeed_pokemon=outspeed_pokemon,
                     outspeed_pokemon_nature=outspeed_pokemon_nature,
                     outspeed_pokemon_evs=outspeed_pokemon_evs,
+                    outspeed_at_speed_stage=outspeed_at_speed_stage,
+                    outspeed_target_has_booster=outspeed_target_has_booster,
+                    outspeed_target_has_tailwind=outspeed_target_has_tailwind,
+                    my_pokemon_has_booster=my_pokemon_has_booster,
+                    my_pokemon_has_tailwind=my_pokemon_has_tailwind,
                     survive_pokemon=survive_pokemon,
                     survive_move=survive_move,
                     survive_pokemon_nature=survive_pokemon_nature,
@@ -3248,7 +3294,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         nature: Annotated[Optional[str], Field(description="Your Pokemon's nature (optional - auto-selects the best nature if not provided)")] = None,
         outspeed_pokemon: Annotated[Optional[str], Field(description="Pokemon to outspeed (optional)")] = None,
         outspeed_pokemon_nature: Annotated[str, Field(description="Speed target's nature")] = "timid",
-        outspeed_pokemon_evs: Annotated[int, Field(ge=0, le=252, description="Speed target's Speed EVs (0-252)")] = 252,
+        outspeed_pokemon_evs: Annotated[int, Field(ge=0, le=252, description="Target Speed EVs in mainline; native SP (0-32) in Champions. Legacy EV values above 32 are converted to SP.")] = 252,
         outspeed_at_speed_stage: Annotated[int, Field(ge=-6, le=6, description="Target's speed stage (-1 = after Icy Wind, -2 = after 2x Icy Wind)")] = 0,
         outspeed_target_has_booster: Annotated[bool, Field(description="True if the target has a Protosynthesis/Quark Drive speed boost (1.5x)")] = False,
         outspeed_target_has_tailwind: Annotated[bool, Field(description="True if the target has Tailwind active (2x speed)")] = False,
@@ -3329,6 +3375,12 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     my_types=my_types,
                     nature=nature,
                     threats=threats,
+                    target_stage=outspeed_at_speed_stage,
+                    target_booster=outspeed_target_has_booster,
+                    target_tailwind=outspeed_target_has_tailwind,
+                    booster=my_pokemon_has_booster,
+                    tailwind=my_pokemon_has_tailwind,
+                    speed_override=speed_evs,
                     outspeed_pokemon=outspeed_pokemon,
                     outspeed_pokemon_nature=outspeed_pokemon_nature,
                     outspeed_pokemon_evs=outspeed_pokemon_evs,
@@ -4082,7 +4134,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         nature: Annotated[Optional[str], Field(description="Your Pokemon's nature (auto-selected if None)")] = None,
         outspeed_pokemon: Annotated[Optional[str], Field(description="Pokemon to outspeed (optional)")] = None,
         outspeed_pokemon_nature: Annotated[str, Field(description="Speed target's nature")] = "timid",
-        outspeed_pokemon_evs: Annotated[int, Field(ge=0, le=252, description="Speed target's Speed EVs (0-252)")] = 252,
+        outspeed_pokemon_evs: Annotated[int, Field(ge=0, le=252, description="Target Speed EVs in mainline; native SP (0-32) in Champions. Legacy EV values above 32 are converted to SP.")] = 252,
         outspeed_at_speed_stage: Annotated[int, Field(ge=-6, le=6, description="Target's speed stage (e.g. -1 after Icy Wind)")] = 0,
         outspeed_target_has_booster: Annotated[bool, Field(description="True if the target has Protosynthesis/Quark Drive active (1.5x speed)")] = False,
         outspeed_target_has_tailwind: Annotated[bool, Field(description="True if the target has Tailwind (2x speed)")] = False,
@@ -4134,6 +4186,12 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     my_types=my_types,
                     nature=nature,
                     threats=threats,
+                    target_stage=outspeed_at_speed_stage,
+                    target_booster=outspeed_target_has_booster,
+                    target_tailwind=outspeed_target_has_tailwind,
+                    booster=my_pokemon_has_booster,
+                    tailwind=my_pokemon_has_tailwind,
+                    speed_override=speed_evs,
                     outspeed_pokemon=outspeed_pokemon,
                     outspeed_pokemon_nature=outspeed_pokemon_nature,
                     outspeed_pokemon_evs=outspeed_pokemon_evs,

@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-09-18
+
+### Champions SP corrections
+- Speed analysis uses native SP inputs. Bold Farigiraf reaches 90 Speed at
+  10 SP and 95 at 15 SP; benchmark searches account for both sides' Tailwind.
+- Completed role, benchmark, and survival recommendations spend all 66 SP
+  without exceeding 32 per stat. Item HP adjustments redistribute freed SP
+  without changing the chosen HP number or Speed benchmark. Partial analysis
+  results explicitly report remaining SP.
+- Survival attackers use Champions SPs, preserve sourced spreads, and expose
+  SP Showdown pastes. Explicit offensive investment is now respected.
+- Champions stat calculations ignore legacy IVs. Nature optimization no longer
+  silently sacrifices defensive stats to claim an investment saving.
+- Failed benchmark lookups return structured errors instead of a misleading
+  recommendation. Impossible Speed benchmarks are marked unverified, final
+  survival percentages are recalculated, and Champions tools reject Tera input.
+- Fixed invalid-input error codes, hardened allocation completion against unknown
+  stat names and fractional inputs, and synchronized package version constants.
+- Production verification now exercises Farigiraf's native SP stats, the
+  Tailwind Speed benchmark, and the 66-SP recommendation budget over live MCP.
+
 ### Changed
 - Render deploys are now pinned to `main` and begin only after GitHub CI passes.
   A post-deployment workflow waits for the exact commit SHA, initializes a live

@@ -10,7 +10,7 @@ Tool handlers should dispatch to this module when `pokemon.is_champions()`.
 import math
 from typing import Optional
 
-from ..models.pokemon import Nature
+from ..models.pokemon import Nature, StatPointSpread
 from .stats_champions import (
     SP_BREAKPOINTS_LV50,
     calculate_hp_sp,
@@ -40,6 +40,52 @@ def find_speed_sps_to_outspeed(
         if calculate_speed_sp(base_speed, iv, sp, level, nature) >= needed:
             return sp
     return None
+
+
+def design_speed_benchmark_sps(
+    base_speed: int,
+    target_base_speed: int,
+    target_sps: int,
+    nature: Nature,
+    target_nature: Nature,
+    *,
+    target_stage: int = 0,
+    target_booster: bool = False,
+    target_tailwind: bool = False,
+    booster: bool = False,
+    tailwind: bool = False,
+    fixed_sps: Optional[int] = None,
+) -> dict[str, int]:
+    """Find minimum SP to strictly outspeed a target after speed modifiers."""
+    if not 0 <= target_sps <= SP_PER_STAT_MAX or not -6 <= target_stage <= 6:
+        raise ValueError("Invalid Speed SP allocation or speed stage")
+    if fixed_sps is not None and not 0 <= fixed_sps <= SP_PER_STAT_MAX:
+        raise ValueError("Speed SP must be between 0 and 32")
+    target_speed = calculate_speed_sp(target_base_speed, sp=target_sps, nature=target_nature)
+    if target_booster:
+        target_speed = target_speed * 3 // 2
+    if target_stage >= 0:
+        target_speed = target_speed * (2 + target_stage) // 2
+    else:
+        target_speed = target_speed * 2 // (2 - target_stage)
+    if target_tailwind:
+        target_speed *= 2
+
+    for sp in ([fixed_sps] if fixed_sps is not None else SP_BREAKPOINTS_LV50):
+        speed = calculate_speed_sp(base_speed, sp=sp, nature=nature)
+        effective_speed = speed * 3 // 2 if booster else speed
+        if tailwind:
+            effective_speed *= 2
+        if effective_speed > target_speed:
+            break
+    return {
+        "target_speed": target_speed,
+        "target_sps": target_sps,
+        "sps_needed": sp,
+        "my_speed": speed,
+        "my_effective_speed": effective_speed,
+        "outspeeds": effective_speed > target_speed,
+    }
 
 
 # ---------- HP / Survival ----------
@@ -207,6 +253,36 @@ def find_attack_sps_for_ko(
 
 # ---------- Validators ----------
 
+def complete_sp_allocation(
+    allocation: dict[str, int],
+    priorities: tuple[str, ...] = ("hp", "defense", "special_defense"),
+    budget: int = SP_TOTAL_MAX,
+) -> dict[str, int]:
+    """Spend a recommendation's remaining budget without changing locked stats.
+
+    Existing investment is preserved. Only listed stats receive extra points,
+    so Speed benchmarks and item-specific HP numbers can be kept fixed.
+    Partial inputs remain supported by the stat calculators and search helpers.
+    """
+    if any(stat not in StatPointSpread.model_fields for stat in allocation):
+        raise ValueError("SP allocation contains unknown stat names")
+    if type(budget) is not int or any(type(value) is not int for value in allocation.values()):
+        raise ValueError("SP allocations and budgets must be whole numbers")
+    spread = StatPointSpread(**allocation)
+    if not spread.is_valid() or not spread.total <= budget <= SP_TOTAL_MAX:
+        raise ValueError("SP allocation exceeds the available budget")
+    result = dict(allocation)
+    remaining = budget - spread.total
+    for stat in priorities:
+        if stat not in StatPointSpread.model_fields:
+            raise ValueError(f"Unknown stat: {stat}")
+        extra = min(SP_PER_STAT_MAX - result.get(stat, 0), remaining)
+        result[stat] = result.get(stat, 0) + extra
+        remaining -= extra
+    if remaining:
+        raise ValueError("Cannot spend the SP budget without changing locked stats")
+    return result
+
 def validate_sp_allocation(allocation: dict[str, int]) -> dict:
     """Validate an SP allocation against the 32/stat, 66/total caps.
 
@@ -233,4 +309,5 @@ def validate_sp_allocation(allocation: dict[str, int]) -> dict:
         "over_budget": max(0, total - SP_TOTAL_MAX),
         "per_stat_violations": per_stat_violations,
         "remaining": max(0, SP_TOTAL_MAX - total),
+        "is_complete": total == SP_TOTAL_MAX and not per_stat_violations,
     }

@@ -43,6 +43,35 @@ def test_sse_json_extracts_json_rpc_envelope():
     assert verify_production._sse_json(body)["id"] == 1
 
 
+@pytest.mark.parametrize("bad", [None, "speed", "budget", "tailwind", "cap"])
+def test_champions_checks_catch_sp_regressions(monkeypatch, bad):
+    stats = {"format_system": "champions", "final_stats": {"speed": 90}, "sps": {"total": 66}}
+    benchmark = {
+        "verified": True,
+        "benchmarks": {"speed": {"sps_needed": 15, "my_effective_speed": 190, "target_speed": 189}},
+        "spread": {"hp_sps": 32, "atk_sps": 0, "def_sps": 9, "spa_sps": 0, "spd_sps": 10, "spe_sps": 15, "total": 66},
+    }
+    if bad == "speed":
+        stats["final_stats"]["speed"] = 81
+    elif bad == "budget":
+        stats["sps"]["total"] = 64
+    elif bad == "tailwind":
+        benchmark["benchmarks"]["speed"]["my_effective_speed"] = 95
+    elif bad == "cap":
+        benchmark["spread"]["hp_sps"] = 33
+    payloads = {"set_session_regulation": {"success": True}, "get_pokemon_stats": stats,
+                "design_spread_with_benchmarks": benchmark}
+    def post(url, request, session_id=None):
+        payload = payloads[request["params"]["name"]]
+        return {"result": {"structuredContent": payload}}, Message()
+    monkeypatch.setattr(verify_production, "_post_mcp", post)
+    if bad:
+        with pytest.raises(RuntimeError):
+            verify_production.verify_champions_tools("https://example.invalid/mcp", "session")
+    else:
+        verify_production.verify_champions_tools("https://example.invalid/mcp", "session")
+
+
 def test_sse_json_rejects_response_without_data_event():
     with pytest.raises(ValueError, match="SSE data event"):
         verify_production._sse_json("event: ping\n\n")

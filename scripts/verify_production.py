@@ -130,6 +130,40 @@ def verify_functional_tools(mcp_url: str, session_id: str) -> None:
         raise RuntimeError("Production outcome distribution does not sum to one")
 
 
+def verify_champions_tools(mcp_url: str, session_id: str) -> None:
+    """Check native SP interpretation, Tailwind and the full budget in production."""
+    def call(request_id: int, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        envelope, _ = _post_mcp(mcp_url, {
+            "jsonrpc": "2.0", "id": request_id, "method": "tools/call",
+            "params": {"name": name, "arguments": arguments},
+        }, session_id=session_id)
+        return _tool_payload(envelope)
+
+    call(6, "set_session_regulation", {"regulation": "Reg MA"})
+    stats = call(7, "get_pokemon_stats", {
+        "pokemon_name": "farigiraf", "nature": "bold", "hp_evs": 32,
+        "def_evs": 24, "spe_evs": 10,
+    })
+    if stats.get("format_system") != "champions" or stats.get("final_stats", {}).get("speed") != 90:
+        raise RuntimeError(f"Production Champions SP regression: {stats}")
+    if stats.get("sps", {}).get("total") != 66:
+        raise RuntimeError(f"Production Champions budget regression: {stats}")
+
+    benchmark = call(8, "design_spread_with_benchmarks", {
+        "pokemon_name": "farigiraf", "nature": "bold", "outspeed_pokemon": "salamence-mega",
+        "outspeed_pokemon_nature": "timid", "outspeed_pokemon_evs": 32,
+        "my_pokemon_has_tailwind": True,
+    })
+    speed = benchmark.get("benchmarks", {}).get("speed", {})
+    spread = benchmark.get("spread", {})
+    if (not benchmark.get("verified") or speed.get("sps_needed") != 15
+            or speed.get("my_effective_speed") != 190 or speed.get("target_speed") != 189
+            or spread.get("total") != 66
+            or any(not 0 <= spread.get(stat, -1) <= 32 for stat in
+                   ("hp_sps", "atk_sps", "def_sps", "spa_sps", "spd_sps", "spe_sps"))):
+        raise RuntimeError(f"Production Champions Tailwind regression: {benchmark}")
+
+
 def verify_mcp(base_url: str, health: dict[str, Any]) -> None:
     mcp_url = f"{base_url}/mcp"
     initialize, response_headers = _post_mcp(
@@ -192,6 +226,7 @@ def verify_mcp(base_url: str, health: dict[str, Any]) -> None:
 
     try:
         verify_functional_tools(mcp_url, session_id)
+        verify_champions_tools(mcp_url, session_id)
     finally:
         try:
             _request(

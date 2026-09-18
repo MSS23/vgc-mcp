@@ -13,7 +13,9 @@ from pydantic import Field
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
 from vgc_mcp_core.calc.stats import calculate_speed
+from vgc_mcp_core.calc.stats_champions import calculate_speed_sp
 from vgc_mcp_core.models.pokemon import Nature
+from vgc_mcp_core.rules.format_detect import detect_champions_format
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 # Common VGC Pokemon with their base speeds and common speed investments
@@ -97,7 +99,7 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
         pokemon_name: Annotated[str, Field(description="Your Pokemon's name", min_length=1)],
         target_pokemon: Annotated[str, Field(description="The target Pokemon to compare against", min_length=1)],
         nature: Annotated[str, Field(description="Your Pokemon's nature (ignored if speed_stat is provided)")] = "serious",
-        speed_evs: Annotated[int, Field(ge=0, le=252, description="Your Pokemon's Speed EVs (0-252; ignored if speed_stat is provided)")] = 0,
+        speed_evs: Annotated[int, Field(ge=0, le=252, description="Speed EVs (0-252), or Stat Points (0-32) in Champions; ignored if speed_stat is provided")] = 0,
         speed_stat: Annotated[Optional[int], Field(description="Your Pokemon's final Speed stat (overrides the nature/EVs calculation)")] = None
     ) -> dict:
         """Analyze what percentage of a target Pokemon's common spreads you outspeed.
@@ -106,6 +108,10 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
         meta speed tiers and then calculated standard spreads.
         """
         try:
+            is_champions = detect_champions_format(pokemon_name)
+            speed_calc = calculate_speed_sp if is_champions else calculate_speed
+            if is_champions and speed_stat is None and speed_evs > 32:
+                return error_response(ErrorCodes.INVALID_PARAMETER, "Speed Stat Points must be between 0 and 32")
             # Get base stats for your Pokemon
             base_stats = await pokeapi.get_base_stats(pokemon_name)
 
@@ -118,7 +124,7 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
             if speed_stat is not None:
                 your_speed = speed_stat
             else:
-                your_speed = calculate_speed(base_stats.speed, 31, speed_evs, 50, parsed_nature)
+                your_speed = speed_calc(base_stats.speed, 31, speed_evs, 50, parsed_nature)
 
             # Normalize target name
             target_lower = target_pokemon.lower().replace(" ", "-")
@@ -147,7 +153,7 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
                     pass  # Fall through to fallbacks
 
             # Fallback 1: META_SPEED_TIERS (calculated dynamically from spreads)
-            if not target_spreads:
+            if not target_spreads and not is_champions:
                 from vgc_mcp_core.calc.speed import get_meta_speed_tier
                 target_data = get_meta_speed_tier(target_pokemon)
                 if target_data:
@@ -190,11 +196,12 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
             if not target_spreads:
                 try:
                     target_base = await pokeapi.get_base_stats(target_pokemon)
+                    max_investment = 32 if is_champions else 252
                     target_spreads = [
-                        {"speed": calculate_speed(target_base.speed, 31, 252, 50, Nature.JOLLY), "usage": 35},
-                        {"speed": calculate_speed(target_base.speed, 31, 252, 50, Nature.SERIOUS), "usage": 25},
-                        {"speed": calculate_speed(target_base.speed, 31, 0, 50, Nature.SERIOUS), "usage": 20},
-                        {"speed": calculate_speed(target_base.speed, 31, 0, 50, Nature.BRAVE), "usage": 20},
+                        {"speed": speed_calc(target_base.speed, 31, max_investment, 50, Nature.JOLLY), "usage": 35},
+                        {"speed": speed_calc(target_base.speed, 31, max_investment, 50, Nature.SERIOUS), "usage": 25},
+                        {"speed": speed_calc(target_base.speed, 31, 0, 50, Nature.SERIOUS), "usage": 20},
+                        {"speed": speed_calc(target_base.speed, 31, 0, 50, Nature.BRAVE), "usage": 20},
                     ]
                     target_base_speed = target_base.speed
                     data_source = "calculated"
@@ -256,7 +263,8 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
             if speed_stat is not None:
                 speed_source = f"At {your_speed} Speed:"
             else:
-                speed_source = f"At {your_speed} Speed ({nature}, {speed_evs} EVs):"
+                unit = "SPs" if is_champions else "EVs"
+                speed_source = f"At {your_speed} Speed ({nature}, {speed_evs} {unit}):"
 
             disclaimer = "(Estimated from Smogon usage data)"
 
@@ -290,7 +298,8 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
                 "pokemon": pokemon_name,
                 "your_speed": your_speed,
                 "nature": nature if speed_stat is None else None,
-                "speed_evs": speed_evs if speed_stat is None else None,
+                "speed_sps" if is_champions else "speed_evs": speed_evs if speed_stat is None else None,
+                **({"format_system": "champions"} if is_champions else {}),
                 "speed_stat": speed_stat,
                 "target_pokemon": target_pokemon,
                 "target_base_speed": target_base_speed,
