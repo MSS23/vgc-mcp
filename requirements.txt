@@ -9,7 +9,7 @@
 # file; it exists for platforms that only accept a requirements.txt.
 
 # Core (pyproject [project].dependencies)
-mcp>=1.0.0,<2.0  # 2.0 removed mcp.server.fastmcp; upgrading is a migration
+mcp>=1.0.0,<3.0  # 2.0 removed mcp.server.fastmcp; upgrading is a migration
 httpx>=0.27.0
 pydantic>=2.0.0
 diskcache>=5.6.0
