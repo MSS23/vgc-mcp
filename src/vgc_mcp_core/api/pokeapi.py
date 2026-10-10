@@ -15,7 +15,7 @@ from ..models.move import (
     is_always_crit_move,
     move_makes_contact,
 )
-from ..models.pokemon import BaseStats
+from ..models.pokemon import NATURE_MODIFIERS, BaseStats, Nature
 from ..utils.normalize import normalize_move, reorder_mega_prefix
 from .cache import APICache
 
@@ -188,9 +188,23 @@ class PokeAPIClient:
         raise PokeAPIError(f"Failed after {settings.API_MAX_RETRIES} attempts: {last_error}")
 
     async def get_pokemon(self, name_or_id: str | int) -> dict:
-        """Get Pokemon data including base stats, types, abilities."""
+        """Get Pokemon data including base stats, types, abilities.
+
+        Returns the raw PokeAPI payload with two keys normalized for callers:
+        ``base_stats`` (dict keyed by canonical stat names) and ``types``
+        (capitalized type names, e.g. ``["Ghost", "Fairy"]``). Raises
+        PokeAPIError when the Pokemon does not exist.
+        """
         name = self._normalize_name(str(name_or_id))
-        return await self._fetch(f"pokemon/{name}")
+        data = await self._fetch(f"pokemon/{name}")
+        stats = {
+            s["stat"]["name"].replace("-", "_"): s["base_stat"] for s in data.get("stats", [])
+        }
+        types = [
+            t["type"]["name"].capitalize() if isinstance(t, dict) else t
+            for t in data.get("types", [])
+        ]
+        return {**data, "base_stats": stats, "types": types}
 
     async def get_pokemon_species(self, name_or_id: str | int) -> dict:
         """Get Pokemon species data (for species clause)."""
@@ -204,31 +218,34 @@ class PokeAPIClient:
 
     async def get_base_stats(self, name_or_id: str | int) -> BaseStats:
         """Extract base stats from Pokemon data."""
-        data = await self.get_pokemon(name_or_id)
-
-        stats_dict = {}
-        for stat_entry in data["stats"]:
-            stat_name = stat_entry["stat"]["name"]
-            # Convert API names to our model names
-            if stat_name == "special-attack":
-                stat_name = "special_attack"
-            elif stat_name == "special-defense":
-                stat_name = "special_defense"
-            stats_dict[stat_name] = stat_entry["base_stat"]
-
+        s = (await self.get_pokemon(name_or_id))["base_stats"]
         return BaseStats(
-            hp=stats_dict["hp"],
-            attack=stats_dict["attack"],
-            defense=stats_dict["defense"],
-            special_attack=stats_dict["special_attack"],
-            special_defense=stats_dict["special_defense"],
-            speed=stats_dict["speed"]
+            hp=s["hp"], attack=s["attack"], defense=s["defense"],
+            special_attack=s["special_attack"], special_defense=s["special_defense"],
+            speed=s["speed"],
         )
+
+    async def get_pokemon_stats(self, name_or_id: str | int) -> dict[str, int]:
+        """Base stats keyed by PokeAPI stat names ("hp", "special-defense", ...)."""
+        data = await self.get_pokemon(name_or_id)
+        return {s["stat"]["name"]: s["base_stat"] for s in data["stats"]}
+
+    async def get_nature(self, name: str) -> dict:
+        """Nature in PokeAPI's shape, built from the local table (no network).
+
+        Neutral natures return ``{}``; unknown names raise ValueError.
+        """
+        nature = Nature(name.strip().lower())
+        mods = NATURE_MODIFIERS.get(nature, {})
+        result: dict = {}
+        for stat, mult in mods.items():
+            key = "increased_stat" if mult > 1 else "decreased_stat"
+            result[key] = {"name": stat.replace("_", "-")}
+        return result
 
     async def get_pokemon_types(self, name_or_id: str | int) -> list[str]:
         """Get Pokemon types."""
-        data = await self.get_pokemon(name_or_id)
-        return [t["type"]["name"].capitalize() for t in data["types"]]
+        return list((await self.get_pokemon(name_or_id))["types"])
 
     async def get_pokemon_abilities(self, name_or_id: str | int) -> list[str]:
         """Get Pokemon abilities."""

@@ -124,7 +124,11 @@ class TestPokeAPIClient:
             result = await client.get_pokemon("flutter-mane")
 
             assert result["name"] == "flutter-mane"
-            assert len(result["types"]) == 2
+            # Callers index these normalized keys directly (quick_damage_check,
+            # analyze_speed_matchup, ...); the raw payload has neither.
+            assert result["types"] == ["Ghost", "Fairy"]
+            assert result["base_stats"]["special_attack"] == 135
+            assert result["base_stats"]["speed"] == 135
             mock_fetch.assert_called_once_with("pokemon/flutter-mane")
 
     @pytest.mark.asyncio
@@ -182,7 +186,7 @@ class TestPokeAPIClient:
         with patch.object(client, '_get_client') as mock_get_client:
             result = await client.get_pokemon("flutter-mane")
 
-            assert result == FLUTTER_MANE_RESPONSE
+            assert result["name"] == FLUTTER_MANE_RESPONSE["name"]
             # _get_client should not be called when cache hits
             mock_get_client.assert_not_called()
 
