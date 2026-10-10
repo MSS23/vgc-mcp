@@ -26,7 +26,7 @@ Directories mirror the architecture — find the code, find its tests:
   tool returns a raw `{"error": ...}` instead of `error_response(...)`.
 - **`test_tool_registry.py`** — duplicate tool names or missing registration
   dependencies must be fatal at startup, never silently swallowed.
-- **`test_deploy_smoke.py`** — pins the total tool count (208). Dropping a
+- **`test_deploy_smoke.py`** — pins the total tool count (213). Dropping a
   registration module fails here instead of quietly shipping a smaller server.
 - **`test_http_transport.py` / `test_verify_production.py`** — the HTTP
   transport and the deploy smoke-test script itself.

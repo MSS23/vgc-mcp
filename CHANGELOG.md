@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- ~24 tools failed in production with `internal_error`/`calculation_error`:
+  workflow tools (`quick_damage_check`, `analyze_speed_matchup`,
+  `compare_pokemon_options`, `find_counter_for`, `check_team_vs_threat`,
+  `evaluate_core`, `design_pokemon_for_role`, `optimize_spread`,
+  `import_and_analyze`), all six chip-damage tools, all seven item tools
+  (Booster Energy, Assault Vest, Eviolite, Choice, Life Orb, Focus Sash,
+  berry thresholds), `check_coverage_vs_target` and part of
+  `find_speed_benchmark`. Root cause: `PokeAPIClient.get_pokemon`
+  returned the raw PokeAPI payload while callers indexed `base_stats` and flat
+  `types`, and `get_pokemon_stats` / `get_nature` were called but never
+  existed. Tool tests mocked the shape callers wanted, hiding it.
+  `get_pokemon` now returns normalized `base_stats` + `types`, the two
+  missing client methods exist (`get_nature` uses the local nature table, no
+  network), and `tests/api/test_pokeapi_contract.py` runs tools against the
+  real client with raw payloads.
+- Gen 9 Snow no longer deals 6.25% chip (only legacy Hail does); Ice Body
+  now heals in Hail/Snow instead of being reported as "immune"; `"sand"` is
+  accepted as Sandstorm instead of silently returning 0 damage.
+- MCP `initialize` reported the mcp SDK version (`1.30.0`) as
+  `serverInfo.version`; it now reports the package version.
+
+### Changed
+- Smogon 404s (unpublished month, retired format) are cached for 1 hour, so
+  usage lookups stop re-requesting the same missing chaos files every call.
+- Bearer auth compares tokens in constant time; the per-IP rate limiter
+  prunes expired buckets instead of growing without bound.
+- Docs: tool count 208 -> 213 in CLAUDE.md, WIKI.md, smithery.yaml and
+  package READMEs; removed links to the disabled GitHub Discussions and the
+  non-existent Smithery icon. CI mypy baseline lowered to 1134.
+- Added `docs/REVIEW-2026-10-10.md`.
+
 ## [1.0.1] - 2026-09-18
 
 ### Champions SP corrections

@@ -3,14 +3,13 @@
 name: vgc-mcp
 displayName: VGC Pokémon Coach
 description: >
-  Pokémon VGC team-building and live battle coaching over MCP. 208 tools for
+  Pokémon VGC team-building and live battle coaching over MCP. 213 tools for
   Showdown-accurate damage calcs, multi-threat EV optimization, replay
   analysis, breakpoint finding, and turn-by-turn battle copilot. Plug into
   Claude Desktop, ChatGPT, or any MCP client.
 homepage: https://github.com/MSS23/vgc-mcp
 repository: https://github.com/MSS23/vgc-mcp
 license: MIT
-icon: https://raw.githubusercontent.com/MSS23/vgc-mcp/main/docs/assets/icon.png
 
 categories:
   - games
@@ -45,7 +44,7 @@ local:
 
 # Tool count + categories for discovery
 tools:
-  count: 208
+  count: 213
   highlights:
     - calculate_damage_output
     - find_survival_evs

@@ -360,7 +360,7 @@ Examples, mockups, related features
 
 ## Questions?
 
-- Open a [Discussion](https://github.com/MSS23/vgc-mcp/discussions)
+- Open an [issue](https://github.com/MSS23/vgc-mcp/issues)
 - Ask in an existing issue
 - Contact maintainers
 

@@ -596,7 +596,6 @@ rm -rf data/cache/
 - **Deployment**: [DEPLOYMENT.md](deploy.md)
 - **API reference**: [API_REFERENCE.md](api-reference.md)
 - **Report issues**: https://github.com/MSS23/vgc-mcp/issues
-- **Discussions**: https://github.com/MSS23/vgc-mcp/discussions
 
 ---
 
