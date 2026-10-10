@@ -15,6 +15,7 @@ Both middlewares are **opt-in via environment variables** so the default
 
 from __future__ import annotations
 
+import hmac
 import time
 from collections import defaultdict
 from threading import Lock
@@ -67,9 +68,10 @@ class BearerAuthMiddleware:
             return await self.app(scope, receive, send)
 
         headers = dict(scope.get("headers") or [])
-        provided = headers.get(b"authorization", b"").decode()
-        expected = f"Bearer {self.api_key}"
-        if provided == expected:
+        provided = headers.get(b"authorization", b"")
+        expected = f"Bearer {self.api_key}".encode()
+        # Constant-time bytes compare: no timing leak, no decode errors on junk headers.
+        if hmac.compare_digest(provided, expected):
             return await self.app(scope, receive, send)
 
         await _send_json(
@@ -114,6 +116,13 @@ class RateLimitMiddleware:
 
     def _allowed(self, ip: str, now: float) -> bool:
         with self._lock:
+            # Drop expired buckets so one-off client IPs don't accumulate
+            # forever on a long-lived public instance.
+            if len(self._buckets) > 10_000:
+                self._buckets = defaultdict(
+                    lambda: (0.0, 0),
+                    {k: v for k, v in self._buckets.items() if now - v[0] < self.window},
+                )
             start, count = self._buckets[ip]
             if now - start >= self.window:
                 self._buckets[ip] = (now, 1)

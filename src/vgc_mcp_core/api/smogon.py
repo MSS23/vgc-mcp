@@ -168,6 +168,10 @@ class SmogonStatsClient:
         cached = self.cache.get("smogon", cache_key)
         if cached is not None:
             return cached
+        # Month/format/rating combos that 404'd recently (unpublished month,
+        # retired format) are skipped; otherwise every lookup re-walks them.
+        if self.cache.get("smogon_missing", cache_key) is True:
+            return None
 
         client = await self._get_client()
         url = f"{settings.SMOGON_STATS_BASE_URL}/{month}/chaos/{format_name}-{rating}.json"
@@ -188,6 +192,7 @@ class SmogonStatsClient:
                 return data
             elif response.status_code == 404:
                 logger.debug(f"Smogon stats not found: {month}/{format_name}/{rating}")
+                self.cache.set("smogon_missing", cache_key, value=True, expire=3600)
         except httpx.RequestError as e:
             logger.warning(f"Smogon request error for {url}: {e}")
 

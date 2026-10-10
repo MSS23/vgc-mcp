@@ -92,6 +92,16 @@ def test_rate_limit_returns_429_over_limit():
     assert client.get("/health").status_code == 200
 
 
+def test_rate_limit_prunes_expired_buckets():
+    from vgc_mcp.http_middleware import RateLimitMiddleware
+
+    rl = RateLimitMiddleware(app=None, limit=5, window=60.0)
+    for i in range(10_001):
+        rl._allowed(f"10.0.{i // 256}.{i % 256}", now=0.0)
+    assert rl._allowed("1.2.3.4", now=120.0)  # every old bucket has expired
+    assert len(rl._buckets) == 1
+
+
 def test_rate_limit_disabled_when_zero():
     from starlette.middleware import Middleware
 

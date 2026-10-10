@@ -41,6 +41,7 @@ from vgc_mcp_core.presentation import PRESENTATION_INSTRUCTIONS
 from vgc_mcp_core.state.session_registry import make_scoped_managers
 from vgc_mcp_core.team.analysis import TeamAnalyzer
 
+from . import __version__
 from .tools import register_all as register_all_tools
 
 # This is the plain-MCP server. It does NOT depend on mcp-ui-server. Any
@@ -50,6 +51,9 @@ from .tools import register_all as register_all_tools
 
 # Initialize MCP server — shared presentation rules in vgc_mcp_core.presentation
 mcp = FastMCP("VGC Team Builder", instructions=PRESENTATION_INSTRUCTIONS)
+# FastMCP has no version kwarg; without this, initialize reports the mcp SDK
+# version (e.g. "1.30.0") as serverInfo.version instead of ours.
+mcp._mcp_server.version = __version__
 
 
 # ============================================================================
