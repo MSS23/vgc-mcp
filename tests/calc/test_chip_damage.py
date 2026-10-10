@@ -174,3 +174,21 @@ class TestWeatherChip:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestGen9Snow:
+    """Gen 9 Snow deals no chip; Hail still does; Ice Body heals in both."""
+
+    def test_snow_deals_no_damage(self):
+        r = calculate_weather_chip("snow", 200, 200, ["Water"])
+        assert r.damage == 0 and r.hp_after == 200
+
+    def test_hail_still_chips(self):
+        assert calculate_weather_chip("hail", 160, 160, ["Water"]).damage == 10
+
+    def test_ice_body_heals_in_snow(self):
+        r = calculate_weather_chip("snow", 100, 160, ["Ice"], "Ice Body")
+        assert r.is_healing and r.hp_after == 110
+
+    def test_sand_alias(self):
+        assert calculate_weather_chip("sand", 160, 160, ["Fire"]).damage == 10

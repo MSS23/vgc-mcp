@@ -72,6 +72,7 @@ def calculate_weather_chip(
         ChipDamageResult with damage/healing info
     """
     weather = weather.lower() if weather else ""
+    weather = {"sand": "sandstorm"}.get(weather, weather)
     normalized_types = [t.lower() for t in pokemon_types]
     normalized_ability = ability.lower().replace(" ", "-") if ability else ""
 
@@ -135,6 +136,34 @@ def calculate_weather_chip(
 
     # Hail/Snow damage (6.25% = 1/16)
     if weather in ["hail", "snow"]:
+        # Ice Body heals in Hail/Snow instead
+        if normalized_ability == "ice-body":
+            healing = max_hp // 16
+            return ChipDamageResult(
+                source=weather.title(),
+                damage=-healing,
+                damage_percent=-round((healing / max_hp) * 100, 2),
+                is_healing=True,
+                immune=False,
+                immunity_reason=None,
+                hp_after=min(max_hp, current_hp + healing),
+                notes=["Ice Body heals 6.25% HP in Hail/Snow"]
+            )
+
+        # Gen 9 Snow replaced Hail and deals no chip damage (it only boosts
+        # Ice-type Defense, handled in the damage calc).
+        if weather == "snow":
+            return ChipDamageResult(
+                source="Snow",
+                damage=0,
+                damage_percent=0,
+                is_healing=False,
+                immune=True,
+                immunity_reason="Snow deals no damage in Gen 9 (it boosts Ice-type Defense)",
+                hp_after=current_hp,
+                notes=[]
+            )
+
         # Check type immunity
         if "ice" in normalized_types:
             return ChipDamageResult(
@@ -161,20 +190,6 @@ def calculate_weather_chip(
                     hp_after=current_hp,
                     notes=[]
                 )
-
-        # Ice Body heals in Hail/Snow instead
-        if normalized_ability == "ice-body":
-            healing = max_hp // 16
-            return ChipDamageResult(
-                source=weather.title(),
-                damage=-healing,
-                damage_percent=-round((healing / max_hp) * 100, 2),
-                is_healing=True,
-                immune=False,
-                immunity_reason=None,
-                hp_after=min(max_hp, current_hp + healing),
-                notes=["Ice Body heals 6.25% HP in Hail/Snow"]
-            )
 
         damage = max_hp // 16
         damage_percent = (damage / max_hp) * 100
