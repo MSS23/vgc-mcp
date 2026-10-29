@@ -282,6 +282,72 @@ class TestCalculateDamageOutputChampionsDisplayFields:
         assert "0/0/0/252/0/0" in res["condensed_summary"]["attacker_line"]
 
 
+class TestCalculateDamageOutputChampionsSmogonSets:
+    """Champions chaos spreads carry `sps`, not `evs`. The per-set results and
+    the attacker/defender spread blocks must show those SPs (they used to print
+    as 0/0/0/0/0/0) and cite the chaos month/format/rating."""
+
+    @staticmethod
+    def _fake_smogon():
+        usage = {
+            "spreads": [
+                {"nature": "Careful", "sps": {"hp": 32, "attack": 0, "defense": 10,
+                                               "special_attack": 0, "special_defense": 24, "speed": 0},
+                 "format_system": "champions", "usage": 41.2},
+                {"nature": "Adamant", "sps": {"hp": 24, "attack": 16, "defense": 0,
+                                               "special_attack": 0, "special_defense": 0, "speed": 26},
+                 "format_system": "champions", "usage": 22.5},
+            ],
+            "items": {"Sitrus Berry": 55.0},
+            "abilities": {"Intimidate": 99.0},
+            "tera_types": {},
+            "_meta": {"month": "2026-09", "format": "gen9championsvgc2026regmc", "rating": 1630},
+        }
+        smogon = MagicMock()
+        smogon.get_pokemon_usage = AsyncMock(return_value=usage)
+        smogon.current_regulation_from_data = "MC"
+        return smogon
+
+    def test_per_set_results_show_sps_and_cite_chaos_month(self, champions_session):
+        mcp = FastMCP("test")
+        captured = {}
+        orig = mcp.tool
+
+        def patched(*a, **k):
+            decorator = orig(*a, **k)
+
+            def wrap(fn):
+                captured[fn.__name__] = fn
+                return decorator(fn)
+            return wrap
+
+        mcp.tool = patched
+        register_damage_tools(mcp, _fake_pokeapi(_moonblast()), smogon=self._fake_smogon())
+
+        res = asyncio.run(captured["calculate_damage_output"](
+            attacker_name="flutter-mane",
+            defender_name="incineroar",
+            move_name="moonblast",
+            attacker_nature="timid",
+            attacker_sps="0/0/0/32/2/32",
+        ))
+        assert "error" not in res, res
+
+        sets = res["results_by_spread"]
+        assert [r["sps"]["attack"] for r in sets] == [0, 16]
+        assert sets[1]["ev_string"] == "Adamant 24/16/0/0/0/26 SP"
+        assert all(r["allocation_unit"] == "SP" and "evs" not in r for r in sets)
+        assert sets[0]["usage_percent"] == 41.2
+        # The two sets have different bulk, so the damage must differ.
+        assert sets[0]["damage_max"] != sets[1]["damage_max"]
+
+        assert res["defender_spread"]["sps"]["special_defense"] == 24
+        assert res["defender_spread"]["allocation_unit"] == "SP"
+        assert res["attacker_spread"]["sps"]["special_attack"] == 32
+        assert res["data_source"]["month"] == "2026-09"
+        assert res["data_source"]["rating"] == 1630
+
+
 # --------------------------------------------------------------------------- #
 # [T3-b] find_survival_evs
 # --------------------------------------------------------------------------- #

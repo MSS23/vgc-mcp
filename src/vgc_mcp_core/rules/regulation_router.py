@@ -23,6 +23,9 @@ from .restricted import is_banned, is_restricted
 # Canonical aliases: every key is a normalized phrase (lowercase, hyphens and
 # spaces collapsed to underscores) -> regulation code in regulations.json.
 # Order matters only for documentation; lookup is exact-match.
+# Sentinel alias target: resolved to `_champions_code(cfg)` at lookup time.
+CHAMPIONS_DEFAULT = "<newest-champions>"
+
 _ALIASES: dict[str, str] = {
     # Reg F (mainline, 2 restricteds)
     "f": "reg_f",
@@ -64,7 +67,7 @@ _ALIASES: dict[str, str] = {
     "champions_regulation_ma": "reg_ma_champs",
     "ncp_ma": "reg_ma_champs",
 
-    # Reg MB — Pokemon Champions (current default; superset of MA's roster)
+    # Reg MB — Pokemon Champions (superset of MA's roster; reachable via explicit MB wording)
     "mb": "reg_mb_champs",
     "m_b": "reg_mb_champs",
     "reg_mb": "reg_mb_champs",
@@ -76,30 +79,40 @@ _ALIASES: dict[str, str] = {
     "champions_regulation_mb": "reg_mb_champs",
     "ncp_mb": "reg_mb_champs",
 
-    # Generic Champions phrasing -> current default regulation (MB)
-    "champions": "reg_mb_champs",
-    "pokemon_champions": "reg_mb_champs",
-    "champs": "reg_mb_champs",
-    "ncp": "reg_mb_champs",
-    "gen10": "reg_mb_champs",
-    "gen_10": "reg_mb_champs",
-}
+    # Reg MC — Pokemon Champions (current default; superset of MB's roster)
+    "mc": "reg_mc_champs",
+    "m_c": "reg_mc_champs",
+    "reg_mc": "reg_mc_champs",
+    "reg_m_c": "reg_mc_champs",
+    "regulation_mc": "reg_mc_champs",
+    "regulation_m_c": "reg_mc_champs",
+    "champions_mc": "reg_mc_champs",
+    "champions_reg_mc": "reg_mc_champs",
+    "champions_regulation_mc": "reg_mc_champs",
+    "ncp_mc": "reg_mc_champs",
 
-# Champions ships as two regulations: MA (original) and MB (a superset of MA's
-# roster, currently the default). Generic "champions" phrasing and Pokemon-based
-# detection resolve to MB; MA stays reachable only via explicit "reg ma" / "MA".
-_CHAMPIONS_DEFAULT = "reg_mb_champs"
-_CHAMPIONS_FALLBACK = "reg_ma_champs"
+    # Generic Champions phrasing -> the newest Champions regulation in
+    # regulations.json (resolved at lookup time by `_champions_code`), so a reg
+    # appended by scripts/sync_regulations.py becomes the default with no edit here.
+    "champions": CHAMPIONS_DEFAULT,
+    "pokemon_champions": CHAMPIONS_DEFAULT,
+    "champs": CHAMPIONS_DEFAULT,
+    "ncp": CHAMPIONS_DEFAULT,
+    "gen10": CHAMPIONS_DEFAULT,
+    "gen_10": CHAMPIONS_DEFAULT,
+}
 
 
 def _champions_code(cfg: RegulationConfig) -> Optional[str]:
-    """Return the active Champions regulation code (MB if present, else MA)."""
-    available = set(cfg.list_regulation_codes())
-    if _CHAMPIONS_DEFAULT in available:
-        return _CHAMPIONS_DEFAULT
-    if _CHAMPIONS_FALLBACK in available:
-        return _CHAMPIONS_FALLBACK
-    return None
+    """Newest Champions regulation by start_date (MC today), or None.
+
+    Generic "champions" phrasing and Mega-based detection resolve here; older
+    Champions regs stay reachable only via explicit "Reg MB" / "MA" wording.
+    """
+    champs = [c for c in cfg.list_regulation_codes() if cfg.get_format_system(c) == "champions"]
+    if not champs:
+        return None
+    return max(champs, key=lambda c: (cfg.get_regulation(c).get("start_date") or "", c))
 
 
 def _normalize(phrase: str) -> str:
@@ -139,17 +152,22 @@ def resolve_regulation(
 
     # 2. Alias table
     aliased = _ALIASES.get(norm)
+    if aliased == CHAMPIONS_DEFAULT:
+        return _champions_code(cfg)
     if aliased and aliased in available:
         return aliased
 
-    # 3. Pattern fallback for `reg_<letter>` / single letter
-    m = re.fullmatch(r"reg_?([a-z])", norm)
+    # 3. Pattern fallback: "reg f" / "regulation_f" / "f" -> reg_f and
+    # "reg mc" / "regulation m-c" / "mc" -> reg_mc_champs, if that code exists.
+    # This is what makes a regulation added only to regulations.json selectable.
+    m = re.fullmatch(r"(?:reg(?:ulation)?_?)?m_?([a-z])", norm)
     if m:
-        candidate = f"reg_{m.group(1)}"
+        candidate = f"reg_m{m.group(1)}_champs"
         if candidate in available:
             return candidate
-    if len(norm) == 1 and norm.isalpha():
-        candidate = f"reg_{norm}"
+    m = re.fullmatch(r"(?:reg(?:ulation)?_?)?([a-z])", norm)
+    if m:
+        candidate = f"reg_{m.group(1)}"
         if candidate in available:
             return candidate
 
@@ -181,9 +199,9 @@ def infer_format_from_pokemon(
     """Guess which regulation a team belongs to from the Pokemon mentioned.
 
     Heuristics, in order:
-    1. Any Mega form -> the default Champions reg (MB; Megas are Champions-only).
+    1. Any Mega form -> the default Champions reg (MC; Megas are Champions-only).
     2. Any name in the Champions allowlist BUT illegal in mainline (e.g. an
-       NCP-only mon) -> the default Champions reg (MB).
+       NCP-only mon) -> the default Champions reg (MC).
     3. Count Pokemon that are restricted in mainline regs:
        - 0 restricteds -> the active 0-restrict reg (`reg_f` first, then `reg_h`)
        - 1 restricted  -> `reg_g`

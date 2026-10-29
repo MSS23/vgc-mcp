@@ -14,7 +14,7 @@ from vgc_mcp_core.tools.smogon_helpers import get_common_spreads
 pytestmark = pytest.mark.integration
 
 
-@pytest.mark.parametrize("regulation,allocation", [("reg_i", "evs"), ("reg_mb_champs", "sps")])
+@pytest.mark.parametrize("regulation,allocation", [("reg_i", "evs"), ("reg_mb_champs", "sps"), ("reg_mc_champs", "sps")])
 async def test_live_chaos_common_sets_reach_calculations(tmp_path, regulation, allocation):
     config = RegulationConfig()
     config.set_session_regulation(regulation)
@@ -36,7 +36,7 @@ async def test_live_chaos_common_sets_reach_calculations(tmp_path, regulation, a
         cache.close()
 
 
-@pytest.mark.parametrize("regulation", ["reg_i", "reg_mb_champs"])
+@pytest.mark.parametrize("regulation", ["reg_i", "reg_mb_champs", "reg_mc_champs"])
 async def test_live_preparation_workflow(tmp_path, regulation):
     cache = APICache(str(tmp_path / "preparation-cache"))
     pokeapi = PokeAPIClient(cache)

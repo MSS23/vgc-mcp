@@ -116,7 +116,7 @@ tournament results or mixed into usage frequencies.
 The regression suite exercises MCP argument validation and serialization,
 report generation, source locking, reference isolation, exports, exact final
 paste round-trips and mathematical edge cases. Live tests additionally exercise
-real PokeAPI and chaos data for Reg I and Champions MB. The post-deployment
+real PokeAPI and chaos data for Reg I and Champions MB/MC. The post-deployment
 verifier now fetches real common spreads and checks a deterministic damage
 calculation, beyond registering tools and returning a welcome message.
 

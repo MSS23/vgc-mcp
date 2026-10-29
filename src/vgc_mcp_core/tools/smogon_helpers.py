@@ -24,8 +24,9 @@ async def get_common_spreads(
 ) -> list[dict]:
     """Fetch the top `limit` common spreads for a Pokemon from Smogon usage stats.
 
-    Each spread dict includes `rank`, `nature`, `evs`, `usage`, `item`,
-    `item_usage`, `ability`, `ability_usage`. Item/ability are derived from
+    Each spread dict includes `rank`, `nature`, `evs` (or `sps` +
+    `format_system="champions"`), `usage`, `item`, `item_usage`, `ability`,
+    `ability_usage`, and `meta` (the chaos `_meta`: month/format/rating). Item/ability are derived from
     the top usage of each, with item-ability synergy applied (e.g. Life Orb
     pulls Sheer Force when the Pokemon learns it).
 
@@ -65,6 +66,9 @@ async def get_common_spreads(
             "item_usage": top_item_usage,
             "ability": top_ability,
             "ability_usage": top_ability_usage,
+            # Chaos provenance (month / format / rating / stale notice) so
+            # callers can cite which dataset the spread came from.
+            "meta": usage.get("_meta", {}),
         }
         for i, spread in enumerate(spreads)
     ]

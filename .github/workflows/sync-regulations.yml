@@ -1,0 +1,56 @@
+name: Sync regulations
+
+# Weekly check of Smogon's stats listing for a VGC / Champions format that
+# regulations.json does not know yet. When one appears, scripts/sync_regulations.py
+# appends a provisional regulation and this workflow opens a pull request.
+# Merging it to main runs CI, and Render deploys on green (render.yaml
+# `autoDeployTrigger: checksPass`). Nothing reaches main without a human merge.
+#
+# Note: a PR opened with the default GITHUB_TOKEN does not trigger the CI
+# workflow (GitHub rule against recursive runs). Either add a fine-grained PAT
+# with contents + pull-requests write as the SYNC_REGULATIONS_TOKEN secret, or
+# close and reopen the bot PR to start CI by hand.
+
+on:
+  schedule:
+    - cron: "0 9 * * 1" # Mondays 09:00 UTC; Smogon posts a month's stats mid-month
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sync-regulations
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Discover new Smogon formats
+        run: python scripts/sync_regulations.py --summary "${{ runner.temp }}/sync-summary.md"
+
+      - name: Validate regulations.json
+        run: |
+          python -m pip install -e . jsonschema
+          python scripts/validate_regulations.py
+          python -m pytest tests/champions/test_regulation_router.py tests/champions/test_alias_consistency.py -q
+
+      - name: Open pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.SYNC_REGULATIONS_TOKEN || secrets.GITHUB_TOKEN }}
+          branch: bot/sync-regulations
+          delete-branch: true
+          add-paths: src/vgc_mcp_core/data/regulations.json
+          commit-message: "Add provisional regulation discovered on Smogon stats"
+          title: "Add provisional regulation discovered on Smogon stats"
+          body-path: ${{ runner.temp }}/sync-summary.md

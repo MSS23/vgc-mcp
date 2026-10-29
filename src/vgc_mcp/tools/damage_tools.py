@@ -954,14 +954,21 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     # Calculate damage for this spread
                     spread_result = calculate_damage(attacker, spread_defender, move, spread_modifiers)
 
-                    # Format EV string
-                    ev_str = f"{spread_evs.get('hp', 0)}/{spread_evs.get('attack', 0)}/{spread_evs.get('defense', 0)}/{spread_evs.get('special_attack', 0)}/{spread_evs.get('special_defense', 0)}/{spread_evs.get('speed', 0)}"
+                    # Format the allocation string. Champions chaos spreads carry
+                    # `sps` (not `evs`), so read the build's StatPointSpread.
+                    spread_alloc = (
+                        spread_defender.sps.model_dump() if is_champions and spread_defender.sps
+                        else spread_evs
+                    )
+                    ev_str = "/".join(str(spread_alloc.get(k, 0)) for k in (
+                        "hp", "attack", "defense", "special_attack", "special_defense", "speed"))
 
                     results_by_spread.append({
                         "spread_rank": spread_data["rank"],
                         "nature": spread_nature,
-                        "evs": spread_evs,
-                        "ev_string": f"{spread_nature} {ev_str}",
+                        "evs" if not is_champions else "sps": spread_alloc,
+                        "allocation_unit": "SP" if is_champions else "EV",
+                        "ev_string": f"{spread_nature} {ev_str}" + (" SP" if is_champions else ""),
                         "usage_percent": spread_data.get("usage", 0),
                         "item": spread_item,
                         "item_usage_percent": spread_data.get("item_usage", 0),
@@ -1097,7 +1104,11 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 response["attacker_spread"] = {
                     "source": "smogon_usage",
                     "nature": attacker_nature,
-                    "evs": attacker_spread_info.get("evs", {}),
+                    "evs" if not is_champions else "sps": (
+                        attacker.sps.model_dump() if is_champions and attacker.sps
+                        else attacker_spread_info.get("evs", {})
+                    ),
+                    "allocation_unit": "SP" if is_champions else "EV",
                     "item": attacker_item,
                     "ability": attacker_ability,
                     "tera_type": attacker_tera_type,
@@ -1113,20 +1124,30 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             response["defender_spread"] = {
                 "source": defender_spread_source,
                 "nature": defender_nature,
-                "evs": {
-                    "hp": defender_hp_evs,
-                    "attack": defender_atk_evs,
-                    "defense": defender_def_evs,
-                    "special_attack": defender_spa_evs,
-                    "special_defense": defender_spd_evs,
-                    "speed": defender_spe_evs,
-                },
+                "evs" if not is_champions else "sps": (
+                    defender.sps.model_dump() if is_champions and defender.sps else {
+                        "hp": defender_hp_evs,
+                        "attack": defender_atk_evs,
+                        "defense": defender_def_evs,
+                        "special_attack": defender_spa_evs,
+                        "special_defense": defender_spd_evs,
+                        "speed": defender_spe_evs,
+                    }
+                ),
+                "allocation_unit": "SP" if is_champions else "EV",
                 "item": defender_item,
                 "ability": defender_ability,
                 "tera_type": defender_tera_type,
                 "tera_active": defender_tera_type is not None,
                 "usage_percent": defender_spread_info.get("usage", 0) if defender_spread_info else None
             }
+
+            # Cite the chaos dataset (month / format / rating) behind any
+            # Smogon-sourced spread so the user can see how current it is.
+            for info in (defender_spread_info, attacker_spread_info):
+                if info and info.get("meta"):
+                    response["data_source"] = info["meta"]
+                    break
 
             # Add ability effect notes
             ability_notes = []

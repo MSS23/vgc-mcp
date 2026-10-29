@@ -77,6 +77,7 @@ def _validate_router_consistency(data: dict, errors: list[str]) -> None:
         sys.path.insert(0, str(PROJECT_ROOT / "src"))
         from vgc_mcp_core.rules.regulation_router import (
             _ALIASES,
+            CHAMPIONS_DEFAULT,
             resolve_regulation,
         )
     except Exception as e:
@@ -95,6 +96,8 @@ def _validate_router_consistency(data: dict, errors: list[str]) -> None:
             )
 
     for alias, target in _ALIASES.items():
+        if target == CHAMPIONS_DEFAULT:
+            continue  # resolved at runtime to the newest Champions reg
         if target not in regs:
             errors.append(
                 f"router: alias {alias!r} -> {target!r} but {target!r} is not "

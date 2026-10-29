@@ -6,7 +6,7 @@ fails to resolve. This file fails fast in CI when the two go out of sync.
 """
 
 from vgc_mcp_core.rules.regulation_loader import RegulationConfig
-from vgc_mcp_core.rules.regulation_router import _ALIASES, resolve_regulation
+from vgc_mcp_core.rules.regulation_router import CHAMPIONS_DEFAULT, _ALIASES, resolve_regulation
 
 # Codes that exist in the router's alias table but are intentionally not yet
 # defined in regulations.json (e.g. future regulations stubbed out so users
@@ -16,21 +16,22 @@ from vgc_mcp_core.rules.regulation_router import _ALIASES, resolve_regulation
 _PROVISIONAL_CODES: set[str] = set()
 
 
-def test_every_regulation_has_a_router_alias():
-    """For each regulation code in JSON, at least one alias must point at it.
+def _user_phrase(code: str) -> str:
+    """'reg_f' -> 'Reg F', 'reg_mc_champs' -> 'Reg MC'."""
+    letters = code.removeprefix("reg_").removesuffix("_champs")
+    return f"Reg {letters.upper()}"
 
-    Otherwise the user wording 'Reg X' would never resolve to that code.
-    """
+
+def test_every_regulation_resolves_from_its_user_phrase():
+    """'Reg X' must resolve for every code in JSON, whether via an explicit
+    alias or the router's pattern fallback — otherwise a regulation added by
+    scripts/sync_regulations.py would be unselectable by users."""
     cfg = RegulationConfig()
-    available = set(cfg.list_regulation_codes())
-    aliased_targets = set(_ALIASES.values())
-
-    missing = available - aliased_targets
-    assert not missing, (
-        f"These regulation codes exist in regulations.json but no alias in "
-        f"regulation_router._ALIASES points to them: {sorted(missing)}. "
-        f"Add at least one phrase mapping or users won't be able to select them."
-    )
+    for code in cfg.list_regulation_codes():
+        phrase = _user_phrase(code)
+        assert resolve_regulation(phrase, cfg) == code, (
+            f"{phrase!r} does not resolve to {code!r}; add an alias or extend the pattern fallback."
+        )
 
 
 def test_every_router_alias_points_to_a_real_or_provisional_code():
@@ -42,7 +43,7 @@ def test_every_router_alias_points_to_a_real_or_provisional_code():
     bad_targets = {
         target
         for target in _ALIASES.values()
-        if target not in available and target not in _PROVISIONAL_CODES
+        if target not in available and target not in _PROVISIONAL_CODES and target != CHAMPIONS_DEFAULT
     }
     assert not bad_targets, (
         f"Router aliases point at codes that don't exist in regulations.json "

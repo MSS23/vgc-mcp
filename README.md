@@ -143,7 +143,7 @@ Damage calc is verified against **Pokémon Showdown** — the source of truth us
 The test suite covers Gen 9 damage, stats, items, abilities, Tera, weather, multi-hit probabilities, and MCP tool registration. An independent oracle suite pins 2,037 exact-roll cases from `@smogon/calc 0.11.0`; an integer-formula grid checks mainline EVs and Champions Stat Points. See the [preparation workflow guide](docs/preparation-workflows.md#mathematical-scope) for supported mechanics and limits, and the [original September 2026 audit](docs/audit-2026-09-05.md) for earlier results.
 
 Meta sets come directly from Smogon's monthly `chaos/*.json` datasets. The
-active MCP regulation selects the matching Reg I / Champions MA / Champions MB
+active MCP regulation selects the matching Reg I / Champions MA / MB / MC
 format, with 1630 as the default competitive weighting. Every usage response
 reports its resolved format, month, rating, and source URL; callers may request
 0 (unweighted), 1500 (average ladder), 1630 (competitive), or 1760 (elite).

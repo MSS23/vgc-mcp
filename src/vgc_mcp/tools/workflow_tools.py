@@ -2202,12 +2202,12 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
     async def calc_damage_vs_smogon_sets(
         my_pokemon: Annotated[str, Field(description="Your Pokemon name", min_length=1)],
         my_nature: Annotated[str, Field(description="Your Pokemon's nature", min_length=1)],
-        my_hp_evs: Annotated[int, Field(ge=0, le=252, description="Your HP EVs (0-252)")] = 0,
-        my_atk_evs: Annotated[int, Field(ge=0, le=252, description="Your Attack EVs (0-252)")] = 0,
-        my_def_evs: Annotated[int, Field(ge=0, le=252, description="Your Defense EVs (0-252)")] = 0,
-        my_spa_evs: Annotated[int, Field(ge=0, le=252, description="Your Sp. Atk EVs (0-252)")] = 0,
-        my_spd_evs: Annotated[int, Field(ge=0, le=252, description="Your Sp. Def EVs (0-252)")] = 0,
-        my_spe_evs: Annotated[int, Field(ge=0, le=252, description="Your Speed EVs (0-252)")] = 0,
+        my_hp_evs: Annotated[int, Field(ge=0, le=252, description="Your HP EVs (0-252). In a Champions session these are Stat Points (0-32, 66 total).")] = 0,
+        my_atk_evs: Annotated[int, Field(ge=0, le=252, description="Your Attack EVs (0-252); Stat Points in Champions")] = 0,
+        my_def_evs: Annotated[int, Field(ge=0, le=252, description="Your Defense EVs (0-252); Stat Points in Champions")] = 0,
+        my_spa_evs: Annotated[int, Field(ge=0, le=252, description="Your Sp. Atk EVs (0-252); Stat Points in Champions")] = 0,
+        my_spd_evs: Annotated[int, Field(ge=0, le=252, description="Your Sp. Def EVs (0-252); Stat Points in Champions")] = 0,
+        my_spe_evs: Annotated[int, Field(ge=0, le=252, description="Your Speed EVs (0-252); Stat Points in Champions")] = 0,
         my_item: Annotated[Optional[str], Field(description="Your item")] = None,
         my_ability: Annotated[Optional[str], Field(description="Your ability (auto-detected if not specified)")] = None,
         my_tera_type: Annotated[Optional[str], Field(description="Your Tera type if active (replaces your defensive typing)")] = None,
@@ -2215,24 +2215,36 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
         move: Annotated[str, Field(description="Move being used (required)")] = "",
         direction: Annotated[str, Field(description="'from' = opponent attacks you with the move; 'to' = you attack the opponent")] = "from",
         num_sets: Annotated[int, Field(ge=1, description="Number of top Smogon spreads to check")] = 3,
+        attacker_stage: Annotated[int, Field(ge=-6, le=6, description="Extra offensive stat stage on whichever side is attacking (e.g. +2 after Swords Dance). Do not pass -1 for Intimidate — use `intimidate`.")] = 0,
+        intimidate: Annotated[Optional[bool], Field(description="Intimidate on the attacker. Omit (None) = automatic: applied only when the defending side's Pokemon actually has Intimidate (Incineroar, Landorus-T, Mega Manectric...). True = the user asked for the Intimidate calc (e.g. an Intimidate partner is on the field) — apply -1 Atk even if the defender itself lacks it. False = never apply it. Attacker-side blockers (Clear Body, Inner Focus...) are always respected.")] = None,
     ) -> dict:
         """Calculate damage using YOUR exact spread vs the top Smogon sets.
 
         Answers questions like "how much damage does my 252 HP / 116 Def Entei
         take from the top 3 Urshifu sets?" or "can my Flutter Mane OHKO the
         common Incineroar spreads?". Returns your build's stats, the top N
-        Smogon sets with usage %, a damage calc per set, and a survival/KO
-        summary.
+        Smogon sets with usage % and their exact spread, a damage calc per
+        set, a survival/KO summary, and `meta_info` naming the chaos
+        month/format/rating. Champions-aware: in a Champions session your
+        `my_*_evs` are Stat Points and the opponent sets are SP spreads.
+        If the defending side's Pokemon has Intimidate (or `intimidate=True`
+        was requested) and the move is physical, each set also carries
+        `after_intimidate` (the -1 Atk calc), unless the attacker's ability
+        blocks or reverses it — see the top-level `intimidate` field. For a head-to-head ("my X vs Y"), call once with
+        direction='to' for your move and once with direction='from' for
+        their retaliation.
         """
-        from vgc_mcp_core.calc.damage import calculate_damage
+        from vgc_mcp_core.calc.damage import DamageResult, calculate_damage
         from vgc_mcp_core.calc.modifiers import DamageModifiers
-        from vgc_mcp_core.calc.stats import calculate_hp, calculate_stat
+        from vgc_mcp_core.calc.stats import calculate_all_stats
         from vgc_mcp_core.models.pokemon import (
             EVSpread,
             Nature,
             PokemonBuild,
-            get_nature_modifier,
+            StatPointSpread,
         )
+        from vgc_mcp_core.rules.format_detect import detect_champions_format
+        from vgc_mcp_core.tools.ability_helpers import compute_intimidate_attack_stage
 
         try:
             # Validate inputs
@@ -2278,44 +2290,46 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
             except ValueError:
                 return error_response(ErrorCodes.INVALID_NATURE, f"Invalid nature: {my_nature}")
 
-            # Auto-detect my ability if not provided
+            # Resolve my ability (Mega form > Smogon most-used > pokeapi) so
+            # e.g. Incineroar reads as Intimidate, not pokeapi's first-listed Blaze.
             if not my_ability:
-                abilities = await pokeapi.get_pokemon_abilities(my_pokemon)
-                if abilities:
-                    my_ability = abilities[0].lower().replace(" ", "-")
+                from vgc_mcp_core.tools.ability_helpers import resolve_ability
+                my_ability, _ = await resolve_ability(my_pokemon, pokeapi=pokeapi, smogon_client=smogon)
+            if my_ability:
+                my_ability = my_ability.lower().replace(" ", "-")
 
             # Build my Pokemon
             my_types = await pokeapi.get_pokemon_types(my_pokemon)
             # If Tera active, defensive typing changes
             defensive_types = [my_tera_type] if my_tera_type else my_types
 
-            my_build = PokemonBuild(
-                name=my_pokemon,
-                base_stats=my_base_stats,
-                types=defensive_types,
-                nature=parsed_nature,
-                evs=EVSpread(
-                    hp=my_hp_evs,
-                    attack=my_atk_evs,
-                    defense=my_def_evs,
-                    special_attack=my_spa_evs,
-                    special_defense=my_spd_evs,
-                    speed=my_spe_evs
-                ),
-                item=my_item,
-                ability=my_ability,
-                tera_type=my_tera_type
-            )
-
-            # Calculate my final stats for display
-            my_final_stats = {
-                "hp": calculate_hp(my_base_stats.hp, 31, my_hp_evs, 50),
-                "attack": calculate_stat(my_base_stats.attack, 31, my_atk_evs, 50, get_nature_modifier(parsed_nature, "attack")),
-                "defense": calculate_stat(my_base_stats.defense, 31, my_def_evs, 50, get_nature_modifier(parsed_nature, "defense")),
-                "special_attack": calculate_stat(my_base_stats.special_attack, 31, my_spa_evs, 50, get_nature_modifier(parsed_nature, "special_attack")),
-                "special_defense": calculate_stat(my_base_stats.special_defense, 31, my_spd_evs, 50, get_nature_modifier(parsed_nature, "special_defense")),
-                "speed": calculate_stat(my_base_stats.speed, 31, my_spe_evs, 50, get_nature_modifier(parsed_nature, "speed"))
+            # Champions: the my_*_evs ints are Stat Points (0-32, 66 total).
+            is_champions = detect_champions_format(my_pokemon, opponent_pokemon)
+            my_alloc = {
+                "hp": my_hp_evs, "attack": my_atk_evs, "defense": my_def_evs,
+                "special_attack": my_spa_evs, "special_defense": my_spd_evs, "speed": my_spe_evs,
             }
+            if is_champions:
+                if max(my_alloc.values()) > 32 or sum(my_alloc.values()) > 66:
+                    return error_response(
+                        ErrorCodes.INVALID_PARAMETER,
+                        "Champions session: my_*_evs are Stat Points (0-32 per stat, 66 total)",
+                    )
+                my_build = PokemonBuild(
+                    name=my_pokemon, base_stats=my_base_stats, types=defensive_types,
+                    nature=parsed_nature, format_system="champions",
+                    sps=StatPointSpread(**my_alloc),
+                    item=my_item, ability=my_ability, tera_type=my_tera_type,
+                )
+            else:
+                my_build = PokemonBuild(
+                    name=my_pokemon, base_stats=my_base_stats, types=defensive_types,
+                    nature=parsed_nature, evs=EVSpread(**my_alloc),
+                    item=my_item, ability=my_ability, tera_type=my_tera_type,
+                )
+
+            # Final stats for display (format-aware: SP formula in Champions)
+            my_final_stats = calculate_all_stats(my_build)
 
             # Get opponent's Smogon usage data
             opp_usage = await smogon.get_pokemon_usage(opponent_pokemon)
@@ -2367,11 +2381,56 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
             if my_item and my_item.lower().replace(" ", "-") == "life-orb":
                 my_life_orb_recoil = my_final_stats["hp"] // 10
 
-            for i, spread in enumerate(opp_spreads):
-                if "evs" not in spread:
-                    continue
+            # Intimidate on the DEFENDING side drops the attacker's Atk by one
+            # stage at switch-in (blocked by Clear Body etc., reversed by
+            # Contrary/Defiant). Computed once; applied as a second calc per set.
+            atk_ability, def_ability = (
+                (top_ability, my_ability) if direction == "from" else (my_ability, top_ability)
+            )
+            defender_has_intimidate = (def_ability or "").lower().replace(" ", "-") == "intimidate"
+            is_physical_move = move_data.category.value == "physical"
+            intim_stage, intim_note = 0, None
+            if intimidate is not False and (defender_has_intimidate or intimidate):
+                intim_stage, intim_note = compute_intimidate_attack_stage(
+                    # intimidate=True models an Intimidate partner on the field
+                    defender_ability="intimidate" if intimidate else def_ability,
+                    attacker_ability=atk_ability,
+                    is_physical=is_physical_move,
+                )
+                if intimidate and not is_physical_move:
+                    intim_note = f"Intimidate requested, but {move} is special — Atk drop has no effect"
+            intimidate_info = None
+            if intim_note:
+                intimidate_info = {
+                    "applied": intim_stage != 0,
+                    "stage": intim_stage,
+                    "note": intim_note,
+                    "intimidate_user": (
+                        (opponent_pokemon if direction == "to" else my_pokemon)
+                        if defender_has_intimidate else "requested (Intimidate partner on the field)"
+                    ),
+                    "source": "auto (defender has Intimidate)" if defender_has_intimidate else "requested",
+                }
 
-                spread_evs = spread["evs"]
+            def _short_outcome(res: DamageResult) -> str:
+                if direction == "from":
+                    if res.max_percent < 100:
+                        return f"Survives (HP: {my_final_stats['hp'] - res.max_damage}-{my_final_stats['hp'] - res.min_damage})"
+                    return "KO'd"
+                if res.min_percent >= 100:
+                    return "Guaranteed OHKO"
+                if res.max_percent >= 100:
+                    return "Possible OHKO (roll)"
+                return f"{res.max_percent:.0f}% max"
+
+            alloc_key = "sps" if is_champions else "evs"
+            alloc_unit = "SP" if is_champions else "EV"
+            stat_keys = ("hp", "attack", "defense", "special_attack", "special_defense", "speed")
+            for i, spread in enumerate(opp_spreads):
+                spread_evs = spread.get(alloc_key)
+                if not spread_evs:
+                    continue  # wrong-format or unparsable spread
+
                 spread_nature_str = spread.get("nature", "Serious")
 
                 try:
@@ -2379,22 +2438,18 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                 except ValueError:
                     spread_nature = Nature.SERIOUS
 
-                # Build opponent with this spread
+                # Build opponent with this spread (SP spread in Champions)
                 opp_build = PokemonBuild(
                     name=opponent_pokemon,
                     base_stats=opp_base_stats,
                     types=opp_types,
                     nature=spread_nature,
-                    evs=EVSpread(
-                        hp=spread_evs.get("hp", 0),
-                        attack=spread_evs.get("attack", 0),
-                        defense=spread_evs.get("defense", 0),
-                        special_attack=spread_evs.get("special_attack", 0),
-                        special_defense=spread_evs.get("special_defense", 0),
-                        speed=spread_evs.get("speed", 0)
-                    ),
                     item=top_item,
-                    ability=top_ability
+                    ability=top_ability,
+                    **(
+                        {"format_system": "champions", "sps": StatPointSpread(**spread_evs)}
+                        if is_champions else {"evs": EVSpread(**spread_evs)}
+                    ),
                 )
 
                 # Set up modifiers based on direction
@@ -2406,8 +2461,12 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                         is_doubles=True,
                         attacker_item=top_item,
                         attacker_ability=top_ability,
+                        defender_item=my_item,
+                        defender_ability=my_ability,
                         defender_tera_type=my_tera_type,
-                        defender_tera_active=my_tera_type is not None
+                        defender_tera_active=my_tera_type is not None,
+                        attack_stage=attacker_stage,
+                        special_attack_stage=attacker_stage,
                     )
                 else:
                     # I attack opponent
@@ -2417,21 +2476,51 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                         is_doubles=True,
                         attacker_item=my_item,
                         attacker_ability=my_ability,
+                        defender_item=top_item,
+                        defender_ability=top_ability,
                         tera_type=my_tera_type,
-                        tera_active=my_tera_type is not None
+                        tera_active=my_tera_type is not None,
+                        attack_stage=attacker_stage,
+                        special_attack_stage=attacker_stage,
                     )
 
                 result = calculate_damage(attacker, defender, move_data, modifiers)
+                intim_result = None
+                if intim_stage:
+                    from dataclasses import replace as _replace
+                    intim_result = calculate_damage(
+                        attacker, defender, move_data,
+                        _replace(modifiers, attack_stage=attacker_stage + intim_stage),
+                    )
 
                 # Determine outcome
+                alloc_desc = " / ".join(
+                    f"{spread_evs.get(k, 0)} {lbl}"
+                    for k, lbl in zip(stat_keys, ("HP", "Atk", "Def", "SpA", "SpD", "Spe"))
+                    if spread_evs.get(k, 0)
+                ) or f"0 {alloc_unit}s"
+                slash_str = "/".join(str(spread_evs.get(k, 0)) for k in stat_keys)
                 result_entry = {
                     "set_rank": i + 1,
                     "usage": f"{spread.get('usage', 0)}%",
                     "nature": spread_nature_str,
-                    "evs": f"{spread_evs.get('hp', 0)} HP / {spread_evs.get('attack', 0)} Atk / {spread_evs.get('defense', 0)} Def / {spread_evs.get('special_attack', 0)} SpA / {spread_evs.get('special_defense', 0)} SpD / {spread_evs.get('speed', 0)} Spe",
+                    alloc_key: alloc_desc,
+                    "allocation_unit": alloc_unit,
+                    "spread_line": (
+                        f"{spread_nature_str} {slash_str}"
+                        + (" SP" if is_champions else "")
+                        + (f" @ {top_item}" if top_item else "")
+                    ),
                     "damage_range": result.damage_range,
                     "percent_range": f"{format_percent(result.min_percent)}% - {format_percent(result.max_percent)}%",
                 }
+                if intim_result is not None:
+                    result_entry["after_intimidate"] = {
+                        "attack_stage": attacker_stage + intim_stage,
+                        "damage_range": intim_result.damage_range,
+                        "percent_range": f"{format_percent(intim_result.min_percent)}% - {format_percent(intim_result.max_percent)}%",
+                        "outcome": _short_outcome(intim_result),
+                    }
 
                 if direction == "from":
                     # I'm being attacked
@@ -2504,7 +2593,7 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                 "your_pokemon": my_pokemon,
                 "your_build": {
                     "nature": my_nature,
-                    "evs": {
+                    alloc_key: {
                         "HP": my_hp_evs,
                         "Atk": my_atk_evs,
                         "Def": my_def_evs,
@@ -2512,6 +2601,7 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                         "SpD": my_spd_evs,
                         "Spe": my_spe_evs
                     },
+                    "allocation_unit": alloc_unit,
                     "item": my_item,
                     "ability": my_ability,
                     "tera_type": my_tera_type,
@@ -2525,11 +2615,22 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                 "move_type": move_data.type,
                 "move_power": move_data.power,
                 "direction": "Opponent attacks you" if direction == "from" else "You attack opponent",
+                "attacker_stage": attacker_stage,
                 "damage_vs_sets": damage_results,
                 "summary": summary,
                 "verdict": verdict,
                 "meta_info": opp_usage.get("_meta", {})
             }
+
+            if intimidate_info:
+                response_data["intimidate"] = intimidate_info
+                if intim_stage:
+                    if direction == "from":
+                        n_ok = sum(1 for r in damage_results if r["after_intimidate"]["outcome"].startswith("Survives"))
+                        intimidate_info["summary"] = f"After Intimidate: survives {n_ok}/{len(damage_results)} common sets"
+                    else:
+                        n_ok = sum(1 for r in damage_results if r["after_intimidate"]["outcome"] == "Guaranteed OHKO")
+                        intimidate_info["summary"] = f"After Intimidate: OHKOs {n_ok}/{len(damage_results)} common sets"
 
             # Add warnings if any
             if warnings:
