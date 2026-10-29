@@ -9,9 +9,130 @@ from pydantic import Field
 from vgc_mcp_core.config import logger
 from vgc_mcp_core.utils.errors import api_error
 
+# Each category lists example questions plus the tools that answer them, in
+# priority order. Tool titles and descriptions are read from the live registry
+# at call time, so a renamed or removed tool drops out instead of going stale.
+_CATEGORIES: dict[str, dict] = {
+    "damage": {
+        "title": "Damage calculations",
+        "examples": [
+            "Does Flutter Mane OHKO Incineroar with Moonblast?",
+            "How much does Mega Garchomp Z's Earthquake do to Rillaboom?",
+            "Show my Urshifu's damage against the top 10 meta threats",
+        ],
+        "tools": [
+            "calculate_damage_output",
+            "calc_damage_vs_smogon_sets",
+            "calculate_bulk_offensive_calcs",
+            "calculate_move_outcomes",
+            "export_damage_report",
+        ],
+    },
+    "team": {
+        "title": "Team building and review",
+        "examples": [
+            "Get my team ready for a Regional (I'll paste it)",
+            "What pairs well with Incineroar?",
+            "What are my team's biggest threats?",
+        ],
+        "tools": [
+            "prepare_team",
+            "import_and_analyze",
+            "suggest_teammates",
+            "find_threats_to_team",
+            "analyze_lead_pairs",
+        ],
+    },
+    "evs": {
+        "title": "Spreads (EVs or Champions Stat Points)",
+        "examples": [
+            "What does Incineroar need to survive Flutter Mane's Moonblast?",
+            "Design a spread that outspeeds Tornadus and survives Urshifu",
+            "Can I save points with a different nature?",
+        ],
+        "tools": [
+            "find_survival_evs",
+            "design_spread_with_benchmarks",
+            "optimize_multi_survival_spread",
+            "suggest_nature_optimization",
+            "check_spread_efficiency",
+        ],
+    },
+    "speed": {
+        "title": "Speed",
+        "examples": [
+            "Is my Landorus faster than Tornadus?",
+            "How many points does Mega Lucario Z need to outspeed Dragapult?",
+            "Show my team's speed tiers under Tailwind",
+        ],
+        "tools": [
+            "compare_speed",
+            "find_speed_evs_to_outspeed",
+            "visualize_team_speed_tiers",
+            "analyze_outspeed_probability",
+            "get_meta_speed_tiers",
+        ],
+    },
+    "learn": {
+        "title": "Learning VGC",
+        "examples": [
+            "Explain what Stat Points are in Champions",
+            "What makes Incineroar good?",
+            "Check my build for mistakes",
+        ],
+        "tools": [
+            "explain_vgc_term",
+            "explain_pokemon",
+            "explain_type_matchup",
+            "check_build_for_mistakes",
+            "what_tool_should_i_use",
+        ],
+    },
+}
+_ALIASES = {
+    "teambuilding": "team",
+    "team building": "team",
+    "ev": "evs",
+    "sp": "evs",
+    "sps": "evs",
+    "spread": "evs",
+    "spreads": "evs",
+    "learning": "learn",
+    "education": "learn",
+}
+_MAX_TOOLS_PER_CATEGORY = 5
+
+# Three questions a phone user can send as-is. There are no slash commands in
+# the Claude apps, so onboarding never tells people to type one.
+_STARTER_QUESTIONS = [
+    "Does Flutter Mane OHKO Incineroar with Moonblast?",
+    "Get my team ready for a tournament (I'll paste it)",
+    "What does Incineroar need to survive Flutter Mane?",
+]
+
+
+def _first_sentence(text: Optional[str]) -> str:
+    line = (text or "").strip().split("\n", 1)[0].strip()
+    return line.rstrip(".")
+
 
 def register_onboarding_tools(mcp: FastMCP):
     """Register onboarding and discoverability tools."""
+
+    async def _registered_tools() -> dict:
+        return {tool.name: tool for tool in await mcp.list_tools()}
+
+    def _category_markdown(key: str, registered: dict) -> tuple[list[str], list[str]]:
+        cat = _CATEGORIES[key]
+        tools = [n for n in cat["tools"] if n in registered][:_MAX_TOOLS_PER_CATEGORY]
+        lines = [f"## {cat['title']}", "", "**Try asking:**"]
+        lines += [f'- "{q}"' for q in cat["examples"]]
+        lines += ["", "**Tools behind it:**"]
+        for name in tools:
+            tool = registered[name]
+            label = tool.title or name
+            lines.append(f"- **{label}**: {_first_sentence(tool.description)}")
+        return lines, tools
 
     @mcp.tool(
         title="Show Capabilities",
@@ -31,193 +152,49 @@ def register_onboarding_tools(mcp: FastMCP):
         markdown, listing example prompts and the relevant tools.
         """
         try:
+            registered = await _registered_tools()
+            categories = list(_CATEGORIES)
+
             if category is None:
-                # Main capabilities overview
-                markdown_lines = [
-                    "## What Can I Do?",
+                lines = [
+                    "## What can I do?",
                     "",
-                    "I'm a VGC team building assistant. Ask me anything!",
+                    "Ask in plain words, or paste a Showdown team. Works for "
+                    "mainline VGC (EVs) and Pokemon Champions (Stat Points).",
                     "",
-                    "### Quick Examples (Try These!)",
-                    "",
-                    "| Category | Example Prompt |",
-                    "|----------|----------------|",
-                    "| **Damage** | \"Does Flutter Mane OHKO Incineroar?\" |",
-                    "| **Team** | \"Help me build a Rain team\" |",
-                    "| **EVs** | \"What EVs to survive Flutter Mane?\" |",
-                    "| **Speed** | \"Is Landorus faster than Tornadus?\" |",
-                    "| **Learn** | \"Explain what EVs are\" |",
-                    "",
-                    "### How to Use Me",
-                    "",
-                    "**Just ask naturally!** Examples:",
-                    "- \"I want to build a team around Koraidon\"",
-                    "- \"My Incineroar keeps dying, what can I do?\"",
-                    "- \"Does my Flutter Mane OHKO Incineroar?\"",
-                    "",
-                    "**Paste Showdown Teams** - I'll analyze them:",
-                    "```",
-                    "Flutter Mane @ Choice Specs",
-                    "Ability: Protosynthesis",
-                    "EVs: 252 SpA / 4 SpD / 252 Spe",
-                    "...",
-                    "```",
-                    "",
-                    "### More Help",
-                    "Say \"help damage\", \"help team\", \"help evs\" for category-specific examples."
                 ]
-
-                response = {
+                for key in categories:
+                    cat = _CATEGORIES[key]
+                    lines.append(f"**{cat['title']}**: \"{cat['examples'][0]}\"")
+                lines += [
+                    "",
+                    "Ask \"what can you do for speed?\" (or damage, team, evs, "
+                    "learn) for more examples.",
+                ]
+                return {
                     "capabilities_type": "overview",
-                    "markdown_summary": "\n".join(markdown_lines),
-                    "categories": ["damage", "team", "evs", "speed", "learn"]
+                    "markdown_summary": "\n".join(lines),
+                    "categories": categories,
+                    "tool_count": len(registered),
                 }
 
-            elif category.lower() == "damage":
-                markdown_lines = [
-                    "## Damage Calculations",
-                    "",
-                    "### What I Can Do",
-                    "- Calculate damage between any two Pokemon",
-                    "- Show if you OHKO, 2HKO, or survive attacks",
-                    "- Include all modifiers (STAB, items, weather, etc.)",
-                    "",
-                    "### Example Prompts",
-                    "- \"Does Flutter Mane OHKO Incineroar?\"",
-                    "- \"Can Amoonguss survive Flutter Mane's Moonblast?\"",
-                    "- \"What's the damage range for Landorus EQ vs Rillaboom?\"",
-                    "- \"Check damage with Tera Fairy active\"",
-                    "",
-                    "### Tools Available",
-                    "- `calculate_damage_output()` - Full damage calculation",
-                    "- `check_survival()` - Can Pokemon survive an attack?",
-                    "- `find_bulk_evs()` - EVs needed to survive"
-                ]
-                response = {
-                    "capabilities_type": "category",
-                    "category": "damage",
-                    "markdown_summary": "\n".join(markdown_lines)
-                }
-
-            elif category.lower() in ["team", "teambuilding", "team building"]:
-                markdown_lines = [
-                    "## Team Building",
-                    "",
-                    "### What I Can Do",
-                    "- Help build teams from scratch",
-                    "- Analyze team weaknesses",
-                    "- Suggest Pokemon partners",
-                    "- Check team matchups vs meta",
-                    "",
-                    "### Example Prompts",
-                    "- \"Help me build a Rain team\"",
-                    "- \"What Pokemon pair well with Flutter Mane?\"",
-                    "- \"Analyze my team: [paste Showdown team]\"",
-                    "- \"What are my team's weaknesses?\"",
-                    "",
-                    "### Tools Available",
-                    "- `analyze_team_matchup()` - Full team analysis",
-                    "- `check_tournament_readiness()` - Is team ready?",
-                    "- `analyze_lead_pairs()` - Best lead combinations"
-                ]
-                response = {
-                    "capabilities_type": "category",
-                    "category": "team",
-                    "markdown_summary": "\n".join(markdown_lines)
-                }
-
-            elif category.lower() in ["evs", "ev", "spread"]:
-                markdown_lines = [
-                    "## EV Optimization",
-                    "",
-                    "### What I Can Do",
-                    "- Find EVs to survive specific attacks",
-                    "- Optimize bulk for multiple threats",
-                    "- Suggest nature changes to save EVs",
-                    "- Check spread efficiency",
-                    "",
-                    "### Example Prompts",
-                    "- \"What EVs does Incineroar need to survive Flutter Mane?\"",
-                    "- \"Is my spread efficient? Suggest a better nature\"",
-                    "- \"Find bulk EVs to survive multiple threats\"",
-                    "- \"Can I save EVs with a different nature?\"",
-                    "",
-                    "### Tools Available",
-                    "- `find_bulk_evs()` - EVs to survive one attack",
-                    "- `find_multi_threat_bulk_evs()` - Survive multiple threats",
-                    "- `suggest_nature_optimization()` - Save EVs with better nature",
-                    "- `check_spread_efficiency()` - Check for wasted EVs"
-                ]
-                response = {
-                    "capabilities_type": "category",
-                    "category": "evs",
-                    "markdown_summary": "\n".join(markdown_lines)
-                }
-
-            elif category.lower() == "speed":
-                markdown_lines = [
-                    "## Speed Analysis",
-                    "",
-                    "### What I Can Do",
-                    "- Compare speeds between Pokemon",
-                    "- Show speed tiers with your team highlighted",
-                    "- Calculate speed under Tailwind/Trick Room",
-                    "- Find EVs to outspeed threats",
-                    "",
-                    "### Example Prompts",
-                    "- \"Is my Landorus faster than Tornadus?\"",
-                    "- \"What speed tier is 252 Spe Timid Flutter Mane?\"",
-                    "- \"Show speed tiers under Tailwind\"",
-                    "- \"What EVs to outspeed Dragapult?\"",
-                    "",
-                    "### Tools Available",
-                    "- `compare_speed()` - Compare two Pokemon speeds",
-                    "- `visualize_team_speed_tiers()` - Speed tier chart",
-                    "- `find_speed_evs()` - EVs to outspeed target"
-                ]
-                response = {
-                    "capabilities_type": "category",
-                    "category": "speed",
-                    "markdown_summary": "\n".join(markdown_lines)
-                }
-
-            elif category.lower() in ["learn", "learning", "education"]:
-                markdown_lines = [
-                    "## Learning VGC",
-                    "",
-                    "### What I Can Do",
-                    "- Explain VGC terms (EVs, STAB, OHKO, etc.)",
-                    "- Explain Pokemon roles and builds",
-                    "- Explain type matchups",
-                    "- Check builds for common mistakes",
-                    "",
-                    "### Example Prompts",
-                    "- \"Explain what EVs are\"",
-                    "- \"What makes Flutter Mane good?\"",
-                    "- \"Explain Fire type matchups\"",
-                    "- \"Check my build for mistakes\"",
-                    "",
-                    "### Tools Available",
-                    "- `explain_vgc_term()` - Explain competitive terms",
-                    "- `explain_pokemon()` - Learn about a Pokemon",
-                    "- `explain_type_matchup()` - Type effectiveness",
-                    "- `check_build_for_mistakes()` - Find build errors"
-                ]
-                response = {
-                    "capabilities_type": "category",
-                    "category": "learn",
-                    "markdown_summary": "\n".join(markdown_lines)
-                }
-
-            else:
-                response = {
+            key = _ALIASES.get(category.lower().strip(), category.lower().strip())
+            if key not in _CATEGORIES:
+                return {
                     "capabilities_type": "unknown",
                     "category": category,
-                    "message": f"Unknown category: {category}. Try: damage, team, evs, speed, learn",
-                    "available_categories": ["damage", "team", "evs", "speed", "learn"]
+                    "message": f"Unknown category: {category}. Try: {', '.join(categories)}",
+                    "available_categories": categories,
                 }
 
-            return response
+            lines, tools = _category_markdown(key, registered)
+            return {
+                "capabilities_type": "category",
+                "category": key,
+                "markdown_summary": "\n".join(lines),
+                "tools": tools,
+                "example_prompts": _CATEGORIES[key]["examples"],
+            }
 
         except Exception as e:
             logger.error(f"Error in show_capabilities: {e}", exc_info=True)
@@ -239,55 +216,23 @@ def register_onboarding_tools(mcp: FastMCP):
         quick-start guide as markdown plus suggested starter prompts.
         """
         try:
-            markdown_lines = [
-                "# Welcome to VGC Team Builder!",
+            lines = [
+                "# Welcome to VGC Team Builder",
                 "",
-                "I can help you build competitive Pokemon VGC teams.",
+                "I do damage calcs, spreads, speed checks and team reviews for "
+                "VGC and Pokemon Champions. Just ask in plain words.",
                 "",
-                "## Quick Start",
-                "",
-                "Try asking me:",
-                "- \"Does Flutter Mane OHKO Incineroar?\" - Damage calculations",
-                "- \"Help me build a Rain team\" - Team building",
-                "- \"What EVs to survive Flutter Mane?\" - EV optimization",
-                "- \"Explain what EVs are\" - Learn VGC basics",
-                "",
-                "## Slash Commands",
-                "",
-                "Type `/help` to see all available commands.",
-                "",
-                "## Paste Teams",
-                "",
-                "You can paste Pokemon Showdown teams and I'll analyze them!",
-                "",
-                "```",
-                "Flutter Mane @ Choice Specs",
-                "Ability: Protosynthesis",
-                "EVs: 252 SpA / 4 SpD / 252 Spe",
-                "Timid Nature",
-                "- Moonblast",
-                "...",
-                "```",
-                "",
-                "## What would you like to do?",
-                "",
-                "| Task | Just Ask... |",
-                "|------|-------------|",
-                "| Build a team | \"Help me build a team around X\" |",
-                "| Check damage | \"Does X OHKO Y?\" |",
-                "| Optimize EVs | \"What EVs to survive X?\" |",
-                "| Learn VGC | \"Explain [term]\" |",
+                "**Try one of these:**",
             ]
-
+            lines += [f"{i}. {q}" for i, q in enumerate(_STARTER_QUESTIONS, 1)]
+            lines += [
+                "",
+                "You can also paste a Showdown team and I'll review it.",
+            ]
             return {
                 "welcome": True,
-                "markdown_summary": "\n".join(markdown_lines),
-                "suggested_prompts": [
-                    "Does Flutter Mane OHKO Incineroar?",
-                    "Help me build a Rain team",
-                    "What EVs does Incineroar need to survive Flutter Mane?",
-                    "Explain what EVs are"
-                ]
+                "markdown_summary": "\n".join(lines),
+                "suggested_prompts": list(_STARTER_QUESTIONS),
             }
 
         except Exception as e:
