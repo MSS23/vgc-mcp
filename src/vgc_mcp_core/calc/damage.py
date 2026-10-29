@@ -1083,14 +1083,14 @@ def _calculate_damage_rolls(
         defender_types = [modifiers.defender_tera_type]
     type_eff = get_type_effectiveness(effective_move_type, defender_types)
 
-    # Weather defensive boosts: sand gives Rock-types 1.5x SpD, snow gives
-    # Ice-types 1.5x Def. Applied to the stat like Assault Vest, so Psyshock
-    # (targets Defense) correctly skips the sand SpD boost.
+    # Weather defensive boosts: sand gives Rock-types 1.5x SpD, Gen 9 snow
+    # gives Ice-types 1.5x Def (old Hail never did). Applied to the stat like
+    # Assault Vest, so Psyshock (targets Defense) correctly skips the sand SpD boost.
     weather_norm = (modifiers.weather or "").lower().replace("-", "_")
     if weather_norm in ("sand", "sandstorm") and "Rock" in defender_types \
             and defense_stat_name == "special_defense":
         defense_stat = apply_mod(defense_stat, MOD_WEATHER_BOOST)
-    elif weather_norm in ("snow", "hail") and "Ice" in defender_types \
+    elif weather_norm == "snow" and "Ice" in defender_types \
             and defense_stat_name == "defense":
         defense_stat = apply_mod(defense_stat, MOD_WEATHER_BOOST)
 

@@ -4,25 +4,32 @@ on:
   workflow_run:
     workflows: [CI]
     types: [completed]
+  # Nightly live smoke test: mocked tests can stay green while a real
+  # upstream (PokeAPI, Smogon) contract breaks production.
+  schedule:
+    - cron: "17 3 * * *"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: production-deployment
+  # The nightly run must not cancel a post-deploy verification.
+  group: production-${{ github.event_name == 'schedule' && 'nightly' || 'deployment' }}
   cancel-in-progress: true
 
 jobs:
   verify-production:
     if: >-
       github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule' ||
       (github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      EXPECTED_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      # Nightly runs check whatever is live rather than waiting for a revision.
+      EXPECTED_SHA: ${{ github.event_name != 'schedule' && (github.event.workflow_run.head_sha || github.sha) || '' }}
 
     steps:
       - name: Check out the validated revision
@@ -33,5 +40,5 @@ jobs:
       - name: Wait for Render and verify the live MCP service
         run: >-
           python scripts/verify_production.py
-          --expected-sha "$EXPECTED_SHA"
+          ${EXPECTED_SHA:+--expected-sha "$EXPECTED_SHA"}
           --timeout 900

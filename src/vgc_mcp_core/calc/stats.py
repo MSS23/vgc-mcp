@@ -109,6 +109,34 @@ def calculate_speed(
     return calculate_stat(base_speed, iv, ev, level, nature_mod)
 
 
+def calculate_stat_for_format(
+    base: int,
+    investment: int = 0,
+    iv: int = 31,
+    nature_mod: float = 1.0,
+    *,
+    is_hp: bool = False,
+    champions: bool = False,
+) -> int:
+    """One level-50 stat; ``investment`` is EVs (mainline) or SPs (Champions).
+
+    Champions has no IVs (always 31) and caps each stat at 32 SP.
+    """
+    if champions:
+        from .stats_champions import calculate_hp_sp, calculate_stat_sp
+
+        if investment > 32:
+            raise ValueError(
+                f"Champions uses Stat Points: 0-32 per stat (got {investment})"
+            )
+        if is_hp:
+            return calculate_hp_sp(base, sp=investment)
+        return calculate_stat_sp(base, sp=investment, nature_mod=nature_mod)
+    if is_hp:
+        return calculate_hp(base, iv, investment)
+    return calculate_stat(base, iv, investment, nature_mod=nature_mod)
+
+
 def calculate_all_stats(
     pokemon: PokemonBuild,
     level: Optional[int] = None

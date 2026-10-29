@@ -578,7 +578,7 @@ Use the RIGHT tool for survival calculations:
    - Auto-fetches attacker's Smogon spread (nature, EVs, item)
    - Returns required defensive EVs + damage calculation
    - Use when: "What EVs does Ogerpon need to survive Urshifu?"
-   - **ALWAYS show the attacker_spread_info in your response**
+   - **ALWAYS show the `attacker_spread` in your response**
 
 2. **calculate_damage_output** - Check exact damage with specific spreads
    - Use when verifying a specific spread survives

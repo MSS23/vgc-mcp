@@ -29,7 +29,7 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 - **`get_battle_state`** — Return the full structured snapshot of the active battle.
 - **`record_turn`** ★ — Record one turn of an active battle.
 - **`start_battle`** ★ — Begin a new battle. Replaces any active battle.
-- **`suggest_next_move`** ★ — Recommend the next turn given the remembered battle state.
+- **`suggest_next_move`** ★ — Best next turn for the active battle, with reasoning and alternatives.
 
 ## breakpoint_tools  (1 tools)
 
@@ -91,10 +91,10 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 
 ## damage_tools  (6 tools)
 
-- **`calculate_damage_output`** ★ — ⭐ PRIMARY DAMAGE TOOL — use this for ANY damage / KO / survival question.
+- **`calculate_damage_output`** ★ — Damage range, % HP and KO verdict for one move: the main damage tool.
 - **`find_bulk_to_survive_hits`** — Find minimum HP/Def EVs to survive multiple hits of an attack.
 - **`find_ko_evs`** — Find minimum offensive EVs needed to achieve a certain KO probability.
-- **`find_survival_evs`** ★ — Find minimum HP/Defense EVs needed to SURVIVE a specific attack.
+- **`find_survival_evs`** ★ — Minimum HP and Def/SpD investment to survive one specific attack.
 - **`survive_double_up`** — Check if a Pokemon survives combined damage from two attackers in one turn (double-up).
 - **`survive_multiple_hits`** — Calculate if a Pokemon can survive multiple hits of an attack.
 
@@ -152,7 +152,7 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 
 ## legality_tools  (14 tools)
 
-- **`auto_detect_regulation_from_pokemon`** ★ — ZERO-CONFIG REGULATION DETECTION — call this whenever a user mentions
+- **`auto_detect_regulation_from_pokemon`** ★ — Infer the regulation from the Pokemon mentioned and set it for the session.
 - **`check_item_clause_tool`** — Check if the current team violates the item clause (no duplicate items).
 - **`check_pokemon_legality`** — Check if a specific Pokemon is legal, restricted, or banned.
 - **`check_restricted_count`** — Check how many restricted (box legend) Pokemon are on the team.
@@ -163,7 +163,7 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 - **`list_available_regulations`** — List all available VGC regulations with key parameters and date ranges.
 - **`list_banned_pokemon`** — List all banned Pokemon for a VGC regulation.
 - **`list_restricted_pokemon`** — List all restricted (box legend) Pokemon for a VGC regulation.
-- **`set_session_regulation`** ★ — Override the current regulation for this session based on user phrasing.
+- **`set_session_regulation`** ★ — Set the regulation from the user's wording ("Reg F", "Champions", "Reg MB").
 - **`suggest_item_alternatives`** — Suggest alternative items when the item clause flags a duplicate.
 - **`validate_team_legality`** ★ — Validate full team legality for VGC tournament play.
 
@@ -301,11 +301,11 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 - **`analyze_bulk_diminishing_returns`** — Analyze diminishing returns for HP, Def, and SpD investment.
 - **`analyze_hp_number`** — Analyze HP EV options for optimal item-based recovery or recoil.
 - **`check_spread_efficiency`** — Check an EV spread for efficiency (wasted EVs, optimal distribution).
-- **`design_spread_with_benchmarks`** ★ — Design an EV spread that meets specific speed and SINGLE survival benchmarks.
+- **`design_spread_with_benchmarks`** ★ — Spread that outspeeds a target and survives ONE attack (or maxes offense).
 - **`optimize_bulk`** — Optimize HP/Def/SpD EVs for maximum effective bulk.
 - **`optimize_bulk_math`** — Deprecated alias of `optimize_bulk`; will be removed in the next release.
-- **`optimize_dual_survival_spread`** ★ — Find the optimal EV spread to survive TWO DIFFERENT attacks while meeting a speed benchmark.
-- **`optimize_multi_survival_spread`** ★ — Find the optimal EV spread to survive 3-6 different attacks while meeting a speed benchmark.
+- **`optimize_dual_survival_spread`** ★ — Cheapest spread that survives TWO different attackers and hits a speed target.
+- **`optimize_multi_survival_spread`** ★ — Cheapest spread that survives 3-6 different attacks and hits a speed target.
 - **`suggest_nature_optimization`** — Suggest a nature change that achieves the same stats with fewer EVs.
 - **`suggest_spread`** — Suggest an EV spread based on role, with a Showdown paste.
 
@@ -362,7 +362,7 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 
 - **`add_pokemon_smart`** ★ — Add a Pokemon to the team with an intelligently suggested build.
 - **`analyze_speed_matchup`** — Compare Speed between two Pokemon across various scenarios.
-- **`calc_damage_vs_smogon_sets`** ★ — Calculate damage using YOUR exact spread vs the top Smogon sets.
+- **`calc_damage_vs_smogon_sets`** ★ — Damage from YOUR exact spread against each of the top Smogon sets.
 - **`check_team_vs_threat`** — Check how your currently loaded team handles a specific threat.
 - **`compare_pokemon_options`** — Compare two Pokemon to help decide which fits your team better.
 - **`design_pokemon_for_role`** — Design a complete Pokemon build for a specific role in ONE call.

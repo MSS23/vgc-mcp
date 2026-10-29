@@ -87,47 +87,18 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         defender_starting_hp_percent: Annotated[float, Field(description="Defender's HP at the moment of the hit (0.1-100). Use this to model prior chip damage — e.g. 90.0 if defender has taken one Life Orb chip (10%), 75.0 if it lost a Sitrus to a previous hit. Affects KO computation only; damage rolls themselves are unchanged.")] = 100.0,
         attacker_starting_hp_percent: Annotated[float, Field(description="Attacker's HP %, used only for Multiscale / Shadow Shield activation checks (these abilities halve damage at full HP). Default 100.0 (full HP).")] = 100.0,
     ) -> CalcResultDict:
-        """⭐ PRIMARY DAMAGE TOOL — use this for ANY damage / KO / survival question.
+        """Damage range, % HP and KO verdict for one move: the main damage tool.
 
-        USE THIS WHEN the user asks ANY of:
-            - "Does X OHKO/2HKO/KO Y?"
-            - "Can X survive Y?"
-            - "Does this spread live Y after Tera/chip/screens/whatever?"
-            - "What's the damage of X's move vs Y?"
-            - "How much HP does Y have left after X's attack?"
+        Use for "Does X OHKO Y?", "Can X survive Y?" and "How much does X's move
+        do to Y?". Handles Tera (both sides), items, abilities (Ruin abilities
+        still apply on crits), weather, terrain, screens, Helping Hand, Friend
+        Guard, stat stages, multi-hit, crits, spread moves and prior chip
+        (`defender_starting_hp_percent`).
 
-        FULLY HANDLES: Tera (both sides), every item (Life Orb, Choice items,
-        Assault Vest, Booster Energy, Sitrus Berry, Hearthflame Mask, etc.),
-        every ability (Sheer Force, Intimidate, Multiscale, Ruin abilities,
-        Adaptability, etc.), weather, terrain, screens (Reflect, Light Screen,
-        Aurora Veil), Helping Hand, Friend Guard, stat stages, multi-hit moves,
-        always-crit moves, spread-move 0.75x, and prior chip damage.
-
-        DO NOT USE the simpler tools (`check_survival_benchmark`,
-        `survive_multiple_hits`, `find_bulk_to_survive_hits`) unless the user
-        is specifically asking about *finding spreads*, not computing damage.
-
-        EXAMPLE — "Does Tera Normal Entei live Sheer Force LO Earth Power
-        after 1 chip of LO damage?":
-            calculate_damage_output(
-                attacker_name="landorus", defender_name="entei",
-                move_name="earth-power", attacker_item="life-orb",
-                attacker_ability="sheer-force", defender_tera_type="normal",
-                defender_starting_hp_percent=90.0,  # 1 chip = 10% lost
-            )
-
-        By default, uses the most common Smogon VGC spreads for both Pokemon when
-        nature/EVs are not specified. Calculates against the top 3 defender spreads
-        to show damage variance across common builds.
-
-        Returns damage calculations against top defender spreads with KO
-        probabilities and items. IMPORTANT: the response includes
-        'attacker_spread' showing the exact spread used — always show this to
-        the user so they know what nature/EVs/item were assumed ("252 Atk"
-        notation means neutral nature; "252+ Atk" means boosting nature). When
-        `defender_starting_hp_percent` < 100, the response also includes
-        `survival_after_chip` describing whether the defender survives given
-        the prior damage.
+        Unset natures/EVs default to the top Smogon spreads; the defender is
+        checked against its top 3 spreads. Always show `attacker_spread` so the
+        user sees what was assumed. To find a spread rather than check one, use
+        find_survival_evs.
         """
         return await damage_handlers.calculate_damage_output(
             pokeapi,
@@ -253,24 +224,14 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         attacker_ability: Annotated[Optional[str], Field(description="Attacker's ability — overrides auto-detection")] = None,
         apply_defender_intimidate: Annotated[bool, Field(description="If True (default), automatically applies the defender's Intimidate (-1 attacker Atk for physical moves), accounting for attacker blockers (Clear Body, Inner Focus, etc.) and punishers (Defiant, Contrary). Set False to ignore Intimidate (e.g. simulating a turn after switch-in).")] = True
     ) -> CalcResultDict:
-        """Find minimum HP/Defense EVs needed to SURVIVE a specific attack.
+        """Minimum HP and Def/SpD investment to survive one specific attack.
 
-        Default behavior (93.75% survival) survives the MAXIMUM damage roll but
-        not necessarily the absolute minimum roll — optimal for competitive
-        play, leaving more EVs for offense, speed, or other stats.
-
-        USE THIS TOOL when user asks:
-        - "What EVs to survive X?"
-        - "Can my Pokemon survive Y?"
-        - "How much bulk/HP do I need?"
-        - "What spread survives Z?"
-
-        This tool auto-fetches the attacker's Smogon spread (nature, EVs, item)
-        unless you specify them manually. Always show the attacker_spread_info
-        in your response so the user knows what spread was used.
-
-        Returns the required HP/Def EVs, the damage calculation, and full
-        attacker spread info.
+        Use for "What EVs to survive X?" or "How much bulk do I need?". Default
+        survives the max roll (93.75%); pass target_survival_chance=100 only
+        when the user asks for guaranteed survival. Fetches the attacker's
+        Smogon spread unless given. Returns the investment, the damage calc, a
+        Showdown paste (`defender_showdown_paste`) and `attacker_spread`, which
+    you should always show.
         """
         return await damage_handlers.find_survival_evs(
             pokeapi,

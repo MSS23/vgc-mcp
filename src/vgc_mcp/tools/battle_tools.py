@@ -273,19 +273,12 @@ def register_battle_tools(mcp: FastMCP, battle_manager: BattleStateManager):
         ),
     )
     async def suggest_next_move() -> dict:
-        """Recommend the next turn given the remembered battle state.
+        """Best next turn for the active battle, with reasoning and alternatives.
 
-        Returns:
-            * Top recommendation ("Surging Strikes opp/incineroar; protect Flutter Mane")
-            * Reasoning (KO maths, speed matchups, hidden info)
-            * Alternatives (2nd / 3rd best plays)
-            * Risk callouts (priority moves to watch, Tera scarcity, item triggers)
-            * Win-condition assessment
-
-        This tool deliberately calls into existing damage/speed/matchup tools
-        rather than re-implementing them — it's an *orchestrator* over the
-        remembered state. The actual recommendation phrasing is up to the agent;
-        this returns the structured facts it should reason from.
+        Uses the remembered battle state (start_battle, record_turn). Returns
+        the top play, the reasoning (KO maths, speed order, hidden info), 2nd
+        and 3rd options, risks (priority, Tera, item triggers) and the win
+        condition. You phrase the advice; this supplies the facts.
         """
         if not battle_manager.has_active():
             return error_response(

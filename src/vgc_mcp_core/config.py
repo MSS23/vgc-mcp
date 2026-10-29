@@ -3,7 +3,6 @@
 import bisect
 import logging
 import sys
-from pathlib import Path
 
 
 def setup_logging(level: int = logging.INFO) -> logging.Logger:
@@ -36,8 +35,7 @@ logger = setup_logging()
 class Settings:
     """Application settings."""
 
-    # Cache settings
-    CACHE_DIR: Path = Path(__file__).parent.parent.parent / "data" / "cache"
+    # Cache settings (directory: APICache, overridable with VGC_CACHE_DIR)
     CACHE_EXPIRE_DAYS: int = 7
 
     # API settings

@@ -813,8 +813,6 @@ async def check_team_vs_threat(
             )
 
         threat_data = await pokeapi.get_pokemon(threat_pokemon)
-        if not threat_data:
-            return error_response(ErrorCodes.POKEMON_NOT_FOUND, f"Threat '{threat_pokemon}' not found")
 
         # Auto-detect ability
         if not threat_ability:
@@ -974,13 +972,6 @@ async def find_counter_for(
     try:
         # Get threat data
         threat_data = await pokeapi.get_pokemon(threat)
-        if not threat_data:
-            suggestions = suggest_pokemon_name(threat)
-            return error_response(
-                ErrorCodes.POKEMON_NOT_FOUND,
-                f"Pokemon '{threat}' not found",
-                suggestions=[f"Did you mean: {', '.join(suggestions)}?"] if suggestions else []
-            )
 
         threat_stats = threat_data["base_stats"]
         threat_types = await pokeapi.get_pokemon_types(threat)
@@ -1170,13 +1161,6 @@ async def evaluate_core(
 
         for poke_name in pokemon_list:
             data = await pokeapi.get_pokemon(poke_name)
-            if not data:
-                suggestions = suggest_pokemon_name(poke_name)
-                return error_response(
-                    ErrorCodes.POKEMON_NOT_FOUND,
-                    f"Pokemon '{poke_name}' not found",
-                    suggestions=[f"Did you mean: {', '.join(suggestions)}?"] if suggestions else []
-                )
 
             types = await pokeapi.get_pokemon_types(poke_name)
             abilities = await pokeapi.get_pokemon_abilities(poke_name)

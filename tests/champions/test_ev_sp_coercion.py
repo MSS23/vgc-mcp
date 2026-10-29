@@ -18,6 +18,7 @@ from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.build_tools import register_build_tools
 from vgc_mcp.tools.team_tools import register_team_tools
+from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.calc.conversion import coerce_champions_allocation
 from vgc_mcp_core.models.pokemon import BaseStats
 from vgc_mcp_core.rules.regulation_loader import (
@@ -56,7 +57,7 @@ def mainline_session():
 
 @pytest.fixture
 def mock_pokeapi():
-    client = AsyncMock()
+    client = AsyncMock(spec=PokeAPIClient)
     client.get_base_stats = AsyncMock(return_value=RAGING_BOLT_BASE)
     client.get_pokemon_types = AsyncMock(return_value=["Electric", "Dragon"])
     client.get_pokemon_abilities = AsyncMock(return_value=["Protosynthesis"])

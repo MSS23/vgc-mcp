@@ -6,13 +6,14 @@ import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.meta_threat_tools import register_meta_threat_tools
+from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.models.pokemon import BaseStats
 
 
 @pytest.fixture
 def mock_pokeapi():
     """Create a mock PokeAPI client."""
-    client = AsyncMock()
+    client = AsyncMock(spec=PokeAPIClient)
     client.get_base_stats = AsyncMock(return_value=BaseStats(
         hp=80, attack=120, defense=84,
         special_attack=60, special_defense=96, speed=110

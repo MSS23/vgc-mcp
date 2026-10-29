@@ -13,6 +13,7 @@ from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.speed_analysis_tools import register_speed_analysis_tools
 from vgc_mcp.tools.workflow_tools import register_workflow_tools
+from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.models.pokemon import BaseStats
 from vgc_mcp_core.rules.regulation_loader import get_regulation_config
 from vgc_mcp_core.team.manager import TeamManager
@@ -43,7 +44,7 @@ def mainline_session():
 
 
 def _mock_pokeapi():
-    api = AsyncMock()
+    api = AsyncMock(spec=PokeAPIClient)
     api.get_base_stats = AsyncMock(return_value=FLUTTER_MANE)
     api.get_pokemon_types = AsyncMock(return_value=["ghost", "fairy"])
     api.get_pokemon_abilities = AsyncMock(return_value=["Protosynthesis"])

@@ -6,6 +6,7 @@ import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.speed_analysis_tools import register_speed_analysis_tools
+from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.models.pokemon import BaseStats
 from vgc_mcp_core.team.manager import TeamManager
 
@@ -13,7 +14,7 @@ from vgc_mcp_core.team.manager import TeamManager
 @pytest.fixture
 def mock_pokeapi():
     """Create a mock PokeAPI client."""
-    client = AsyncMock()
+    client = AsyncMock(spec=PokeAPIClient)
     # Flutter Mane: 135 base speed
     client.get_base_stats = AsyncMock(return_value=BaseStats(
         hp=55, attack=55, defense=55,

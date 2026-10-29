@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Backlog fixes
+- A misspelled Pokemon, move, item or ability now returns `pokemon_not_found`
+  (or `move_not_found`, ...) with a "Did you mean" suggestion instead of
+  `internal_error: Not found: pokemon/x`. Handled once in `error_response`.
+- Item and chip tools (Assault Vest, Eviolite, Choice items, berries, Focus
+  Sash, Life Orb, weather, status, Grassy Terrain, Leftovers, chip
+  simulation) read Champions Stat Points (0-32) in a Champions format, via
+  the new `calculate_stat_for_format`.
+- Gen 9: only Snow boosts Ice-type Defense; the old Hail weather does not.
+- Docker image runs as a non-root user, has no curl (Python health check),
+  installs non-editable, and caches under `VGC_CACHE_DIR`.
+- The production verifier also runs nightly (03:17 UTC) and checks the live
+  PokeAPI paths (`quick_damage_check`, `calculate_weather_damage`,
+  `get_usage_stats`) plus the typo error. PokeAPI test mocks use
+  `spec=PokeAPIClient`, so a call to a method that does not exist fails.
+- Shorter, outcome-first descriptions for the longest core tools (core
+  descriptions 27% smaller); `set_session_regulation` no longer calls Reg MB
+  the default.
+
 ### Focused by default
 - `/mcp` now serves a 34-tool core profile (damage, survival, speed, spreads,
   team prep, usage, legality, battle copilot, onboarding, export). All 213

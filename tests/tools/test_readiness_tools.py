@@ -6,12 +6,13 @@ import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.readiness_tools import register_readiness_tools
+from vgc_mcp_core.api.pokeapi import PokeAPIClient
 
 
 @pytest.fixture
 def mock_pokeapi():
     """Create a mock PokeAPI client."""
-    client = AsyncMock()
+    client = AsyncMock(spec=PokeAPIClient)
     # Return different types for different Pokemon
     type_map = {
         "flutter-mane": ["Ghost", "Fairy"],
