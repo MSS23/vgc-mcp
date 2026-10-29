@@ -19,15 +19,13 @@ from vgc_mcp_core.calc.meta_threats import (
     generate_spread_suggestions,
 )
 from vgc_mcp_core.calc.stats import calculate_all_stats
-from vgc_mcp_core.calc.stats_champions import SP_BREAKPOINTS_LV50
-from vgc_mcp_core.config import EV_BREAKPOINTS_LV50
 from vgc_mcp_core.formats.showdown import pokemon_build_to_showdown
 from vgc_mcp_core.models.pokemon import (
     EVSpread,
     Nature,
-    StatPointSpread,
 )
 from vgc_mcp_core.rules.format_detect import detect_champions_format
+from vgc_mcp_core.tools import damage_handlers
 from vgc_mcp_core.tools.build_helpers import build_pokemon
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 from vgc_mcp_core.utils.normalize import normalize_move
@@ -146,6 +144,40 @@ def _format_results_table(threat_results: list[ThreatDamageResult]) -> dict:
         "table_text": "\n".join(table_lines),
         "rows": rows
     }
+
+
+def _legacy_survival_keys(
+    result: dict, pokemon_name: str, nature: str, threat_pokemon: str,
+    threat_move: str, survival_threshold: float,
+) -> dict:
+    """Map a canonical `find_survival_evs` result onto find_survival_evs_meta's old keys."""
+    is_champions = result.get("units") == "Stat Points" or "hp_sps_needed" in result
+    legacy: dict = {
+        "pokemon": pokemon_name,
+        "nature": nature,
+        "threat": threat_pokemon,
+        "move": threat_move,
+        "threshold_requested": survival_threshold,
+        "format_system": "champions" if is_champions else "mainline",
+        "units": "Stat Points" if is_champions else "EVs",
+        "impossible": not result.get("achievable", False),
+    }
+    if legacy["impossible"]:
+        return legacy
+    physical = result.get("def_stat") in ("Def", "defense")
+    hp = result["hp_sps_needed" if is_champions else "hp_evs_needed"]
+    bulk = result["def_sps_needed" if is_champions else "def_evs_needed"]
+    unit = "sps" if is_champions else "evs"
+    legacy["minimum_" + unit] = {
+        f"hp_{unit}": hp,
+        f"def_{unit}": bulk if physical else 0,
+        f"spd_{unit}": 0 if physical else bulk,
+        f"total_{unit}": hp + bulk,
+        "survival_percent": result.get("survival_chance"),
+        "damage_taken": result.get("damage_range"),
+    }
+    legacy["showdown_paste"] = result.get("defender_showdown_paste")
+    return legacy
 
 
 def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
@@ -931,447 +963,26 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
             description="Required survival % (0-100): 100 = survive all rolls (default), 75 = 'most of the time', 50 = 'sometimes'",
         )] = 100.0,
     ) -> dict:
-        """Find minimum bulk EVs needed to survive a specific attack (meta-threat variant).
+        """Deprecated alias of `find_survival_evs`; will be removed in the next release.
+        Call `find_survival_evs` instead (threat_pokemon -> attacker_name, pokemon_name -> defender_name, threat_move -> move_name, nature -> defender_nature, survival_threshold -> target_survival_chance).
 
-        This is the meta-threat-aware version. The canonical survival EV finder
-        is `find_survival_evs` in damage_tools.py — prefer that for general use.
-        Use this one when you specifically want the meta-threat module's
-        Smogon-spread defaults and survival_threshold semantics.
-
-        Returns the minimum HP and defensive investment needed to achieve the
-        survival threshold (Stat Points on the 0-32/66 grain in Champions
-        sessions, EVs on the 0-252/508 grain otherwise), accounting for Ruin
-        abilities on the attacker.
+        `is_physical` is accepted but ignored: the canonical calc uses the
+        move's real category. The result is the canonical payload plus this
+        tool's legacy keys (minimum_evs / minimum_sps, impossible, units,
+        format_system, showdown_paste).
         """
-        # Validate nature first
-        try:
-            nature_enum = Nature(nature.lower())
-        except ValueError:
-            return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {nature}')
-
-        # Get Pokemon data
-        try:
-            base_stats = await pokeapi.get_base_stats(pokemon_name)
-            your_types = await pokeapi.get_pokemon_types(pokemon_name)
-        except Exception:
-            return error_response(ErrorCodes.POKEMON_NOT_FOUND, f'Pokemon not found: {pokemon_name}')
-
-        try:
-            threat_base_stats = await pokeapi.get_base_stats(threat_pokemon)
-            threat_types = await pokeapi.get_pokemon_types(threat_pokemon)
-        except Exception:
-            return error_response(ErrorCodes.POKEMON_NOT_FOUND, f'Pokemon not found: {threat_pokemon}')
-
-        move_data = await pokeapi.get_move(normalize_move(threat_move))
-        if not move_data:
-            return error_response(ErrorCodes.MOVE_NOT_FOUND, f'Move not found: {threat_move}')
-
-        move_is_physical = is_physical if is_physical is not None else (
-            move_data.category.value == "physical"
+        result = await damage_handlers.find_survival_evs(
+            pokeapi,
+            smogon,
+            attacker_name=threat_pokemon,
+            defender_name=pokemon_name,
+            move_name=threat_move,
+            defender_nature=nature,
+            target_survival_chance=survival_threshold,
+            # The meta-threat variant never modelled the defender's Intimidate.
+            apply_defender_intimidate=False,
         )
-
-        # Get threat's actual spread from Smogon if available
-        threat_usage = await smogon.get_pokemon_usage(threat_pokemon)
-        threat_spread = None
-
-        if threat_usage and threat_usage.get("spreads"):
-            top_spread = threat_usage["spreads"][0]
-            try:
-                threat_nature = Nature(top_spread["nature"].lower())
-                threat_evs_data = EVSpread(
-                    hp=top_spread["evs"].get("hp", 0),
-                    attack=top_spread["evs"].get("attack", 0),
-                    defense=top_spread["evs"].get("defense", 0),
-                    special_attack=top_spread["evs"].get("special_attack", 0),
-                    special_defense=top_spread["evs"].get("special_defense", 0),
-                    speed=top_spread["evs"].get("speed", 0)
-                )
-                threat_pokemon_build = build_pokemon(
-                    name=threat_pokemon,
-                    base_stats=threat_base_stats,
-                    types=threat_types,
-                    nature=threat_nature,
-                    spread=threat_evs_data,
-                    level=50,
-                )
-                threat_stats = calculate_all_stats(threat_pokemon_build)
-                threat_spread = {
-                    "nature": top_spread["nature"],
-                    "evs": top_spread["evs"],
-                    "usage": top_spread.get("usage", 0)
-                }
-            except (ValueError, KeyError):
-                threat_stats = {
-                    "hp": threat_base_stats.hp + 75,
-                    "attack": threat_base_stats.attack + 80 if move_is_physical else threat_base_stats.attack + 40,
-                    "defense": threat_base_stats.defense + 40,
-                    "special_attack": threat_base_stats.special_attack + 80 if not move_is_physical else threat_base_stats.special_attack + 40,
-                    "special_defense": threat_base_stats.special_defense + 40,
-                    "speed": threat_base_stats.speed + 40
-                }
-        else:
-            # Fallback to estimated max offensive
-            threat_stats = {
-                "hp": threat_base_stats.hp + 75,
-                "attack": threat_base_stats.attack + 80 if move_is_physical else threat_base_stats.attack + 40,
-                "defense": threat_base_stats.defense + 40,
-                "special_attack": threat_base_stats.special_attack + 80 if not move_is_physical else threat_base_stats.special_attack + 40,
-                "special_defense": threat_base_stats.special_defense + 40,
-                "speed": threat_base_stats.speed + 40
-            }
-
-        stab = move_data.type.lower() in [t.lower() for t in threat_types]
-
-        from vgc_mcp_core.calc.meta_threats import calculate_simple_damage, get_ruinous_info
-        from vgc_mcp_core.calc.modifiers import get_type_effectiveness
-
-        type_eff = get_type_effectiveness(
-            move_data.type.lower(),
-            your_types
-        )
-
-        # Check for ruinous abilities (Sword of Ruin, Beads of Ruin, etc.)
-        ruinous_info = get_ruinous_info(threat_pokemon)
-        defense_modifier = 1.0
-        ruinous_ability_applied = None
-
-        if ruinous_info:
-            affected_stat = ruinous_info["affected_stat"]
-            # Sword of Ruin affects Defense (for physical moves)
-            # Beads of Ruin affects Special Defense (for special moves)
-            if (affected_stat == "defense" and move_is_physical) or \
-               (affected_stat == "special_defense" and not move_is_physical):
-                defense_modifier = ruinous_info["modifier"]
-                ruinous_ability_applied = ruinous_info["ability"]
-
-        # Champions: sweep the SP grain (0-32 per stat, 66 total) and build the
-        # USER'S defender as a Champions SP build. The threat above stays
-        # mainline (its Smogon spread / estimate). Mainline keeps the EV sweep
-        # (0-252 per stat, 508 total) byte-for-byte. Loop vars stay named
-        # hp_evs/def_evs but hold SP units in the champions branch.
-        is_champions = detect_champions_format(pokemon_name)
-        breakpoints = SP_BREAKPOINTS_LV50 if is_champions else EV_BREAKPOINTS_LV50
-        total_budget = 66 if is_champions else 508
-
-        best_spread = None
-        min_total_evs = 999
-        max_achievable_survival = 0
-        max_achievable_spread = None
-
-        for hp_evs in breakpoints:
-            for def_evs in breakpoints:
-                if hp_evs + def_evs > total_budget:
-                    continue
-
-                if is_champions:
-                    test_pokemon = build_pokemon(
-                        name=pokemon_name,
-                        base_stats=base_stats,
-                        types=your_types,
-                        nature=nature_enum,
-                        champions=True,
-                        spread=StatPointSpread(
-                            hp=hp_evs,
-                            defense=def_evs if move_is_physical else 0,
-                            special_defense=0 if move_is_physical else def_evs,
-                        ),
-                        level=50,
-                    )
-                else:
-                    evs = EVSpread(
-                        hp=hp_evs,
-                        defense=def_evs if move_is_physical else 0,
-                        special_defense=0 if move_is_physical else def_evs
-                    )
-
-                    test_pokemon = build_pokemon(
-                        name=pokemon_name,
-                        base_stats=base_stats,
-                        types=your_types,
-                        nature=nature_enum,
-                        spread=evs,
-                        level=50,
-                    )
-
-                test_stats = calculate_all_stats(test_pokemon)
-
-                damage = calculate_simple_damage(
-                    threat_stats, test_stats,
-                    move_data.power or 80,
-                    move_is_physical,
-                    stab=stab,
-                    type_effectiveness=type_eff,
-                    defense_modifier=defense_modifier
-                )
-
-                # Calculate survival percentage from damage rolls
-                damage_rolls = damage.get("damage_rolls", [])
-                test_hp = test_stats["hp"]
-
-                if damage_rolls:
-                    survival_count = sum(1 for r in damage_rolls if r < test_hp)
-                    survival_percent = (survival_count / len(damage_rolls)) * 100
-                else:
-                    # Fallback to binary check
-                    survival_percent = 100.0 if test_hp > damage["max_damage"] else 0.0
-                    survival_count = 16 if survival_percent == 100.0 else 0
-
-                # Calculate HP remaining for clearer output
-                hp_remaining_min = max(0, test_hp - damage["max_damage"])
-                hp_remaining_max = max(0, test_hp - damage["min_damage"])
-                hp_remaining_min_pct = round((hp_remaining_min / test_hp) * 100, 1)
-                hp_remaining_max_pct = round((hp_remaining_max / test_hp) * 100, 1)
-
-                # Track max achievable survival (for when threshold is impossible)
-                if survival_percent > max_achievable_survival:
-                    max_achievable_survival = survival_percent
-                    max_achievable_spread = {
-                        "hp_evs": hp_evs,
-                        "def_evs": def_evs if move_is_physical else 0,
-                        "spd_evs": 0 if move_is_physical else def_evs,
-                        "total_evs": hp_evs + def_evs,
-                        "resulting_hp": test_hp,
-                        "survival_percent": round(survival_percent, 1),
-                        "survival_rolls": f"{survival_count}/16",
-                        "damage_taken": f"{damage['min_percent']:.0f}%-{damage['max_percent']:.0f}%",
-                        "hp_remaining_percent": f"{hp_remaining_min_pct}-{hp_remaining_max_pct}%"
-                    }
-
-                # Check if meets threshold
-                if survival_percent >= survival_threshold:
-                    total = hp_evs + def_evs
-                    if total < min_total_evs:
-                        min_total_evs = total
-                        best_spread = {
-                            "hp_evs": hp_evs,
-                            "def_evs": def_evs if move_is_physical else 0,
-                            "spd_evs": 0 if move_is_physical else def_evs,
-                            "total_evs": total,
-                            "resulting_hp": test_hp,
-                            "survival_percent": round(survival_percent, 1),
-                            "survival_rolls": f"{survival_count}/16",
-                            "damage_taken": f"{damage['min_percent']:.0f}%-{damage['max_percent']:.0f}%",
-                            "hp_remaining_percent": f"{hp_remaining_min_pct}-{hp_remaining_max_pct}%"
-                        }
-                        break  # Found minimum for this HP level
-            if best_spread and best_spread["total_evs"] == min_total_evs:
-                # Check if we can do better with less HP
-                if hp_evs > 0:
-                    continue
-                break
-
-        # Check if attacker has Unseen Fist (Urshifu forms)
-        normalized_threat = threat_pokemon.lower().replace(" ", "-")
-        has_unseen_fist = normalized_threat in ("urshifu", "urshifu-single-strike", "urshifu-rapid-strike")
-
-        # Build threat spread string for analysis
-        if threat_spread:
-            # Extract relevant EVs based on move category
-            threat_evs_dict = threat_spread.get("evs", {})
-            threat_atk_evs = threat_evs_dict.get("attack", 0) if move_is_physical else threat_evs_dict.get("special_attack", 0)
-            threat_stat_name = "Atk" if move_is_physical else "SpA"
-            threat_nature_name = threat_spread.get("nature", "")
-            # Determine nature modifier
-            from vgc_mcp_core.calc.stats import get_nature_modifier
-            try:
-                threat_nature_enum = Nature(threat_nature_name.lower())
-                nature_mod = get_nature_modifier(threat_nature_enum, "attack" if move_is_physical else "special_attack")
-                nature_indicator = "+" if nature_mod > 1.0 else ("-" if nature_mod < 1.0 else "")
-            except (ValueError, KeyError):
-                nature_indicator = ""
-            threat_spread_str = f"{threat_atk_evs}{nature_indicator} {threat_stat_name} {threat_pokemon}"
-        else:
-            # Fallback when no Smogon data
-            threat_spread_str = f"max invested {threat_pokemon}"
-
-        if not best_spread:
-            # Build message based on what's achievable
-            ruinous_note = f" (with {ruinous_ability_applied})" if ruinous_ability_applied else ""
-            if max_achievable_survival > 0:
-                message = (
-                    f"Cannot achieve {survival_threshold}% survival against {threat_move} ({threat_spread_str}){ruinous_note}. "
-                    f"Max achievable is {max_achievable_survival:.1f}% with max bulk investment."
-                )
-            else:
-                message = f"Cannot survive {threat_move} ({threat_spread_str}){ruinous_note} even with max bulk investment"
-
-            result = {
-                "pokemon": pokemon_name,
-                "threat": threat_pokemon,
-                "move": threat_move,
-                "threat_spread": threat_spread,
-                "threat_stats": threat_stats,
-                "impossible": True,
-                "threshold_requested": survival_threshold,
-                "max_achievable_survival": round(max_achievable_survival, 1),
-                "max_achievable_spread": max_achievable_spread,
-                "message": message,
-                "ruinous_ability_applied": ruinous_ability_applied,
-                "format_system": "champions" if is_champions else "mainline",
-                "units": "Stat Points" if is_champions else "EVs",
-            }
-        elif is_champions:
-            # Champions success branch: loop vars held SP units. Report SP-scale
-            # keys and an 'SPs:' paste; never emit 252/508 or EV-unit labels.
-            threshold_note = ""
-            if survival_threshold < 100:
-                threshold_note = f" (meets {survival_threshold}% threshold)"
-
-            ruinous_note = ""
-            if ruinous_ability_applied:
-                ruinous_note = f" (accounts for {ruinous_ability_applied})"
-
-            hp_sps = best_spread["hp_evs"]
-            def_sps = best_spread["def_evs"]
-            spd_sps = best_spread["spd_evs"]
-            total_sps = best_spread["total_evs"]
-
-            minimum_sps = {
-                "hp_sps": hp_sps,
-                "def_sps": def_sps,
-                "spd_sps": spd_sps,
-                "total_sps": total_sps,
-                "resulting_hp": best_spread["resulting_hp"],
-                "survival_percent": best_spread["survival_percent"],
-                "survival_rolls": best_spread["survival_rolls"],
-                "damage_taken": best_spread["damage_taken"],
-                "hp_remaining_percent": best_spread["hp_remaining_percent"],
-            }
-
-            survival_build = build_pokemon(
-                name=pokemon_name,
-                base_stats=base_stats,
-                types=your_types,
-                nature=nature_enum,
-                champions=True,
-                spread=StatPointSpread(
-                    hp=hp_sps,
-                    defense=def_sps if move_is_physical else 0,
-                    special_defense=0 if move_is_physical else spd_sps,
-                ),
-                level=50,
-            )
-
-            result = {
-                "pokemon": pokemon_name,
-                "nature": nature,
-                "threat": threat_pokemon,
-                "move": threat_move,
-                "threat_spread": threat_spread,
-                "threat_stats": threat_stats,
-                "move_type": move_data.type,
-                "move_category": "Physical" if move_is_physical else "Special",
-                "threshold_requested": survival_threshold,
-                "format_system": "champions",
-                "units": "Stat Points",
-                "minimum_sps": minimum_sps,
-                "ruinous_ability_applied": ruinous_ability_applied,
-                "showdown_paste": pokemon_build_to_showdown(survival_build),
-            }
-
-            # Build SP string showing only non-zero stats
-            sp_parts = []
-            if hp_sps:
-                sp_parts.append(f"{hp_sps} HP")
-            if def_sps:
-                sp_parts.append(f"{def_sps} Def")
-            if spd_sps:
-                sp_parts.append(f"{spd_sps} SpD")
-            sp_str = " / ".join(sp_parts) if sp_parts else "0 SP"
-
-            result["analysis"] = (
-                f"Minimum {total_sps} total SP needed: "
-                f"{sp_str} "
-                f"to survive {best_spread['survival_percent']}% of rolls "
-                f"({best_spread['survival_rolls']}) from {threat_move} ({threat_spread_str}), "
-                f"left with {best_spread['hp_remaining_percent']} HP{threshold_note}{ruinous_note}"
-            )
-
-            table_lines = [
-                "| Stat                 | Value                                    |",
-                "|----------------------|------------------------------------------|",
-                f"| Pokemon              | {pokemon_name:<40} |",
-                f"| Nature               | {nature:<40} |",
-                f"| Threat               | {threat_pokemon}'s {threat_move:<20} |",
-                f"| HP SP                | {hp_sps:<40} |",
-                f"| Def SP               | {def_sps:<40} |",
-                f"| SpD SP               | {spd_sps:<40} |",
-                f"| Total SP             | {total_sps:<40} |",
-                f"| Resulting HP         | {best_spread['resulting_hp']:<40} |",
-                f"| Damage Taken         | {best_spread['damage_taken']:<40} |",
-                f"| HP Remaining         | {best_spread['hp_remaining_percent']:<40} |",
-                f"| Survival Rate        | {best_spread['survival_percent']}% ({best_spread['survival_rolls']}){' ':<20} |",
-            ]
-            if ruinous_ability_applied:
-                table_lines.append(f"| Ability Applied      | {ruinous_ability_applied:<40} |")
-            result["spread_table"] = "\n".join(table_lines)
-
-        else:
-            # Build analysis message with HP remaining for clarity
-            threshold_note = ""
-            if survival_threshold < 100:
-                threshold_note = f" (meets {survival_threshold}% threshold)"
-
-            ruinous_note = ""
-            if ruinous_ability_applied:
-                ruinous_note = f" (accounts for {ruinous_ability_applied})"
-
-            result = {
-                "pokemon": pokemon_name,
-                "nature": nature,
-                "threat": threat_pokemon,
-                "move": threat_move,
-                "threat_spread": threat_spread,
-                "threat_stats": threat_stats,
-                "move_type": move_data.type,
-                "move_category": "Physical" if move_is_physical else "Special",
-                "threshold_requested": survival_threshold,
-                "minimum_evs": best_spread,
-                "ruinous_ability_applied": ruinous_ability_applied,
-            }
-
-            # Build EV string showing only non-zero stats
-            ev_parts = []
-            if best_spread['hp_evs']:
-                ev_parts.append(f"{best_spread['hp_evs']} HP")
-            if best_spread['def_evs']:
-                ev_parts.append(f"{best_spread['def_evs']} Def")
-            if best_spread['spd_evs']:
-                ev_parts.append(f"{best_spread['spd_evs']} SpD")
-            ev_str = " / ".join(ev_parts) if ev_parts else "0 EVs"
-
-            result["analysis"] = (
-                f"Minimum {best_spread['total_evs']} total EVs needed: "
-                f"{ev_str} "
-                f"to survive {best_spread['survival_percent']}% of rolls "
-                f"({best_spread['survival_rolls']}) from {threat_move} ({threat_spread_str}), "
-                f"left with {best_spread['hp_remaining_percent']} HP{threshold_note}{ruinous_note}"
-            )
-
-            # Build spread result table
-            table_lines = [
-                "| Stat                 | Value                                    |",
-                "|----------------------|------------------------------------------|",
-                f"| Pokemon              | {pokemon_name:<40} |",
-                f"| Nature               | {nature:<40} |",
-                f"| Threat               | {threat_pokemon}'s {threat_move:<20} |",
-                f"| HP EVs               | {best_spread['hp_evs']:<40} |",
-                f"| Def EVs              | {best_spread['def_evs']:<40} |",
-                f"| SpD EVs              | {best_spread['spd_evs']:<40} |",
-                f"| Total EVs            | {best_spread['total_evs']:<40} |",
-                f"| Resulting HP         | {best_spread['resulting_hp']:<40} |",
-                f"| Damage Taken         | {best_spread['damage_taken']:<40} |",
-                f"| HP Remaining         | {best_spread['hp_remaining_percent']:<40} |",
-                f"| Survival Rate        | {best_spread['survival_percent']}% ({best_spread['survival_rolls']}){' ':<20} |",
-            ]
-            if ruinous_ability_applied:
-                table_lines.append(f"| Ability Applied      | {ruinous_ability_applied:<40} |")
-            result["spread_table"] = "\n".join(table_lines)
-
-        if has_unseen_fist:
-            result["unseen_fist_warning"] = (
-                "WARNING: Urshifu has Unseen Fist - contact moves bypass Protect! "
-                "You cannot avoid this damage with Protect."
-            )
-
-        return result
+        if "error" in result:
+            return result
+        return {**result, **_legacy_survival_keys(result, pokemon_name, nature, threat_pokemon,
+                                                  threat_move, survival_threshold)}
