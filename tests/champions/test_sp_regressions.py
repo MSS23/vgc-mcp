@@ -29,7 +29,7 @@ def tools(monkeypatch):
     api.get_pokemon_types.return_value = ["normal", "psychic"]
     api.get_pokemon_abilities.return_value = ["armor-tail"]
     api.get_move.return_value = Move(name="tackle", type="normal", category=MoveCategory.PHYSICAL, power=40)
-    monkeypatch.setattr("vgc_mcp.tools.spread_tools._get_common_spread", AsyncMock(return_value=None))
+    monkeypatch.setattr("vgc_mcp_core.tools.spread_common._get_common_spread", AsyncMock(return_value=None))
     mcp = FastMCP("SP regressions")
     register_stats_tools(mcp, api)
     register_speed_tools(mcp, api)
@@ -201,7 +201,7 @@ async def test_survival_attacker_uses_sps(tools, investment, expected):
 
 
 async def test_survival_preserves_sourced_champions_spread(tools, monkeypatch):
-    monkeypatch.setattr("vgc_mcp.tools.spread_tools._get_common_spread", AsyncMock(return_value={
+    monkeypatch.setattr("vgc_mcp_core.tools.spread_common._get_common_spread", AsyncMock(return_value={
         "nature": "bold", "sps": {"hp": 32, "at": 10, "df": 14, "sp": 10},
         "format_system": "champions",
     }))
