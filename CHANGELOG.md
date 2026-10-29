@@ -7,6 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Focused by default
+- `/mcp` now serves a 34-tool core profile (damage, survival, speed, spreads,
+  team prep, usage, legality, battle copilot, onboarding, export). All 213
+  tools stay available at `/mcp/full`, or as the default with
+  `VGC_MCP_PROFILE=full`. `/health` reports `profile`, `tools` and
+  `tools_total`. The tool count is pinned once in `vgc_mcp/profiles.py`.
+- Seven duplicate tools now delegate to one implementation and are marked as
+  deprecated aliases, to be removed in the next release:
+
+  | Deprecated | Use instead |
+  |---|---|
+  | `outspeed_probability`, `outspeed_probability_stored` | `analyze_outspeed_probability` |
+  | `get_meta_speed_tiers` | `get_speed_tiers` |
+  | `visualize_team_speed_tiers` | `visualize_speed_tiers` |
+  | `find_survival_evs_meta` | `find_survival_evs` |
+  | `optimize_bulk_math` | `optimize_bulk` |
+  | `find_multi_threat_bulk_evs` | `optimize_multi_survival_spread` |
+
+  Their numbers can differ slightly from before because they now run the
+  more complete canonical calculation.
+
+### Phone-first output
+- Server instructions lead with a one-line verdict, cap tables at 4 columns,
+  show one short block per opponent set and send wide grids to the export.
+- Fourteen core calc tools return the same contract fields (`headline`,
+  `spreads_used`, `data_source`, `showdown_paste`) and publish a typed
+  output schema. `analyze_outspeed_probability` moved its old string
+  `data_source` to `speed_data_source`.
+- Errors carry one `next_step` and at most three suggestions.
+- Onboarding is generated from the tool registry and no longer mentions
+  `/help`; two new prompts cover tournament prep and replay explanations.
+- Spread parameters across the spread, damage and speed tools also accept
+  the `HP/Atk/Def/SpA/SpD/Spe` slash string.
+
+### Reliability and security
+- The free Render instance stays awake around the clock: each keep-alive
+  run pings every 10 minutes for ~5h50m and the next run queues behind it.
+- The rate limiter keys on the proxy-appended client address
+  (`VGC_MCP_TRUSTED_PROXY_HOPS`) instead of the spoofable leftmost
+  `X-Forwarded-For` entry.
+- Fixed: 15 tools raised `TypeError` inside their own error handler;
+  `find_survival_evs` dropped Def/SpD EVs from its mainline paste;
+  `analyze_outspeed_probability` echoed the wrong nature and EVs after its
+  meta fallback; four hints named tools that do not exist.
+
+### Internals
+- One build factory (`build_pokemon`), one read-only and one session-setting
+  format detector, and `DamageModifiers.from_scenario` replace 117
+  hand-built builds, 13 private detectors and 45 hand-built modifier sets.
+- `spread_tools.py`, `workflow_tools.py` and `damage_tools.py` (11,662 lines)
+  are now thin wrappers (1,547 lines) over handler modules in
+  `vgc_mcp_core/tools/`.
+- `vgc_mcp_core/api` and `vgc_mcp_core/calc` pass strict mypy; the CI
+  baseline dropped from 1,149 to 908.
+- Docs: seven stale files removed, one docs index, AGENTS.md points to
+  CLAUDE.md; tests fail if docs state a tool count other than the pin, or if
+  any hint names a missing or deprecated tool.
+
 ## [1.0.1] - 2026-09-18
 
 ### Champions SP corrections
