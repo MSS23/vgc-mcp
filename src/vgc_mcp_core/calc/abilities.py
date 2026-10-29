@@ -1,7 +1,7 @@
 """Ability synergy and interaction analysis for VGC."""
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 # ============================================================================
 # INTIMIDATE INTERACTIONS
@@ -131,7 +131,7 @@ REDIRECT_ABILITIES: dict[str, str] = {
 # SPEED MODIFYING ABILITIES
 # ============================================================================
 
-SPEED_ABILITIES: dict[str, dict] = {
+SPEED_ABILITIES: dict[str, dict[str, Any]] = {
     "swift-swim": {"condition": "rain", "multiplier": 2.0},
     "chlorophyll": {"condition": "sun", "multiplier": 2.0},
     "sand-rush": {"condition": "sand", "multiplier": 2.0},
@@ -338,7 +338,7 @@ def analyze_weather_synergy(team_abilities: list[str]) -> WeatherAnalysis:
     )
 
 
-def analyze_terrain_synergy(team_abilities: list[str]) -> dict:
+def analyze_terrain_synergy(team_abilities: list[str]) -> dict[str, Any]:
     """
     Analyze team's terrain setting potential.
 
@@ -371,7 +371,7 @@ def analyze_terrain_synergy(team_abilities: list[str]) -> dict:
     }
 
 
-def find_redirect_abilities(team_abilities: list[str]) -> list[dict]:
+def find_redirect_abilities(team_abilities: list[str]) -> list[dict[str, Any]]:
     """Find redirection abilities on the team."""
     results = []
 
@@ -387,7 +387,7 @@ def find_redirect_abilities(team_abilities: list[str]) -> list[dict]:
     return results
 
 
-def find_partner_abilities(team_abilities: list[str]) -> list[dict]:
+def find_partner_abilities(team_abilities: list[str]) -> list[dict[str, Any]]:
     """Find abilities that benefit partners."""
     results = []
 
@@ -587,7 +587,7 @@ def apply_ruin_abilities(
 def suggest_ability_additions(
     current_abilities: list[str],
     team_style: Optional[str] = None
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """
     Suggest abilities that would improve team synergy.
 

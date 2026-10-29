@@ -6,7 +6,7 @@ threats in the metagame, including damage calculations in both directions.
 
 import math
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 from ..models.move import Move, MoveCategory
 from ..models.pokemon import PokemonBuild
@@ -27,7 +27,7 @@ RUINOUS_POKEMON = {
 }
 
 
-def get_ruinous_info(pokemon_name: str) -> Optional[dict]:
+def get_ruinous_info(pokemon_name: str) -> Optional[dict[str, Any]]:
     """Get ruinous ability info for a Pokemon if applicable."""
     normalized = pokemon_name.lower().replace(" ", "-").replace("_", "-")
     return RUINOUS_POKEMON.get(normalized)
@@ -38,12 +38,12 @@ class ThreatDamageResult:
     """Result of threat analysis for a single matchup."""
     threat_name: str
     threat_usage_pct: float
-    your_damage_to_threat: dict   # Best move, damage range, KO chance
-    threat_damage_to_you: dict    # Best move, damage range, KO chance
+    your_damage_to_threat: dict[str, Any]   # Best move, damage range, KO chance
+    threat_damage_to_you: dict[str, Any]    # Best move, damage range, KO chance
     speed_comparison: str
     matchup_verdict: str          # "Favorable", "Unfavorable", "Even"
-    threat_spread: Optional[dict] = None  # Spread used for calculation (nature, evs, usage)
-    threat_stats: Optional[dict] = None   # Calculated stats from spread
+    threat_spread: Optional[dict[str, Any]] = None  # Spread used for calculation (nature, evs, usage)
+    threat_stats: Optional[dict[str, Any]] = None   # Calculated stats from spread
 
 
 @dataclass
@@ -62,15 +62,15 @@ class MetaThreatReport:
 
 
 def calculate_simple_damage(
-    attacker_stats: dict,
-    defender_stats: dict,
+    attacker_stats: dict[str, Any],
+    defender_stats: dict[str, Any],
     move_power: int,
     is_physical: bool,
     stab: bool = False,
     type_effectiveness: float = 1.0,
     is_spread: bool = False,
     defense_modifier: float = 1.0
-) -> dict:
+) -> dict[str, Any]:
     """
     Calculate simplified damage without full move/modifier infrastructure.
 
@@ -164,9 +164,9 @@ def calculate_simple_damage(
 def _damage_via_engine(
     attacker: PokemonBuild,
     defender: PokemonBuild,
-    move_data: dict,
+    move_data: dict[str, Any],
     modifiers: Optional[DamageModifiers] = None,
-) -> dict:
+) -> dict[str, Any]:
     """Run a single move through the authoritative damage engine.
 
     Builds a `Move` from a usage-set move dict and calls `calculate_damage`
@@ -212,15 +212,15 @@ def _damage_via_engine(
 
 def analyze_single_threat(
     your_pokemon: PokemonBuild,
-    your_stats: dict,
+    your_stats: dict[str, Any],
     threat_name: str,
-    threat_stats: dict,
+    threat_stats: dict[str, Any],
     threat_types: list[str],
     threat_usage_pct: float,
-    threat_common_moves: list[dict],
-    your_common_moves: list[dict],
+    threat_common_moves: list[dict[str, Any]],
+    your_common_moves: list[dict[str, Any]],
     your_speed: int,
-    threat_spread: Optional[dict] = None,
+    threat_spread: Optional[dict[str, Any]] = None,
     threat_build: Optional[PokemonBuild] = None,
 ) -> ThreatDamageResult:
     """

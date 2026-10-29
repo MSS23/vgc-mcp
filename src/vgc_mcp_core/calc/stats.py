@@ -14,7 +14,7 @@ Formulas (Level 50):
 
 import bisect
 import math
-from typing import Optional
+from typing import Any, Optional
 
 from ..config import EV_BREAKPOINTS_LV50
 from ..models.pokemon import Nature, PokemonBuild, get_nature_modifier
@@ -377,7 +377,7 @@ def optimize_spread_efficiency(
 def validate_ev_efficiency(
     pokemon: "PokemonBuild",
     evs: dict[str, int]
-) -> dict:
+) -> dict[str, Any]:
     """
     Validate that an EV spread has no wasted EVs.
 

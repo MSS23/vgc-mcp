@@ -1,7 +1,7 @@
 """Speed control analysis for Trick Room, Tailwind, and stat drops."""
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 from ..models.team import Team
 from .speed import SPEED_BENCHMARKS, get_speed_benchmark
@@ -325,7 +325,7 @@ def analyze_paralysis(team: Team) -> SpeedControlAnalysis:
     )
 
 
-def get_speed_control_summary(team: Team) -> dict:
+def get_speed_control_summary(team: Team) -> dict[str, Any]:
     """Get comprehensive speed control analysis for a team."""
     base_speeds = get_team_speeds(team)
     tr_analysis = analyze_trick_room(team)

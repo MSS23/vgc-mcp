@@ -64,7 +64,7 @@ class APICache:
         self.cache.clear()
 
     @property
-    def stats(self) -> dict:
+    def stats(self) -> dict[str, Any]:
         """Return cache hit/miss statistics."""
         total = self._hits + self._misses
         return {

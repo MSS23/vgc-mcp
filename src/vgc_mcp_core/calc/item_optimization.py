@@ -5,6 +5,7 @@ and analyzing EV-item trade-offs for competitive optimization.
 """
 
 from dataclasses import dataclass, replace
+from typing import Any
 
 from ..calc.damage import calculate_damage
 from ..calc.items import calculate_life_orb_effect
@@ -212,7 +213,7 @@ def analyze_life_orb_sustainability(
 
 def calculate_ev_tradeoff(
     pokemon: PokemonBuild,
-    target_benchmark: dict,
+    target_benchmark: dict[str, Any],
     items_to_test: list[str],
     offensive_stat: str = "auto"
 ) -> list[EVTradeoffResult]:

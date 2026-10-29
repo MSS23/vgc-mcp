@@ -9,7 +9,7 @@ This module handles competitive item mechanics including:
 """
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 # Paradox Pokemon that can use Booster Energy
 PARADOX_POKEMON = {
@@ -377,7 +377,7 @@ def calculate_choice_item_boost(
     )
 
 
-def calculate_life_orb_effect(damage: int, attacker_hp: int) -> dict:
+def calculate_life_orb_effect(damage: int, attacker_hp: int) -> dict[str, Any]:
     """
     Calculate Life Orb damage boost and recoil.
 
@@ -409,7 +409,7 @@ def check_berry_activation(
     current_hp: int,
     max_hp: int,
     stat_to_boost: Optional[str] = None
-) -> dict:
+) -> dict[str, Any]:
     """
     Check if a berry would activate and what it does.
 
@@ -486,7 +486,7 @@ def check_focus_sash_survival(
     damage: int,
     current_hp: int,
     max_hp: int
-) -> dict:
+) -> dict[str, Any]:
     """
     Check if Focus Sash would save the Pokemon.
 

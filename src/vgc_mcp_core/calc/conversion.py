@@ -14,7 +14,7 @@ conversions.
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 from ..models.pokemon import EVSpread, StatPointSpread
 
@@ -117,7 +117,7 @@ def sps_to_evs_spread(sps: StatPointSpread) -> EVSpread:
 def describe_conversion(
     evs: Optional[EVSpread] = None,
     sps: Optional[StatPointSpread] = None,
-) -> dict:
+) -> dict[str, Any]:
     """Round-trip both directions and return a side-by-side dict.
 
     Useful for tools that want to surface "this EV spread translates to
@@ -161,7 +161,7 @@ def regulation_uses_champions(regulation_code: Optional[str]) -> bool:
     } or "champ" in code
 
 
-def coerce_champions_allocation(allocation: dict[str, int]) -> tuple[dict[str, int], Optional[dict]]:
+def coerce_champions_allocation(allocation: dict[str, int]) -> tuple[dict[str, int], Optional[dict[str, Any]]]:
     """Interpret a user-supplied stat allocation for a Champions session.
 
     Tools with EV-named parameters (`hp_evs`, `spa_evs`, ...) interpret those

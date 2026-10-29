@@ -6,7 +6,7 @@ suggest coverage moves, and detect quad weaknesses.
 """
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Any, Optional
 
 from ..utils.normalize import normalize_move_name  # noqa: F401  (re-export for back-compat)
 from .modifiers import get_type_effectiveness
@@ -210,7 +210,7 @@ class CoverageAnalysisResult:
     worst_coverage: list[str]  # Types with least/no coverage
 
 
-def get_move_type_from_name(move_name: str, move_data: Optional[dict] = None) -> Optional[str]:
+def get_move_type_from_name(move_name: str, move_data: Optional[dict[str, Any]] = None) -> Optional[str]:
     """
     Get move type from move name.
     Uses move_data if provided, otherwise searches COVERAGE_MOVES.
@@ -230,7 +230,7 @@ def get_move_type_from_name(move_name: str, move_data: Optional[dict] = None) ->
 
 
 def analyze_move_coverage(
-    team_data: list[dict],
+    team_data: list[dict[str, Any]],
     move_types: Optional[dict[str, dict[str, str]]] = None
 ) -> CoverageAnalysisResult:
     """
@@ -347,7 +347,7 @@ def analyze_move_coverage(
     )
 
 
-def find_coverage_holes(team_data: list[dict]) -> list[str]:
+def find_coverage_holes(team_data: list[dict[str, Any]]) -> list[str]:
     """
     Find types that no team member can hit super-effectively.
 
@@ -361,7 +361,7 @@ def find_coverage_holes(team_data: list[dict]) -> list[str]:
     return result.coverage_holes
 
 
-def check_quad_weaknesses(team_data: list[dict]) -> list[dict]:
+def check_quad_weaknesses(team_data: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """
     Find all 4x type weaknesses on the team.
 
@@ -384,9 +384,9 @@ def check_quad_weaknesses(team_data: list[dict]) -> list[dict]:
 
 
 def check_coverage_vs_pokemon(
-    team_data: list[dict],
+    team_data: list[dict[str, Any]],
     target_types: list[str]
-) -> dict:
+) -> dict[str, Any]:
     """
     Check if team has super-effective coverage against a specific Pokemon type.
 
@@ -447,7 +447,7 @@ def suggest_coverage_moves(
     existing_types: Optional[list[str]] = None,
     category_preference: Optional[str] = None,
     prioritize_spread: bool = False
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """
     Suggest moves to fill coverage gaps.
 
@@ -529,7 +529,7 @@ def suggest_coverage_moves(
     return unique_suggestions[:10]  # Return top 10
 
 
-def get_coverage_summary(team_data: list[dict]) -> dict:
+def get_coverage_summary(team_data: list[dict[str, Any]]) -> dict[str, Any]:
     """
     Get a quick summary of team coverage.
 

@@ -17,7 +17,7 @@ This means: HP stat should roughly equal Defense stat for optimal bulk
 
 import math
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 from ..config import EV_BREAKPOINTS_LV50, normalize_evs
 from ..models.pokemon import NATURE_MODIFIERS, Nature
@@ -38,7 +38,7 @@ class BulkOptimizationResult:
     total_bulk: int      # Combined bulk score
     efficiency_score: float  # How optimal this distribution is (0-1)
     explanation: str
-    comparison: Optional[dict] = None  # Comparison to naive distribution
+    comparison: Optional[dict[str, Any]] = None  # Comparison to naive distribution
 
 
 def get_nature_modifier(nature_name: str, stat: str) -> float:
@@ -398,7 +398,7 @@ def analyze_diminishing_returns(
     base_def: int,
     base_spd: int,
     nature: str
-) -> dict:
+) -> dict[str, Any]:
     """
     Analyze diminishing returns for HP, Def, and SpD.
 

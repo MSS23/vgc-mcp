@@ -9,7 +9,7 @@ should use Adamant (+Atk) when hitting a speed benchmark, not Timid (+Spe),
 because the Attack boost saves more EVs than the Speed boost would.
 """
 
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel
 
@@ -95,7 +95,7 @@ def get_relevant_natures(
 def calculate_evs_for_benchmarks(
     base_stats: BaseStats,
     nature: Nature,
-    benchmarks: dict,
+    benchmarks: dict[str, Any],
     level: int = 50
 ) -> Optional[dict[str, int]]:
     """
@@ -266,7 +266,7 @@ def calculate_nature_score(
 
 def find_optimal_nature_for_benchmarks(
     base_stats: BaseStats,
-    benchmarks: dict,
+    benchmarks: dict[str, Any],
     is_physical: bool = False,
     is_special: bool = False,
     role: str = "offensive",

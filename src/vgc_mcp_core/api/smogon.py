@@ -3,7 +3,7 @@
 import threading
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 from weakref import WeakKeyDictionary
 
 import httpx
@@ -162,7 +162,7 @@ class SmogonStatsClient:
             months.append(f"{year:04d}-{month:02d}")
         return months
 
-    async def _try_fetch_stats(self, month: str, format_name: str, rating: int) -> Optional[dict]:
+    async def _try_fetch_stats(self, month: str, format_name: str, rating: int) -> Optional[dict[str, Any]]:
         """Try to fetch stats for a specific month/format/rating combination."""
         cache_key = f"{month}/{format_name}/{rating}"
         cached = self.cache.get("smogon", cache_key)
@@ -240,7 +240,7 @@ class SmogonStatsClient:
         format_name: Optional[str] = None,
         rating: Optional[int] = None,
         month: Optional[str] = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Fetch chaos.json usage stats with auto-detection.
 
@@ -314,7 +314,7 @@ class SmogonStatsClient:
         format_name: Optional[str] = None,
         rating: Optional[int] = None,
         month: Optional[str] = None,
-    ) -> Optional[dict]:
+    ) -> Optional[dict[str, Any]]:
         """Get usage stats for a specific Pokemon."""
         stats = await self.get_usage_stats(format_name, rating, month)
 
@@ -414,7 +414,7 @@ class SmogonStatsClient:
 
         return None
 
-    def _parse_spread(self, spread_str: str, champions: bool = False) -> dict:
+    def _parse_spread(self, spread_str: str, champions: bool = False) -> dict[str, Any]:
         """Parse spread string like 'Modest:252/0/4/252/0/0' into structured data.
 
         For Champions formats (`champions=True`), the same `Nature:N/N/N/N/N/N`
@@ -456,7 +456,7 @@ class SmogonStatsClient:
         rating: Optional[int] = None,
         limit: int = 5,
         month: Optional[str] = None,
-    ) -> Optional[dict]:
+    ) -> Optional[dict[str, Any]]:
         """Get the most common competitive sets for a Pokemon."""
         usage = await self.get_pokemon_usage(pokemon_name, format_name, rating, month)
         if not usage:
@@ -495,7 +495,7 @@ class SmogonStatsClient:
         rating: Optional[int] = None,
         limit: int = 10,
         month: Optional[str] = None,
-    ) -> Optional[dict]:
+    ) -> Optional[dict[str, Any]]:
         """Get suggested teammates based on usage data."""
         usage = await self.get_pokemon_usage(pokemon_name, format_name, rating, month)
         if not usage:
@@ -564,7 +564,7 @@ class SmogonStatsClient:
         pokemon_name: str,
         format_name: Optional[str] = None,
         rating: Optional[int] = None,
-    ) -> Optional[dict]:
+    ) -> Optional[dict[str, Any]]:
         """
         Compare a Pokemon's usage between current and previous month.
 
@@ -678,7 +678,7 @@ class SmogonStatsClient:
         base_speed: int,
         format_name: Optional[str] = None,
         rating: Optional[int] = None,
-    ) -> Optional[dict]:
+    ) -> Optional[dict[str, Any]]:
         """
         Get speed distribution from Smogon spreads.
 

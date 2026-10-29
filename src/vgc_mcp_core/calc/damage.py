@@ -21,7 +21,7 @@ Reference: https://bulbapedia.bulbagarden.net/wiki/Damage
 
 import math
 from dataclasses import dataclass, replace
-from typing import Optional
+from typing import Any, Optional
 
 from ..config import EV_BREAKPOINTS_LV50
 from ..models.move import (
@@ -350,7 +350,7 @@ RESISTANCE_BERRIES = {
 def _calculate_variable_bp(
     move_name: str,
     base_power: int,
-    special_move_data: dict,
+    special_move_data: dict[str, Any],
     attacker_speed: int,
     defender_speed: int,
     modifiers: "DamageModifiers",
@@ -541,7 +541,7 @@ class DamageResult:
     ko_chance: str
     is_guaranteed_ohko: bool
     is_possible_ohko: bool
-    details: dict
+    details: dict[str, Any]
     ko_probability: Optional[KOProbability] = None  # Detailed KO probability analysis
 
     @property
@@ -1879,7 +1879,7 @@ def calculate_ko_threshold(
     move: Move,
     modifiers: Optional[DamageModifiers] = None,
     target_ko_chance: float = 100.0
-) -> Optional[dict]:
+) -> Optional[dict[str, Any]]:
     """
     Find minimum EVs needed to achieve a certain KO probability.
 
@@ -1963,7 +1963,7 @@ def calculate_bulk_threshold(
     move: Move,
     modifiers: Optional[DamageModifiers] = None,
     target_survival_chance: float = 100.0
-) -> Optional[dict]:
+) -> Optional[dict[str, Any]]:
     """
     Find minimum bulk EVs to survive an attack.
 

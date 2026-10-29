@@ -1,7 +1,7 @@
 """Team vs team matchup analysis with scoring algorithm and game plan generation."""
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 from ..models.move import Move, MoveCategory
 from ..models.pokemon import PokemonBuild
@@ -112,7 +112,7 @@ class TeamMatchupResult:
     key_threats: list[ThreatInfo]
     your_key_pokemon: list[str]  # Most important Pokemon to preserve
     recommended_leads: list[LeadMatchup]
-    speed_advantages: dict  # Your Pokemon -> list of opponent Pokemon they outspeed
+    speed_advantages: dict[str, Any]  # Your Pokemon -> list of opponent Pokemon they outspeed
     game_plan: str
     detailed_matchups: list[MatchupScore]
 
@@ -494,7 +494,7 @@ def analyze_lead_matchups(
 def analyze_speed_tiers(
     team1: list[PokemonBuild],
     team2: list[PokemonBuild]
-) -> dict:
+) -> dict[str, Any]:
     """
     Compare speed tiers between two teams.
     """
@@ -641,7 +641,7 @@ class PokemonProfile:
     is_prankster: bool
     prankster_moves: list[str]  # Status moves that get +1 priority from Prankster
     is_intimidate: bool
-    priority_moves: list[dict]  # [{name, priority, is_status}]
+    priority_moves: list[dict[str, Any]]  # [{name, priority, is_status}]
     is_trick_room_setter: bool
     is_tailwind_setter: bool
     is_weather_setter: bool

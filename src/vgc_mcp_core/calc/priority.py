@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import Optional
+from typing import Any, Optional
 
 from ..utils.normalize import normalize_move_name  # noqa: F401  (re-export for back-compat)
 
@@ -98,7 +98,7 @@ PRIORITY_MOVES: dict[str, int] = {
 }
 
 # Moves that are conditionally priority
-CONDITIONAL_PRIORITY: dict[str, dict] = {
+CONDITIONAL_PRIORITY: dict[str, dict[str, Any]] = {
     "grassy-glide": {
         "base_priority": 0,
         "boosted_priority": 1,
@@ -115,7 +115,7 @@ CONDITIONAL_PRIORITY: dict[str, dict] = {
 }
 
 # Abilities that affect priority
-PRIORITY_ABILITIES: dict[str, dict] = {
+PRIORITY_ABILITIES: dict[str, dict[str, Any]] = {
     "prankster": {
         "effect": "+1 priority to status moves",
         "boost": 1,
@@ -406,7 +406,7 @@ def analyze_fake_out_matchup(
     opponent_pokemon: str,
     opponent_speed: int,
     trick_room: bool = False
-) -> dict:
+) -> dict[str, Any]:
     """
     Analyze Fake Out speed interaction.
 

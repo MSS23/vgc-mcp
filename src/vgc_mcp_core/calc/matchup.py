@@ -1,7 +1,7 @@
 """Matchup analysis for team threat assessment."""
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 from ..models.move import Move, MoveCategory
 from ..models.pokemon import BaseStats, EVSpread, IVSpread, Nature, PokemonBuild
@@ -588,7 +588,7 @@ def find_team_threats(team: Team) -> TeamThreatSummary:
     )
 
 
-def check_type_coverage(team: Team, target_type: str) -> dict:
+def check_type_coverage(team: Team, target_type: str) -> dict[str, Any]:
     """
     Check how well a team can hit a specific type.
 
@@ -636,7 +636,7 @@ def check_type_coverage(team: Team, target_type: str) -> dict:
     }
 
 
-def analyze_defensive_matchup(team: Team, attacking_type: str) -> dict:
+def analyze_defensive_matchup(team: Team, attacking_type: str) -> dict[str, Any]:
     """
     Check how well a team resists a specific attacking type.
 

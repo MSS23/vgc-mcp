@@ -437,7 +437,7 @@ class DamageModifiers:
 
 
 # Ability effects on damage
-OFFENSIVE_ABILITIES: dict[str, dict] = {
+OFFENSIVE_ABILITIES: dict[str, dict[str, Any]] = {
     "adaptability": {"stab_mod": 2.0},  # STAB becomes 2x instead of 1.5x
     "aerilate": {"normal_to": "Flying", "boost": 1.2},
     "pixilate": {"normal_to": "Fairy", "boost": 1.2},
@@ -459,7 +459,7 @@ OFFENSIVE_ABILITIES: dict[str, dict] = {
     "vessel-of-ruin": {"spa_reduction": 0.75},  # Lowers foe SpA
 }
 
-DEFENSIVE_ABILITIES: dict[str, dict] = {
+DEFENSIVE_ABILITIES: dict[str, dict[str, Any]] = {
     "multiscale": {"full_hp_reduction": 0.5},
     "shadow-shield": {"full_hp_reduction": 0.5},
     "solid-rock": {"se_reduction": 0.75},

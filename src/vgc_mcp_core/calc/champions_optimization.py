@@ -8,7 +8,7 @@ Tool handlers should dispatch to this module when `pokemon.is_champions()`.
 """
 
 import math
-from typing import Optional
+from typing import Any, Optional
 
 from ..models.pokemon import Nature, StatPointSpread
 from .stats_champions import (
@@ -121,7 +121,7 @@ def find_optimal_hp_sps(
     item: str,
     iv: int = 31,
     level: int = 50,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """All HP SP options with item-driven optimization scores.
 
     Same scoring rules as `hp_optimization.find_optimal_hp_evs` (mod-16 for
@@ -131,7 +131,7 @@ def find_optimal_hp_sps(
     from .hp_optimization import _get_item_category, score_hp_for_item
 
     category = _get_item_category(item)
-    results: list[dict] = []
+    results: list[dict[str, Any]] = []
     for sp in SP_BREAKPOINTS_LV50:
         hp = calculate_hp_sp(base_hp, iv, sp, level)
         score = score_hp_for_item(hp, item)
@@ -178,7 +178,7 @@ def find_bulk_sps_to_survive(
     def_nature_mod: float = 1.0,
     level: int = 50,
     sp_budget: int = SP_TOTAL_MAX,
-) -> Optional[dict]:
+) -> Optional[dict[str, Any]]:
     """Find the cheapest HP+Def SP allocation to survive `incoming_dmg_at_zero_def`.
 
     Sweeps every (hp_sp, def_sp) pair in 0..32 × 0..32 with hp+def ≤ budget
@@ -195,7 +195,7 @@ def find_bulk_sps_to_survive(
     if base_def_stat <= 0:
         return None
 
-    best: Optional[dict] = None
+    best: Optional[dict[str, Any]] = None
     for hp_sp in SP_BREAKPOINTS_LV50:
         if hp_sp > sp_budget:
             break
@@ -283,7 +283,7 @@ def complete_sp_allocation(
         raise ValueError("Cannot spend the SP budget without changing locked stats")
     return result
 
-def validate_sp_allocation(allocation: dict[str, int]) -> dict:
+def validate_sp_allocation(allocation: dict[str, int]) -> dict[str, Any]:
     """Validate an SP allocation against the 32/stat, 66/total caps.
 
     Args:
