@@ -28,6 +28,8 @@ from vgc_mcp_core.calc.items import (
     check_focus_sash_survival,
     get_item_damage_modifier,
 )
+from vgc_mcp_core.calc.stats import calculate_stat_for_format
+from vgc_mcp_core.rules.format_detect import detect_champions_format
 from vgc_mcp_core.utils.errors import error_response
 
 
@@ -112,7 +114,7 @@ def register_item_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
     )
     async def calculate_assault_vest(
         pokemon_name: Annotated[str, Field(description="Pokemon name", min_length=1)],
-        spd_evs: Annotated[int, Field(ge=0, le=252, description="Special Defense EVs (0-252)")] = 0,
+        spd_evs: Annotated[int, Field(ge=0, le=252, description="Special Defense EVs (0-252), or Stat Points (0-32) in Champions")] = 0,
         spd_ivs: Annotated[int, Field(ge=0, le=31, description="Special Defense IVs (0-31)")] = 31,
         nature: Annotated[str, Field(description="Nature (affects SpD if +/- SpD nature)")] = "hardy",
     ) -> dict:
@@ -137,7 +139,8 @@ def register_item_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
 
             # Calculate SpD at level 50
             base_spd = stats.get("special-defense", 80)
-            spd_stat = int(((2 * base_spd + spd_ivs + spd_evs // 4) * 50 // 100 + 5) * nature_mod)
+            champions = detect_champions_format(pokemon_name)
+            spd_stat = calculate_stat_for_format(base_spd, spd_evs, spd_ivs, nature_mod, champions=champions)
 
             result = calculate_assault_vest_boost(spd_stat)
 
@@ -218,12 +221,8 @@ def register_item_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             base_stat = stats.get(api_stat, 80)
 
             # Calculate stat at level 50
-            if stat_key == "speed":
-                # Speed uses standard formula
-                final_stat = int(((2 * base_stat + ivs + evs // 4) * 50 // 100 + 5) * nature_mod)
-            else:
-                # Attack/SpA use standard formula
-                final_stat = int(((2 * base_stat + ivs + evs // 4) * 50 // 100 + 5) * nature_mod)
+            champions = detect_champions_format(pokemon_name)
+            final_stat = calculate_stat_for_format(base_stat, evs, ivs, nature_mod, champions=champions)
 
             result = calculate_choice_item_boost(item, final_stat)
 
@@ -259,8 +258,8 @@ def register_item_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             description="Not-fully-evolved Pokemon name (e.g. 'porygon2', 'dusclops', 'chansey')",
             min_length=1,
         )],
-        def_evs: Annotated[int, Field(ge=0, le=252, description="Defense EVs (0-252)")] = 0,
-        spd_evs: Annotated[int, Field(ge=0, le=252, description="Special Defense EVs (0-252)")] = 0,
+        def_evs: Annotated[int, Field(ge=0, le=252, description="Defense EVs (0-252), or Stat Points (0-32) in Champions")] = 0,
+        spd_evs: Annotated[int, Field(ge=0, le=252, description="Special Defense EVs (0-252), or Stat Points (0-32) in Champions")] = 0,
         def_ivs: Annotated[int, Field(ge=0, le=31, description="Defense IVs (0-31)")] = 31,
         spd_ivs: Annotated[int, Field(ge=0, le=31, description="Special Defense IVs (0-31)")] = 31,
         nature: Annotated[str, Field(description="Nature for stat modifiers")] = "hardy",
@@ -294,8 +293,10 @@ def register_item_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             base_spd = stats.get("special-defense", 80)
 
             # Calculate stats at level 50
-            final_def = int(((2 * base_def + def_ivs + def_evs // 4) * 50 // 100 + 5) * def_mod)
-            final_spd = int(((2 * base_spd + spd_ivs + spd_evs // 4) * 50 // 100 + 5) * spd_mod)
+            champions = detect_champions_format(pokemon_name)
+            final_def = calculate_stat_for_format(base_def, def_evs, def_ivs, def_mod, champions=champions)
+            champions = detect_champions_format(pokemon_name)
+            final_spd = calculate_stat_for_format(base_spd, spd_evs, spd_ivs, spd_mod, champions=champions)
 
             result = calculate_eviolite_boost(pokemon_name, final_def, final_spd)
 
@@ -344,7 +345,7 @@ def register_item_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             min_length=1,
         )],
         current_hp_percent: Annotated[float, Field(ge=0, le=100, description="Current HP as a percentage (0-100)")] = 100.0,
-        hp_evs: Annotated[int, Field(ge=0, le=252, description="HP EVs (0-252)")] = 0,
+        hp_evs: Annotated[int, Field(ge=0, le=252, description="HP EVs (0-252), or Stat Points (0-32) in Champions")] = 0,
         hp_ivs: Annotated[int, Field(ge=0, le=31, description="HP IVs (0-31)")] = 31,
     ) -> dict:
         """Check when a berry would activate based on its HP threshold.
@@ -361,7 +362,8 @@ def register_item_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
 
             base_hp = stats.get("hp", 100)
             # HP calculation at level 50
-            max_hp = (2 * base_hp + hp_ivs + hp_evs // 4) * 50 // 100 + 50 + 10
+            champions = detect_champions_format(pokemon_name)
+            max_hp = calculate_stat_for_format(base_hp, hp_evs, hp_ivs, is_hp=True, champions=champions)
             current_hp = int(max_hp * current_hp_percent / 100)
 
             result = check_berry_activation(berry, current_hp, max_hp)
@@ -395,7 +397,7 @@ def register_item_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
     async def check_focus_sash(
         pokemon_name: Annotated[str, Field(description="Pokemon name", min_length=1)],
         incoming_damage: Annotated[int, Field(ge=0, description="Damage amount from the attack")],
-        hp_evs: Annotated[int, Field(ge=0, le=252, description="HP EVs (0-252)")] = 0,
+        hp_evs: Annotated[int, Field(ge=0, le=252, description="HP EVs (0-252), or Stat Points (0-32) in Champions")] = 0,
         hp_ivs: Annotated[int, Field(ge=0, le=31, description="HP IVs (0-31)")] = 31,
         at_full_hp: Annotated[bool, Field(
             description="Whether the Pokemon is at full HP (Focus Sash only activates at full HP)",
@@ -413,7 +415,8 @@ def register_item_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 return error_response("pokemon_not_found", f"Could not find Pokemon: {pokemon_name}")
 
             base_hp = stats.get("hp", 100)
-            max_hp = (2 * base_hp + hp_ivs + hp_evs // 4) * 50 // 100 + 50 + 10
+            champions = detect_champions_format(pokemon_name)
+            max_hp = calculate_stat_for_format(base_hp, hp_evs, hp_ivs, is_hp=True, champions=champions)
             current_hp = max_hp if at_full_hp else max_hp - 1  # Simulate not full HP
 
             result = check_focus_sash_survival(incoming_damage, current_hp, max_hp)
@@ -447,7 +450,7 @@ def register_item_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
     async def calculate_life_orb_damage(
         pokemon_name: Annotated[str, Field(description="Pokemon name (for HP/recoil calculation)", min_length=1)],
         base_damage: Annotated[int, Field(ge=0, description="Damage the move would deal without Life Orb")],
-        hp_evs: Annotated[int, Field(ge=0, le=252, description="HP EVs (0-252)")] = 0,
+        hp_evs: Annotated[int, Field(ge=0, le=252, description="HP EVs (0-252), or Stat Points (0-32) in Champions")] = 0,
         hp_ivs: Annotated[int, Field(ge=0, le=31, description="HP IVs (0-31)")] = 31,
     ) -> dict:
         """Calculate the Life Orb damage boost and recoil cost.
@@ -462,7 +465,8 @@ def register_item_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 return error_response("pokemon_not_found", f"Could not find Pokemon: {pokemon_name}")
 
             base_hp = stats.get("hp", 100)
-            max_hp = (2 * base_hp + hp_ivs + hp_evs // 4) * 50 // 100 + 50 + 10
+            champions = detect_champions_format(pokemon_name)
+            max_hp = calculate_stat_for_format(base_hp, hp_evs, hp_ivs, is_hp=True, champions=champions)
 
             result = calculate_life_orb_effect(base_damage, max_hp)
 
