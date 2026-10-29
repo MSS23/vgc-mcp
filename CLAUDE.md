@@ -566,6 +566,10 @@ await export_damage_report(
 )
 ```
 
+Each Excel row is one target × move: Target | Nature | HP..Spe (EVs, or SPs in
+Champions) | Item | Move | Damage (roll / HP) | % HP | Result. With no
+`defender_names` it uses the top 20 by usage for the session's format.
+
 **Color coding:** Green = OHKO, Yellow = 2HKO, Orange = 3HKO, Red = 4HKO+
 
 ### CRITICAL: Always Offer Export After Bulk Calcs

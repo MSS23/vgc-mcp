@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- `export_damage_report` Excel sheets are now a calc sheet: one row per
+  target × move with the target's nature, per-stat EVs or SPs, item, move,
+  damage roll against its HP, % HP and verdict. With no `defender_names` it
+  takes the top 20 by usage (was 25).
+
+### Fixed
+- Bulk calcs and exports showed Champions spreads as `0/0/0/0/0/0`; they now
+  show Stat Points with an `SP` suffix, and calc strings use SP values.
+- `export_damage_report` and `calculate_bulk_offensive_calcs` fetched the
+  top-usage list before resolving the format, so with no regulation set the
+  list could come from Reg MC while the spreads came from Reg F (Megas got
+  empty spreads). The format is now resolved first, from the current
+  regulation (session choice, else `regulations.json`, Reg MC today) rather
+  than a guess from the attacker's name. Item names read
+  `Assault Vest`, not `Assaultvest`.
+
 ### Removed
 - The seven deprecated aliases (`outspeed_probability`,
   `outspeed_probability_stored`, `get_meta_speed_tiers`,

@@ -202,20 +202,23 @@ def register_bulk_calc_tools(
             if len(move_names) > 4:
                 return error_response(ErrorCodes.INVALID_PARAMETER, 'Maximum 4 moves supported.')
 
+            # Resolve the format first: it decides which usage stats the top-20
+            # list AND each target's spread come from, so they must agree. Use
+            # the current regulation (session choice, else regulations.json),
+            # not a guess from the attacker's name: a non-Mega attacker would
+            # otherwise pull Reg F usage while Reg MC is live.
+            is_champions = detect_champions_format()
+
             # Auto-fetch top meta defenders if not specified
             if defender_names is None:
                 defender_names = await _get_top_meta_pokemon(
-                    smogon, count=25, exclude=attacker_name,
+                    smogon, count=20, exclude=attacker_name,
                 )
                 if not defender_names:
                     return error_response(ErrorCodes.API_ERROR, 'Could not fetch top meta Pokemon. Please specify defender_names manually.')
 
             if len(defender_names) > 30:
                 return error_response(ErrorCodes.INVALID_PARAMETER, 'Maximum 30 defenders supported.')
-
-            # Detect Champions (Reg MA) session — only the user's subject
-            # attacker becomes a Stat-Point build; meta defenders stay mainline.
-            is_champions = detect_champions_format(attacker_name)
 
             # Build attacker (format-aware)
             if is_champions:
@@ -421,7 +424,7 @@ def register_bulk_calc_tools(
             description="List of 1-4 moves to test",
         )],
         defender_names: Annotated[Optional[list[str]], Field(
-            description="Defenders to test against (max 30). If not specified, auto-fetches top 25 by Smogon usage.",
+            description="Defenders to test against (max 30). If not specified, auto-fetches the top 20 by Smogon usage for the session's format.",
         )] = None,
         format: Annotated[str, Field(
             description="Output format: 'excel' for .xlsx or 'pdf' for .pdf",
@@ -457,7 +460,9 @@ def register_bulk_calc_tools(
         """Export bulk damage calculations as an Excel spreadsheet or PDF file on disk.
 
         Generates a color-coded report (green=OHKO, yellow=2HKO, orange=3HKO,
-        red=4HKO+) with one sheet/page per scenario. Returns the file path and
+        red=4HKO+) with one sheet/page per scenario. Each Excel row is one
+        target × move: the target's nature and per-stat EVs/SPs, item, move,
+        damage roll and % HP. Returns the file path and
         total calc count.
         """
         try:
@@ -467,20 +472,23 @@ def register_bulk_calc_tools(
             if len(move_names) > 4:
                 return error_response(ErrorCodes.INVALID_PARAMETER, 'Maximum 4 moves supported.')
 
+            # Resolve the format first: it decides which usage stats the top-20
+            # list AND each target's spread come from, so they must agree. Use
+            # the current regulation (session choice, else regulations.json),
+            # not a guess from the attacker's name: a non-Mega attacker would
+            # otherwise pull Reg F usage while Reg MC is live.
+            is_champions = detect_champions_format()
+
             # Auto-fetch top meta defenders if not specified
             if defender_names is None:
                 defender_names = await _get_top_meta_pokemon(
-                    smogon, count=25, exclude=attacker_name,
+                    smogon, count=20, exclude=attacker_name,
                 )
                 if not defender_names:
                     return error_response(ErrorCodes.API_ERROR, 'Could not fetch top meta Pokemon. Please specify defender_names manually.')
 
             if len(defender_names) > 30:
                 return error_response(ErrorCodes.INVALID_PARAMETER, 'Maximum 30 defenders supported.')
-
-            # Detect Champions (Reg MA) session — only the user's subject
-            # attacker becomes a Stat-Point build; meta defenders stay mainline.
-            is_champions = detect_champions_format(attacker_name)
 
             # Build attacker (format-aware)
             if is_champions:
