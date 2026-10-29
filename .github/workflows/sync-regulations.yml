@@ -45,7 +45,7 @@ jobs:
           python -m pytest tests/champions/test_regulation_router.py tests/champions/test_alias_consistency.py -q
 
       - name: Open pull request
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.SYNC_REGULATIONS_TOKEN || secrets.GITHUB_TOKEN }}
           branch: bot/sync-regulations
