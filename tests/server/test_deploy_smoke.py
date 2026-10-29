@@ -29,6 +29,7 @@ def test_nature_optimization_imports():
 
 
 def test_server_module_loads_with_tools():
+    from vgc_mcp.profiles import FULL_TOOL_COUNT
     from vgc_mcp.server import (
         REGISTERED_TOOL_COUNT,
         REGISTERED_TOOL_MODULE_COUNT,
@@ -41,7 +42,7 @@ def test_server_module_loads_with_tools():
     assert REGISTERED_TOOL_MODULE_COUNT == len(discovered_modules)
     assert REGISTERED_TOOL_COUNT == len(tools)
     assert REGISTERED_TOOL_MODULE_COUNT == 52
-    assert REGISTERED_TOOL_COUNT == 213
+    assert REGISTERED_TOOL_COUNT == FULL_TOOL_COUNT
     assert len(tools) == len(set(tools)), "tool names must be unique"
 
 

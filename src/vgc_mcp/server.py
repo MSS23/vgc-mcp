@@ -41,6 +41,7 @@ from vgc_mcp_core.presentation import PRESENTATION_INSTRUCTIONS
 from vgc_mcp_core.state.session_registry import make_scoped_managers
 from vgc_mcp_core.team.analysis import TeamAnalyzer
 
+from .profiles import CORE_TOOLS, resolve_profile
 from .tools import register_all as register_all_tools
 
 # This is the plain-MCP server. It does NOT depend on mcp-ui-server. Any
@@ -232,6 +233,29 @@ REGISTERED_TOOL_MODULE_COUNT = register_all_tools(
 REGISTERED_TOOL_COUNT = len(mcp._tool_manager._tools)
 
 
+def _build_core_server(full: FastMCP) -> FastMCP:
+    """Second server over the same registered tools, limited to CORE_TOOLS.
+
+    Tool and prompt objects are shared, not re-registered, so both servers run
+    the same code and per-session state (keyed by the MCP request context)
+    behaves identically on either endpoint.
+    """
+    missing = sorted(CORE_TOOLS - set(full._tool_manager._tools))
+    if missing:
+        raise RuntimeError(f"Core profile names unregistered tools: {missing}")
+    core = FastMCP(full.name, instructions=PRESENTATION_INSTRUCTIONS)
+    for name in sorted(CORE_TOOLS):
+        core._tool_manager._tools[name] = full._tool_manager._tools[name]
+    core._prompt_manager._prompts.update(full._prompt_manager._prompts)
+    return core
+
+
+mcp_core = _build_core_server(mcp)
+CORE_TOOL_COUNT = len(mcp_core._tool_manager._tools)
+DEFAULT_PROFILE = resolve_profile()
+served_mcp = mcp_core if DEFAULT_PROFILE == "core" else mcp
+
+
 def _build_middleware(cors_cls, middleware_wrapper):
     """Assemble the ASGI middleware stack for the HTTP app.
 
@@ -295,8 +319,12 @@ def _build_middleware(cors_cls, middleware_wrapper):
 
 def main():
     """Entry point for the MCP server (local stdio transport)."""
-    logger.info("Starting VGC MCP server (stdio transport)")
-    mcp.run()
+    logger.info(
+        "Starting VGC MCP server (stdio transport, %s profile, %d tools)",
+        DEFAULT_PROFILE,
+        len(served_mcp._tool_manager._tools),
+    )
+    served_mcp.run()
 
 
 def main_http(host: str = "0.0.0.0", port: int = None):
@@ -304,7 +332,9 @@ def main_http(host: str = "0.0.0.0", port: int = None):
 
     Serves BOTH remote MCP transports side by side:
     - /mcp — Streamable HTTP (modern; what Claude.ai custom connectors and
-      current MCP clients expect)
+      current MCP clients expect), default tool profile (core unless
+      VGC_MCP_PROFILE=full)
+    - /mcp/full — Streamable HTTP with every registered tool
     - /sse + /messages/ — legacy HTTP+SSE (older clients, mcp-remote bridge)
 
     Usage:
@@ -328,7 +358,8 @@ def main_http(host: str = "0.0.0.0", port: int = None):
     app = create_http_app()
 
     logger.info(f"Starting VGC MCP server on http://{host}:{port}")
-    logger.info(f"Streamable HTTP endpoint: http://{host}:{port}/mcp")
+    logger.info(f"Streamable HTTP endpoint: http://{host}:{port}/mcp ({DEFAULT_PROFILE} profile)")
+    logger.info(f"Full tool set: http://{host}:{port}/mcp/full")
     logger.info(f"SSE endpoint (legacy): http://{host}:{port}/sse")
     logger.info(f"Health check: http://{host}:{port}/health")
     uvicorn.run(app, host=host, port=port)
@@ -338,9 +369,12 @@ def create_http_app():
     """Build and return the combined Starlette ASGI app (no server started).
 
     Split out from ``main_http`` so it can be exercised by a Starlette
-    ``TestClient`` without binding a socket. Serves ``/mcp`` (Streamable HTTP),
-    legacy ``/sse`` + ``/messages/``, plus ``/`` and ``/health``.
+    ``TestClient`` without binding a socket. Serves ``/mcp`` (Streamable HTTP,
+    default profile), ``/mcp/full`` (every tool), legacy ``/sse`` +
+    ``/messages/``, plus ``/`` and ``/health``.
     """
+    import contextlib
+
     from mcp.server.sse import SseServerTransport
     from starlette.applications import Starlette
     from starlette.middleware import Middleware
@@ -355,8 +389,8 @@ def create_http_app():
         async with sse.connect_sse(
             request.scope, request.receive, request._send
         ) as streams:
-            await mcp._mcp_server.run(
-                streams[0], streams[1], mcp._mcp_server.create_initialization_options()
+            await served_mcp._mcp_server.run(
+                streams[0], streams[1], served_mcp._mcp_server.create_initialization_options()
             )
         return Response()
 
@@ -371,25 +405,33 @@ def create_http_app():
         ``GET /sse`` still serves the legacy HTTP+SSE handshake above.
         """
 
-        def __init__(self, app):
+        def __init__(self, app, path: str = "/mcp"):
             self.app = app
+            self.path = path
 
         async def __call__(self, scope, receive, send):
             scope = dict(scope)
-            scope["path"] = "/mcp"
-            scope["raw_path"] = b"/mcp"
+            scope["path"] = self.path
+            scope["raw_path"] = self.path.encode()
             await self.app(scope, receive, send)
+
+    def tool_counts() -> dict:
+        # "tools" is what /mcp lists; "tools_total" is what /mcp/full lists.
+        return {
+            "profile": DEFAULT_PROFILE,
+            "tools": len(served_mcp._tool_manager._tools),
+            "tools_total": len(mcp._tool_manager._tools),
+        }
 
     async def health_check(request):
         """Health check endpoint for monitoring."""
-        tool_count = len(mcp._tool_manager._tools) if hasattr(mcp, '_tool_manager') else 0
         return JSONResponse({
             "status": "healthy",
             "service": "vgc-mcp",
             "revision": os.environ.get("RENDER_GIT_COMMIT"),
             "branch": os.environ.get("RENDER_GIT_BRANCH"),
             "tool_modules": REGISTERED_TOOL_MODULE_COUNT,
-            "tools": tool_count,
+            **tool_counts(),
             "active_sessions": session_registry.session_count(),
         })
 
@@ -401,7 +443,6 @@ def create_http_app():
             version = importlib.metadata.version("vgc-mcp")
         except importlib.metadata.PackageNotFoundError:
             version = "unknown"
-        tool_count = len(mcp._tool_manager._tools) if hasattr(mcp, '_tool_manager') else 0
         return JSONResponse({
             "name": "vgc-mcp",
             "version": version,
@@ -409,15 +450,17 @@ def create_http_app():
             "branch": os.environ.get("RENDER_GIT_BRANCH"),
             "description": "Pokemon VGC MCP Server - damage calcs, spreads, team building",
             "tool_modules": REGISTERED_TOOL_MODULE_COUNT,
-            "tools": tool_count,
+            **tool_counts(),
             "endpoints": {
                 "mcp": "/mcp",
+                "mcp_full": "/mcp/full",
                 "sse": "/sse",
                 "health": "/health",
                 "messages": "/messages/"
             },
-            "connect": "Use /mcp (Streamable HTTP) in MCP clients; /sse is the "
-                       "legacy HTTP+SSE transport (POST /sse is forwarded to /mcp)."
+            "connect": "Use /mcp (Streamable HTTP) in MCP clients, or /mcp/full "
+                       "for every tool; /sse is the legacy HTTP+SSE transport "
+                       "(POST /sse is forwarded to /mcp)."
         })
 
     # This is a deliberately public endpoint. FastMCP's default transport
@@ -429,16 +472,39 @@ def create_http_app():
     # public TLS host, so disable the check here. The stdio path (main) is
     # unaffected.
     from mcp.server.transport_security import TransportSecuritySettings
-    mcp.settings.transport_security = TransportSecuritySettings(
-        enable_dns_rebinding_protection=False
-    )
+    for server in (mcp, mcp_core):
+        server.settings.transport_security = TransportSecuritySettings(
+            enable_dns_rebinding_protection=False
+        )
 
     # Streamable HTTP (modern MCP transport). streamable_http_app() lazily
     # creates the session manager and returns a Starlette app whose only
     # route is /mcp — we reuse that route in our combined app and run the
     # session manager via the outer app's lifespan (mounted sub-app
     # lifespans do NOT propagate in Starlette, so this must be explicit).
-    streamable_app = mcp.streamable_http_app()
+    # The full server always lives at /mcp/full. /mcp serves the default
+    # profile: the core server, or the full one again when
+    # VGC_MCP_PROFILE=full (through a path rewrite, because one session
+    # manager owns one route).
+    mcp.settings.streamable_http_path = "/mcp/full"
+    full_app = mcp.streamable_http_app()
+    if served_mcp is mcp_core:
+        streamable_app = mcp_core.streamable_http_app()
+        mcp_routes = [*streamable_app.routes, *full_app.routes]
+    else:
+        streamable_app = StreamableHTTPCompat(full_app, "/mcp/full")
+        mcp_routes = [
+            Route("/mcp", endpoint=streamable_app, methods=["GET", "POST", "DELETE"]),
+            *full_app.routes,
+        ]
+
+    @contextlib.asynccontextmanager
+    async def lifespan(app):
+        async with contextlib.AsyncExitStack() as stack:
+            await stack.enter_async_context(mcp.session_manager.run())
+            if served_mcp is mcp_core:
+                await stack.enter_async_context(mcp_core.session_manager.run())
+            yield
 
     app = Starlette(
         routes=[
@@ -454,10 +520,10 @@ def create_http_app():
                 methods=["POST", "DELETE"],
             ),
             Mount("/messages/", app=sse.handle_post_message),
-            *streamable_app.routes,  # /mcp
+            *mcp_routes,  # /mcp and /mcp/full
         ],
         middleware=_build_middleware(CORSMiddleware, Middleware),
-        lifespan=lambda app: mcp.session_manager.run(),
+        lifespan=lifespan,
     )
 
     return app

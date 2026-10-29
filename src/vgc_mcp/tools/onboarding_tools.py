@@ -32,15 +32,15 @@ _CATEGORIES: dict[str, dict] = {
         "title": "Team building and review",
         "examples": [
             "Get my team ready for a Regional (I'll paste it)",
-            "What pairs well with Incineroar?",
-            "What are my team's biggest threats?",
+            "Analyze this team: (paste)",
+            "What are the most used Pokemon right now?",
         ],
         "tools": [
             "prepare_team",
             "import_and_analyze",
-            "suggest_teammates",
-            "find_threats_to_team",
-            "analyze_lead_pairs",
+            "get_usage_stats",
+            "validate_team_legality",
+            "export_team_to_paste",
         ],
     },
     "evs": {
@@ -48,14 +48,14 @@ _CATEGORIES: dict[str, dict] = {
         "examples": [
             "What does Incineroar need to survive Flutter Mane's Moonblast?",
             "Design a spread that outspeeds Tornadus and survives Urshifu",
-            "Can I save points with a different nature?",
+            "Check this spread hits all my benchmarks",
         ],
         "tools": [
             "find_survival_evs",
             "design_spread_with_benchmarks",
             "optimize_multi_survival_spread",
-            "suggest_nature_optimization",
-            "check_spread_efficiency",
+            "verify_spread_benchmarks",
+            "recommend_verified_spreads",
         ],
     },
     "speed": {
@@ -63,29 +63,40 @@ _CATEGORIES: dict[str, dict] = {
         "examples": [
             "Is my Landorus faster than Tornadus?",
             "How many points does Mega Lucario Z need to outspeed Dragapult?",
-            "Show my team's speed tiers under Tailwind",
+            "How often does my Incineroar outspeed the meta?",
         ],
         "tools": [
             "compare_speed",
             "find_speed_evs_to_outspeed",
-            "visualize_team_speed_tiers",
             "analyze_outspeed_probability",
-            "get_meta_speed_tiers",
+            "get_pokemon_stats",
+        ],
+    },
+    "battle": {
+        "title": "Live battle copilot",
+        "examples": [
+            "Start a battle: my team against theirs (I'll list both)",
+            "Turn 1: they led Incineroar and Flutter Mane. What should I do?",
+            "Explain what happened in this replay (I'll paste the link)",
+        ],
+        "tools": [
+            "start_battle",
+            "record_turn",
+            "suggest_next_move",
+            "end_battle",
+            "analyze_replay",
         ],
     },
     "learn": {
         "title": "Learning VGC",
         "examples": [
             "Explain what Stat Points are in Champions",
-            "What makes Incineroar good?",
-            "Check my build for mistakes",
+            "What does spread move damage reduction mean?",
+            "What are the common sets for Incineroar?",
         ],
         "tools": [
             "explain_vgc_term",
-            "explain_pokemon",
-            "explain_type_matchup",
-            "check_build_for_mistakes",
-            "what_tool_should_i_use",
+            "get_common_sets",
         ],
     },
 }
@@ -99,6 +110,8 @@ _ALIASES = {
     "spreads": "evs",
     "learning": "learn",
     "education": "learn",
+    "copilot": "battle",
+    "replay": "battle",
 }
 _MAX_TOOLS_PER_CATEGORY = 5
 
@@ -144,7 +157,7 @@ def register_onboarding_tools(mcp: FastMCP):
         ),
     )
     async def show_capabilities(
-        category: Annotated[Optional[str], Field(description="Filter by 'damage', 'team', 'evs', 'speed', 'learn', or None for the full overview")] = None,
+        category: Annotated[Optional[str], Field(description="Filter by 'damage', 'team', 'evs', 'speed', 'battle', 'learn', or None for the full overview")] = None,
     ) -> dict:
         """Show what this server can do, with example prompts.
 
@@ -169,7 +182,7 @@ def register_onboarding_tools(mcp: FastMCP):
                 lines += [
                     "",
                     "Ask \"what can you do for speed?\" (or damage, team, evs, "
-                    "learn) for more examples.",
+                    "battle, learn) for more examples.",
                 ]
                 return {
                     "capabilities_type": "overview",
