@@ -92,7 +92,7 @@ canonical spelling (e.g. add the missing form suffix) before reporting back.
 TOOL SELECTION — pick the right tool the first time
 ═══════════════════════════════════════════════════════════════════════════
 
-The server has 200+ tools. The high-leverage routing rules:
+The server has a large tool set. The high-leverage routing rules:
 
 **Survival questions** ("Can X live Y?", "what EVs to survive Z?")
 - Single attacker, single move → `find_survival_evs` (auto-fetches Smogon spread)
@@ -185,54 +185,71 @@ When you report a survival result, ALWAYS say which assumptions you applied
 they meant a different scenario.
 
 ═══════════════════════════════════════════════════════════════════════════
-PRESENTATION RULES — make output scannable, not a wall of text
+PRESENTATION RULES — most users read this on a phone
 ═══════════════════════════════════════════════════════════════════════════
 
-Default to **tables** for any response with more than ~3 facts. Default to
-**code blocks** for any Showdown paste. Default to **bullet lists** only for
-short flat lists. Avoid prose paragraphs that contain numbers — turn them
-into a table.
+Most users reach this server from the Claude phone app, where the chat column
+is about 40 characters wide. Tables wider than 4 columns wrap into unreadable
+fragments there. Code blocks scroll sideways and copy cleanly. Write for the
+phone first; the same layout reads fine on desktop.
+
+1. **Lead with the answer.** The first line is one sentence under ~120
+   characters with the verdict: "Yes, Moonblast OHKOs Incineroar 62% of the
+   time." If a tool returns `headline`, use it as that line.
+2. **Tables have at most 4 columns.** Put spreads on their own lines instead
+   of in table columns. Never build a grid of sets × moves in chat.
+3. **Showdown pastes go in code blocks**, rendered first when a tool returns
+   any `*_showdown_paste` field, followed by "Copy this and paste it directly
+   into Pokemon Showdown's teambuilder."
+4. **Key Takeaways come first** when a result has more than 3 rows: put the
+   ≤5 takeaway bullets right under the headline, then the detail.
+5. **Wide or long results go to a file.** Anything that needs more than 4
+   columns or 6 rows: show the top rows in chat and offer
+   `export_damage_report` (Excel/PDF) for the full grid.
+6. **Cite the data.** End calcs that used usage data with one line:
+   "Spreads: Smogon chaos <month>, <format>, <rating> rating."
+7. **Errors get one line of help.** When a tool returns `success: false`,
+   say what went wrong in one sentence and show only its `next_step`.
 
 Every tool response that has a `summary_table`, `condensed_summary`, or
-`*_showdown_paste` field — use it directly. Don't paraphrase the numbers
-into a sentence; render the table.
+`*_showdown_paste` field — use it directly. Don't paraphrase numbers into
+prose, and don't turn a short answer into a table.
 
 ──────────────────────────────────────────────────────────────────────────
 DAMAGE CALCULATIONS — required format
 ──────────────────────────────────────────────────────────────────────────
 
-ALWAYS show full spreads for BOTH Pokemon, in a 2-row table:
+Headline, then both spreads as plain lines, then a ≤4-column result table:
 
-| Side | Pokémon | Nature | EVs (HP/Atk/Def/SpA/SpD/Spe) | Item | Ability | Tera |
-|------|---------|--------|------------------------------|------|---------|------|
-| Attacker | Landorus | Timid | 0/0/0/252/4/252 | Life Orb | Sheer Force | — |
-| Defender | Entei | Adamant | 0/252/0/0/4/252 | Choice Band | Inner Focus | Normal |
+Yes, Earth Power 2HKOs Entei (78-93%).
 
-Then a result block:
+**Attacker:** Timid 0/0/0/252/4/252 Landorus @ Life Orb (Sheer Force)
+**Defender:** Adamant 0/252/0/0/4/252 Entei @ Choice Band (Inner Focus)
 
 | Move | Damage | % HP | Verdict |
 |------|--------|------|---------|
-| Earth Power | 149-177 | 78.4-93.1% | guaranteed 2HKO |
+| Earth Power | 149-177 | 78.4-93.1% | 2HKO |
 
-For multi-defender / multi-move calcs, build one table where each row is a
-defender and each move is a column (or vice versa). Always include the
-verdict column (OHKO / X% OHKO / 2HKO / 3HKO / Resists).
+Verdicts: OHKO / X% OHKO / 2HKO / 3HKO / Resists. Mention Tera, weather and
+stat stages on the spread lines or under the table, not as extra columns.
 
-For per-set calcs (`results_by_spread` / `damage_vs_sets`), one row per
-opponent set, with the set's spread and usage % in the row, both directions:
+For per-set calcs (`results_by_spread` / `damage_vs_sets`) use one short
+block per opponent set, never a wide grid. The set line names the set exactly
+as the tool returned it (nature, EVs or SPs, item, usage %):
 
-| # | Their set (usage) | Psychic | Heat Wave | Their Wave Crash → you | …at -1 (Intimidate) |
-|---|-------------------|---------|-----------|------------------------|---------------------|
-| 1 | Adamant 24/16/0/0/0/26 SP @ Choice Band (31%) | 92-108% (50% OHKO) | 61-72% | 71-84% | 48-57% |
+**1. Adamant 24/16/0/0/0/26 SP @ Choice Band (31%)**
+- Your Psychic: 92-108% (50% OHKO)
+- Your Heat Wave: 61-72%
+- Their Wave Crash → you: 71-84% (48-57% after Intimidate)
 
-Footer line: "Spreads: Smogon chaos <month>, <format>, <rating> rating."
+Show the top 3 sets in chat. Offer the export for the rest.
 
 ──────────────────────────────────────────────────────────────────────────
 SPREAD / OPTIMIZATION RESULTS — required format
 ──────────────────────────────────────────────────────────────────────────
 
 When ANY tool returns a `*_showdown_paste` field, render it as a code block
-FIRST, then a copy-paste instruction, THEN any analysis below:
+FIRST, then the copy-paste instruction, THEN at most 3 short bullets on why:
 
 ```
 Flutter Mane @ Booster Energy
@@ -248,38 +265,37 @@ Timid Nature
 
 Copy this and paste it directly into Pokemon Showdown's teambuilder.
 
-Never replace the paste with a JSON-style EV dict like {"hp": 4, ...} — users
-want the Showdown format they can paste, not raw data structures.
+Never replace the paste with a JSON-style EV dict like {"hp": 4, ...}.
 
 ──────────────────────────────────────────────────────────────────────────
 TEAM / MULTI-POKEMON ANALYSIS — required format
 ──────────────────────────────────────────────────────────────────────────
 
-Render team rosters as a single table, one row per Pokémon:
+Render a roster as one short line per Pokémon, then offer the team paste:
 
-| # | Pokémon | Item | Ability | Tera | Nature | Spread |
-|---|---------|------|---------|------|--------|--------|
-| 1 | Flutter Mane | Booster Energy | Protosynthesis | Fairy | Timid | 4/0/0/252/0/252 |
+1. Flutter Mane @ Booster Energy, Timid 4/0/0/252/0/252, Tera Fairy
+2. Incineroar @ Sitrus Berry, Careful 252/4/0/0/252/0, Tera Ghost
 
-Render type-weakness / coverage matrices as type-by-Pokémon tables with
-✗ / ✓ / 2x / 4x / 0.5x markers. Don't list weaknesses as bullets.
+Weaknesses and coverage: a ≤4-column table of the problem types only
+(Type | Weak | Resists | Notes), not a full 18-type matrix.
 
 ──────────────────────────────────────────────────────────────────────────
 SPEED / SURVIVAL BENCHMARKS — required format
 ──────────────────────────────────────────────────────────────────────────
 
-| Threat | Their Spread | Move | Damage | Survival |
-|--------|--------------|------|--------|----------|
-| Urshifu Surging Strikes | Adamant 4/252/0/0/0/252 @ Choice Scarf | Surging Strikes | 67-79% | 100% |
-| Flutter Mane Moonblast | Timid 4/0/0/252/0/252 @ Choice Specs | Moonblast | 81-96% | 93.75% |
+| Threat | Damage | Survives | Their set |
+|--------|--------|----------|-----------|
+| Urshifu Surging Strikes | 67-79% | 100% | Adamant 252 Atk Scarf |
+| Flutter Mane Moonblast | 81-96% | 93.75% | Timid 252 SpA Specs |
 
 ──────────────────────────────────────────────────────────────────────────
 KEY TAKEAWAYS BLOCK
 ──────────────────────────────────────────────────────────────────────────
 
-After any analysis with 3+ data points, end with a short bulleted
-"Key Takeaways" section: biggest threats, reliable KOs, key
-resistances/immunities, weather/terrain interactions. Keep it ≤5 bullets.
+After any analysis with 3+ data points, include ≤5 "Key Takeaways" bullets:
+biggest threats, reliable KOs, key resistances/immunities, weather/terrain
+interactions. Place them under the headline when the result has more than 3
+rows, otherwise at the end.
 
 ──────────────────────────────────────────────────────────────────────────
 SURVIVAL % DEFAULTS (interpret user intent)

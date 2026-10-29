@@ -18,6 +18,9 @@ class ToolError:
     context: dict[str, Any] = field(default_factory=dict)  # Additional debug info
 
 
+MAX_SUGGESTIONS = 3
+
+
 # Common error codes for consistency across tools
 class ErrorCodes:
     """Standard error codes used across the MCP server."""
@@ -98,7 +101,10 @@ def error_response(
     }
 
     if suggestions:
-        response["suggestions"] = suggestions
+        # Phones show one retry hint well; lists push the answer off-screen.
+        # `next_step` is the one to show; `suggestions` keeps up to three.
+        response["next_step"] = suggestions[0]
+        response["suggestions"] = suggestions[:MAX_SUGGESTIONS]
 
     # Add any extra fields (like valid_values, current_value, etc.)
     response.update(extra_fields)
@@ -198,7 +204,7 @@ def team_empty_error() -> dict:
         "No Pokemon on team",
         suggestions=[
             "Use 'add_to_team' to add Pokemon to your team",
-            "Use 'import_showdown_paste' to import a team from Pokemon Showdown",
+            "Use 'import_showdown_team' to import a team from Pokemon Showdown",
             "Use 'add_pokemon_smart' for intelligent Pokemon suggestions",
         ],
     )
@@ -211,7 +217,7 @@ def team_full_error(current_pokemon: list[str]) -> dict:
         "Team is full (6 Pokemon maximum)",
         suggestions=[
             "Use 'remove_from_team' to remove a Pokemon first",
-            "Use 'swap_pokemon' to replace a specific slot",
+            "Use 'swap_team_pokemon' to replace a specific slot",
         ],
         current_team=current_pokemon,
     )
@@ -219,10 +225,21 @@ def team_full_error(current_pokemon: list[str]) -> dict:
 
 def api_error(
     api_name: str,
-    original_error: str,
+    original_error: Optional[str] = None,
     is_retryable: bool = False
 ) -> dict:
-    """Create an API error with context."""
+    """Create an API error with context.
+
+    Called either as ``api_error("Smogon", str(e))`` for an upstream API
+    failure, or as ``api_error(str(e))`` from a tool's catch-all handler,
+    where the single argument is the error text itself.
+    """
+    if original_error is None:
+        return error_response(
+            ErrorCodes.INTERNAL_ERROR,
+            f"Unexpected error: {api_name}",
+            suggestions=["Check your input and try again"],
+        )
     suggestions = []
 
     if is_retryable:
