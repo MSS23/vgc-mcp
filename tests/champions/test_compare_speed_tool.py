@@ -25,7 +25,10 @@ def _text(res):
 
 async def _call(tool, args, reg):
     get_regulation_config().set_session_regulation(reg, by_user=True)
-    return json.loads(_text(await server.mcp.call_tool(tool, args)))
+    res = await server.mcp.call_tool(tool, args)
+    # Tools with an outputSchema return (content, structured_content).
+    content = res[0] if isinstance(res, tuple) else res
+    return json.loads(_text(content))
 
 
 _ARGS = {

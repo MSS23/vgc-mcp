@@ -22,6 +22,12 @@ from vgc_mcp_core.rules.format_detect import detect_champions_format
 from vgc_mcp_core.tools.build_helpers import build_pokemon
 from vgc_mcp_core.tools.build_helpers import parse_ev_string as _parse_ev_string
 from vgc_mcp_core.tools.build_helpers import parse_sp_string as _parse_sp_string
+from vgc_mcp_core.tools.response_contract import (
+    CalcResult,
+    apply_contract,
+    data_source_from_meta,
+    spread_label,
+)
 from vgc_mcp_core.tools.smogon_helpers import sps_from_smogon_spread
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
@@ -185,7 +191,7 @@ def register_bulk_calc_tools(
         defender_tera_types: Annotated[Optional[dict[str, str]], Field(
             description="Map of defender name to their Tera type (e.g. {'incineroar': 'water', 'rillaboom': 'fire'})",
         )] = None,
-    ) -> dict:
+    ) -> CalcResult:
         """Run bulk offensive damage calculations: 1 attacker x N moves x M defenders x K scenarios.
 
         Replaces running dozens of individual damage calcs. Returns structured
@@ -359,7 +365,15 @@ def register_bulk_calc_tools(
             else:
                 attacker_spread_display = summary.attacker_spread_str
 
-            return {
+            first = summary.scenario_names[0]
+            ohko = {r.defender_name for r in summary.results if r.scenario_name == first and r.min_pct >= 100}
+            meta = None
+            if _smogon_client is not None:
+                try:
+                    meta = (await _smogon_client.get_usage_stats()).get("_meta")
+                except Exception:  # noqa: BLE001 - provenance is best effort
+                    meta = None
+            return apply_contract({
                 "attacker": {
                     "name": attacker_name,
                     "spread": attacker_spread_display,
@@ -376,7 +390,15 @@ def register_bulk_calc_tools(
                 "twohko_summary": summary.twohko_counts,
                 "calc_strings": calc_strings,
                 "failed_defenders": failed_defenders if failed_defenders else None,
-            }
+            },
+                headline=(
+                    f"{attacker_name.replace('-', ' ').title()} guarantees an OHKO on "
+                    f"{len(ohko)}/{len(defenders)} defenders ({first})"
+                ),
+                spreads_used={"attacker": spread_label(attacker), **{d.name: spread_label(d) for d in defenders}},
+                data_source=data_source_from_meta(meta if isinstance(meta, dict) else None),
+                showdown_paste=attacker_paste,
+            )
 
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))

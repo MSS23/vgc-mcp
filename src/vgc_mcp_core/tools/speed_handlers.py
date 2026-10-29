@@ -12,12 +12,87 @@ from vgc_mcp_core.calc.speed import (
 )
 from vgc_mcp_core.calc.stats import calculate_speed
 from vgc_mcp_core.calc.stats_champions import calculate_speed_sp
+from vgc_mcp_core.formats.showdown import format_showdown_species
 from vgc_mcp_core.models.pokemon import Nature
 from vgc_mcp_core.rules.format_detect import detect_champions_format
 from vgc_mcp_core.tools.build_helpers import parse_ev_dict, parse_ev_string
+from vgc_mcp_core.tools.response_contract import apply_contract, data_source_from_meta
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 logger = logging.getLogger(__name__)
+
+
+def speed_label(name: str, nature: Optional[str], invest: Optional[int], champions: bool) -> str:
+    """spread_label-style line for a Speed-only investment: 'Jolly 0/0/0/0/0/252 Garchomp'."""
+    species = format_showdown_species(name)
+    if nature is None or invest is None:
+        return species
+    unit = " SP" if champions else ""
+    return f"{str(nature).title()} 0/0/0/0/0/{invest}{unit} {species}"
+
+
+async def outspeed_contract(result: dict[str, Any], smogon: Optional[SmogonStatsClient]) -> dict[str, Any]:
+    """Response contract for `analyze_outspeed_probability`.
+
+    The pre-contract string in ``data_source`` ('smogon', 'meta_tiers',
+    'calculated', 'fallback') moves to ``speed_data_source``; ``data_source``
+    becomes the chaos provenance when Smogon spreads were used.
+    """
+    if "error" in result:
+        return result
+    kind = result.pop("data_source", None)
+    result["speed_data_source"] = kind
+    meta = None
+    if kind == "smogon" and smogon is not None:
+        try:
+            usage = await smogon.get_pokemon_usage(result["target_pokemon"])
+            meta = usage.get("_meta") if isinstance(usage, dict) else None
+        except Exception:  # noqa: BLE001 - provenance is best effort
+            meta = None
+    champions = result.get("format_system") == "champions"
+    invest = result.get("speed_sps" if champions else "speed_evs")
+    if result.get("speed_stat") is not None:
+        mine = f"{result['your_speed']} Spe {format_showdown_species(result['pokemon'])}"
+    else:
+        mine = speed_label(result["pokemon"], result.get("nature"), invest, champions)
+    return apply_contract(
+        result,
+        headline=(
+            f"{format_showdown_species(result['pokemon'])} at {result['your_speed']} Speed outspeeds "
+            f"{result['outspeed_percent']}% of {format_showdown_species(result['target_pokemon'])} "
+            f"spreads (tie {result['tie_percent']}%)"
+        ),
+        spreads_used={"pokemon": mine},
+        data_source=data_source_from_meta(meta),
+    )
+
+
+def speed_evs_contract(result: dict[str, Any], nature: str) -> dict[str, Any]:
+    """Response contract for `find_speed_evs_to_outspeed`."""
+    if "error" in result:
+        return result
+    champions = result.get("format_system") == "champions"
+    unit = "SP" if champions else "EVs"
+    name = result["pokemon"]
+    species = format_showdown_species(name)
+    if result.get("achievable"):
+        invest = result["sps_needed" if champions else "evs_needed"]
+        headline = (
+            f"{species} needs {invest} Speed {unit} ({str(nature).title()}) to reach "
+            f"{result['actual_speed']} Speed (target {result['target_speed']})"
+        )
+    else:
+        invest = 32 if champions else 252
+        best = result.get("max_speed_with_32_sps" if champions else "max_speed_with_252_evs")
+        headline = (
+            f"No, {species} can't reach {result['target_speed']} Speed with "
+            f"{str(nature).title()}; max is {best}"
+        )
+    return apply_contract(
+        result,
+        headline=headline,
+        spreads_used={"pokemon": speed_label(name, nature, invest, champions)},
+    )
 
 
 def speed_investment(value: int | str) -> int:

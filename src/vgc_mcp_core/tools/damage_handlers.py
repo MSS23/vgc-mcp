@@ -23,6 +23,7 @@ from vgc_mcp_core.models.pokemon import (
 )
 from vgc_mcp_core.rules.format_detect import detect_champions_format
 from vgc_mcp_core.tools.build_helpers import build_pokemon, parse_ev_string, parse_sp_string
+from vgc_mcp_core.tools.response_contract import apply_contract, data_source_from_meta, spread_label
 from vgc_mcp_core.tools.smogon_helpers import (
     get_common_spread as _shared_get_common_spread,
 )
@@ -59,6 +60,23 @@ async def _get_common_spreads(pokemon_name: str, limit: int = 3) -> list[dict]:
 async def _get_common_spread(pokemon_name: str) -> Optional[dict]:
     """Module-local wrapper — passes the registered Smogon client through."""
     return await _shared_get_common_spread(_smogon_client, pokemon_name)
+
+
+def _display(name: str) -> str:
+    """'flutter-mane' -> 'Flutter Mane' for headlines."""
+    return name.replace("-", " ").title()
+
+
+def damage_headline(move: str, defender: str, result: Any) -> str:
+    """One-line OHKO verdict, e.g. 'Yes, Moonblast OHKOs Incineroar 62.50% of the time (87-104%)'."""
+    rng = f"({format_percent(result.min_percent)}-{format_percent(result.max_percent)}%)"
+    move, defender = _display(move), _display(defender)
+    if result.is_guaranteed_ohko:
+        return f"Yes, {move} OHKOs {defender} {rng}"
+    if result.is_possible_ohko and "chance to OHKO" in result.ko_chance:
+        odds = result.ko_chance.split("%")[0]
+        return f"Yes, {move} OHKOs {defender} {odds}% of the time {rng}"
+    return f"No, {move} does not OHKO {defender}: {result.ko_chance} {rng}"
 
 
 def format_transparent_output(
@@ -1224,7 +1242,13 @@ async def calculate_damage_output(
         response["attacker_showdown_paste"] = pokemon_build_to_showdown(attacker)
         response["defender_showdown_paste"] = pokemon_build_to_showdown(defender)
 
-        return response
+        # data_source stays the full chaos _meta set above when Smogon sets were used.
+        return apply_contract(
+            response,
+            headline=damage_headline(move.name or move_name, defender_name, result),
+            spreads_used={"attacker": spread_label(attacker), "defender": spread_label(defender)},
+            showdown_paste=response["attacker_showdown_paste"],
+        )
 
     except Exception as e:
         error_str = str(e).lower()
@@ -1527,6 +1551,7 @@ async def find_survival_evs(
         if isinstance(attacker_evs, str) and attacker_evs.strip().isdigit():
             attacker_evs = int(attacker_evs)
         explicit_spread = isinstance(attacker_evs, str)
+        attacker_meta: Optional[dict[str, Any]] = None
         if isinstance(attacker_evs, str):
             try:
                 if is_champions:
@@ -1546,6 +1571,7 @@ async def find_survival_evs(
             if atk_spread:
                 attacker_spread_info["source"] = "smogon"
                 attacker_spread_info["usage_percent"] = atk_spread.get("usage", 0)
+                attacker_meta = atk_spread.get("meta")
                 # Add regulation info from Smogon data
                 if smogon and smogon.current_regulation_from_data:
                     attacker_spread_info["regulation"] = f"Reg {smogon.current_regulation_from_data}"
@@ -1785,7 +1811,7 @@ async def find_survival_evs(
             ]
             if intimidate_note:
                 table_lines.append(f"| Intimidate       | {intimidate_note}                          |")
-            return {
+            return apply_contract({
                 "attacker": attacker_name,
                 # Top-level attacker info for LLM visibility
                 "attacker_item": attacker_item.replace("-", " ").title() if attacker_item else "None",
@@ -1801,7 +1827,14 @@ async def find_survival_evs(
                 "achievable": False,
                 "message": "Cannot survive this attack with max investment. Consider items, Tera typing, or screens.",
                 "summary_table": "\n".join(table_lines)
-            }
+            },
+                headline=(
+                    f"No, {_display(defender_name)} can't survive {_display(attacker_name)}'s "
+                    f"{_display(move_name)} even with max bulk"
+                ),
+                spreads_used={"attacker": spread_label(attacker), "defender": spread_label(defender)},
+                data_source=data_source_from_meta(attacker_meta),
+            )
 
         # Normalize the solver result into format-agnostic locals. Wave-1's
         # calculate_bulk_threshold returns 'hp_sps'/'def_sps' for champions
@@ -1945,7 +1978,19 @@ async def find_survival_evs(
         if attacker_spread_info.get("regulation"):
             response["data_from"] = attacker_spread_info["regulation"]
 
-        return response
+        bulk_label = "Def" if is_def_physical else "SpD"
+        unit = "SP" if is_champions else "EVs"
+        return apply_contract(
+            response,
+            headline=(
+                f"{_display(defender_name)} needs {hp_units} HP / {def_units} {bulk_label} {unit} "
+                f"({defender_nature.title()}) to survive {_display(attacker_name)}'s "
+                f"{_display(move_name)} ({result['survival_chance']:.1f}% of rolls)"
+            ),
+            spreads_used={"attacker": spread_label(attacker), "defender": spread_label(recommended_defender)},
+            data_source=data_source_from_meta(attacker_meta),
+            showdown_paste=defender_showdown_paste,
+        )
 
     except Exception as e:
         error_str = str(e).lower()

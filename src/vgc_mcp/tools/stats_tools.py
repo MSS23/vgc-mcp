@@ -14,9 +14,11 @@ from vgc_mcp_core.calc.stats import (
     get_min_speed,
 )
 from vgc_mcp_core.calc.stats_champions import calculate_speed_sp
-from vgc_mcp_core.models.pokemon import EVSpread, IVSpread, Nature, StatPointSpread
+from vgc_mcp_core.formats.showdown import format_showdown_species, pokemon_build_to_showdown
+from vgc_mcp_core.models.pokemon import EVSpread, IVSpread, Nature, PokemonBuild, StatPointSpread
 from vgc_mcp_core.rules.format_detect import detect_champions_format
 from vgc_mcp_core.tools.build_helpers import build_pokemon
+from vgc_mcp_core.tools.response_contract import CalcResult, apply_contract, spread_label
 from vgc_mcp_core.utils.errors import (
     api_error,
     invalid_evs_error,
@@ -31,7 +33,6 @@ def _champions_stats_response(
     hp_sps, atk_sps, def_sps, spa_sps, spd_sps, spe_sps, total_sps,
 ) -> dict:
     """Build the get_pokemon_stats response for a Champions (SP) subject build."""
-    from vgc_mcp_core.formats.showdown import pokemon_build_to_showdown
 
     sps = StatPointSpread(
         hp=hp_sps, attack=atk_sps, defense=def_sps,
@@ -66,7 +67,7 @@ def _champions_stats_response(
         f"{stats['special_defense']} SpD / {stats['speed']} Spe ({nature} nature, Stat Points)"
     )
 
-    return {
+    return _stats_contract({
         "pokemon": pokemon_name,
         "level": level,
         "nature": nature,
@@ -94,7 +95,19 @@ def _champions_stats_response(
         "summary_table": "\n".join(table_lines),
         "analysis": analysis_str,
         "showdown_paste": pokemon_build_to_showdown(pokemon),
-    }
+    }, pokemon, stats)
+
+
+def _stats_contract(result: dict, pokemon: PokemonBuild, stats: dict) -> dict:
+    """Add the calc response contract to a get_pokemon_stats result."""
+    finals = "/".join(str(stats[k]) for k in (
+        "hp", "attack", "defense", "special_attack", "special_defense", "speed"))
+    return apply_contract(
+        result,
+        headline=f"{format_showdown_species(pokemon.name)} final stats: {finals} (HP/Atk/Def/SpA/SpD/Spe)",
+        spreads_used={"pokemon": spread_label(pokemon)},
+        showdown_paste=pokemon_build_to_showdown(pokemon),
+    )
 
 
 def register_stats_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
@@ -124,7 +137,7 @@ def register_stats_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         spd_evs: Annotated[int, Field(ge=0, le=252, description="Special Defense EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0,
         spe_evs: Annotated[int, Field(ge=0, le=252, description="Speed EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0,
         level: Annotated[int, Field(ge=1, le=100, description="Pokemon level (VGC standard is 50)")] = 50,
-    ) -> dict:
+    ) -> CalcResult:
         """Calculate all six final stats for a Pokemon at level 50 (VGC standard).
 
         Returns base stats, the investment used, final calculated stats, a
@@ -211,7 +224,7 @@ def register_stats_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             # Build analysis prose
             analysis_str = f"{pokemon_name} at Lv{level}: {stats['hp']} HP / {stats['attack']} Atk / {stats['defense']} Def / {stats['special_attack']} SpA / {stats['special_defense']} SpD / {stats['speed']} Spe ({nature} nature)"
 
-            return {
+            return _stats_contract({
                 "pokemon": pokemon_name,
                 "level": level,
                 "nature": nature,
@@ -237,7 +250,7 @@ def register_stats_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 "final_stats": stats,
                 "summary_table": "\n".join(table_lines),
                 "analysis": analysis_str
-            }
+            }, pokemon, stats)
 
         except Exception as e:
             error_str = str(e).lower()

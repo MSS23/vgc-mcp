@@ -31,9 +31,11 @@ from vgc_mcp_core.calc.speed_control import (
 )
 from vgc_mcp_core.calc.stats import calculate_speed, find_speed_evs
 from vgc_mcp_core.config import EV_BREAKPOINTS_LV50
+from vgc_mcp_core.formats.showdown import format_showdown_species
 from vgc_mcp_core.models.pokemon import Nature
 from vgc_mcp_core.team.manager import TeamManager
 from vgc_mcp_core.tools import speed_handlers
+from vgc_mcp_core.tools.response_contract import CalcResult, apply_contract
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 
@@ -58,7 +60,7 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
         pokemon1_speed_evs: Annotated[Union[Annotated[int, Field(ge=0, le=252)], str], Field(description="First Pokemon's Speed EVs (0-252); Stat Points 0-32 in Champions sessions. Also accepts the full 'HP/Atk/Def/SpA/SpD/Spe' slash string (its Spe value is used).")] = 0,
         pokemon2_nature: Annotated[str, Field(description="Second Pokemon's nature")] = "serious",
         pokemon2_speed_evs: Annotated[Union[Annotated[int, Field(ge=0, le=252)], str], Field(description="Second Pokemon's Speed EVs (0-252); Stat Points 0-32 in Champions sessions. Also accepts the full 'HP/Atk/Def/SpA/SpD/Spe' slash string (its Spe value is used).")] = 0
-    ) -> dict:
+    ) -> CalcResult:
         """Compare speed between two Pokemon to determine who moves first.
 
         In a Pokemon Champions (Reg MA) session the ``*_speed_evs`` arguments are
@@ -163,7 +165,22 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
                     "32 SP saturates to the same stat as 252 EVs"
                 )
 
-            return response
+            name1 = format_showdown_species(pokemon1_name)
+            name2 = format_showdown_species(pokemon2_name)
+            if winner == "tie":
+                headline = f"Speed tie: {name1} and {name2} both have {speed1} Speed"
+            elif speed1 > speed2:
+                headline = f"{name1} ({speed1}) outspeeds {name2} ({speed2})"
+            else:
+                headline = f"{name2} ({speed2}) outspeeds {name1} ({speed1})"
+            return apply_contract(
+                response,
+                headline=headline,
+                spreads_used={
+                    "pokemon1": speed_handlers.speed_label(pokemon1_name, pokemon1_nature, pokemon1_speed_evs, is_champions),
+                    "pokemon2": speed_handlers.speed_label(pokemon2_name, pokemon2_nature, pokemon2_speed_evs, is_champions),
+                },
+            )
 
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
@@ -181,13 +198,17 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
         pokemon_name: Annotated[str, Field(description="Your Pokemon's name", min_length=1)],
         target_speed: Annotated[int, Field(description="The Speed stat you want to reach or exceed")],
         nature: Annotated[str, Field(description="Your Pokemon's nature")] = "serious"
-    ) -> dict:
+    ) -> CalcResult:
         """Find minimum Speed EVs needed to reach or exceed a target Speed stat.
 
         Returns the required EVs (or Stat Points in a Champions Reg MA session)
         and the resulting Speed, or flags the target as unreachable with the
         max achievable Speed.
         """
+        result = await _find_speed_evs_impl(pokemon_name, target_speed, nature)
+        return speed_handlers.speed_evs_contract(result, nature)
+
+    async def _find_speed_evs_impl(pokemon_name: str, target_speed: int, nature: str) -> dict:
         try:
             base_stats = await pokeapi.get_base_stats(pokemon_name)
 
