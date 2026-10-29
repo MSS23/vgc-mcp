@@ -135,3 +135,16 @@ def test_champions_regulation_letter_includes_full_suffix():
     client = _client(config)
     client._session_state().current_format = "gen9championsvgc2026regmb"
     assert client.current_regulation_from_data == "MB"
+
+
+async def test_missing_month_is_negatively_cached(tmp_path):
+    """A 404'd month/format/rating is not re-requested on every lookup."""
+    from vgc_mcp_core.api.cache import APICache
+
+    client = SmogonStatsClient(cache=APICache(str(tmp_path)))
+    http = MagicMock()
+    http.get = AsyncMock(return_value=MagicMock(status_code=404))
+    with patch.object(client, "_get_client", AsyncMock(return_value=http)):
+        assert await client._try_fetch_stats("2026-09", "gen9vgc2026regi", 1630) is None
+        assert await client._try_fetch_stats("2026-09", "gen9vgc2026regi", 1630) is None
+    assert http.get.await_count == 1

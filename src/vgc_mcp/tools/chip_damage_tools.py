@@ -66,7 +66,7 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 return error_response("stats_not_found", f"Could not get stats for: {pokemon_name}")
 
             # Get types
-            types = [t["type"]["name"] for t in pokemon_data.get("types", [])]
+            types = [t.lower() for t in pokemon_data.get("types", [])]
 
             # Calculate HP
             base_hp = stats.get("hp", 100)
@@ -222,7 +222,7 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
 
             # Check if Flying type from API
             pokemon_data = await pokeapi.get_pokemon(pokemon_name)
-            types = [t["type"]["name"] for t in pokemon_data.get("types", [])] if pokemon_data else []
+            types = [t.lower() for t in pokemon_data.get("types", [])] if pokemon_data else []
             is_grounded = "flying" not in types and not has_levitate
 
             # Calculate HP
@@ -282,7 +282,7 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
 
             # Check if Poison type from API
             pokemon_data = await pokeapi.get_pokemon(pokemon_name)
-            types = [t["type"]["name"] for t in pokemon_data.get("types", [])] if pokemon_data else []
+            types = [t.lower() for t in pokemon_data.get("types", [])] if pokemon_data else []
             is_poison = is_poison_type or "poison" in types
 
             # Calculate HP
@@ -365,7 +365,7 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 return error_response("stats_not_found", f"Could not get stats for: {pokemon_name}")
 
             # Get types
-            types = [t["type"]["name"] for t in pokemon_data.get("types", [])]
+            types = [t.lower() for t in pokemon_data.get("types", [])]
             is_grounded = "flying" not in types and ability.lower() not in ["levitate"]
 
             # Calculate HP
@@ -467,7 +467,7 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 return error_response("pokemon_not_found", f"Could not find Pokemon: {pokemon_name}")
 
             stats = await pokeapi.get_pokemon_stats(pokemon_name)
-            types = [t["type"]["name"] for t in pokemon_data.get("types", [])]
+            types = [t.lower() for t in pokemon_data.get("types", [])]
             is_grounded = "flying" not in types and ability.lower() not in ["levitate"]
 
             # Calculate HP

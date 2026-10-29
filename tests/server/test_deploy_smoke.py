@@ -46,6 +46,14 @@ def test_server_module_loads_with_tools():
     assert len(tools) == len(set(tools)), "tool names must be unique"
 
 
+def test_server_info_reports_package_version():
+    from vgc_mcp import __version__
+    from vgc_mcp.server import mcp
+
+    opts = mcp._mcp_server.create_initialization_options()
+    assert opts.server_version == __version__
+
+
 def test_main_http_entrypoint_is_callable():
     from vgc_mcp.server import main_http
 

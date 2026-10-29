@@ -18,10 +18,7 @@ def mock_pokeapi():
     })
     client.get_pokemon = AsyncMock(return_value={
         "name": "incineroar",
-        "types": [
-            {"type": {"name": "fire"}},
-            {"type": {"name": "dark"}}
-        ]
+        "types": ["Fire", "Dark"]
     })
     return client
 
@@ -48,7 +45,7 @@ class TestCalculateWeatherDamage:
         """Test sandstorm immunity for Steel type."""
         mock_pokeapi.get_pokemon.return_value = {
             "name": "metagross",
-            "types": [{"type": {"name": "steel"}}, {"type": {"name": "psychic"}}]
+            "types": ["Steel", "Psychic"]
         }
         fn = tools["calculate_weather_damage"].fn
         result = await fn(pokemon_name="metagross", weather="sandstorm")
@@ -95,7 +92,7 @@ class TestCalculateGrassyTerrainHealing:
         """Test flying Pokemon doesn't receive grassy healing."""
         mock_pokeapi.get_pokemon.return_value = {
             "name": "tornadus",
-            "types": [{"type": {"name": "flying"}}]
+            "types": ["Flying"]
         }
         fn = tools["calculate_grassy_terrain_healing"].fn
         result = await fn(pokemon_name="tornadus")

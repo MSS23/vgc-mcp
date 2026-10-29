@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-green.svg)](https://modelcontextprotocol.io/)
 [![Live](https://img.shields.io/badge/live-vgc--mcp.onrender.com-brightgreen)](https://vgc-mcp.onrender.com/health)
-[![Tests](https://img.shields.io/badge/tests-3681%20passing-success)](#)
+[![Tests](https://img.shields.io/badge/tests-3763%20passing-success)](#)
 [![Tools](https://img.shields.io/badge/MCP%20tools-213-blueviolet)](docs/tools-catalog.md)
 
 A **Model Context Protocol** server that turns any LLM into a competitive Pokémon VGC coach. **213 tools** spanning the full Gen 9 damage formula, Smogon usage data, multi-threat EV optimization, replay analysis, and a turn-by-turn live battle copilot. Clients get a focused **34-tool core** by default, so the model picks the right tool first time, even on a phone.
@@ -241,4 +241,4 @@ MIT — see [LICENSE](LICENSE).
 
 ---
 
-**Built with [Model Context Protocol](https://modelcontextprotocol.io/).** Questions? Open an [issue](https://github.com/MSS23/vgc-mcp/issues) or join [Discussions](https://github.com/MSS23/vgc-mcp/discussions).
+**Built with [Model Context Protocol](https://modelcontextprotocol.io/).** Questions? Open an [issue](https://github.com/MSS23/vgc-mcp/issues).
