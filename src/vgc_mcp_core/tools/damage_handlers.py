@@ -1866,8 +1866,8 @@ async def find_survival_evs(
             defender_ev_str = f"{result['hp_evs']} HP / {result['def_evs']} {result['def_stat_name']}"
             defender_evs_dict = {
                 "hp": result["hp_evs"],
-                "defense": result["def_evs"] if result["def_stat_name"] == "Def" else 0,
-                "special_defense": result["def_evs"] if result["def_stat_name"] == "SpD" else 0,
+                "defense": result["def_evs"] if is_def_physical else 0,
+                "special_defense": 0 if is_def_physical else result["def_evs"],
             }
             recommended_defender = build_pokemon(
                 name=defender_name,
