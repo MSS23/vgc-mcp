@@ -1,6 +1,7 @@
 """PokePaste API client for fetching teams from pokepast.es URLs."""
 
 import re
+from types import TracebackType
 from typing import Optional
 
 import httpx
@@ -75,7 +76,7 @@ class PokePasteClient:
         """
         # Check cache first
         cache_key = f"paste/{paste_id}"
-        cached = self.cache.get("pokepaste", cache_key)
+        cached: Optional[str] = self.cache.get("pokepaste", cache_key)
         if cached is not None:
             return cached
 
@@ -139,5 +140,10 @@ class PokePasteClient:
     async def __aenter__(self) -> "PokePasteClient":
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+    async def __aexit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
         await self.close()

@@ -1,6 +1,7 @@
 """PokeAPI client with caching and retry logic."""
 
 import asyncio
+from types import TracebackType
 from typing import Any, Optional
 
 import httpx
@@ -130,7 +131,7 @@ class PokeAPIClient:
     async def _fetch(self, endpoint: str) -> dict[str, Any]:
         """Fetch from API with caching, negative caching, and coalescing."""
         # Persistent (positive) cache first.
-        cached = self.cache.get("pokeapi", endpoint)
+        cached: Optional[dict[str, Any]] = self.cache.get("pokeapi", endpoint)
         if cached is not None:
             return cached
 
@@ -165,7 +166,7 @@ class PokeAPIClient:
             try:
                 response = await client.get(f"{settings.POKEAPI_BASE_URL}/{endpoint}")
                 response.raise_for_status()
-                data = response.json()
+                data: dict[str, Any] = response.json()
                 self.cache.set("pokeapi", endpoint, value=data)
                 return data
 
@@ -322,5 +323,10 @@ class PokeAPIClient:
     async def __aenter__(self) -> "PokeAPIClient":
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+    async def __aexit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
         await self.close()

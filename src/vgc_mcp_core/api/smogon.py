@@ -3,6 +3,7 @@
 import threading
 from dataclasses import dataclass
 from datetime import datetime
+from types import TracebackType
 from typing import Any, Optional
 from weakref import WeakKeyDictionary
 
@@ -165,7 +166,7 @@ class SmogonStatsClient:
     async def _try_fetch_stats(self, month: str, format_name: str, rating: int) -> Optional[dict[str, Any]]:
         """Try to fetch stats for a specific month/format/rating combination."""
         cache_key = f"{month}/{format_name}/{rating}"
-        cached = self.cache.get("smogon", cache_key)
+        cached: Optional[dict[str, Any]] = self.cache.get("smogon", cache_key)
         if cached is not None:
             return cached
 
@@ -784,7 +785,7 @@ class SmogonStatsClient:
         mean_speed = weighted_sum / total_usage if total_usage > 0 else speeds[0]
 
         # Median (by usage weight)
-        cumulative = 0
+        cumulative: float = 0
         median_speed = speeds[0]
         for s, u in sorted(zip(speeds, usages)):
             cumulative += u
@@ -828,5 +829,10 @@ class SmogonStatsClient:
     async def __aenter__(self) -> "SmogonStatsClient":
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+    async def __aexit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
         await self.close()
