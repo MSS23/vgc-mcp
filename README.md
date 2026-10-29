@@ -7,9 +7,9 @@
 [![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-green.svg)](https://modelcontextprotocol.io/)
 [![Live](https://img.shields.io/badge/live-vgc--mcp.onrender.com-brightgreen)](https://vgc-mcp.onrender.com/health)
 [![Tests](https://img.shields.io/badge/tests-3763%20passing-success)](#)
-[![Tools](https://img.shields.io/badge/MCP%20tools-213-blueviolet)](docs/tools-catalog.md)
+[![Tools](https://img.shields.io/badge/MCP%20tools-206-blueviolet)](docs/tools-catalog.md)
 
-A **Model Context Protocol** server that turns any LLM into a competitive Pokémon VGC coach. **213 tools** spanning the full Gen 9 damage formula, Smogon usage data, multi-threat EV optimization, replay analysis, and a turn-by-turn live battle copilot. Clients get a focused **34-tool core** by default, so the model picks the right tool first time, even on a phone.
+A **Model Context Protocol** server that turns any LLM into a competitive Pokémon VGC coach. **206 tools** spanning the full Gen 9 damage formula, Smogon usage data, multi-threat EV optimization, replay analysis, and a turn-by-turn live battle copilot. Clients get a focused **34-tool core** by default, so the model picks the right tool first time, even on a phone.
 
 ```
 You:    Does Tera-Normal Entei live a Sheer-Force Life-Orb Earth Power
@@ -54,11 +54,11 @@ Every VGC team-builder is a wall of UI: type into a calculator, copy-paste a pas
 
 **📼 Replay analyzer** — Paste a `replay.pokemonshowdown.com` URL. Get turn-by-turn breakdown, key moments (KOs, Tera timing, weather wars), and concrete coaching takeaways.
 
-**🎯 Focused by default** — `/mcp` serves 34 core tools; `/mcp/full` serves all 213, including spread iteration deltas, archetype classification and breakpoint Pareto-optimal options.
+**🎯 Focused by default** — `/mcp` serves 34 core tools; `/mcp/full` serves all 206, including spread iteration deltas, archetype classification and breakpoint Pareto-optimal options.
 
 **🌐 Live and free** — Hosted at `https://vgc-mcp.onrender.com/mcp` (Streamable HTTP; legacy SSE at `/sse`) and kept awake around the clock on the free tier.
 
-[**→ Browse the full 213-tool catalog**](docs/tools-catalog.md)
+[**→ Browse the full 206-tool catalog**](docs/tools-catalog.md)
 
 ---
 
@@ -186,7 +186,7 @@ src/
 │   ├── state/            # BuildStateManager, BattleStateManager
 │   └── ...
 └── vgc_mcp/              # MCP server — auto-discovers tool modules
-    ├── profiles.py       # 34 core tools at /mcp; all 213 at /mcp/full
+    ├── profiles.py       # 34 core tools at /mcp; all 206 at /mcp/full
     └── tools/            # 52 auto-discovered modules
 ```
 
@@ -227,7 +227,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/development.md](docs/developmen
 
 ## Status
 
-- ✅ Live at `https://vgc-mcp.onrender.com/mcp` (core) and `/mcp/full` (all 213 tools)
+- ✅ Live at `https://vgc-mcp.onrender.com/mcp` (core) and `/mcp/full` (all 206 tools)
 - ✅ Kept awake on the free tier by a chained keep-alive workflow
 - ✅ Full offline test suite, strict lint and a ratcheting mypy gate in CI
 - ✅ CI-gated deploys from `main`, followed by exact-revision production MCP verification

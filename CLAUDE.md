@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-VGC MCP Server - A Model Context Protocol server for Pokemon VGC (Video Game Championships) team building. Provides 213 tools for damage calculations, stat analysis, team management, and competitive play optimization. Clients see a 34-tool **core profile** by default (`/mcp`); `/mcp/full` or `VGC_MCP_PROFILE=full` serves all 213. The total is pinned once, as `FULL_TOOL_COUNT` in `src/vgc_mcp/profiles.py`; tests check the registry, README and this file against it, and the CI catalog-drift gate checks `docs/tools-catalog.md`.
+VGC MCP Server - A Model Context Protocol server for Pokemon VGC (Video Game Championships) team building. Provides 206 tools for damage calculations, stat analysis, team management, and competitive play optimization. Clients see a 34-tool **core profile** by default (`/mcp`); `/mcp/full` or `VGC_MCP_PROFILE=full` serves all 206. The total is pinned once, as `FULL_TOOL_COUNT` in `src/vgc_mcp/profiles.py`; tests check the registry, README and this file against it, and the CI catalog-drift gate checks `docs/tools-catalog.md`.
 
 Supports two parallel format systems:
 - **Mainline VGC** (Reg F/G/H/I) — classic EV system, 0-252 per stat / 508 total
@@ -78,7 +78,7 @@ src/
 │   ├── presentation.py   # MCP server `instructions=` block (phone-width output rules)
 │   └── config.py         # Settings (API URLs, VGC defaults, EV limits)
 │
-└── vgc_mcp/              # MCP server (213 tools) — entry: vgc-mcp / vgc-mcp-http
+└── vgc_mcp/              # MCP server (206 tools) — entry: vgc-mcp / vgc-mcp-http
     ├── server.py         # FastMCP setup, registration, core + full servers, HTTP app
     ├── profiles.py       # CORE_TOOLS (served at /mcp) and FULL_TOOL_COUNT
     └── tools/            # Thin register_*_tools(mcp, deps) wrappers

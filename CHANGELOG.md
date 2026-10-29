@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+- The seven deprecated aliases (`outspeed_probability`,
+  `outspeed_probability_stored`, `get_meta_speed_tiers`,
+  `visualize_team_speed_tiers`, `find_survival_evs_meta`, `optimize_bulk_math`,
+  `find_multi_threat_bulk_evs`). The full profile now has 206 tools in 50
+  modules. See the table in `docs/api-reference.md` for the replacements.
+- 54 internal functions nothing called, seven unused settings, dead
+  `if not` checks after `get_pokemon_stats`, and the ignored `num_turns`
+  parameter of `compare_item_damage_output`.
+
+### Fixed
+- `calculate_grassy_terrain_healing` now honours `is_flying` (Tera Flying,
+  Air Balloon) instead of ignoring it.
+
 ### Backlog fixes
 - A misspelled Pokemon, move, item or ability now returns `pokemon_not_found`
   (or `move_not_found`, ...) with a "Did you mean" suggestion instead of

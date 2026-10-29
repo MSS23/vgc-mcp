@@ -25,7 +25,6 @@ from vgc_mcp_core.models.pokemon import (
     Nature,
 )
 from vgc_mcp_core.rules.format_detect import detect_champions_format
-from vgc_mcp_core.tools import damage_handlers
 from vgc_mcp_core.tools.build_helpers import build_pokemon
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 from vgc_mcp_core.utils.normalize import normalize_move
@@ -928,61 +927,3 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
             )
 
         return result
-
-    @mcp.tool(
-        title="Find Survival EVs (Meta Threat)",
-        annotations=ToolAnnotations(
-            readOnlyHint=True,
-            destructiveHint=False,
-            idempotentHint=True,
-            openWorldHint=True,
-        ),
-    )
-    async def find_survival_evs_meta(
-        pokemon_name: Annotated[str, Field(
-            description="Your Pokemon's name",
-            min_length=1,
-        )],
-        nature: Annotated[str, Field(
-            description="Your Pokemon's nature",
-            min_length=1,
-        )],
-        threat_pokemon: Annotated[str, Field(
-            description="Attacking Pokemon's name",
-            min_length=1,
-        )],
-        threat_move: Annotated[str, Field(
-            description="Attacking move name",
-            min_length=1,
-        )],
-        is_physical: Annotated[Optional[bool], Field(
-            description="Override move category detection (True = physical, False = special); auto-detected from the move if omitted",
-        )] = None,
-        survival_threshold: Annotated[float, Field(
-            ge=0, le=100,
-            description="Required survival % (0-100): 100 = survive all rolls (default), 75 = 'most of the time', 50 = 'sometimes'",
-        )] = 100.0,
-    ) -> dict:
-        """Deprecated alias of `find_survival_evs`; will be removed in the next release.
-        Call `find_survival_evs` instead (threat_pokemon -> attacker_name, pokemon_name -> defender_name, threat_move -> move_name, nature -> defender_nature, survival_threshold -> target_survival_chance).
-
-        `is_physical` is accepted but ignored: the canonical calc uses the
-        move's real category. The result is the canonical payload plus this
-        tool's legacy keys (minimum_evs / minimum_sps, impossible, units,
-        format_system, showdown_paste).
-        """
-        result = await damage_handlers.find_survival_evs(
-            pokeapi,
-            smogon,
-            attacker_name=threat_pokemon,
-            defender_name=pokemon_name,
-            move_name=threat_move,
-            defender_nature=nature,
-            target_survival_chance=survival_threshold,
-            # The meta-threat variant never modelled the defender's Intimidate.
-            apply_defender_intimidate=False,
-        )
-        if "error" in result:
-            return result
-        return {**result, **_legacy_survival_keys(result, pokemon_name, nature, threat_pokemon,
-                                                  threat_move, survival_threshold)}

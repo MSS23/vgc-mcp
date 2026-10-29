@@ -46,6 +46,10 @@ class Settings:
     # Smogon rating cutoffs
     SMOGON_RATING_CUTOFFS: list[int] = [0, 1500, 1630, 1760]
 
+    # Mainline EV limits (normalize_evs, validate_ev_spread)
+    MAX_TOTAL_EVS: int = 508
+    MAX_STAT_EVS: int = 252
+
 
 settings = Settings()
 

@@ -41,7 +41,7 @@ def test_server_module_loads_with_tools():
     discovered_modules = discover_register_functions()
     assert REGISTERED_TOOL_MODULE_COUNT == len(discovered_modules)
     assert REGISTERED_TOOL_COUNT == len(tools)
-    assert REGISTERED_TOOL_MODULE_COUNT == 52
+    assert REGISTERED_TOOL_MODULE_COUNT == 50
     assert REGISTERED_TOOL_COUNT == FULL_TOOL_COUNT
     assert len(tools) == len(set(tools)), "tool names must be unique"
 

@@ -1,6 +1,6 @@
 # Tool Catalog
 
-Auto-generated from the running server. **213 tools** organized by module.
+Auto-generated from the running server. **206 tools** organized by module.
 
 ★ marks the **34 core tools** that `/mcp` serves by default. `/mcp/full` (or `VGC_MCP_PROFILE=full`) serves all of them.
 
@@ -176,12 +176,11 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 - **`full_matchup_report`** — Generate a comprehensive matchup report for the current team.
 - **`get_available_threats`** — List all common threat Pokemon available for matchup analysis.
 
-## meta_threat_tools  (4 tools)
+## meta_threat_tools  (3 tools)
 
 - **`analyze_spread_vs_threats`** — Analyze a spread against the top meta threats.
 - **`analyze_stored_pokemon_threats`** — Analyze a stored Pokemon's spread against the top meta threats.
 - **`check_survival_benchmark`** — ⚠️ NARROW USE ONLY. Prefer `calculate_damage_output` for general damage/survival.
-- **`find_survival_evs_meta`** — Deprecated alias of `find_survival_evs`; will be removed in the next release.
 
 ## move_tools  (7 tools)
 
@@ -192,10 +191,6 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 - **`get_pokemon_learnable_moves`** — Get all moves a Pokemon can learn, grouped by learn method.
 - **`suggest_competitive_moves`** — Suggest competitive moves for a Pokemon based on usage data.
 - **`validate_pokemon_moveset`** — Check if all moves are legal for a Pokemon.
-
-## multi_threat_tools  (1 tools)
-
-- **`find_multi_threat_bulk_evs`** — Deprecated alias of `optimize_multi_survival_spread`; will be removed in the next release.
 
 ## multicalc_tools  (3 tools)
 
@@ -264,7 +259,7 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 - **`list_sample_team_archetypes`** — List all available team archetypes in the sample database, with descriptions.
 - **`suggest_team_for_playstyle`** — Suggest a sample team based on your preferred playstyle.
 
-## speed_analysis_tools  (13 tools)
+## speed_analysis_tools  (12 tools)
 
 - **`analyze_paralysis_matchup`** — Analyze what your team outspeeds when opponents are paralyzed.
 - **`analyze_speed_drops`** — Analyze what your team can outspeed after using Icy Wind/Electroweb.
@@ -276,34 +271,26 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 - **`find_speed_benchmark`** — Find what Pokemon/spreads hit a specific speed stat.
 - **`find_speed_evs_to_outspeed`** ★ — Find minimum Speed EVs needed to reach or exceed a target Speed stat.
 - **`get_full_speed_analysis`** — Get comprehensive speed control analysis for the current team.
-- **`get_meta_speed_tiers`** — Deprecated alias of `get_speed_tiers`; will be removed in the next release.
 - **`get_speed_tiers`** — Get speed tier benchmarks for common VGC Pokemon.
 - **`visualize_speed_tiers`** — Visualize speed tiers as a text-based chart.
 
-## speed_probability_tools  (5 tools)
+## speed_probability_tools  (3 tools)
 
 - **`compare_speed_investment`** — Compare different Speed EV investments against a target.
 - **`meta_outspeed_analysis`** — Analyze what percentage of the top meta Pokemon you outspeed.
-- **`outspeed_probability`** — Deprecated alias of `analyze_outspeed_probability`; will be removed in the next release.
-- **`outspeed_probability_stored`** — Deprecated alias of `analyze_outspeed_probability`; will be removed in the next release.
 - **`speed_creep_calculator`** — Calculate how many Speed EVs are needed to outspeed a target.
 
 ## speed_tools  (1 tools)
 
 - **`analyze_outspeed_probability`** ★ — Analyze what percentage of a target Pokemon's common spreads you outspeed.
 
-## speed_viz_tools  (1 tools)
-
-- **`visualize_team_speed_tiers`** — Deprecated alias of `visualize_speed_tiers`; will be removed in the next release.
-
-## spread_tools  (10 tools)
+## spread_tools  (9 tools)
 
 - **`analyze_bulk_diminishing_returns`** — Analyze diminishing returns for HP, Def, and SpD investment.
 - **`analyze_hp_number`** — Analyze HP EV options for optimal item-based recovery or recoil.
 - **`check_spread_efficiency`** — Check an EV spread for efficiency (wasted EVs, optimal distribution).
 - **`design_spread_with_benchmarks`** ★ — Spread that outspeeds a target and survives ONE attack (or maxes offense).
 - **`optimize_bulk`** — Optimize HP/Def/SpD EVs for maximum effective bulk.
-- **`optimize_bulk_math`** — Deprecated alias of `optimize_bulk`; will be removed in the next release.
 - **`optimize_dual_survival_spread`** ★ — Cheapest spread that survives TWO different attackers and hits a speed target.
 - **`optimize_multi_survival_spread`** ★ — Cheapest spread that survives 3-6 different attacks and hits a speed target.
 - **`suggest_nature_optimization`** — Suggest a nature change that achieves the same stats with fewer EVs.

@@ -1,20 +1,20 @@
 # API Reference
 
-Complete tool catalog for the VGC MCP Server with 213 tools for competitive Pokemon team building.
+Complete tool catalog for the VGC MCP Server with 206 tools for competitive Pokemon team building.
 
-## Profiles and deprecated aliases
+## Profiles
 
 `/mcp` serves the 34 core tools (starred in [tools-catalog.md](tools-catalog.md));
-`/mcp/full` serves all 213. These names still work but delegate to the tool
-on the right and will be removed in the next release:
+`/mcp/full` serves all 206. The seven deprecated aliases were removed; call the
+canonical tool instead:
 
-| Deprecated | Use instead |
+| Removed | Use instead |
 |---|---|
 | `outspeed_probability`, `outspeed_probability_stored` | `analyze_outspeed_probability` |
 | `get_meta_speed_tiers` | `get_speed_tiers` |
 | `visualize_team_speed_tiers` | `visualize_speed_tiers` |
 | `find_survival_evs_meta` | `find_survival_evs` |
-| `optimize_bulk_math` | `optimize_bulk` |
+| `optimize_bulk_math` | `optimize_bulk` (`include_analysis=True`) |
 | `find_multi_threat_bulk_evs` | `optimize_multi_survival_spread` |
 
 Calc tools in the core profile also return `headline`, `spreads_used`,
@@ -618,7 +618,7 @@ Valid natures:
 
 ## Complete Tool List
 
-For a complete list of all 213 tools, run in Claude Desktop:
+For a complete list of all 206 tools, run in Claude Desktop:
 
 > "List all your VGC tools"
 

@@ -68,44 +68,6 @@ def tools(mock_pokeapi, mock_smogon, mock_team_manager):
     return {t.name: t for t in mcp._tool_manager._tools.values()}
 
 
-class TestOutspeedProbability:
-    """Tests for outspeed_probability."""
-
-    async def test_basic_calc(self, tools):
-        """Test basic outspeed probability."""
-        fn = tools["outspeed_probability"].fn
-        result = await fn(
-            your_pokemon="entei",
-            your_speed_evs=252,
-            your_nature="jolly",
-            target_pokemon="landorus"
-        )
-        assert "error" not in result
-
-    async def test_invalid_nature(self, tools):
-        """Test with invalid nature."""
-        fn = tools["outspeed_probability"].fn
-        result = await fn(
-            your_pokemon="entei",
-            your_speed_evs=252,
-            your_nature="notanature",
-            target_pokemon="landorus"
-        )
-        assert "error" in result
-
-    async def test_pokemon_not_found(self, tools, mock_pokeapi):
-        """Test when your Pokemon is not found."""
-        mock_pokeapi.get_base_stats = AsyncMock(side_effect=Exception("Not found"))
-        fn = tools["outspeed_probability"].fn
-        result = await fn(
-            your_pokemon="fakemon",
-            your_speed_evs=0,
-            your_nature="jolly",
-            target_pokemon="landorus"
-        )
-        assert "error" in result
-
-
 class TestSpeedCreepCalculator:
     """Tests for speed_creep_calculator."""
 

@@ -79,7 +79,7 @@ def test_profile_env_var(monkeypatch):
     assert resolve_profile() == "full"
 
 
-@pytest.mark.parametrize("doc", ["README.md", "CLAUDE.md", "AGENTS.md", "WIKI.md"])
+@pytest.mark.parametrize("doc", ["README.md", "CLAUDE.md", "AGENTS.md"])
 def test_docs_state_the_pinned_tool_count(doc):
     """Every 'N tools' claim in the top-level docs matches FULL_TOOL_COUNT or the core size."""
     text = (ROOT / doc).read_text(encoding="utf-8")

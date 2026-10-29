@@ -783,24 +783,6 @@ async def suggest_spread(
         return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
 
 
-async def optimize_bulk_math(
-    pokeapi: PokeAPIClient,
-    pokemon_name: str,
-    nature: str,
-    total_bulk_evs: int = 252,
-    defense_weight: float = 0.5,
-    item: Optional[str] = None,
-) -> dict[str, Any]:
-    """Deprecated alias: optimize_bulk with the analysis block included."""
-    result = await optimize_bulk(
-        pokeapi, pokemon_name, nature, total_bulk_evs, defense_bias=defense_weight,
-        item=item, include_analysis=True,
-    )
-    if "error" not in result:
-        result["defense_weight"] = defense_weight
-    return result
-
-
 def _bulk_analysis(base_stats: BaseStats, nature: Nature, total_bulk_evs: int,
                    spread: dict[str, Any], weight: float) -> dict[str, Any]:
     """Final stats, weighted bulk and gain vs single-stat investment for a spread."""

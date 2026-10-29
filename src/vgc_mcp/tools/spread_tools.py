@@ -166,34 +166,6 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         )
 
     @mcp.tool(
-        title="Optimize Bulk (Mathematical)",
-        annotations=ToolAnnotations(
-            readOnlyHint=True,
-            destructiveHint=False,
-            idempotentHint=True,
-            openWorldHint=True,
-        ),
-    )
-    async def optimize_bulk_math(
-        pokemon_name: Annotated[str, Field(description="Pokemon name", min_length=1)],
-        nature: Annotated[str, Field(description="Pokemon's nature (e.g. 'Bold', 'Calm', 'Careful')", min_length=1)],
-        total_bulk_evs: Annotated[int, Field(ge=0, description="Total EVs to distribute; in Champions sessions the default (252) maps to the full 66 Stat Point budget")] = 252,
-        defense_weight: Annotated[float, Field(description="0.0 = all SpD, 0.5 = balanced, 1.0 = all Def")] = 0.5,
-        item: Annotated[Optional[str], Field(description="Held item for HP number optimization (e.g. 'leftovers', 'life-orb')")] = None,
-    ) -> dict:
-        """Deprecated alias of `optimize_bulk`; will be removed in the next release.
-        Call optimize_bulk(..., defense_bias=<defense_weight>, include_analysis=True) instead.
-        """
-        return await spread_handlers.optimize_bulk_math(
-            pokeapi,
-            pokemon_name=pokemon_name,
-            nature=nature,
-            total_bulk_evs=total_bulk_evs,
-            defense_weight=defense_weight,
-            item=item,
-        )
-
-    @mcp.tool(
         title="Analyze Bulk Diminishing Returns",
         annotations=ToolAnnotations(
             readOnlyHint=True,

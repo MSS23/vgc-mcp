@@ -593,7 +593,7 @@ curl https://your-server.com/health
   "status": "healthy",
   "service": "vgc-mcp",
   "tool_modules": 52,
-  "tools": 213,
+  "tools": 206,
   "active_sessions": 0
 }
 ```
