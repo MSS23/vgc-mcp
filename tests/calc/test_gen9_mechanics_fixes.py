@@ -98,6 +98,14 @@ class TestWeatherDefensiveBoosts:
         snow = calculate_damage(attacker, ice_def, cc, DamageModifiers(weather="snow"))
         assert snow.max_damage < clear.max_damage
 
+    def test_hail_does_not_boost_ice_type_def(self):
+        attacker = _make("attacker", ["Fighting"])
+        ice_def = _make("cetitan", ["Ice"])
+        cc = _move("close-combat", "Fighting", MoveCategory.PHYSICAL, 120)
+        clear = calculate_damage(attacker, ice_def, cc, DamageModifiers())
+        hail = calculate_damage(attacker, ice_def, cc, DamageModifiers(weather="hail"))
+        assert hail.max_damage == clear.max_damage
+
 
 class TestSniperCrit:
     def test_sniper_crit_is_stronger_than_normal_crit(self):
