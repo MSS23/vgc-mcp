@@ -86,3 +86,26 @@ def test_docs_state_the_pinned_tool_count(doc):
     counts = {int(n) for n in re.findall(r"\b(\d{2,3})(?:\+)?(?:-tool| tools| MCP tools)\b", text)}
     allowed = {FULL_TOOL_COUNT, len(CORE_TOOLS)}
     assert counts <= allowed, f"{doc} states tool counts {counts - allowed}"
+
+
+def test_smithery_listing_matches_the_served_profile():
+    import asyncio
+
+    from vgc_mcp.server import mcp
+
+    text = (ROOT / "smithery.yaml").read_text(encoding="utf-8")
+    count = int(re.search(r"^  count: (\d+)$", text, re.M).group(1))
+    total = int(re.search(r"^  total_at_full_endpoint: (\d+)$", text, re.M).group(1))
+    tools_block = text.split("
+tools:
+", 1)[1].split("
+prompts:
+", 1)[0]
+    highlights = set(re.findall(r"^    - ([a-z_]+)$", tools_block, re.M))
+    prompt_ids = set(re.findall(r"^  - id: ([a-z_]+)$", text, re.M))
+
+    assert count == len(CORE_TOOLS)
+    assert total == FULL_TOOL_COUNT
+    assert highlights and highlights <= CORE_TOOLS
+    prompts = {p.name for p in asyncio.run(mcp.list_prompts())}
+    assert prompt_ids and prompt_ids <= prompts
