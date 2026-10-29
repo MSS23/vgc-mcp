@@ -1,6 +1,6 @@
 # Verified preparation over MCP
 
-The upgrade adds five MCP tools, bringing the server to 213 tools in 52 modules.
+The preparation workflow adds five MCP tools (`prepare_team`, `verify_spread_benchmarks`, `recommend_verified_spreads`, `import_reference_team`, `calculate_move_outcomes`).
 They work through the existing Claude/MCP connection and both stdio and HTTP
 transports. No frontend or replay-analysis upgrade is part of this change.
 

@@ -480,40 +480,6 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
         )
 
     @mcp.tool(
-        title="Get Meta Speed Tiers",
-        annotations=ToolAnnotations(
-            readOnlyHint=True,
-            destructiveHint=False,
-            idempotentHint=True,
-            openWorldHint=True,
-        ),
-    )
-    async def get_meta_speed_tiers(
-        format_type: Annotated[str, Field(
-            description="'general', 'trick_room' (slowest first), or 'tailwind' (adds doubled max speeds)",
-        )] = "general",
-        tier: Annotated[Optional[str], Field(
-            description="Optional filter: 'fast' (base 120+), 'medium' (base 80+), or 'slow'",
-        )] = None,
-        use_competitive_data: Annotated[bool, Field(
-            description="Use Smogon competitive spreads; if False (or Smogon is unavailable), uses theoretical meta speed tiers",
-        )] = True
-    ) -> dict:
-        """Deprecated alias of `get_speed_tiers`; will be removed in the next release.
-        Call `get_speed_tiers(investment="meta", format_type=..., min_base_speed=..., max_base_speed=...)` instead.
-
-        Returns speed tier information for meta Pokemon based on real
-        competitive usage data, with theoretical max/min speeds for reference.
-        """
-        return await speed_handlers.meta_speed_tiers(
-            pokeapi,
-            smogon_client,
-            format_type=format_type,
-            tier=tier,
-            use_competitive_data=use_competitive_data,
-        )
-
-    @mcp.tool(
         title="Find Speed Benchmark",
         annotations=ToolAnnotations(
             readOnlyHint=True,

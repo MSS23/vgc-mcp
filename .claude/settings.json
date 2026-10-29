@@ -18,6 +18,32 @@
           }
         ]
       }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git commit*)",
+            "command": "python scripts/hooks/check_docs.py --staged >&2 || exit 2",
+            "statusMessage": "Checking docs are up to date",
+            "timeout": 120
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python scripts/hooks/check_docs.py --stop",
+            "statusMessage": "Checking docs are up to date",
+            "timeout": 120
+          }
+        ]
+      }
     ]
   },
   "extraKnownMarketplaces": {

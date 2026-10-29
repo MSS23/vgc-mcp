@@ -3,7 +3,6 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Optional
 
-from ..config import EV_BREAKPOINTS_LV50
 from ..models.pokemon import Nature, PokemonBuild
 from .stats import calculate_all_stats, calculate_speed, find_speed_evs
 
@@ -127,40 +126,6 @@ def find_speed_evs_to_outspeed(
         Minimum EVs needed, or None if impossible
     """
     return find_speed_evs(base_speed, target_speed + by, nature, iv, level)
-
-
-def find_speed_evs_to_underspeed(
-    base_speed: int,
-    target_speed: int,
-    nature: Nature = Nature.SERIOUS,
-    iv: int = 31,
-    level: int = 50,
-) -> Optional[int]:
-    """
-    Find maximum EVs while staying slower than target (for Trick Room).
-
-    Args:
-        base_speed: Your Pokemon's base Speed
-        target_speed: Target Speed stat to stay under
-        nature: Your Pokemon's nature
-        iv: Speed IV
-        level: Pokemon level
-
-    Returns:
-        Maximum EVs while staying slower, or None if impossible
-    """
-    # Start from 252 and work down (level 50 breakpoints: 252, 244, 236...)
-    for ev in reversed(EV_BREAKPOINTS_LV50):
-        speed = calculate_speed(base_speed, iv, ev, level, nature)
-        if speed < target_speed:
-            return ev
-
-    # Even 0 EVs is too fast, try 0 IV
-    speed_0iv = calculate_speed(base_speed, 0, 0, level, nature)
-    if speed_0iv < target_speed:
-        return 0  # Need to use 0 IV
-
-    return None  # Cannot underspeed
 
 
 # Common speed benchmarks for VGC - only base speeds stored, calculated dynamically

@@ -23,20 +23,6 @@ SPREAD_TARGETS = [
 ]
 
 
-class SecondaryEffect(str, Enum):
-    """Possible secondary effects of moves."""
-    BURN = "burn"
-    FREEZE = "freeze"
-    PARALYSIS = "paralysis"
-    POISON = "poison"
-    BADLY_POISON = "badly_poison"
-    SLEEP = "sleep"
-    CONFUSION = "confusion"
-    FLINCH = "flinch"
-    STAT_DROP = "stat_drop"
-    STAT_BOOST = "stat_boost"
-
-
 class Move(BaseModel):
     """Pokemon move data."""
     name: str
@@ -285,52 +271,6 @@ MOVE_SECONDARY_EFFECTS: dict[str, tuple[str, int]] = {
     "liquidation": ("stat_drop", 20),  # -1 Def
     "seed-flare": ("stat_drop", 40),  # -2 SpD
 }
-
-
-def get_move_secondary_effect(move_name: str) -> tuple[str, int] | None:
-    """
-    Get the secondary effect info for a move.
-
-    Args:
-        move_name: Move name (case insensitive, hyphenated)
-
-    Returns:
-        Tuple of (effect_type, chance) or None if no effect
-    """
-    normalized = move_name.lower().replace(" ", "-")
-    return MOVE_SECONDARY_EFFECTS.get(normalized)
-
-
-def format_secondary_effect(effect: str, chance: int) -> str:
-    """
-    Format a secondary effect for display.
-
-    Args:
-        effect: Effect type (burn, paralysis, etc.)
-        chance: Percentage chance (0-100)
-
-    Returns:
-        Human-readable effect description
-    """
-    effect_descriptions = {
-        "burn": "Burns target",
-        "freeze": "May freeze target",
-        "paralysis": "Paralyzes target",
-        "poison": "Poisons target",
-        "badly_poison": "Badly poisons target",
-        "sleep": "Puts target to sleep",
-        "confusion": "Confuses target",
-        "flinch": "May cause flinching",
-        "stat_drop": "Lowers target's stats",
-        "stat_boost": "Raises user's stats",
-    }
-
-    desc = effect_descriptions.get(effect, effect.replace("_", " ").title())
-
-    if chance == 100:
-        return f"{desc} (guaranteed)"
-    else:
-        return f"{desc} ({chance}% chance)"
 
 
 # Always-crit moves (single hit but guaranteed critical)

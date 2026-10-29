@@ -117,12 +117,6 @@ def format_transparent_output(
         return plus_stat
 
     # Get stat abbreviations
-    def get_stat_abbrev(stat_name: str) -> str:
-        abbrevs = {
-            "hp": "HP", "attack": "Atk", "defense": "Def",
-            "special_attack": "SpA", "special_defense": "SpD", "speed": "Spe"
-        }
-        return abbrevs.get(stat_name, stat_name.title())
 
     lines = []
     lines.append("## Damage Calculation\n")

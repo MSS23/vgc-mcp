@@ -27,12 +27,6 @@ RUINOUS_POKEMON = {
 }
 
 
-def get_ruinous_info(pokemon_name: str) -> Optional[dict[str, Any]]:
-    """Get ruinous ability info for a Pokemon if applicable."""
-    normalized = pokemon_name.lower().replace(" ", "-").replace("_", "-")
-    return RUINOUS_POKEMON.get(normalized)
-
-
 @dataclass
 class ThreatDamageResult:
     """Result of threat analysis for a single matchup."""
@@ -405,18 +399,3 @@ def generate_spread_suggestions(
 
     return suggestions
 
-
-def create_empty_threat_report(pokemon_name: str, spread_summary: str, reason: str) -> MetaThreatReport:
-    """Create an empty threat report when analysis can't be completed."""
-    return MetaThreatReport(
-        pokemon_name=pokemon_name,
-        spread_summary=spread_summary,
-        threats_analyzed=0,
-        favorable_matchups=[],
-        unfavorable_matchups=[],
-        even_matchups=[],
-        ohko_threats=[],
-        ohko_targets=[],
-        spread_weaknesses=[reason],
-        improvement_suggestions=[]
-    )

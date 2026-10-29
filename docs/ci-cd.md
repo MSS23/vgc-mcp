@@ -13,11 +13,13 @@ git push
    ▼
 ┌─────────────────────────────────────────────────────────┐
 │  CI  (.github/workflows/ci.yml)                         │
-│  5 jobs, all in parallel:                               │
+│  7 jobs, all in parallel:                               │
 │    • test (Python 3.11 / 3.12 / 3.13) + ruff            │
 │    • typecheck (mypy strict, ratcheting)                │
 │    • catalog-drift                                      │
+│    • docs-freshness (PRs only)                          │
 │    • validate-regulations                               │
+│    • damage-oracle                                      │
 │    • docker                                             │
 └─────────────────────────────────────────────────────────┘
    │  all green, branch == main
@@ -94,6 +96,17 @@ This buys enforcement today without blocking on a 1300-line annotation sweep.
 > **Why not just fix all 1301?** Because ~494 are `type-arg` (a bare `dict`
 > where `dict[str, Any]` was meant) with no behavioural bug behind them.
 > Enforcement now beats a perfect number later.
+
+### `docs-freshness` — the rest of the docs can't rot either
+
+Runs `scripts/hooks/check_docs.py --base origin/<base>` on every PR. It fails
+when behaviour under `src/` changed without a `CHANGELOG.md` line (skip with
+`[no changelog]` in the PR title), when the tools catalog is stale, when a
+Markdown link points at a missing file, or when README / CLAUDE.md / AGENTS.md /
+WIKI.md state the wrong tool count. It also prints the docs that usually
+describe the files the PR touched. The same script runs before each local
+commit (`git config core.hooksPath .githooks`) and as Claude Code's Stop and
+pre-commit hooks (`.claude/settings.json`), so problems surface before CI.
 
 ### 3. `catalog-drift` — docs can't rot
 
@@ -181,11 +194,13 @@ that just passed CI, then smoke-tests the real MCP endpoint. **A green CI run
 tells you nothing about what Render is currently serving** — this is the job
 that closes that gap.
 
-Run it manually any time (it's `workflow_dispatch`-enabled), or locally:
+It also runs nightly at 03:17 UTC against whatever is live, so an upstream
+change (PokeAPI, Smogon) that breaks real tool calls shows up even when nobody
+pushes. Run it manually any time (it's `workflow_dispatch`-enabled), or locally:
 
 ```bash
 python scripts/verify_production.py
-# Production verified: revision=039b64b… tools=208 url=https://vgc-mcp.onrender.com
+# Production verified: revision=<sha> profile=core tools=<core> tools_total=<full> url=https://vgc-mcp.onrender.com
 ```
 
 ### `keep-alive.yml` — staying awake for free
@@ -227,11 +242,12 @@ before it reaches `main`, and therefore before Render sees it.
 Everything CI does, minus the Docker job, in the order it'd fail:
 
 ```bash
-python -m pytest tests/ -q                      # 1494 tests, ~45s
+python -m pytest tests/ -q                      # under a minute
 python -m ruff check src/ tests/ scripts/
 python -m mypy src/vgc_mcp_core src/vgc_mcp     # count must not exceed baseline
 python scripts/build_catalog.py && git diff --exit-code docs/tools-catalog.md
 python scripts/validate_regulations.py
+python scripts/hooks/check_docs.py --base origin/main
 docker build -t vgc-mcp:ci .                    # requires Docker
 ```
 
@@ -242,10 +258,11 @@ docker build -t vgc-mcp:ci .                    # requires Docker
 | Symptom | Cause | Fix |
 |---|---|---|
 | `docs/tools-catalog.md is stale` | Added a tool, didn't regenerate | `python scripts/build_catalog.py`, commit |
-| `mypy errors increased: N > 1301` | New type debt | Fix the new findings, or justify raising the baseline |
+| `mypy errors increased: N > baseline` | New type debt | Fix the new findings, or justify raising the baseline |
 | mypy notice: count dropped | You cleaned some up | Lower `MYPY_BASELINE` in `ci.yml` |
 | `container failed /health within 30s` | Image builds but won't serve | Read the dumped `docker logs`; check `[remote]` extra installs |
 | `validate_regulations` fails | `regulations.json` ↔ router alias drift | Re-sync the alias map |
+| `Docs are stale` / `CHANGELOG.md not updated` | Code changed without its docs | Do what the message lists, or `[no changelog]` in the PR title for a pure refactor |
 | CI green, `deploy-verify` fails | Render didn't deploy, or deployed a different SHA | Check the Render dashboard; confirm `autoDeployTrigger: checksPass` |
 | Tests fail only on 3.11 | Version-specific syntax | Check f-string nesting — this has bitten before |
 | Connector handshake times out | Free dyno slept | Expected on free tier; see keep-alive caveat above |
@@ -254,8 +271,8 @@ docker build -t vgc-mcp:ci .                    # requires Docker
 
 ## Adding a new gate
 
-Add a job to `ci.yml` — the five existing ones are independent and parallel, so
-a sixth costs wall-clock time only if it's slower than the slowest current job.
+Add a job to `ci.yml` — the existing ones are independent and parallel, so
+another one costs wall-clock time only if it's slower than the slowest current job.
 
 Two rules worth keeping:
 

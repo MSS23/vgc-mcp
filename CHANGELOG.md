@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+- The seven deprecated aliases (`outspeed_probability`,
+  `outspeed_probability_stored`, `get_meta_speed_tiers`,
+  `visualize_team_speed_tiers`, `find_survival_evs_meta`, `optimize_bulk_math`,
+  `find_multi_threat_bulk_evs`). The full profile now has 206 tools in 50
+  modules. See the table in `docs/api-reference.md` for the replacements.
+- 54 internal functions nothing called, seven unused settings, dead
+  `if not` checks after `get_pokemon_stats`, and the ignored `num_turns`
+  parameter of `compare_item_damage_output`.
+
+### Docs stay current
+- `scripts/hooks/check_docs.py` blocks commits and PRs that change behaviour
+  without a changelog line, leave the tools catalog stale, break a Markdown link
+  or misstate the tool count, and lists the docs that cover the touched code.
+  It runs as Claude Code Stop and pre-commit hooks, as `.githooks/pre-commit`
+  (`git config core.hooksPath .githooks`) and in CI (`docs-freshness`).
+- README, CLAUDE.md and WIKI.md open with the project's objective; stale
+  numbers in `docs/ci-cd.md` replaced; the README test badge is the live CI badge.
+
+### Fixed
+- `calculate_grassy_terrain_healing` now honours `is_flying` (Tera Flying,
+  Air Balloon) instead of ignoring it.
+
 ### Backlog fixes
 - A misspelled Pokemon, move, item or ability now returns `pokemon_not_found`
   (or `move_not_found`, ...) with a "Did you mean" suggestion instead of

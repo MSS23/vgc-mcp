@@ -3,8 +3,6 @@
 from dataclasses import dataclass
 from typing import Any, Optional
 
-from ..utils.normalize import normalize_item
-
 # Complete Gen 9 Type Chart
 # Source: Pokemon Showdown (https://github.com/smogon/pokemon-showdown)
 # Verified against pokemondb.net and tested in tests/test_damage.py
@@ -130,12 +128,6 @@ def get_type_effectiveness(
 def is_super_effective(attack_type: str, defender_types: list[str]) -> bool:
     """Check if attack is super effective (2x or 4x)."""
     return get_type_effectiveness(attack_type, defender_types) >= 2.0
-
-
-def is_not_very_effective(attack_type: str, defender_types: list[str]) -> bool:
-    """Check if attack is not very effective (0.5x or 0.25x)."""
-    eff = get_type_effectiveness(attack_type, defender_types)
-    return 0 < eff < 1.0
 
 
 def is_immune(attack_type: str, defender_types: list[str]) -> bool:
@@ -322,26 +314,6 @@ class DamageModifiers:
 
         return 1.0
 
-    def get_terrain_modifier(self, move_type: str, is_physical: bool) -> float:
-        """Get terrain damage modifier."""
-        if not self.attacker_grounded:
-            return 1.0
-
-        move_type = move_type.capitalize()
-
-        if self.terrain == "electric" and move_type == "Electric":
-            return 1.3
-        elif self.terrain == "grassy" and move_type == "Grass":
-            return 1.3
-        elif self.terrain == "psychic" and move_type == "Psychic":
-            return 1.3
-        elif self.terrain == "misty" and move_type == "Dragon":
-            # Misty terrain halves Dragon damage if defender is grounded
-            if self.defender_grounded:
-                return 0.5
-
-        return 1.0
-
     def get_screen_modifier(self, is_physical: bool) -> float:
         """Get screen damage reduction modifier."""
         if self.is_critical:
@@ -357,84 +329,6 @@ class DamageModifiers:
             screen_mod = 2/3 if self.is_doubles else 0.5
 
         return screen_mod
-
-    def get_item_modifier(self, move_type: str, is_physical: bool) -> float:
-        """Get item damage modifier."""
-        if not self.attacker_item:
-            return 1.0
-
-        item = normalize_item(self.attacker_item)
-        move_type = move_type.capitalize()
-
-        # Life Orb (applies to damage, not stat)
-        if item == "life-orb":
-            return 1.3
-
-        # Expert Belt (only if super effective - caller must check)
-        # Handled separately in damage calc
-
-        # Type-boosting items (1.2x)
-        type_items = {
-            "charcoal": "Fire",
-            "mystic-water": "Water",
-            "magnet": "Electric",
-            "miracle-seed": "Grass",
-            "never-melt-ice": "Ice",
-            "black-belt": "Fighting",
-            "poison-barb": "Poison",
-            "soft-sand": "Ground",
-            "sharp-beak": "Flying",
-            "twisted-spoon": "Psychic",
-            "silver-powder": "Bug",
-            "hard-stone": "Rock",
-            "spell-tag": "Ghost",
-            "dragon-fang": "Dragon",
-            "black-glasses": "Dark",
-            "metal-coat": "Steel",
-            "silk-scarf": "Normal",
-            "fairy-feather": "Fairy",
-            # Ogerpon masks (1.2x type boost + Embody Aspect)
-            "hearthflame-mask": "Fire",
-            "wellspring-mask": "Water",
-            "cornerstone-mask": "Rock",
-        }
-
-        if item in type_items and type_items[item] == move_type:
-            return 1.2
-
-        # Plates (1.2x) - same as type items basically
-        plates = {
-            "flame-plate": "Fire",
-            "splash-plate": "Water",
-            "zap-plate": "Electric",
-            "meadow-plate": "Grass",
-            "icicle-plate": "Ice",
-            "fist-plate": "Fighting",
-            "toxic-plate": "Poison",
-            "earth-plate": "Ground",
-            "sky-plate": "Flying",
-            "mind-plate": "Psychic",
-            "insect-plate": "Bug",
-            "stone-plate": "Rock",
-            "spooky-plate": "Ghost",
-            "draco-plate": "Dragon",
-            "dread-plate": "Dark",
-            "iron-plate": "Steel",
-            "pixie-plate": "Fairy",
-        }
-
-        if item in plates and plates[item] == move_type:
-            return 1.2
-
-        return 1.0
-
-    def get_stat_stage_multiplier(self, stage: int) -> float:
-        """Convert stat stage (-6 to +6) to multiplier."""
-        if stage >= 0:
-            return (2 + stage) / 2
-        else:
-            return 2 / (2 - stage)
-
 
 # Ability effects on damage
 OFFENSIVE_ABILITIES: dict[str, dict[str, Any]] = {

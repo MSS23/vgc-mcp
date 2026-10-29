@@ -452,25 +452,6 @@ def get_teams_by_archetype(archetype: str) -> list[SampleTeam]:
     return [t for t in ALL_SAMPLE_TEAMS if t.archetype.lower() == archetype_lower]
 
 
-def get_teams_with_pokemon(pokemon_name: str) -> list[SampleTeam]:
-    """Get all teams containing a specific Pokemon."""
-    pokemon_lower = pokemon_name.lower().replace(" ", "-")
-    return [
-        t for t in ALL_SAMPLE_TEAMS
-        if any(pokemon_lower in p.lower().replace(" ", "-") for p in t.pokemon)
-    ]
-
-
-def get_teams_by_regulation(regulation: str) -> list[SampleTeam]:
-    """Get all teams for a specific regulation."""
-    return [t for t in ALL_SAMPLE_TEAMS if t.regulation.upper() == regulation.upper()]
-
-
-def get_teams_by_difficulty(difficulty: str) -> list[SampleTeam]:
-    """Get teams by difficulty level."""
-    return [t for t in ALL_SAMPLE_TEAMS if t.difficulty.lower() == difficulty.lower()]
-
-
 def get_all_archetypes() -> list[str]:
     """Get list of all available archetypes."""
     return list(set(t.archetype for t in ALL_SAMPLE_TEAMS))

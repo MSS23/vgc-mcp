@@ -246,19 +246,6 @@ def team_empty_error() -> dict:
     )
 
 
-def team_full_error(current_pokemon: list[str]) -> dict:
-    """Create a team full error with current team info."""
-    return error_response(
-        ErrorCodes.TEAM_FULL,
-        "Team is full (6 Pokemon maximum)",
-        suggestions=[
-            "Use 'remove_from_team' to remove a Pokemon first",
-            "Use 'swap_team_pokemon' to replace a specific slot",
-        ],
-        current_team=current_pokemon,
-    )
-
-
 def api_error(
     api_name: str,
     original_error: Optional[str] = None,

@@ -55,7 +55,6 @@ def test_user_text_never_points_at_a_deprecated_alias():
     aliases = {
         t.name for t in tools if (t.description or "").lstrip().startswith("Deprecated alias")
     }
-    assert aliases, "expected the deprecated aliases to be registered"
     offenders = []
     for path in SRC.rglob("*.py"):
         for lineno, value in _user_strings(path):

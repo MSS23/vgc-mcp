@@ -253,59 +253,6 @@ class BuildStateManager:
         self._active_build_id = build_id
         return True, f"Updated {', '.join(changes.keys())}"
 
-    def update_build_by_name(self, pokemon_name: str, changes: dict) -> tuple[bool, str, Optional[str]]:
-        """Update a build by Pokemon name.
-
-        Args:
-            pokemon_name: Pokemon name to find
-            changes: Dict of changes to apply
-
-        Returns:
-            Tuple of (success, message, build_id)
-        """
-        build = self.get_build_by_name(pokemon_name)
-        if not build:
-            return False, f"No build found for '{pokemon_name}'", None
-
-        build_id = build["build_id"]
-        success, message = self.update_build(build_id, changes)
-        return success, message, build_id
-
-    def sync_from_ui(self, build_id: str, ui_state: dict) -> tuple[bool, str]:
-        """Sync UI state back to server.
-
-        Called when user makes changes via UI sliders/dropdowns and then
-        sends a chat message. The UI state is captured and merged.
-
-        Args:
-            build_id: The build to sync
-            ui_state: Serialized state from UI (evs, nature, moves, etc.)
-
-        Returns:
-            Tuple of (success, message)
-        """
-        if build_id not in self._builds:
-            return False, f"Build {build_id} not found"
-
-        build = self._builds[build_id]
-
-        # Merge UI state - UI takes precedence for these fields
-        if "evs" in ui_state:
-            build["evs"].update(ui_state["evs"])
-        if "nature" in ui_state:
-            build["nature"] = ui_state["nature"]
-        if "ability" in ui_state:
-            build["ability"] = ui_state["ability"]
-        if "item" in ui_state:
-            build["item"] = ui_state["item"]
-        if "tera_type" in ui_state:
-            build["tera_type"] = ui_state["tera_type"]
-        if "moves" in ui_state:
-            build["moves"] = ui_state["moves"][:4]
-
-        self._active_build_id = build_id
-        return True, "Synced UI state"
-
     def change_move(self, build_id: str, old_move: str, new_move: str) -> tuple[bool, str]:
         """Change a specific move on a build.
 
@@ -347,34 +294,6 @@ class BuildStateManager:
             }
             for b in self._builds.values()
         ]
-
-    def delete_build(self, build_id: str) -> bool:
-        """Delete a build by ID.
-
-        Args:
-            build_id: The build to delete
-
-        Returns:
-            True if deleted, False if not found
-        """
-        if build_id not in self._builds:
-            return False
-
-        build = self._builds[build_id]
-        pokemon_name = build["pokemon"].lower()
-
-        # Remove from name mapping
-        if self._name_to_id.get(pokemon_name) == build_id:
-            del self._name_to_id[pokemon_name]
-
-        # Remove build
-        del self._builds[build_id]
-
-        # Update active if needed
-        if self._active_build_id == build_id:
-            self._active_build_id = next(iter(self._builds), None)
-
-        return True
 
     @property
     def active_pokemon_name(self) -> Optional[str]:

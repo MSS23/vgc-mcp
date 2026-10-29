@@ -23,7 +23,7 @@ from vgc_mcp_core.formats.showdown import (
     parse_showdown_team,
     parsed_to_pokemon_build,
 )
-from vgc_mcp_core.models.move import Move, MoveCategory
+from vgc_mcp_core.models.move import MoveCategory
 from vgc_mcp_core.models.pokemon import EVSpread, Nature, PokemonBuild
 from vgc_mcp_core.tools.build_helpers import build_pokemon
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
@@ -46,120 +46,6 @@ PRIORITY_MOVES = {
 PRIORITY_BLOCKING_ABILITIES = {
     "armor-tail", "queenly-majesty", "dazzling"
 }
-
-
-def _parse_nature(nature_str: str) -> Nature:
-    """Convert nature string to Nature enum."""
-    try:
-        return Nature[nature_str.upper()]
-    except KeyError:
-        return Nature.SERIOUS
-
-
-def _create_move(move_name: str, pokemon_types: list[str], is_physical: bool) -> Move:
-    """Create a Move object from a move name."""
-    # Simplified move creation - estimate power based on common moves
-    move_lower = move_name.lower().replace(" ", "-")
-
-    # Common move power mappings
-    move_powers = {
-        # Physical moves
-        "surging-strikes": 25,  # Multi-hit
-        "wicked-blow": 75,
-        "close-combat": 120,
-        "collision-course": 100,
-        "flare-blitz": 120,
-        "stone-edge": 100,
-        "earthquake": 100,
-        "earth-power": 90,
-        "wood-hammer": 120,
-        "grassy-glide": 55,
-        "knock-off": 65,
-        "u-turn": 70,
-        "aqua-jet": 40,
-        "ice-shard": 40,
-        "fake-out": 40,
-        "extreme-speed": 80,
-        "glacial-lance": 120,
-        "sacred-sword": 90,
-        "ice-spinner": 80,
-        "outrage": 120,
-        "high-horsepower": 95,
-        "crunch": 80,
-        "wild-charge": 90,
-        "drain-punch": 75,
-        "heavy-slam": 0,  # Variable
-        "sucker-punch": 70,
-        # Special moves
-        "moonblast": 95,
-        "shadow-ball": 80,
-        "thunderbolt": 90,
-        "thunder": 110,
-        "mystical-fire": 75,
-        "dazzling-gleam": 80,
-        "draco-meteor": 130,
-        "electro-drift": 100,
-        "volt-switch": 70,
-        "water-spout": 150,
-        "origin-pulse": 110,
-        "ice-beam": 90,
-        "heat-wave": 95,
-        "dark-pulse": 80,
-        "overheat": 130,
-        "psychic": 90,
-        "sludge-bomb": 90,
-        "hyper-voice": 90,
-        "bleakwind-storm": 100,
-        "pollen-puff": 90,
-        "tera-blast": 80,
-    }
-
-    # Determine category and type (simplified)
-    power = move_powers.get(move_lower, 80)
-
-    # Guess move type from name
-    type_keywords = {
-        "fire": ["flare", "fire", "heat", "mystical-fire", "overheat"],
-        "water": ["water", "aqua", "surging", "origin-pulse"],
-        "grass": ["grass", "wood", "grassy"],
-        "electric": ["thunder", "electro", "volt", "wild-charge"],
-        "ice": ["ice", "glacial", "blizzard"],
-        "fighting": ["close-combat", "sacred-sword", "collision", "drain-punch"],
-        "dark": ["wicked", "knock", "crunch", "dark-pulse", "sucker"],
-        "psychic": ["psychic", "psych"],
-        "ghost": ["shadow"],
-        "fairy": ["moonblast", "dazzling", "play"],
-        "ground": ["earthquake", "earth", "high-horsepower"],
-        "rock": ["stone", "rock"],
-        "steel": ["iron", "heavy-slam"],
-        "poison": ["sludge", "poison"],
-        "flying": ["bleakwind", "hurricane"],
-        "dragon": ["draco", "outrage", "dragon"],
-        "bug": ["u-turn", "pollen"],
-        "normal": ["hyper-voice", "extreme-speed", "fake-out", "tera-blast"],
-    }
-
-    move_type = "Normal"
-    for ptype, keywords in type_keywords.items():
-        if any(kw in move_lower for kw in keywords):
-            move_type = ptype.capitalize()
-            break
-
-    # Determine category based on move name patterns
-    physical_keywords = ["strike", "blow", "combat", "collision", "blitz", "edge",
-                        "quake", "hammer", "glide", "knock", "turn", "jet", "shard",
-                        "lance", "sword", "spinner", "crunch", "charge", "punch", "slam",
-                        "outrage", "horsepower", "sucker"]
-    is_physical_move = any(kw in move_lower for kw in physical_keywords)
-    category = MoveCategory.PHYSICAL if is_physical_move else MoveCategory.SPECIAL
-
-    return Move(
-        name=move_name,
-        type=move_type,
-        category=category,
-        power=power,
-        accuracy=100
-    )
 
 
 async def _parsed_to_build(parsed_mon, pokeapi: PokeAPIClient) -> Optional[PokemonBuild]:

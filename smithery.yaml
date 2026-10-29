@@ -4,7 +4,7 @@ name: vgc-mcp
 displayName: VGC Pokémon Coach
 description: >
   Pokémon VGC team-building and live battle coaching over MCP, for mainline
-  VGC and Pokémon Champions. 34 core tools by default (all 213 at /mcp/full)
+  VGC and Pokémon Champions. 34 core tools by default (all 206 at /mcp/full)
   for Showdown-accurate damage calcs, multi-threat spread optimization,
   replay analysis and a turn-by-turn battle copilot. Plug into Claude,
   ChatGPT, or any MCP client.
@@ -46,7 +46,7 @@ local:
 # Tools served at the remote URL above (the core profile) + highlights.
 tools:
   count: 34
-  total_at_full_endpoint: 213
+  total_at_full_endpoint: 206
   highlights:
     - calculate_damage_output
     - calc_damage_vs_smogon_sets

@@ -49,13 +49,6 @@ def _verdict(min_pct: float, max_pct: float) -> str:
     return "4HKO+"
 
 
-def _mods_for(spread: dict, item_field: str, ability_field: str) -> DamageModifiers:
-    return DamageModifiers.from_scenario(
-        attacker_item=spread.get(item_field),
-        attacker_ability=spread.get(ability_field),
-    )
-
-
 async def _build_from_overrides(
     pokeapi: PokeAPIClient,
     name: str,

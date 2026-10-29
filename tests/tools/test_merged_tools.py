@@ -11,7 +11,6 @@ from vgc_mcp.tools.meta_threat_tools import register_meta_threat_tools
 from vgc_mcp.tools.speed_analysis_tools import register_speed_analysis_tools
 from vgc_mcp.tools.speed_probability_tools import register_speed_probability_tools
 from vgc_mcp.tools.speed_tools import register_speed_tools
-from vgc_mcp.tools.speed_viz_tools import register_speed_viz_tools
 from vgc_mcp_core.models.move import Move, MoveCategory
 from vgc_mcp_core.models.pokemon import BaseStats, EVSpread, Nature, PokemonBuild
 from vgc_mcp_core.rules.regulation_loader import get_regulation_config
@@ -80,59 +79,8 @@ def tools(pokeapi, smogon):
     register_speed_tools(mcp, pokeapi, smogon)
     register_speed_probability_tools(mcp, smogon, pokeapi, team_manager)
     register_speed_analysis_tools(mcp, pokeapi, team_manager, smogon)
-    register_speed_viz_tools(mcp, pokeapi, smogon)
     register_bulk_calc_tools(mcp, pokeapi, smogon)
     return {name: t.fn for name, t in mcp._tool_manager._tools.items()}
-
-
-def test_alias_docstrings_point_at_canonical(tools):
-    for alias, canonical in ALIASES.items():
-        first = tools[alias].__doc__.strip().splitlines()[0]
-        assert first == f"Deprecated alias of `{canonical}`; will be removed in the next release."
-
-
-async def test_outspeed_probability_alias(tools):
-    canon = await tools["analyze_outspeed_probability"](
-        pokemon_name="garchomp", target_pokemon="landorus", nature="jolly", speed_evs=252)
-    alias = await tools["outspeed_probability"](
-        your_pokemon="garchomp", your_speed_evs=252, your_nature="jolly", target_pokemon="landorus")
-    assert alias["your_speed"] == canon["your_speed"] == 169
-    assert alias["outspeed_probability"] == canon["outspeed_percent"]
-    assert alias["speed_tie_probability"] == canon["tie_percent"]
-
-
-async def test_outspeed_probability_stored_alias(tools):
-    canon = await tools["analyze_outspeed_probability"](
-        pokemon_name="garchomp", target_pokemon="landorus", speed_stat=169)
-    alias = await tools["outspeed_probability_stored"](target_pokemon="landorus")
-    assert alias["your_speed"] == 169
-    assert alias["outspeed_probability"] == canon["outspeed_percent"]
-
-
-async def test_get_meta_speed_tiers_alias(tools, smogon):
-    smogon.get_usage_stats.side_effect = RuntimeError("offline")  # use the theoretical meta tiers
-    canon = await tools["get_speed_tiers"](investment="meta", min_base_speed=0, max_base_speed=999)
-    alias = await tools["get_meta_speed_tiers"]()
-    assert alias["speed_tiers"] and alias["speed_tiers"] == canon["speed_tiers"]
-
-
-async def test_visualize_team_speed_tiers_alias(tools):
-    team = [{"name": "garchomp", "nature": "jolly", "evs": {"speed": 252}}]
-    canon = await tools["visualize_speed_tiers"](pokemon_speeds=team, include_tailwind=True)
-    alias = await tools["visualize_team_speed_tiers"](team_pokemon=team)
-    assert alias["team_speeds"][0]["speed"] == 169
-    assert alias["markdown_summary"] == canon["visualization"]
-
-
-async def test_find_survival_evs_meta_alias(tools):
-    canon = await tools["find_survival_evs"](
-        attacker_name="flutter-mane", defender_name="garchomp", move_name="moonblast",
-        defender_nature="careful", target_survival_chance=100, apply_defender_intimidate=False)
-    alias = await tools["find_survival_evs_meta"](
-        pokemon_name="garchomp", nature="careful", threat_pokemon="flutter-mane", threat_move="moonblast")
-    assert alias["hp_evs_needed"] == canon["hp_evs_needed"]
-    assert alias["minimum_evs"]["spd_evs"] == canon["def_evs_needed"]
-    assert "EVs:" in alias["showdown_paste"]
 
 
 async def test_find_survival_evs_slash_string(tools):

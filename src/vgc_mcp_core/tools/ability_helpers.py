@@ -176,39 +176,3 @@ def compute_static_attacker_stat_stages(
             return 0, 0, "Embody Aspect (Teal): +1 Speed on Tera (no damage effect)"
     return 0, 0, None
 
-
-async def resolve_attacker_and_defender_abilities(
-    *,
-    attacker_name: str,
-    defender_name: str,
-    pokeapi: Any,
-    smogon_client: Optional[Any] = None,
-    attacker_override: Optional[str] = None,
-    defender_override: Optional[str] = None,
-    use_smogon: bool = True,
-) -> dict:
-    """Convenience wrapper resolving both sides in one call.
-
-    Returns dict with keys: `attacker_ability`, `attacker_ability_source`,
-    `defender_ability`, `defender_ability_source`.
-    """
-    atk_ab, atk_src = await resolve_ability(
-        attacker_name,
-        pokeapi=pokeapi,
-        smogon_client=smogon_client,
-        user_override=attacker_override,
-        use_smogon=use_smogon,
-    )
-    def_ab, def_src = await resolve_ability(
-        defender_name,
-        pokeapi=pokeapi,
-        smogon_client=smogon_client,
-        user_override=defender_override,
-        use_smogon=use_smogon,
-    )
-    return {
-        "attacker_ability": atk_ab,
-        "attacker_ability_source": atk_src,
-        "defender_ability": def_ab,
-        "defender_ability_source": def_src,
-    }

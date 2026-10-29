@@ -181,7 +181,6 @@ def register_item_optimization_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogo
         items_to_compare: Annotated[Optional[list[str]], Field(
             description="Items to compare (default: ['life-orb', 'choice-band', 'choice-specs', 'expert-belt'])",
         )] = None,
-        num_turns: Annotated[int, Field(ge=1, description="Number of turns for recoil accumulation analysis")] = 3,
         attacker_nature: Annotated[Optional[str], Field(
             description="Attacker's nature (auto-fetched from Smogon if not specified)",
         )] = None,

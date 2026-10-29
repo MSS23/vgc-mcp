@@ -167,20 +167,6 @@ def _parse_from(extras: list[str]) -> Optional[str]:
     return None
 
 
-def _hp_to_percent(hp: str) -> Optional[float]:
-    """Showdown HP fields look like '142/270', 'fnt', or 'a/b status'."""
-    if not hp or hp == "fnt":
-        return 0.0
-    s = hp.split(" ", 1)[0]
-    if "/" in s:
-        cur, total = s.split("/", 1)
-        try:
-            return round(float(cur) / float(total) * 100.0, 1)
-        except ValueError:
-            return None
-    return None
-
-
 def _identify(slot: str) -> tuple[str, str]:
     """Convert 'p1a: Flutter Mane' -> ('p1', 'Flutter Mane')."""
     if ": " in slot:

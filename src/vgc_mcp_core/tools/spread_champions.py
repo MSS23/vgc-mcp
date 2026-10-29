@@ -779,13 +779,8 @@ async def _optimize_multi_survival_champions(
     booster: bool = False,
     tailwind: bool = False,
     speed_override: Optional[int] = None,
-    fill_remaining: bool = True,
 ) -> dict[str, Any]:
-    """SP-scale multi/dual survival optimizer (cap 32/stat, 66 total).
-
-    fill_remaining=False returns the minimum survival allocation instead of
-    spending the leftover budget on HP/Def/SpD.
-    """
+    """SP-scale multi/dual survival optimizer (cap 32/stat, 66 total)."""
     if defender_tera_type or any(threat.get("tera_type") for threat in threats):
         return error_response(ErrorCodes.INVALID_PARAMETER, "Terastallization is not available in Champions")
     is_physical = my_base.attack >= my_base.special_attack
@@ -870,7 +865,7 @@ async def _optimize_multi_survival_champions(
         "hp": alloc["hp_sp"], "defense": alloc["def_sp"],
         "special_defense": alloc["spd_sp"], "speed": speed_sps,
     }
-    sps = StatPointSpread(**(complete_sp_allocation(minimum) if fill_remaining else minimum))
+    sps = StatPointSpread(**complete_sp_allocation(minimum))
     optimized_pokemon = _build_champions_pokemon(
         pokemon_name, my_base, my_types, parsed_nature, sps,
         item=item, tera_type=defender_tera_type, ability=resolved_ability,

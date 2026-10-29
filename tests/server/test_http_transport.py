@@ -171,7 +171,7 @@ def test_health_endpoint(http_client, monkeypatch):
     assert resp.status_code == 200
     body = resp.json()
     assert body["status"] == "healthy"
-    assert body["tool_modules"] == 52
+    assert body["tool_modules"] == 50
     assert body["profile"] == "core"
     assert body["tools"] == len(CORE_TOOLS)
     assert body["tools_total"] == FULL_TOOL_COUNT
@@ -186,7 +186,7 @@ def test_root_endpoint(http_client):
     body = resp.json()
     assert body["endpoints"]["mcp"] == "/mcp"
     assert body["endpoints"]["mcp_full"] == "/mcp/full"
-    assert body["tool_modules"] == 52
+    assert body["tool_modules"] == 50
     assert body["tools"] == len(CORE_TOOLS)
     assert body["tools_total"] == FULL_TOOL_COUNT
 

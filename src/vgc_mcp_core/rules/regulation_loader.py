@@ -58,10 +58,6 @@ class RegulationConfig:
                 }
             }
 
-    def reload(self) -> None:
-        """Reload configuration from file (useful for testing or hot-reloading)."""
-        self._load_config()
-
     @property
     def current_regulation(self) -> str:
         """
@@ -243,31 +239,6 @@ class RegulationConfig:
         reg_data = self.get_regulation(regulation)
         return reg_data.get("restricted_limit", 2)
 
-    def is_item_clause_active(self, regulation: Optional[str] = None) -> bool:
-        """Check if item clause is active for a regulation."""
-        reg_data = self.get_regulation(regulation)
-        return reg_data.get("item_clause", True)
-
-    def is_species_clause_active(self, regulation: Optional[str] = None) -> bool:
-        """Check if species clause is active for a regulation."""
-        reg_data = self.get_regulation(regulation)
-        return reg_data.get("species_clause", True)
-
-    def get_level(self, regulation: Optional[str] = None) -> int:
-        """Get battle level for a regulation (usually 50)."""
-        reg_data = self.get_regulation(regulation)
-        return reg_data.get("level", 50)
-
-    def get_pokemon_limit(self, regulation: Optional[str] = None) -> int:
-        """Get team size limit (usually 6)."""
-        reg_data = self.get_regulation(regulation)
-        return reg_data.get("pokemon_limit", 6)
-
-    def get_bring_limit(self, regulation: Optional[str] = None) -> int:
-        """Get number of Pokemon you can bring to battle (usually 4)."""
-        reg_data = self.get_regulation(regulation)
-        return reg_data.get("bring_limit", 4)
-
     def list_regulation_codes(self) -> list[str]:
         """
         List all available regulation codes.
@@ -378,25 +349,6 @@ class RegulationConfig:
         if name_normalized in self.get_banned_pokemon(regulation):
             return False
         return True
-
-    def is_pokemon_restricted(
-        self,
-        pokemon_name: str,
-        regulation: Optional[str] = None
-    ) -> bool:
-        """
-        Check if a Pokemon is restricted.
-
-        Args:
-            pokemon_name: Pokemon name (case-insensitive)
-            regulation: Regulation code. Uses current if None.
-
-        Returns:
-            True if the Pokemon is restricted
-        """
-        name_normalized = pokemon_name.lower().replace(" ", "-")
-        restricted = self.get_restricted_pokemon(regulation)
-        return name_normalized in restricted
 
     def is_pokemon_banned(
         self,

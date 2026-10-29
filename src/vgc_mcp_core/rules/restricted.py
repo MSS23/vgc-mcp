@@ -240,34 +240,3 @@ def find_banned(pokemon_names: list[str], regulation: Optional[str] = None) -> l
     """
     return [name for name in pokemon_names if is_banned(name, regulation)]
 
-
-def validate_restricted_limit(
-    pokemon_names: list[str],
-    regulation: Optional[str] = None
-) -> dict:
-    """
-    Validate if a team meets the restricted Pokemon limit.
-
-    Args:
-        pokemon_names: List of Pokemon names
-        regulation: Regulation code (e.g., "reg_f"). Uses current if None.
-
-    Returns:
-        Dict with validation result
-    """
-    config = get_regulation_config()
-    limit = config.get_restricted_limit(regulation)
-    restricted = find_restricted(pokemon_names, regulation)
-    count = len(restricted)
-
-    return {
-        "valid": count <= limit,
-        "count": count,
-        "limit": limit,
-        "restricted_pokemon": restricted,
-        "message": (
-            f"Team has {count}/{limit} restricted Pokemon"
-            if count <= limit
-            else f"Too many restricted Pokemon: {count}/{limit}"
-        )
-    }

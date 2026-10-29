@@ -149,12 +149,6 @@ class TestOptimizeBulkChampions:
         _assert_sp_caps(caps)
         _assert_sp_paste(r["showdown_paste"])
 
-    async def test_optimize_bulk_math_emits_sp_paste(self, champ_tm):
-        r = await champ_tm.call_tool("optimize_bulk_math", {"pokemon_name": "flutter-mane", "nature": "calm"})
-        assert r["format_system"] == "champions"
-        _assert_sp_paste(r["showdown_paste"])
-
-
 # --- check_spread_efficiency ---------------------------------------------
 
 class TestCheckSpreadEfficiencyChampions:

@@ -62,8 +62,6 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             pokemon_data = await pokeapi.get_pokemon(pokemon_name)
 
             stats = await pokeapi.get_pokemon_stats(pokemon_name)
-            if not stats:
-                return error_response("stats_not_found", f"Could not get stats for: {pokemon_name}")
 
             # Get types
             types = [t.lower() for t in pokemon_data.get("types", [])]
@@ -148,8 +146,6 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         """
         try:
             stats = await pokeapi.get_pokemon_stats(pokemon_name)
-            if not stats:
-                return error_response("pokemon_not_found", f"Could not find Pokemon: {pokemon_name}")
 
             # Calculate HP
             base_hp = stats.get("hp", 100)
@@ -207,7 +203,7 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         pokemon_name: Annotated[str, Field(description="Pokemon name", min_length=1)],
         hp_evs: Annotated[int, Field(ge=0, le=252, description="HP EVs (0-252), or Stat Points (0-32) in Champions")] = 0,
         hp_ivs: Annotated[int, Field(ge=0, le=31, description="HP IVs (0-31)")] = 31,
-        is_flying: Annotated[bool, Field(description="Whether Pokemon is Flying-type (not grounded); Flying is also auto-detected from the API")] = False,
+        is_flying: Annotated[bool, Field(description="Not grounded for another reason (Tera Flying, Air Balloon, Magnet Rise); a Flying type is auto-detected")] = False,
         has_levitate: Annotated[bool, Field(description="Whether Pokemon has Levitate (not grounded)")] = False
     ) -> dict:
         """Calculate Grassy Terrain healing for a Pokemon.
@@ -219,13 +215,11 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         """
         try:
             stats = await pokeapi.get_pokemon_stats(pokemon_name)
-            if not stats:
-                return error_response("pokemon_not_found", f"Could not find Pokemon: {pokemon_name}")
 
             # Check if Flying type from API
             pokemon_data = await pokeapi.get_pokemon(pokemon_name)
             types = [t.lower() for t in pokemon_data.get("types", [])] if pokemon_data else []
-            is_grounded = "flying" not in types and not has_levitate
+            is_grounded = "flying" not in types and not is_flying and not has_levitate
 
             # Calculate HP
             base_hp = stats.get("hp", 100)
@@ -280,8 +274,6 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         """
         try:
             stats = await pokeapi.get_pokemon_stats(pokemon_name)
-            if not stats:
-                return error_response("pokemon_not_found", f"Could not find Pokemon: {pokemon_name}")
 
             # Check if Poison type from API
             pokemon_data = await pokeapi.get_pokemon(pokemon_name)
@@ -363,8 +355,6 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             pokemon_data = await pokeapi.get_pokemon(pokemon_name)
 
             stats = await pokeapi.get_pokemon_stats(pokemon_name)
-            if not stats:
-                return error_response("stats_not_found", f"Could not get stats for: {pokemon_name}")
 
             # Get types
             types = [t.lower() for t in pokemon_data.get("types", [])]

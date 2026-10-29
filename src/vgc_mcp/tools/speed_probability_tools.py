@@ -16,84 +16,13 @@ from vgc_mcp_core.calc.speed_probability import (
     calculate_outspeed_probability,
     calculate_speed_creep_evs,
 )
-from vgc_mcp_core.calc.stats import calculate_all_stats, calculate_speed
+from vgc_mcp_core.calc.stats import calculate_speed
 from vgc_mcp_core.models.pokemon import Nature
-from vgc_mcp_core.tools import speed_handlers
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 
 def register_speed_probability_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
     """Register speed probability analysis tools with the MCP server."""
-
-    @mcp.tool(
-        title="Calculate Outspeed Probability",
-        annotations=ToolAnnotations(
-            readOnlyHint=True,
-            destructiveHint=False,
-            idempotentHint=True,
-            openWorldHint=True,
-        ),
-    )
-    async def outspeed_probability(
-        your_pokemon: Annotated[str, Field(description="Your Pokemon's name (e.g. 'Entei')", min_length=1)],
-        your_speed_evs: Annotated[int, Field(ge=0, le=252, description="Your Speed EVs (0-252)")],
-        your_nature: Annotated[str, Field(description="Your nature (e.g. 'Adamant', 'Jolly')", min_length=1)],
-        target_pokemon: Annotated[str, Field(description="Opponent's Pokemon (e.g. 'Landorus-Therian')", min_length=1)]
-    ) -> dict:
-        """Deprecated alias of `analyze_outspeed_probability`; will be removed in the next release.
-        Call `analyze_outspeed_probability(pokemon_name=your_pokemon, target_pokemon=..., nature=your_nature, speed_evs=your_speed_evs)` instead.
-
-        Returns the canonical result plus this tool's legacy keys
-        (outspeed_probability, speed_tie_probability, underspeed_probability,
-        your_build, target_speed_breakdown, meta_info).
-        """
-        result = await speed_handlers.analyze_outspeed_probability(
-            pokeapi,
-            smogon,
-            pokemon_name=your_pokemon,
-            target_pokemon=target_pokemon,
-            nature=your_nature,
-            speed_evs=your_speed_evs,
-        )
-        return _with_legacy_outspeed_keys(result, your_pokemon, your_nature, your_speed_evs)
-
-    @mcp.tool(
-        title="Outspeed Probability (Stored Pokemon)",
-        annotations=ToolAnnotations(
-            readOnlyHint=True,
-            destructiveHint=False,
-            idempotentHint=True,
-            openWorldHint=True,
-        ),
-    )
-    async def outspeed_probability_stored(
-        target_pokemon: Annotated[str, Field(description="Opponent's Pokemon (e.g. 'Landorus-Therian')", min_length=1)],
-        your_pokemon_reference: Annotated[Optional[str], Field(
-            description="Reference to a stored Pokemon (e.g. 'my Entei'); None uses the most recently stored",
-        )] = None
-    ) -> dict:
-        """Deprecated alias of `analyze_outspeed_probability`; will be removed in the next release.
-        Call `analyze_outspeed_probability(pokemon_name=..., target_pokemon=..., speed_stat=<your final Speed>)` instead.
-
-        Reads the stored Pokemon's final Speed (format-aware) and passes it as
-        `speed_stat`; the result carries this tool's legacy keys too.
-        """
-        pokemon = team_manager.get_pokemon_context(your_pokemon_reference)
-        if not pokemon:
-            stored = team_manager.list_pokemon_context()
-            return error_response(ErrorCodes.INTERNAL_ERROR, 'No stored Pokemon found', hint='Use set_my_pokemon first to store a Pokemon', stored_pokemon=[p['reference'] for p in stored])
-
-        result = await speed_handlers.analyze_outspeed_probability(
-            pokeapi,
-            smogon,
-            pokemon_name=pokemon.name,
-            target_pokemon=target_pokemon,
-            speed_stat=calculate_all_stats(pokemon)["speed"],
-        )
-        alloc = pokemon.sps if pokemon.is_champions() and pokemon.sps else pokemon.evs
-        return _with_legacy_outspeed_keys(
-            result, pokemon.name, pokemon.nature.value.title(), alloc.speed
-        )
 
     @mcp.tool(
         title="Analyze Meta Outspeed Rate",

@@ -63,10 +63,6 @@ class APICache:
         key = self._make_key(prefix, *args)
         self.cache.delete(key)
 
-    def clear_all(self) -> None:
-        """Clear entire cache."""
-        self.cache.clear()
-
     @property
     def stats(self) -> dict[str, Any]:
         """Return cache hit/miss statistics."""
@@ -77,11 +73,6 @@ class APICache:
             "total": total,
             "hit_rate": f"{(self._hits / total * 100):.1f}%" if total > 0 else "0.0%",
         }
-
-    def reset_stats(self) -> None:
-        """Reset hit/miss counters."""
-        self._hits = 0
-        self._misses = 0
 
     def close(self) -> None:
         """Close the cache. Logs final stats if any lookups occurred."""

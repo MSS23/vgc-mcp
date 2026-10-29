@@ -8,11 +8,13 @@ split, the response contract and output-format rules.
 Quick facts:
 
 - Install: `pip install -e ".[dev,remote]"`; run tests with `python -m pytest tests/ -q`.
-- The server registers 213 tools; `/mcp` serves the 34-tool core profile and
+- The server registers 206 tools; `/mcp` serves the 34-tool core profile and
   `/mcp/full` serves everything (`src/vgc_mcp/profiles.py`).
 - Logic goes in `src/vgc_mcp_core/`; tool modules in `src/vgc_mcp/tools/` are
   thin wrappers. Build Pokemon with `build_pokemon`, detect the format with
   `detect_champions_format`, and return errors through
   `vgc_mcp_core/utils/errors.py`.
+- Docs stay current: `scripts/hooks/check_docs.py` runs before commits and in CI
+  (see "Keeping docs alive" in CLAUDE.md).
 - Agent tooling (caveman, ponytail, graphify) is described in
   [docs/agents/tooling.md](docs/agents/tooling.md).

@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import os
 
-FULL_TOOL_COUNT = 213
+FULL_TOOL_COUNT = 206
 
 CORE_TOOLS: frozenset[str] = frozenset(
     {
