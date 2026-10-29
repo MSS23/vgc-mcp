@@ -3,7 +3,7 @@
 Thin wrappers: the logic lives in ``vgc_mcp_core.tools.damage_handlers``.
 """
 
-from typing import Annotated, Optional
+from typing import Annotated, Optional, Union
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
@@ -243,7 +243,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         defender_name: Annotated[str, Field(description="YOUR Pokemon that needs to survive", min_length=1)],
         move_name: Annotated[str, Field(description="The attack to survive (e.g. 'Surging Strikes')", min_length=1)],
         attacker_nature: Annotated[Optional[str], Field(description="Attacker's nature (auto-fetched from Smogon if not provided)")] = None,
-        attacker_evs: Annotated[Optional[int], Field(ge=0, le=252, description="Attacker's offensive EVs (auto-fetched from Smogon if not provided)")] = None,
+        attacker_evs: Annotated[Optional[Union[Annotated[int, Field(ge=0, le=252)], str]], Field(description="Attacker's offensive EVs as an int (auto-fetched from Smogon if not provided), or the full spread as an 'HP/Atk/Def/SpA/SpD/Spe' slash string, e.g. '4/252/0/0/0/252' (Stat Points, e.g. '0/32/0/0/2/32', in Champions sessions)")] = None,
         attacker_item: Annotated[Optional[str], Field(description="Attacker's item (auto-fetched from Smogon if not provided)")] = None,
         defender_nature: Annotated[str, Field(description="Your Pokemon's nature (default: Calm for SpD, use Impish for Def)")] = "calm",
         target_survival_chance: Annotated[float, Field(ge=0, le=100, description="Survival %: 93.75 (15/16 rolls, survive max damage only) is RECOMMENDED — minimal EVs; 87.5 = can die to 2 highest rolls; 100 = guaranteed survival (wastes EVs)")] = 93.75,
@@ -376,7 +376,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         move_name: Annotated[str, Field(description="Move to survive", min_length=1)],
         num_hits: Annotated[int, Field(ge=1, description="Number of hits to survive (default 2)")] = 2,
         attacker_nature: Annotated[str, Field(description="Attacker's nature")] = "adamant",
-        attacker_evs: Annotated[int, Field(ge=0, le=252, description="Attacker's offensive EVs")] = 252,
+        attacker_evs: Annotated[Union[Annotated[int, Field(ge=0, le=252)], str], Field(description="Attacker's offensive EVs as an int, or the full EV spread as an 'HP/Atk/Def/SpA/SpD/Spe' slash string, e.g. '4/252/0/0/0/252'")] = 252,
         defender_nature: Annotated[str, Field(description="Your nature (+Def: Impish/Bold, +SpD: Calm/Careful)")] = "impish",
         attacker_attack_stage: Annotated[int, Field(ge=-6, le=6, description="Attack stage (-6 to +6). Use -1 for manual Intimidate override; defender Intimidate is auto-applied unless apply_defender_intimidate=False.")] = 0,
         defender_defense_stage: Annotated[int, Field(ge=-6, le=6, description="Defense stage (-6 to +6). Use -1 for Screech, etc.")] = 0,

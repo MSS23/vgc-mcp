@@ -174,7 +174,7 @@ def register_bulk_calc_tools(
             description="Attacker's nature (auto-fetched from Smogon if not specified)",
         )] = None,
         attacker_evs: Annotated[Optional[str], Field(
-            description="Attacker's EVs in 'HP/Atk/Def/SpA/SpD/Spe' format, e.g. '4/252/0/0/0/252' (mainline only)",
+            description="Attacker's spread as an 'HP/Atk/Def/SpA/SpD/Spe' slash string, e.g. '4/252/0/0/0/252'. In Champions sessions it is read as Stat Points (e.g. '0/32/0/0/2/32') when attacker_sps is not given.",
         )] = None,
         attacker_sps: Annotated[Optional[str], Field(
             description="Champions (Reg MA) only. Attacker Stat Points in 'HP/Atk/Def/SpA/SpD/Spe' format (0-32 per stat, 66 total), e.g. '0/0/0/32/0/32'. Ignored outside a Champions session.",
@@ -214,7 +214,9 @@ def register_bulk_calc_tools(
             # Build attacker (format-aware)
             if is_champions:
                 try:
-                    sp_spread = _parse_sp_string(attacker_sps) if attacker_sps else None
+                    # attacker_evs is read on the SP scale in Champions.
+                    sp_text = attacker_sps or attacker_evs
+                    sp_spread = _parse_sp_string(sp_text) if sp_text else None
                 except ValueError as ve:
                     return error_response(ErrorCodes.INVALID_PARAMETER, str(ve))
                 attacker = await _build_champions_attacker(
@@ -223,7 +225,10 @@ def register_bulk_calc_tools(
                 )
             else:
                 # Parse attacker EVs if provided
-                evs_dict = _parse_ev_string(attacker_evs) if attacker_evs else None
+                try:
+                    evs_dict = _parse_ev_string(attacker_evs) if attacker_evs else None
+                except ValueError as ve:
+                    return error_response(ErrorCodes.INVALID_PARAMETER, f"attacker_evs: {ve}")
                 attacker = await _build_pokemon_from_smogon(
                     attacker_name, pokeapi,
                     attacker_nature, evs_dict, attacker_item, attacker_ability,
@@ -412,7 +417,7 @@ def register_bulk_calc_tools(
             description="Attacker's nature (auto-fetched if not specified)",
         )] = None,
         attacker_evs: Annotated[Optional[str], Field(
-            description="Attacker's EVs in 'HP/Atk/Def/SpA/SpD/Spe' format (mainline only)",
+            description="Attacker's spread as an 'HP/Atk/Def/SpA/SpD/Spe' slash string, e.g. '4/252/0/0/0/252'. In Champions sessions it is read as Stat Points when attacker_sps is not given.",
         )] = None,
         attacker_sps: Annotated[Optional[str], Field(
             description="Champions (Reg MA) only. Attacker Stat Points in 'HP/Atk/Def/SpA/SpD/Spe' format (0-32 per stat, 66 total)",
@@ -458,7 +463,9 @@ def register_bulk_calc_tools(
             # Build attacker (format-aware)
             if is_champions:
                 try:
-                    sp_spread = _parse_sp_string(attacker_sps) if attacker_sps else None
+                    # attacker_evs is read on the SP scale in Champions.
+                    sp_text = attacker_sps or attacker_evs
+                    sp_spread = _parse_sp_string(sp_text) if sp_text else None
                 except ValueError as ve:
                     return error_response(ErrorCodes.INVALID_PARAMETER, str(ve))
                 attacker = await _build_champions_attacker(
@@ -467,7 +474,10 @@ def register_bulk_calc_tools(
                 )
             else:
                 # Parse attacker EVs
-                evs_dict = _parse_ev_string(attacker_evs) if attacker_evs else None
+                try:
+                    evs_dict = _parse_ev_string(attacker_evs) if attacker_evs else None
+                except ValueError as ve:
+                    return error_response(ErrorCodes.INVALID_PARAMETER, f"attacker_evs: {ve}")
                 attacker = await _build_pokemon_from_smogon(
                     attacker_name, pokeapi,
                     attacker_nature, evs_dict, attacker_item, attacker_ability,

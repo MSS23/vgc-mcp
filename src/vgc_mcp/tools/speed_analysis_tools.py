@@ -6,7 +6,7 @@ This module consolidates:
 - Speed control analysis (Trick Room, Tailwind, drops)
 """
 
-from typing import Annotated, Optional
+from typing import Annotated, Optional, Union
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
@@ -55,9 +55,9 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
         pokemon1_name: Annotated[str, Field(description="First Pokemon's name", min_length=1)],
         pokemon2_name: Annotated[str, Field(description="Second Pokemon's name", min_length=1)],
         pokemon1_nature: Annotated[str, Field(description="First Pokemon's nature")] = "serious",
-        pokemon1_speed_evs: Annotated[int, Field(ge=0, le=252, description="First Pokemon's Speed EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0,
+        pokemon1_speed_evs: Annotated[Union[Annotated[int, Field(ge=0, le=252)], str], Field(description="First Pokemon's Speed EVs (0-252); Stat Points 0-32 in Champions sessions. Also accepts the full 'HP/Atk/Def/SpA/SpD/Spe' slash string (its Spe value is used).")] = 0,
         pokemon2_nature: Annotated[str, Field(description="Second Pokemon's nature")] = "serious",
-        pokemon2_speed_evs: Annotated[int, Field(ge=0, le=252, description="Second Pokemon's Speed EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0
+        pokemon2_speed_evs: Annotated[Union[Annotated[int, Field(ge=0, le=252)], str], Field(description="Second Pokemon's Speed EVs (0-252); Stat Points 0-32 in Champions sessions. Also accepts the full 'HP/Atk/Def/SpA/SpD/Spe' slash string (its Spe value is used).")] = 0
     ) -> dict:
         """Compare speed between two Pokemon to determine who moves first.
 
@@ -66,6 +66,11 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
         the SP formula (e.g. Flutter Mane Timid 32 Spe SP -> 205). The per-mon
         investment field is labelled ``sps`` instead of ``evs`` in that case.
         """
+        try:
+            pokemon1_speed_evs = speed_handlers.speed_investment(pokemon1_speed_evs)
+            pokemon2_speed_evs = speed_handlers.speed_investment(pokemon2_speed_evs)
+        except ValueError as ve:
+            return error_response(ErrorCodes.INVALID_PARAMETER, f"speed_evs: {ve}")
         try:
             # Fetch base stats
             base1 = await pokeapi.get_base_stats(pokemon1_name)

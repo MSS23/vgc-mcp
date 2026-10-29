@@ -4,7 +4,7 @@ This module provides speed probability analysis using real Smogon usage data.
 Complements speed_analysis_tools.py with live data integration.
 """
 
-from typing import Annotated, Optional
+from typing import Annotated, Optional, Union
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
@@ -95,7 +95,7 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
         pokemon_name: Annotated[str, Field(description="Your Pokemon's name", min_length=1)],
         target_pokemon: Annotated[str, Field(description="The target Pokemon to compare against", min_length=1)],
         nature: Annotated[str, Field(description="Your Pokemon's nature (ignored if speed_stat is provided)")] = "serious",
-        speed_evs: Annotated[int, Field(ge=0, le=252, description="Speed EVs (0-252), or Stat Points (0-32) in Champions; ignored if speed_stat is provided")] = 0,
+        speed_evs: Annotated[Union[Annotated[int, Field(ge=0, le=252)], str], Field(description="Speed EVs (0-252), or Stat Points (0-32) in Champions; also accepts the full 'HP/Atk/Def/SpA/SpD/Spe' slash string (its Spe value is used). Ignored if speed_stat is provided")] = 0,
         speed_stat: Annotated[Optional[int], Field(description="Your Pokemon's final Speed stat (overrides the nature/EVs calculation)")] = None
     ) -> dict:
         """Analyze what percentage of a target Pokemon's common spreads you outspeed.

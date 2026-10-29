@@ -20,6 +20,16 @@ from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 logger = logging.getLogger(__name__)
 
 
+def speed_investment(value: int | str) -> int:
+    """Speed EVs (or SPs) from an int or the Spe slot of an 'HP/Atk/Def/SpA/SpD/Spe' string."""
+    if isinstance(value, int):
+        return value
+    speed = int(value) if value.strip().isdigit() else parse_ev_string(value)["speed"]
+    if not 0 <= speed <= 252:
+        raise ValueError(f"Speed investment must be 0-252, got {speed}")
+    return speed
+
+
 async def analyze_outspeed_probability(
     pokeapi: PokeAPIClient,
     smogon: Optional[SmogonStatsClient],
@@ -27,10 +37,14 @@ async def analyze_outspeed_probability(
     pokemon_name: str,
     target_pokemon: str,
     nature: str = "serious",
-    speed_evs: int = 0,
+    speed_evs: int | str = 0,
     speed_stat: Optional[int] = None,
 ) -> dict[str, Any]:
     """Share of a target's common spreads that a given Speed outspeeds."""
+    try:
+        speed_evs = speed_investment(speed_evs)
+    except ValueError as ve:
+        return error_response(ErrorCodes.INVALID_PARAMETER, f"speed_evs: {ve}")
     try:
         is_champions = detect_champions_format(pokemon_name)
         speed_calc = calculate_speed_sp if is_champions else calculate_speed

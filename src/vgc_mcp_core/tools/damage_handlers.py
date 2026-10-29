@@ -22,7 +22,7 @@ from vgc_mcp_core.models.pokemon import (
     get_nature_modifier,
 )
 from vgc_mcp_core.rules.format_detect import detect_champions_format
-from vgc_mcp_core.tools.build_helpers import build_pokemon, parse_sp_string
+from vgc_mcp_core.tools.build_helpers import build_pokemon, parse_ev_string, parse_sp_string
 from vgc_mcp_core.tools.smogon_helpers import (
     get_common_spread as _shared_get_common_spread,
 )
@@ -1490,7 +1490,7 @@ async def find_survival_evs(
     defender_name: str,
     move_name: str,
     attacker_nature: Optional[str] = None,
-    attacker_evs: Optional[int] = None,
+    attacker_evs: Optional[int | str] = None,
     attacker_item: Optional[str] = None,
     defender_nature: str = "calm",
     target_survival_chance: float = 93.75,
@@ -1521,7 +1521,22 @@ async def find_survival_evs(
             "pokemon": attacker_name,
             "source": "custom"
         }
-        attacker_full_evs = {}
+        attacker_full_evs: dict[str, int] = {}
+        # A slash string is the attacker's whole spread (SP-scale in Champions);
+        # an int stays the offensive stat's investment.
+        if isinstance(attacker_evs, str) and attacker_evs.strip().isdigit():
+            attacker_evs = int(attacker_evs)
+        explicit_spread = isinstance(attacker_evs, str)
+        if isinstance(attacker_evs, str):
+            try:
+                if is_champions:
+                    attacker_sp_spread = parse_sp_string(attacker_evs)
+                    attacker_full_evs = attacker_sp_spread.model_dump()
+                else:
+                    attacker_full_evs = EVSpread(**parse_ev_string(attacker_evs)).model_dump()
+            except ValueError as ve:
+                return error_response(ErrorCodes.INVALID_PARAMETER, f"attacker_evs: {ve}")
+            attacker_evs = attacker_full_evs["attack" if is_physical else "special_attack"]
         # User-supplied attacker_ability wins over Smogon auto-fetch.
         attacker_ability_name = attacker_ability
 
@@ -1539,14 +1554,15 @@ async def find_survival_evs(
                     attacker_nature = atk_spread["nature"]
 
                 evs = atk_spread.get("evs", {})
-                attacker_full_evs = evs
+                if not explicit_spread:
+                    attacker_full_evs = evs
                 if attacker_evs is None:
                     # Use the relevant offensive stat EVs
                     attacker_evs = evs.get("attack", 0) if is_physical else evs.get("special_attack", 0)
 
                 # Champions: capture the attacker's Stat-Point allocation so
                 # the threat's damage is computed on the real SP investment.
-                if is_champions:
+                if is_champions and not explicit_spread:
                     attacker_sp_spread = sps_from_smogon_spread(atk_spread)
 
                 if attacker_item is None and atk_spread.get("item"):
@@ -2263,7 +2279,7 @@ async def find_bulk_to_survive_hits(
     move_name: str,
     num_hits: int = 2,
     attacker_nature: str = "adamant",
-    attacker_evs: int = 252,
+    attacker_evs: int | str = 252,
     defender_nature: str = "impish",
     attacker_attack_stage: int = 0,
     defender_defense_stage: int = 0,
@@ -2319,15 +2335,27 @@ async def find_bulk_to_survive_hits(
             if sig_item:
                 attacker_item = sig_item
 
+        # A slash string is the attacker's whole EV spread; an int is the
+        # offensive stat's EVs.
+        if isinstance(attacker_evs, str) and attacker_evs.strip().isdigit():
+            attacker_evs = int(attacker_evs)
+        if isinstance(attacker_evs, str):
+            try:
+                attacker_spread = EVSpread(**parse_ev_string(attacker_evs))
+            except ValueError as ve:
+                return error_response(ErrorCodes.INVALID_PARAMETER, f"attacker_evs: {ve}")
+            attacker_evs = attacker_spread.attack if is_physical else attacker_spread.special_attack
+        else:
+            attacker_spread = EVSpread(
+                attack=attacker_evs if is_physical else 0,
+                special_attack=0 if is_physical else attacker_evs
+            )
         attacker = build_pokemon(
             name=attacker_name,
             base_stats=atk_base,
             types=atk_types,
             nature=atk_nature,
-            spread=EVSpread(
-                attack=attacker_evs if is_physical else 0,
-                special_attack=0 if is_physical else attacker_evs
-            ),
+            spread=attacker_spread,
             item=attacker_item,
             ability=attacker_ability,
         )
