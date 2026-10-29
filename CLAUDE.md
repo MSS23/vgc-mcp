@@ -566,7 +566,7 @@ await export_damage_report(
 )
 ```
 
-Each Excel row is one target × move: Target | Nature | HP..Spe (EVs, or SPs in
+Each row (Excel or PDF) is one target × move: Target | Nature | HP..Spe (EVs, or SPs in
 Champions) | Item | Move | Damage (roll / HP) | % HP | Result. With no
 `defender_names` it uses the top 20 by usage for the session's format.
 

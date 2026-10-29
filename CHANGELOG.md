@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- `export_damage_report` PDFs use the same calc-sheet layout as the Excel
+  sheet: one row per target × move with the target's spread and the damage
+  roll. The header row repeats when a scenario runs onto another page.
 - `export_damage_report` Excel sheets are now a calc sheet: one row per
   target × move with the target's nature, per-stat EVs or SPs, item, move,
   damage roll against its HP, % HP and verdict. With no `defender_names` it
