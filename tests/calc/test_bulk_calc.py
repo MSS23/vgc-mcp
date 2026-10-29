@@ -892,8 +892,40 @@ class TestExportGeneration:
 
         wb = load_workbook(output)
         ws = wb["Normal"]
-        # Find the OHKO cell (Incineroar close-combat, row 5, col 4)
-        ohko_cell = ws.cell(row=5, column=4)
-        assert ohko_cell.fill.start_color.rgb is not None
-        # Green for OHKO: C6EFCE
+        # Incineroar close-combat is the first data row; Result is the last column
+        ohko_cell = ws.cell(row=5, column=14)
         assert "C6EFCE" in str(ohko_cell.fill.start_color.rgb)
+
+    def test_excel_rows_show_target_spread_and_roll(self):
+        from openpyxl import load_workbook
+
+        from vgc_mcp_core.export.damage_report import generate_excel_report
+
+        summary = _make_bulk_summary()
+        summary.defender_spreads["flutter-mane"] = "Timid 2/0/0/32/0/32 SP"
+        output = os.path.join(self.tmpdir, "test_rows.xlsx")
+        generate_excel_report(summary, output)
+
+        ws = load_workbook(output)["Normal"]
+        rows = [[c.value for c in row] for row in ws.iter_rows(min_row=5, values_only=False)]
+        incin = next(r for r in rows if r[0] == "Incineroar")
+        assert incin[1:9] == ["Careful", "252", "0", "128", "0", "128", "0", "EV"]
+        assert incin[10] == "Close Combat"
+        flutter = next(r for r in rows if r[0] == "Flutter Mane")
+        assert flutter[1:9] == ["Timid", "2", "0", "0", "32", "0", "32", "SP"]
+
+
+def test_champions_spread_str_shows_stat_points():
+    from vgc_mcp_core.calc.bulk_calc import _spread_str
+    from vgc_mcp_core.models.pokemon import BaseStats, Nature, StatPointSpread
+    from vgc_mcp_core.tools.build_helpers import build_pokemon
+
+    mon = build_pokemon(
+        name="incineroar",
+        base_stats=BaseStats(hp=95, attack=115, defense=90, special_attack=80, special_defense=90, speed=60),
+        types=["fire", "dark"],
+        nature=Nature.CAREFUL,
+        champions=True,
+        spread=StatPointSpread(hp=32, defense=16, special_defense=18),
+    )
+    assert _spread_str(mon) == "Careful 32/0/16/0/18/0 SP"

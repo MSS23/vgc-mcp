@@ -11,6 +11,7 @@ from typing import Optional
 
 from ..models.move import Move
 from ..models.pokemon import PokemonBuild
+from ..utils.normalize import normalize_item
 from .damage import DamageResult, calculate_damage, format_percent
 from .modifiers import DamageModifiers
 
@@ -167,7 +168,7 @@ class BulkCalcSummary:
 
 def _format_ev_label(pokemon: PokemonBuild, stat: str) -> str:
     """Format a single EV stat for the calc string, e.g. '252 Atk' or '252+ Atk'."""
-    evs = getattr(pokemon.evs, stat, 0)
+    evs = pokemon.get_stat_allocation(stat)
     if evs == 0:
         return ""
 
@@ -195,7 +196,7 @@ def _build_attacker_label(attacker: PokemonBuild) -> str:
     parts = []
 
     # Find main offensive stat
-    if attacker.evs.attack >= attacker.evs.special_attack:
+    if attacker.get_stat_allocation("attack") >= attacker.get_stat_allocation("special_attack"):
         atk_label = _format_ev_label(attacker, "attack")
     else:
         atk_label = _format_ev_label(attacker, "special_attack")
@@ -204,7 +205,7 @@ def _build_attacker_label(attacker: PokemonBuild) -> str:
         parts.append(atk_label)
 
     if attacker.item:
-        item_display = attacker.item.replace("-", " ").title()
+        item_display = normalize_item(attacker.item).replace("-", " ").title()
         parts.append(item_display)
 
     name_display = attacker.name.replace("-", " ").title()
@@ -279,6 +280,16 @@ def build_calc_string(
 # Bulk calc engine
 # =============================================================================
 
+_STATS = ("hp", "attack", "defense", "special_attack", "special_defense", "speed")
+
+
+def _spread_str(pokemon: PokemonBuild) -> str:
+    """'Careful 252/0/128/0/128/0', or with an ' SP' suffix for Champions builds."""
+    values = "/".join(str(pokemon.get_stat_allocation(s)) for s in _STATS)
+    suffix = " SP" if pokemon.is_champions() else ""
+    return f"{pokemon.nature.value.title()} {values}{suffix}"
+
+
 def run_bulk_calcs(
     attacker: PokemonBuild,
     moves: list[Move],
@@ -305,22 +316,12 @@ def run_bulk_calcs(
     defender_items: dict[str, str] = {}
 
     # Build attacker spread string
-    nature_name = attacker.nature.value.title()
-    evs = attacker.evs
-    attacker_spread_str = (
-        f"{nature_name} {evs.hp}/{evs.attack}/{evs.defense}/"
-        f"{evs.special_attack}/{evs.special_defense}/{evs.speed}"
-    )
+    attacker_spread_str = _spread_str(attacker)
 
     for defender in defenders:
         # Cache defender spread info
-        def_evs = defender.evs
-        def_nature = defender.nature.value.title()
-        defender_spreads[defender.name] = (
-            f"{def_nature} {def_evs.hp}/{def_evs.attack}/{def_evs.defense}/"
-            f"{def_evs.special_attack}/{def_evs.special_defense}/{def_evs.speed}"
-        )
-        defender_items[defender.name] = defender.item or "None"
+        defender_spreads[defender.name] = _spread_str(defender)
+        defender_items[defender.name] = normalize_item(defender.item) if defender.item else "None"
 
         for move in moves:
             for scenario in scenarios:

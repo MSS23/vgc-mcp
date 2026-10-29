@@ -39,6 +39,14 @@ def _format_cell_value(min_pct: float, max_pct: float, ko_chance: str) -> str:
     return f"{min_str}-{max_str}% ({ko_chance})"
 
 
+def _split_spread(spread: str) -> tuple[str, list[str], str]:
+    """'Careful 32/0/16/0/18/0 SP' -> ('Careful', ['32', ...], 'SP'); EV spreads get 'EV'."""
+    parts = spread.split()
+    if len(parts) < 2 or spread.count("/") != 5:
+        return spread, [""] * 6, ""
+    return parts[0], parts[1].split("/"), "SP" if parts[-1] == "SP" else "EV"
+
+
 # =============================================================================
 # Excel report generation
 # =============================================================================
@@ -50,9 +58,10 @@ def generate_excel_report(
     """Generate an Excel report with color-coded damage results.
 
     Creates one sheet per scenario. Each sheet has:
-    - Header row with attacker info
-    - Columns: Defender | Their Spread | Item | Move1 | Move2 | ...
-    - Color-coded cells based on KO verdict
+    - Title row with the attacker's spread
+    - One row per target × move: Target | Nature | HP..Spe | Pts (EV/SP) |
+      Item | Move | Damage (roll / target HP) | % HP | Result
+    - Damage cells color-coded by KO verdict
 
     Args:
         summary: BulkCalcSummary from run_bulk_calcs
@@ -107,31 +116,26 @@ def generate_excel_report(
         sheet_name = display_name[:31]  # Excel max sheet name length
         ws = wb.create_sheet(title=sheet_name)
 
+        headers = [
+            "Target", "Nature", "HP", "Atk", "Def", "SpA", "SpD", "Spe", "Pts",
+            "Item", "Move", "Damage", "% HP", "Result",
+        ]
+        end_col = len(headers)
+
         # Title row - attacker info
-        end_col = 3 + len(summary.move_names)
-        ws.merge_cells(
-            start_row=1, start_column=1,
-            end_row=1, end_column=end_col,
-        )
+        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=end_col)
         title_cell = ws.cell(row=1, column=1)
         atk_title = summary.attacker_name.replace('-', ' ').title()
         title_cell.value = f"{atk_title} — {summary.attacker_spread_str}"
         title_cell.font = title_font
 
         # Scenario label
-        ws.merge_cells(
-            start_row=2, start_column=1,
-            end_row=2, end_column=end_col,
-        )
+        ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=end_col)
         scenario_cell = ws.cell(row=2, column=1)
         scenario_cell.value = f"Scenario: {display_name}"
         scenario_cell.font = Font(italic=True, size=11)
 
-        # Header row
         header_row = 4
-        headers = ["Defender", "Spread", "Item"] + [
-            m.replace("-", " ").title() for m in summary.move_names
-        ]
         for col_idx, header in enumerate(headers, 1):
             cell = ws.cell(row=header_row, column=col_idx)
             cell.value = header
@@ -140,53 +144,43 @@ def generate_excel_report(
             cell.alignment = Alignment(horizontal="center")
             cell.border = thin_border
 
-        # Data rows
+        # One row per target × move: the target's spread, then the roll on it.
         data_row = header_row + 1
         for defender_name in seen_defenders:
-            ws.cell(row=data_row, column=1).value = defender_name.replace("-", " ").title()
-            ws.cell(row=data_row, column=1).border = thin_border
-            ws.cell(row=data_row, column=1).font = Font(bold=True)
-
-            spread = summary.defender_spreads.get(defender_name, "")
-            ws.cell(row=data_row, column=2).value = spread
-            ws.cell(row=data_row, column=2).border = thin_border
-
+            nature, values, unit = _split_spread(summary.defender_spreads.get(defender_name, ""))
             item = summary.defender_items.get(defender_name, "")
             item_val = item.replace("-", " ").title() if item != "None" else ""
-            ws.cell(row=data_row, column=3).value = item_val
-            ws.cell(row=data_row, column=3).border = thin_border
-
-            # Move columns
-            for move_idx, move_name in enumerate(summary.move_names):
-                col = 4 + move_idx
-                # Find the result for this defender + move + scenario
-                matching = [
-                    r for r in scenario_results
-                    if r.defender_name == defender_name and r.move_name == move_name
+            for move_name in summary.move_names:
+                res = next(
+                    (x for x in scenario_results
+                     if x.defender_name == defender_name and x.move_name == move_name),
+                    None,
+                )
+                row = [
+                    defender_name.replace("-", " ").title(), nature, *values, unit,
+                    item_val, move_name.replace("-", " ").title(),
+                    f"{res.min_damage}-{res.max_damage} / {res.defender_hp}" if res else "—",
+                    f"{format_percent(res.min_pct)}-{format_percent(res.max_pct)}%" if res else "—",
+                    res.ko_chance if res else "—",
                 ]
-                if matching:
-                    r = matching[0]
-                    cell = ws.cell(row=data_row, column=col)
-                    cell.value = _format_cell_value(r.min_pct, r.max_pct, r.ko_chance)
+                for col_idx, value in enumerate(row, 1):
+                    cell = ws.cell(row=data_row, column=col_idx)
+                    cell.value = value
                     cell.border = thin_border
-                    cell.alignment = Alignment(horizontal="center")
-
-                    # Color code
-                    color = _get_ko_color(r.ko_chance)
+                    if col_idx > 1:
+                        cell.alignment = Alignment(horizontal="center")
+                ws.cell(row=data_row, column=1).font = Font(bold=True)
+                if res:
+                    color = _get_ko_color(res.ko_chance)
                     hex_color = f"{color[0]:02X}{color[1]:02X}{color[2]:02X}"
-                    cell.fill = PatternFill(
-                        start_color=hex_color, end_color=hex_color,
-                        fill_type="solid",
-                    )
-                else:
-                    ws.cell(row=data_row, column=col).value = "—"
-                    ws.cell(row=data_row, column=col).border = thin_border
+                    fill = PatternFill(start_color=hex_color, end_color=hex_color, fill_type="solid")
+                    for col_idx in range(end_col - 2, end_col + 1):
+                        ws.cell(row=data_row, column=col_idx).fill = fill
+                data_row += 1
 
-            data_row += 1
-
-        # Auto-size columns (approximate)
-        for col_idx in range(1, 4 + len(summary.move_names)):
-            ws.column_dimensions[ws.cell(row=header_row, column=col_idx).column_letter].width = 22
+        widths = [20, 10, 6, 6, 6, 6, 6, 6, 5, 18, 18, 16, 14, 18]
+        for col_idx, width in enumerate(widths, 1):
+            ws.column_dimensions[ws.cell(row=header_row, column=col_idx).column_letter].width = width
 
         # Freeze header
         ws.freeze_panes = ws.cell(row=header_row + 1, column=1)

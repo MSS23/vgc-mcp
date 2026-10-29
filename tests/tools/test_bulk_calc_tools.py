@@ -109,3 +109,27 @@ class TestExportDamageReport:
             defender_names=["incineroar"]
         )
         assert "error" in result
+
+
+@pytest.mark.parametrize("tool_name", ["calculate_bulk_offensive_calcs", "export_damage_report"])
+async def test_format_resolved_before_top_meta_fetch(tools, mock_smogon, monkeypatch, tool_name):
+    """The top-20 list and each target's spread must come from the same format."""
+    import vgc_mcp.tools.bulk_calc_tools as mod
+
+    order = []
+    calls = []
+    monkeypatch.setattr(
+        mod, "detect_champions_format",
+        lambda *a, **k: calls.append(a) or order.append("detect") or False,
+    )
+    original = mod._get_top_meta_pokemon
+
+    async def tracked(*a, **k):
+        order.append("top_meta")
+        return await original(*a, **k)
+
+    monkeypatch.setattr(mod, "_get_top_meta_pokemon", tracked)
+    await tools[tool_name].fn(attacker_name="urshifu-rapid-strike", move_names=["close-combat"])
+    assert order[:2] == ["detect", "top_meta"]
+    # Current regulation decides, not a guess from the attacker's name.
+    assert calls[0] == ()
