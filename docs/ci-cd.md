@@ -188,20 +188,21 @@ python scripts/verify_production.py
 # Production verified: revision=039b64b… tools=208 url=https://vgc-mcp.onrender.com
 ```
 
-### `keep-alive.yml` — the free-tier tax
+### `keep-alive.yml` — staying awake for free
 
-Render's free tier sleeps after 15 minutes idle, and the ~50s cold start breaks
+Render's free tier sleeps after 15 minutes idle, and the 20-60s wake-up breaks
 the Claude connector handshake.
 
-The critical caveat is documented in the workflow itself: **GitHub cron cannot
-keep a 15-minute-idle dyno warm.** Scheduled workflows on shared runners get
-delayed — a `*/14` cron was observed firing ~2 hours apart. To compensate, each
-run pings every 4 minutes for ~24 minutes rather than pinging once, so any run
-that *does* fire covers a window.
+GitHub delays frequent scheduled workflows (observed: every 4-6 hours), so a
+short ping loop cannot keep the service awake. Instead, each run pings `/health`
+every 10 minutes for ~5h50m, just under the 6-hour job limit, and the
+`keep-alive` concurrency group keeps one run active and one queued. When the
+active run ends, the queued one starts at once, so late schedules still chain
+into continuous coverage. Each run writes a summary table with ping count,
+successes and the slowest response.
 
-This is a backup, not the primary mechanism. The reliable fixes are an external
-uptime monitor (UptimeRobot etc., every 5 min against `/health`) or Render's
-Starter plan, which never sleeps.
+An external 5-minute monitor on `/health` is an optional second pinger, and
+Render's Starter plan never sleeps. Neither is needed for normal use.
 
 ---
 

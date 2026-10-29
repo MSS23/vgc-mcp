@@ -94,7 +94,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now present `/mcp` as the primary connector URL with `/sse` marked
   legacy-only. The keep-alive workflow pings in a 24-minute loop per run to
   survive GitHub cron drift (an external 5-min uptime monitor is still the
-  recommended primary pinger — see docs/connection-fix-plan.md). The root
+  recommended primary pinger). The root
   endpoint reports the real package version instead of a hardcoded "1.0.0".
 - Champions has no IVs (every Pokemon acts as 31 IV): `get_pokemon_speed` in a
   Champions session no longer reports an impossible "Brave 0 IV" minimum speed

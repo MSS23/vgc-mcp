@@ -97,7 +97,7 @@ Add to your Claude Desktop config (`%APPDATA%\Claude\claude_desktop_config.json`
 }
 ```
 
-Restart Claude Desktop. Done. **[Full setup guide →](docs/setup.md)**
+Restart Claude Desktop. Done. **[Full setup guide →](docs/user-guide.md#connect-2-minutes)**
 
 ### Option C — Self-host
 
@@ -140,7 +140,7 @@ Damage calc is verified against **Pokémon Showdown** — the source of truth us
 | Pokémon Showdown  | 149-177   | 78.4 - 93.1%  | guaranteed 2HKO   |
 | **VGC MCP**       | **149-177** | **78.4-93.1%** | **guaranteed 2HKO** |
 
-The test suite covers Gen 9 damage, stats, items, abilities, Tera, weather, multi-hit probabilities, and MCP tool registration. An independent oracle suite pins 2,037 exact-roll cases from `@smogon/calc 0.11.0`; an integer-formula grid checks mainline EVs and Champions Stat Points. See the [preparation workflow guide](docs/preparation-workflows.md#mathematical-scope) for supported mechanics and limits, and the [original September 2026 audit](docs/audit-2026-09-05.md) for earlier results.
+The test suite covers Gen 9 damage, stats, items, abilities, Tera, weather, multi-hit probabilities, and MCP tool registration. An independent oracle suite pins 2,037 exact-roll cases from `@smogon/calc 0.11.0`; an integer-formula grid checks mainline EVs and Champions Stat Points. See the [preparation workflow guide](docs/preparation-workflows.md#mathematical-scope) for supported mechanics and limits.
 
 Meta sets come directly from Smogon's monthly `chaos/*.json` datasets. The
 active MCP regulation selects the matching Reg I / Champions MA / MB / MC
@@ -202,8 +202,8 @@ optional sibling MCP Apps server so this endpoint stays universal. See the
 
 | Audience | Doc |
 |---|---|
-| **Just want to use it** | [Setup](docs/setup.md) · [User guide](docs/user-guide.md) · [FAQ](docs/faq.md) |
-| **Want to deploy your own** | [Deploy](docs/deploy.md) · [Render steps](docs/deploy-render.md) · [Local setup](docs/local-setup.md) |
+| **Just want to use it** | [User guide](docs/user-guide.md) · [FAQ](docs/faq.md) |
+| **Want to deploy your own** | [Deploy](docs/deploy.md) · [CI/CD](docs/ci-cd.md) |
 | **Want to contribute** | [Contributing](CONTRIBUTING.md) · [Development](docs/development.md) · [Architecture](docs/technical-guide.md) |
 | **Building MCP clients** | [API reference](docs/api-reference.md) · [Tool catalog](docs/tools-catalog.md) |
 

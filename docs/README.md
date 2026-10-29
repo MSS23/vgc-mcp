@@ -1,34 +1,8 @@
 # Documentation
 
-All non-essential documentation lives here. The repo root keeps only the
-files most package managers / tools expect (`README.md`, `CHANGELOG.md`,
-`CONTRIBUTING.md`, `CLAUDE.md`, `LICENSE`).
-
-## For users
-
-- [`user-guide.md`](user-guide.md) — how to use the server day-to-day.
-- [`faq.md`](faq.md) — frequently asked questions.
-- [`vgc-guide.md`](vgc-guide.md) — VGC competitive Pokemon primer.
-
-## For setup & deployment
-
-- [`setup.md`](setup.md) — full setup walkthrough.
-- [`local-setup.md`](local-setup.md) — quick local-dev setup.
-- [`deploy.md`](deploy.md) — deployment guide (general).
-- [`deploy-render.md`](deploy-render.md) — Render-specific steps.
-- [`deploy-checklist.md`](deploy-checklist.md) — pre-flight checklist.
-- [`ci-cd.md`](ci-cd.md) — how CI gates and the Render auto-deploy pipeline work.
-
-## For developers
-
-- [`development.md`](development.md) — dev workflow and conventions.
-- [`technical-guide.md`](technical-guide.md) — deep-dive on internals.
-- [`api-reference.md`](api-reference.md) — tool catalog with parameter docs.
-- [`tools-catalog.md`](tools-catalog.md) — auto-generated tool index by module.
-- [`project-overview.md`](project-overview.md) — high-level architecture.
-
-## For Claude Code / Anthropic clients
-
-- [`../CLAUDE.md`](../CLAUDE.md) — repo-level instructions for Claude Code
-  agents working in this project. Includes the response-formatting rules
-  (Showdown paste contract, attacker/defender display rules, survival % defaults).
+- **Use it:** [user-guide.md](user-guide.md) (connect and ask) · [faq.md](faq.md) · [vgc-guide.md](vgc-guide.md) (VGC primer) · [preparation-workflows.md](preparation-workflows.md) (team prep, verified spreads, move outcomes)
+- **Tools:** [tools-catalog.md](tools-catalog.md) (generated from the server, CI-checked) · [api-reference.md](api-reference.md) (parameters)
+- **Run it:** [deploy.md](deploy.md) (Render, Docker, self-hosted, keep-alive) · [ci-cd.md](ci-cd.md) (CI gates and auto-deploy)
+- **Work on it:** [development.md](development.md) · [technical-guide.md](technical-guide.md) · [project-overview.md](project-overview.md) · [agents/](agents/) (agent tooling, issue tracker, domain docs)
+- **Decisions:** [mcp-ui-decision.md](mcp-ui-decision.md) (why this server stays UI-free)
+- **Agents:** [../CLAUDE.md](../CLAUDE.md) and [../AGENTS.md](../AGENTS.md) hold the repo rules for coding agents.

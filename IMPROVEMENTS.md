@@ -191,7 +191,7 @@ into a lint) forbidding raw `{"error":` returns in `src/vgc_mcp/tools/`.
   breakdown (rolls are correct; display is wrong).
 - **Champions format-dispatch completeness:** `presentation.py:253-256` literally instructs
   the LLM to flag tools that return `252/508` in Champions mode as bugs. Audit the remaining
-  non-Champions-aware tools (there's a `docs/format-dispatch-audit.md` to drive from) and
+  non-Champions-aware tools (the format-dispatch audit lives in git history) and
   remove that instruction once clean.
 
 ### 2.2 Performance

@@ -500,9 +500,8 @@ Learn competitive Pokemon basics.
 ## Need Help?
 
 - Say **"What can you do?"** to see all capabilities
-- Say **"Help damage"** for damage calculation help
-- Say **"Help team"** for team building help
-- Say **"/help"** to see slash commands
+- Say **"What can you do for damage?"** for damage calculation examples
+- Say **"What can you do for team?"** for team building examples
 - Say **"Explain [term]"** to learn VGC vocabulary
 
 For bugs or feature requests: https://github.com/MSS23/vgc-mcp/issues

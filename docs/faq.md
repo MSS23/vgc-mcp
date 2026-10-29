@@ -14,14 +14,15 @@ Common questions and troubleshooting for the VGC MCP Server.
 
 ## Setup & Installation
 
-### Does this work on FREE Claude Desktop?
+### Which setup should I use?
 
-**Yes!** The local setup works perfectly on the free version of Claude Desktop. No premium subscription required.
+- **Hosted connector**: add `https://vgc-mcp.onrender.com/mcp` as a custom
+  connector in claude.ai. Nothing to install, and it works in the Claude
+  phone app. Custom connector availability depends on your Claude plan.
+- **Local install**: runs on your own computer with Claude Desktop, on any
+  Claude plan. Needs Python 3.11 or newer.
 
-- **Local setup** (recommended): FREE ✅
-- **Remote setup**: Requires Claude Desktop Premium 💎
-
-See [LOCAL_SETUP.md](local-setup.md) for installation instructions.
+See the [user guide](user-guide.md#connect-2-minutes) for setup steps.
 
 ---
 
@@ -465,7 +466,7 @@ docker run -p 8000:8000 vgc-mcp
 
 ### How do I contribute?
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for:
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for:
 
 - Development setup
 - Code style guidelines
