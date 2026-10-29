@@ -64,7 +64,7 @@ class SpeedTier:
     nature: str
     evs: int
     modified_speed: Optional[int] = None
-    notes: list[str] = None
+    notes: Optional[list[str]] = None
 
 
 @dataclass
@@ -132,7 +132,7 @@ def analyze_trick_room(team: Team) -> SpeedControlAnalysis:
             tier.notes.append("Too fast for TR - consider not bringing")
 
     # Compare against common benchmarks
-    outspeeds = {}
+    outspeeds: dict[str, list[str]] = {}
     for tier in tr_order:
         outspeeds[tier.name] = []
         for mon, data in SPEED_BENCHMARKS.items():
@@ -190,12 +190,14 @@ def analyze_tailwind(team: Team) -> SpeedControlAnalysis:
         tier.notes = []
 
     # Re-sort by modified speed
-    tw_order = sorted(speeds, key=lambda x: x.modified_speed, reverse=True)
+    # modified_speed is always set by the Tailwind loop above; `or 0` only narrows the type
+    tw_order = sorted(speeds, key=lambda x: x.modified_speed or 0, reverse=True)
 
     # Compare against common benchmarks (max speed variants)
-    outspeeds = {}
+    outspeeds: dict[str, list[str]] = {}
     for tier in tw_order:
         outspeeds[tier.name] = []
+        assert tier.modified_speed is not None  # set by the Tailwind loop above
         for mon, data in SPEED_BENCHMARKS.items():
             if "max_positive" in data:
                 if tier.modified_speed > data["max_positive"]:
@@ -208,7 +210,7 @@ def analyze_tailwind(team: Team) -> SpeedControlAnalysis:
     notes = []
 
     # Check what the team can outspeed with Tailwind
-    fastest_tw = tw_order[0].modified_speed if tw_order else 0
+    fastest_tw = (tw_order[0].modified_speed or 0) if tw_order else 0
 
     if fastest_tw >= 400:
         notes.append("Can outspeed max speed Regieleki with Tailwind")
@@ -256,7 +258,7 @@ def analyze_speed_drop(team: Team, stages: int = -1) -> SpeedControlAnalysis:
     notes.append(f"After {move_name} on opponents:")
 
     # For each team member, what can they now outspeed?
-    outspeeds = {}
+    outspeeds: dict[str, list[str]] = {}
     for tier in speeds:
         outspeeds[tier.name] = []
 
@@ -294,7 +296,7 @@ def analyze_paralysis(team: Team) -> SpeedControlAnalysis:
 
     notes = ["Paralysis halves Speed"]
 
-    outspeeds = {}
+    outspeeds: dict[str, list[str]] = {}
     for tier in speeds:
         outspeeds[tier.name] = []
 

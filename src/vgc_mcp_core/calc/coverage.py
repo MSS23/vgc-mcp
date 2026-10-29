@@ -21,7 +21,7 @@ ALL_TYPES = [
 
 # Common VGC coverage moves by type with their base power
 # Used for suggesting coverage options
-COVERAGE_MOVES = {
+COVERAGE_MOVES: dict[str, list[dict[str, Any]]] = {
     "Normal": [
         {"name": "Hyper Voice", "power": 90, "category": "special", "spread": True},
         {"name": "Body Slam", "power": 85, "category": "physical"},
@@ -216,7 +216,8 @@ def get_move_type_from_name(move_name: str, move_data: Optional[dict[str, Any]] 
     Uses move_data if provided, otherwise searches COVERAGE_MOVES.
     """
     if move_data and "type" in move_data:
-        return move_data["type"].capitalize()
+        move_type: str = move_data["type"]
+        return move_type.capitalize()
 
     normalized = normalize_move_name(move_name)
 
@@ -506,8 +507,8 @@ def suggest_coverage_moves(
                 suggestions.append(suggestion)
 
     # Sort suggestions
-    def sort_key(s):
-        score = 0
+    def sort_key(s: dict[str, Any]) -> float:
+        score: float = 0
         score += len(s["additional_coverage"]) * 10  # Prefer multi-coverage
         score += s.get("power", 0) / 10  # Prefer higher power
         if prioritize_spread and s["is_spread"]:

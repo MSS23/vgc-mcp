@@ -4,7 +4,9 @@ from dataclasses import dataclass
 from enum import IntEnum
 from typing import Any, Optional
 
-from ..utils.normalize import normalize_move_name  # noqa: F401  (re-export for back-compat)
+from ..utils.normalize import (
+    normalize_move_name as normalize_move_name,  # re-export for back-compat
+)
 
 
 class PriorityBracket(IntEnum):

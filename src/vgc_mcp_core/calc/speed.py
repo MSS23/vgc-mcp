@@ -231,7 +231,7 @@ def get_speed_benchmark(pokemon_name: str, benchmark_type: str = "max_positive")
 # This data tracks what speed investments are commonly used in VGC
 # paradox_type: "ancient" (Protosynthesis - Sun) or "future" (Quark Drive - Electric Terrain)
 # spreads: list of common spreads with nature, evs, and usage percentage
-META_SPEED_TIERS = {
+META_SPEED_TIERS: dict[str, dict[str, Any]] = {
     # Ultra fast (200+)
     "regieleki": {
         "base": 200,

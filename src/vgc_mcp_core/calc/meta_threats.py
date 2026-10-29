@@ -244,7 +244,7 @@ def analyze_single_threat(
     threat_speed = threat_stats.get("speed", 100)
 
     # Find best threat move against you
-    best_threat_damage = {"max_percent": 0}
+    best_threat_damage: dict[str, Any] = {"max_percent": 0}
     for move_data in threat_common_moves:
         move_power = move_data.get("power", 0)
         move_type = move_data.get("type", "normal")
@@ -275,7 +275,7 @@ def analyze_single_threat(
             }
 
     # Find your best move against threat
-    best_your_damage = {"max_percent": 0}
+    best_your_damage: dict[str, Any] = {"max_percent": 0}
     for move_data in your_common_moves:
         move_power = move_data.get("power", 0)
         move_type = move_data.get("type", "normal")

@@ -1,7 +1,10 @@
 """Ability synergy and interaction analysis for VGC."""
 
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
+
+if TYPE_CHECKING:
+    from .modifiers import DamageModifiers
 
 # ============================================================================
 # INTIMIDATE INTERACTIONS
@@ -532,18 +535,19 @@ def get_speed_ability_effect(
 
     ability_data = SPEED_ABILITIES[norm]
     condition = ability_data.get("condition")
+    multiplier: float = ability_data.get("multiplier", 1.0)
 
     # Check conditions
     if condition == "rain" and weather == "rain":
-        return ability_data.get("multiplier", 1.0)
+        return multiplier
     elif condition == "sun" and weather == "sun":
-        return ability_data.get("multiplier", 1.0)
+        return multiplier
     elif condition == "sand" and weather == "sand":
-        return ability_data.get("multiplier", 1.0)
+        return multiplier
     elif condition == "snow" and weather == "snow":
-        return ability_data.get("multiplier", 1.0)
+        return multiplier
     elif condition == "electric-terrain" and terrain == "electric":
-        return ability_data.get("multiplier", 1.0)
+        return multiplier
 
     return None
 
@@ -551,7 +555,7 @@ def get_speed_ability_effect(
 def apply_ruin_abilities(
     attacker_ability: Optional[str],
     defender_ability: Optional[str],
-    modifiers
+    modifiers: "DamageModifiers",
 ) -> None:
     """
     Apply Ruinous abilities to DamageModifiers in-place.

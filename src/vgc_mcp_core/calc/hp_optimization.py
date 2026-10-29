@@ -118,7 +118,7 @@ def find_optimal_hp_evs(
           "recovery_per_turn": int, "notes": str}, ...]
     """
     category = _get_item_category(item)
-    results = []
+    results: list[dict[str, Any]] = []
 
     for ev in EV_BREAKPOINTS_LV50:
         hp = calculate_hp(base_hp, iv, ev, level)

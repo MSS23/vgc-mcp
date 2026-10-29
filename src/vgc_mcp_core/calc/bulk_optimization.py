@@ -411,7 +411,7 @@ def analyze_diminishing_returns(
     nature_mod_def = get_nature_modifier(nature, "defense")
     nature_mod_spd = get_nature_modifier(nature, "special_defense")
 
-    analysis = {
+    analysis: dict[str, list[Any]] = {
         "hp_gains": [],
         "def_gains": [],
         "spd_gains": [],

@@ -540,7 +540,7 @@ def calculate_total_chip_damage(
     status: Optional[str] = None,
     terrain: Optional[str] = None,
     item: Optional[str] = None,
-    pokemon_types: list[str] = None,
+    pokemon_types: Optional[list[str]] = None,
     ability: Optional[str] = None,
     is_grounded: bool = True
 ) -> dict[str, Any]:

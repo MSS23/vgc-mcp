@@ -18,8 +18,14 @@ from .nature_optimization import (
     find_optimal_nature_for_benchmarks,
     get_relevant_natures,
 )
-from .speed import SpeedComparison, compare_speeds, find_speed_evs
-from .stats import calculate_all_stats, calculate_hp, calculate_speed, calculate_stat
+from .speed import SpeedComparison, compare_speeds
+from .stats import (
+    calculate_all_stats,
+    calculate_hp,
+    calculate_speed,
+    calculate_stat,
+    find_speed_evs,
+)
 
 __all__ = [
     "calculate_hp",

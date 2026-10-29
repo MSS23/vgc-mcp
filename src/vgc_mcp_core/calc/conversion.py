@@ -130,6 +130,7 @@ def describe_conversion(
     elif evs is None and sps is None:
         evs = EVSpread()
         sps = StatPointSpread()
+    assert evs is not None and sps is not None  # every branch above fills both
     return {
         "evs": {
             "hp": evs.hp, "atk": evs.attack, "def": evs.defense,

@@ -184,7 +184,7 @@ class ItemEffect:
 def calculate_booster_energy_boost(
     pokemon_name: str,
     base_stats: dict[str, int],
-    nature_modifiers: dict[str, float] = None
+    nature_modifiers: Optional[dict[str, float]] = None
 ) -> ItemEffect:
     """
     Calculate Booster Energy stat boost for Paradox Pokemon.
@@ -227,7 +227,7 @@ def calculate_booster_energy_boost(
             if stat in stats_to_check:
                 stats_to_check[stat] = int(stats_to_check[stat] * mod)
 
-    highest_stat = max(stats_to_check, key=stats_to_check.get)
+    highest_stat = max(stats_to_check, key=stats_to_check.__getitem__)
     # Speed gets 1.5x, other stats get 1.3x
     boost = 1.5 if highest_stat == "speed" else 1.3
 
