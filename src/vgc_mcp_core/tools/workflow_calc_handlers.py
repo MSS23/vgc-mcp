@@ -4,6 +4,7 @@ from typing import Any, Optional
 
 from vgc_mcp_core.calc.damage import format_percent
 from vgc_mcp_core.config import EV_BREAKPOINTS_LV50
+from vgc_mcp_core.tools import spread_contract as sc
 from vgc_mcp_core.tools.build_helpers import build_pokemon
 from vgc_mcp_core.tools.spread_common import slash_values
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response, success_response
@@ -263,7 +264,7 @@ async def design_pokemon_for_role(
     pokemon_name: str,
     role: str = 'auto',
     speed_benchmark: Optional[str] = None,
-    survive_hit: Optional[dict] = None,
+    survive_hit: Optional[dict[str, Any]] = None,
     item: Optional[str] = None,
 ) -> dict[str, Any]:
     from vgc_mcp_core.calc.stats import calculate_hp, calculate_stat
@@ -620,6 +621,7 @@ async def calc_damage_vs_smogon_sets(
         opp_types = await pokeapi.get_pokemon_types(opponent_pokemon)
 
         damage_results = []
+        opp_builds = []
         survives_count = 0
         ko_count = 0
 
@@ -818,6 +820,7 @@ async def calc_damage_vs_smogon_sets(
 
             result_entry["outcome"] = outcome
             damage_results.append(result_entry)
+            opp_builds.append(opp_build)
 
         # Build summary
         if direction == "from":
@@ -893,9 +896,20 @@ async def calc_damage_vs_smogon_sets(
                 "note": "Life Orb costs 10% HP per attacking move"
             }
 
-        return success_response(
+        response = success_response(
             f"{my_pokemon} vs {opponent_pokemon} ({direction} {move})",
             **response_data
+        )
+        opp, move_name = sc.species(opponent_pokemon), sc.words(move)
+        verdict_text = (f"survives {survives_count}/{len(damage_results)} common {opp} sets' {move_name}"
+                        if direction == "from" else
+                        f"KOs {ko_count:g}/{len(damage_results)} common {opp} sets with {move_name}")
+        return sc.apply_contract(
+            response,
+            headline=f"{sc.subject(my_build)} {verdict_text}",
+            spreads_used={"pokemon": sc.spread_label(my_build),
+                          **{f"opponent_set_{n}": sc.spread_label(b) for n, b in enumerate(opp_builds, 1)}},
+            data_source=sc.data_source_from_meta(opp_usage.get("_meta")),
         )
 
     except Exception as e:

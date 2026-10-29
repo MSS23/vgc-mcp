@@ -35,6 +35,7 @@ from vgc_mcp_core.models.pokemon import (
     get_nature_modifier,
 )
 from vgc_mcp_core.tools import spread_common
+from vgc_mcp_core.tools import spread_contract as sc
 from vgc_mcp_core.tools.build_helpers import build_pokemon
 from vgc_mcp_core.tools.spread_common import (
     META_SYNERGIES,
@@ -433,6 +434,7 @@ async def _prepare_single_threat_build(
     is_physical = move.category == MoveCategory.PHYSICAL
 
     off_stat = "attack" if is_physical else "special_attack"
+    needs_source = None in (nature_str, evs, item, ability)
     evs = offensive_investment(evs, is_physical)
     allocation: dict[str, int] = {}
     sourced = await spread_common._get_common_spread(smogon, attacker_name)
@@ -510,6 +512,7 @@ async def _prepare_single_threat_build(
         "item": item,
         "ability": ability,
         "tera_type": tera_type,
+        "meta": sourced.get("meta") if sourced and needs_source else None,
     }
 
 
@@ -518,7 +521,7 @@ def _find_champions_survival_allocation(
     my_base: BaseStats,
     my_types: list[str],
     parsed_nature: Nature,
-    threats: list[dict],
+    threats: list[dict[str, Any]],
     defender_item: Optional[str],
     defender_ability: Optional[str],
     defender_tera_type: Optional[str],
@@ -527,7 +530,7 @@ def _find_champions_survival_allocation(
     offensive_stat: Optional[str] = None,
     target_survival: float = 93.75,
     speed_sps: int = 0,
-) -> Optional[dict]:
+) -> Optional[dict[str, Any]]:
     """Search the legal SP grid with exact final-build damage checks."""
     def targets_defense(threat: dict[str, Any]) -> bool:
         return bool(threat["is_physical"] or GEN9_SPECIAL_MOVES.get(
@@ -606,7 +609,7 @@ async def _design_spread_with_benchmarks_champions(
     except ValueError:
         return error_response(ErrorCodes.INVALID_NATURE, f"Invalid nature: {nature}")
 
-    results: dict = {
+    results: dict[str, Any] = {
         "pokemon": pokemon_name,
         "nature": nature,
         "format_system": "champions",
@@ -751,7 +754,8 @@ async def _design_spread_with_benchmarks_champions(
     )
     results["verdict"] = "SUCCESS" if results["verified"] else "BENCHMARK_NOT_MET"
     results["showdown_paste"] = pokemon_build_to_showdown(optimized_pokemon)
-    return results
+    return sc.contract(results, optimized_pokemon, sc.benchmark_parts(results["benchmarks"]),
+                       {"attacker": spec["attacker"]} if spec else {}, [spec["meta"] if spec else None])
 
 
 async def _optimize_multi_survival_champions(
@@ -761,7 +765,7 @@ async def _optimize_multi_survival_champions(
     my_base: BaseStats,
     my_types: list[str],
     nature: Optional[str],
-    threats: list[dict],
+    threats: list[dict[str, Any]],
     outspeed_pokemon: Optional[str],
     outspeed_pokemon_nature: str,
     outspeed_pokemon_evs: int,
@@ -843,8 +847,9 @@ async def _optimize_multi_survival_champions(
         speed_sps=speed_sps,
     )
 
+    threat_builds = [spec["attacker"] for spec in prepared]
     if alloc is None:
-        return {
+        impossible = {
             "pokemon": pokemon_name,
             "format_system": "champions",
             "verdict": "IMPOSSIBLE",
@@ -854,6 +859,12 @@ async def _optimize_multi_survival_champions(
             ),
             "speed_benchmark": speed_info,
         }
+        return sc.apply_contract(
+            impossible,
+            headline=f"No {sc.species(pokemon_name)} spread within 66 SP survives all {len(prepared)} hits",
+            spreads_used={k: sc.spread_label(b) for k, b in sc.attackers(threat_builds).items()},
+            data_source=sc.data_source_from_meta(sc.first_meta(spec["meta"] for spec in prepared)),
+        )
 
     minimum = {
         "hp": alloc["hp_sp"], "defense": alloc["def_sp"],
@@ -886,7 +897,7 @@ async def _optimize_multi_survival_champions(
         "speed": calculate_stat_sp(my_base.speed, 31, sps.speed, 50, get_nature_modifier(parsed_nature, "speed")),
     }
 
-    return {
+    payload = {
         "pokemon": pokemon_name,
         "nature": nature,
         "format_system": "champions",
@@ -904,6 +915,12 @@ async def _optimize_multi_survival_champions(
         "threat_breakdown": breakdown,
         "showdown_paste": pokemon_build_to_showdown(optimized_pokemon),
     }
+    survived = sum(row["survives"] for row in breakdown)
+    parts = [f"survives {survived}/{len(breakdown)} hits"]
+    if speed_info is not None:
+        parts.append(sc.speed_part(outspeed_pokemon or "", bool(speed_info.get("outspeeds"))))
+    return sc.contract(payload, optimized_pokemon, parts, sc.attackers(threat_builds),
+                       [spec["meta"] for spec in prepared])
 
 
 async def _check_spread_efficiency_champions(

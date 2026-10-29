@@ -1,7 +1,7 @@
 """Shared helpers for EV/SP spread tools: stat inversion, threat caches, constants."""
 
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Optional, overload
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
@@ -32,13 +32,17 @@ def slash_values(spread: str) -> tuple[int, int, int, int, int, int]:
     return vals
 
 
-def offensive_investment(value: Any, is_physical: bool) -> Any:
+@overload
+def offensive_investment(value: None, is_physical: bool) -> None: ...
+@overload
+def offensive_investment(value: int | str | dict[str, int], is_physical: bool) -> int: ...
+def offensive_investment(value: int | str | dict[str, int] | None, is_physical: bool) -> int | None:
     """Attacker investment as one number: a slash string or stat dict yields its Atk or SpA."""
     if isinstance(value, str) and value.strip().isdigit():
         return int(value)
     if isinstance(value, str):
         value = dict(zip(("hp", "attack", "defense", "special_attack", "special_defense", "speed"),
-                         slash_values(value)))
+                         slash_values(value), strict=True))
     if isinstance(value, dict):
         parsed = parse_ev_dict(value)
         return parsed.attack if is_physical else parsed.special_attack
@@ -153,7 +157,7 @@ def _find_min_evs_for_hp(base: int, iv: int, target_hp: int, level: int = 50) ->
     return optimize_ev_efficiency(base, iv, 252, level, 1.0, "hp")
 
 
-async def _get_common_spread(smogon: Optional[SmogonStatsClient], pokemon_name: str) -> Optional[dict]:
+async def _get_common_spread(smogon: Optional[SmogonStatsClient], pokemon_name: str) -> Optional[dict[str, Any]]:
     """Most common Smogon spread for a Pokemon (None without a client or data).
 
     Handlers call this through the module (``spread_common._get_common_spread``)
@@ -194,7 +198,7 @@ def _get_nature_boost_stat(nature_name: str) -> str:
     return nature_boosts.get(nature_name.lower(), "neutral")
 
 
-def _generate_nature_explanation(optimal: dict, alternative: dict) -> str:
+def _generate_nature_explanation(optimal: dict[str, Any], alternative: dict[str, Any]) -> str:
     """Generate explanation comparing alternative nature to optimal."""
     opt_nature = optimal["nature"]
     alt_nature = alternative["nature"]
@@ -231,6 +235,7 @@ class ThreatSpec:
     item: Optional[str]
     ability: Optional[str]
     tera_type: Optional[str]
+    meta: Optional[dict[str, Any]] = None  # chaos _meta when Smogon filled a field
 
 
 class DamageCache:
@@ -251,7 +256,7 @@ class DamageCache:
         self.defender_types = defender_types
         self.defender_ability = defender_ability
         self.defender_item = defender_item
-        self.cache: dict = {}  # Key: (threat_idx, hp_ev, def_ev, spd_ev, nature_name, tera_type)
+        self.cache: dict[Any, Any] = {}  # Key: (threat_idx, hp_ev, def_ev, spd_ev, nature_name, tera_type)
 
     def get_damage(
         self,
@@ -345,7 +350,7 @@ class DamageCache:
         all_survive = all(r[0] for r in results)
         return all_survive, results
 
-    def get_stats(self) -> dict:
+    def get_stats(self) -> dict[str, Any]:
         """Get cache statistics."""
         return {
             "total_cached": len(self.cache),
@@ -354,7 +359,7 @@ class DamageCache:
 
 
 async def _prepare_threats(
-    threats: list[dict],
+    threats: list[dict[str, Any]],
     pokeapi: PokeAPIClient,
     smogon: Optional[SmogonStatsClient] = None,
 ) -> list[ThreatSpec]:
@@ -502,7 +507,9 @@ async def _prepare_threats(
             evs=evs,
             item=item,
             ability=ability,
-            tera_type=tera_type
+            tera_type=tera_type,
+            meta=smogon_data.get("meta") if smogon_data and None in (
+                threat_dict.get(k) for k in ("nature", "evs", "item", "ability")) else None,
         ))
 
     return prepared
@@ -552,7 +559,7 @@ def _quick_feasibility_check(
     nature: Nature,
     target_survival: float,
     defender_tera_type: Optional[str] = None
-) -> Optional[dict]:
+) -> Optional[dict[str, Any]]:
     """Quick feasibility check by sampling 5 HP values.
 
     Args:

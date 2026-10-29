@@ -17,8 +17,8 @@ async def suggest_ev_spread(
     pokemon_name: str,
     nature: str = 'auto',
     outspeed_targets: Optional[list[str]] = None,
-    survive_hits: Optional[list[dict]] = None,
-    ko_targets: Optional[list[dict]] = None,
+    survive_hits: Optional[list[dict[str, Any]]] = None,
+    ko_targets: Optional[list[dict[str, Any]]] = None,
     prioritize: str = 'bulk',
 ) -> dict[str, Any]:
     from vgc_mcp_core.calc.conversion import evs_to_sps_spread

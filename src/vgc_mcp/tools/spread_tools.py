@@ -1,6 +1,6 @@
 """MCP tools for EV spread optimization."""
 
-from typing import Annotated, Optional, Union
+from typing import Annotated, Any, Optional, Union, cast
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
@@ -9,7 +9,14 @@ from pydantic import Field
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
 from vgc_mcp_core.tools import spread_benchmark_handlers, spread_handlers, spread_survival_handlers
+from vgc_mcp_core.tools.response_contract import CalcResult
 from vgc_mcp_core.tools.spread_common import META_SYNERGIES as META_SYNERGIES
+
+
+def _calc(result: dict[str, Any]) -> CalcResult:
+    """FastMCP validates the dict against CalcResult (publishing an outputSchema);
+    returning the dict itself keeps direct `.fn` callers working."""
+    return cast(CalcResult, result)
 
 
 def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[SmogonStatsClient] = None):
@@ -243,7 +250,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         offensive_evs: Annotated[int, Field(ge=0, le=252, description="Attack/SpA EVs when prioritize='offense'")] = 0,
         item: Annotated[Optional[str], Field(description="Your Pokemon's held item")] = None,
         ability: Annotated[Optional[str], Field(description="Your Pokemon's ability")] = None,
-    ) -> dict:
+    ) -> CalcResult:
         """Design an EV spread that meets specific speed and SINGLE survival benchmarks.
 
         Use this for questions like "I need Entei to survive Surging Strikes and
@@ -258,7 +265,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         (same-type Tera boosts STAB 1.5x -> 2.0x; Tera changes defensive
         typing). Do NOT assume no Tera - always clarify first.
         """
-        return await spread_benchmark_handlers.design_spread_with_benchmarks(
+        return _calc(await spread_benchmark_handlers.design_spread_with_benchmarks(
             pokeapi,
             smogon,
             pokemon_name=pokemon_name,
@@ -283,7 +290,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             offensive_evs=offensive_evs,
             item=item,
             ability=ability,
-        )
+        ))
 
     @mcp.tool(
         title="Optimize Dual Survival Spread",
@@ -324,7 +331,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         target_survival: Annotated[float, Field(ge=0, le=100, description="Minimum survival % to consider 'surviving' (93.75 = 15/16 rolls)")] = 100.0,
         item: Annotated[Optional[str], Field(description="Your Pokemon's held item")] = None,
         ability: Annotated[Optional[str], Field(description="Your Pokemon's ability")] = None,
-    ) -> dict:
+    ) -> CalcResult:
         """Find the optimal EV spread to survive TWO DIFFERENT attacks while meeting a speed benchmark.
 
         PRIORITY ORDER: Speed EVs first (minimum needed), then bulk
@@ -342,7 +349,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         (that's a 2HKO check), or for max Attack/SpA builds (use
         design_spread_with_benchmarks with prioritize='offense').
         """
-        return await spread_survival_handlers.optimize_dual_survival_spread(
+        return _calc(await spread_survival_handlers.optimize_dual_survival_spread(
             pokeapi,
             smogon,
             pokemon_name=pokemon_name,
@@ -374,7 +381,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             target_survival=target_survival,
             item=item,
             ability=ability,
-        )
+        ))
 
     @mcp.tool(
         title="Optimize Multi-Threat Survival Spread",
@@ -402,7 +409,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         target_survival: Annotated[float, Field(ge=0, le=100, description="Minimum survival % (default 93.75 = 15/16 rolls)")] = 93.75,
         item: Annotated[Optional[str], Field(description="Your Pokemon's held item")] = None,
         ability: Annotated[Optional[str], Field(description="Your Pokemon's ability")] = None,
-    ) -> dict:
+    ) -> CalcResult:
         """Find the optimal EV spread to survive 3-6 different attacks while meeting a speed benchmark.
 
         Extends optimize_dual_survival_spread to multiple threats using a
@@ -415,7 +422,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         Showdown paste, or partial solutions plus a Tera suggestion when the
         benchmarks are impossible.
         """
-        return await spread_survival_handlers.optimize_multi_survival_spread(
+        return _calc(await spread_survival_handlers.optimize_multi_survival_spread(
             pokeapi,
             smogon,
             pokemon_name=pokemon_name,
@@ -434,7 +441,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             target_survival=target_survival,
             item=item,
             ability=ability,
-        )
+        ))
 
     @mcp.tool(
         title="Analyze HP Number",

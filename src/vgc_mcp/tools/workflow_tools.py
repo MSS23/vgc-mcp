@@ -4,7 +4,7 @@ These tools combine multiple operations into single, intuitive commands
 for common VGC teambuilding workflows.
 """
 
-from typing import Annotated, Optional
+from typing import Annotated, Any, Optional, cast
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
@@ -15,6 +15,13 @@ from vgc_mcp_core.tools import (
     workflow_spread_handlers,
     workflow_team_handlers,
 )
+from vgc_mcp_core.tools.response_contract import CalcResult
+
+
+def _calc(result: dict[str, Any]) -> CalcResult:
+    """FastMCP validates the dict against CalcResult (publishing an outputSchema);
+    returning the dict itself keeps direct `.fn` callers working."""
+    return cast(CalcResult, result)
 
 
 def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyzer):
@@ -333,7 +340,7 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
         num_sets: Annotated[int, Field(ge=1, description="Number of top Smogon spreads to check")] = 3,
         attacker_stage: Annotated[int, Field(ge=-6, le=6, description="Extra offensive stat stage on whichever side is attacking (e.g. +2 after Swords Dance). Do not pass -1 for Intimidate — use `intimidate`.")] = 0,
         intimidate: Annotated[Optional[bool], Field(description="Intimidate on the attacker. Omit (None) = automatic: applied only when the defending side's Pokemon actually has Intimidate (Incineroar, Landorus-T, Mega Manectric...). True = the user asked for the Intimidate calc (e.g. an Intimidate partner is on the field) — apply -1 Atk even if the defender itself lacks it. False = never apply it. Attacker-side blockers (Clear Body, Inner Focus...) are always respected.")] = None,
-    ) -> dict:
+    ) -> CalcResult:
         """Calculate damage using YOUR exact spread vs the top Smogon sets.
 
         Answers questions like "how much damage does my 252 HP / 116 Def Entei
@@ -350,7 +357,7 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
         direction='to' for your move and once with direction='from' for
         their retaliation.
         """
-        return await workflow_calc_handlers.calc_damage_vs_smogon_sets(
+        return _calc(await workflow_calc_handlers.calc_damage_vs_smogon_sets(
             pokeapi,
             smogon,
             my_pokemon=my_pokemon,
@@ -371,7 +378,7 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
             num_sets=num_sets,
             attacker_stage=attacker_stage,
             intimidate=intimidate,
-        )
+        ))
 
     @mcp.tool(
         title="Optimize EV Spread",

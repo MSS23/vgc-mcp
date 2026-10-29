@@ -18,6 +18,7 @@ from vgc_mcp_core.models.pokemon import (
 )
 from vgc_mcp_core.rules.format_detect import detect_champions_format
 from vgc_mcp_core.tools import spread_common
+from vgc_mcp_core.tools import spread_contract as sc
 from vgc_mcp_core.tools.build_helpers import build_pokemon
 from vgc_mcp_core.tools.spread_champions import (
     _optimize_multi_survival_champions,
@@ -152,6 +153,10 @@ async def optimize_dual_survival_spread(
         # Auto-fetch Smogon spreads for attackers
         smogon1 = await spread_common._get_common_spread(smogon, survive_hit1_attacker)
         smogon2 = await spread_common._get_common_spread(smogon, survive_hit2_attacker)
+        meta1 = smogon1.get("meta") if smogon1 and None in (
+            survive_hit1_nature, survive_hit1_evs, survive_hit1_item, survive_hit1_ability) else None
+        meta2 = smogon2.get("meta") if smogon2 and None in (
+            survive_hit2_nature, survive_hit2_evs, survive_hit2_item, survive_hit2_ability) else None
 
         # Fill in attacker 1 defaults
         if smogon1:
@@ -423,7 +428,7 @@ async def optimize_dual_survival_spread(
             except ValueError:
                 current_nature = Nature.SERIOUS
 
-            def test_spread(hp_ev: int, def_ev: int, spd_ev: int) -> tuple:
+            def test_spread(hp_ev: int, def_ev: int, spd_ev: int) -> tuple[Any, ...]:
                 """Test a specific spread. Returns (survives_both, margin, result1, result2, pcts)."""
                 defender = build_pokemon(
                     name=pokemon_name,
@@ -561,7 +566,7 @@ async def optimize_dual_survival_spread(
             except ValueError:
                 current_nature = Nature.SERIOUS
 
-            def test_spread_fallback(hp_ev: int, def_ev: int, spd_ev: int) -> tuple:
+            def test_spread_fallback(hp_ev: int, def_ev: int, spd_ev: int) -> tuple[Any, ...]:
                 defender = build_pokemon(
                     name=pokemon_name,
                     base_stats=my_base,
@@ -858,7 +863,15 @@ async def optimize_dual_survival_spread(
                 if adj_r1.max_percent < 100 and adj_r2.max_percent < 100:
                     dual_result["hp_optimization"] = hp_adj
 
-        return dual_result
+        parts = [
+            sc.hit_part(survive_hit1_attacker, survive_hit1_move, best_results["survives1"], f"{format_percent(r1.min_percent)}-{format_percent(r1.max_percent)}%"),
+            sc.hit_part(survive_hit2_attacker, survive_hit2_move, best_results["survives2"], f"{format_percent(r2.min_percent)}-{format_percent(r2.max_percent)}%"),
+        ]
+        if outspeed_pokemon:
+            parts.append(sc.speed_part(outspeed_pokemon, final_spe > target_speed))
+        return sc.contract(dual_result, optimized_pokemon, parts,
+                           {"attacker_1": attacker1, "attacker_2": attacker2}, [meta1, meta2],
+                           item=item, ability=ability)
 
     except Exception as e:
         return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
@@ -868,7 +881,7 @@ async def optimize_multi_survival_spread(
     pokeapi: PokeAPIClient,
     smogon: Optional[SmogonStatsClient],
     pokemon_name: str,
-    threats: list[dict],
+    threats: list[dict[str, Any]],
     nature: Optional[str] = None,
     outspeed_pokemon: Optional[str] = None,
     outspeed_pokemon_nature: str = 'timid',
@@ -1317,11 +1330,17 @@ async def optimize_multi_survival_spread(
                     if all_survive and adj_hp >= final_hp - 2:
                         multi_result["hp_optimization"] = hp_adj
 
-            return multi_result
+            survived = sum(1 for row in threat_analysis if row["survives"])
+            parts = [f"survives {survived}/{len(threat_analysis)} threats"]
+            if target_speed > 0 and outspeed_pokemon:
+                parts.append(sc.speed_part(outspeed_pokemon, True))
+            return sc.contract(multi_result, optimized_pokemon, parts,
+                               sc.attackers([t.attacker_build for t in prepared_threats]),
+                               [t.meta for t in prepared_threats])
 
         else:
             # No solution found - report impossibility
-            return {
+            return sc.apply_contract({
                 "success": False,
                 "impossible": True,
                 "reason": "No EV spread can survive all threats simultaneously",
@@ -1336,7 +1355,9 @@ async def optimize_multi_survival_spread(
                     "time_ms": time_ms,
                     "cache_size": cache_stats["total_cached"]
                 }
-            }
+            }, headline=f"No EV spread lets {sc.species(pokemon_name)} survive all {len(prepared_threats)} threats",
+                spreads_used={k: sc.spread_label(b) for k, b in sc.attackers([t.attacker_build for t in prepared_threats]).items()},
+                data_source=sc.data_source_from_meta(sc.first_meta(t.meta for t in prepared_threats)))
 
     except Exception as e:
         return error_response(ErrorCodes.INTERNAL_ERROR, str(e))

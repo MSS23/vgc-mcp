@@ -13,10 +13,12 @@ from vgc_mcp_core.models.move import MoveCategory
 from vgc_mcp_core.models.pokemon import (
     EVSpread,
     Nature,
+    PokemonBuild,
     get_nature_modifier,
 )
 from vgc_mcp_core.rules.format_detect import detect_champions_format
 from vgc_mcp_core.tools import spread_common
+from vgc_mcp_core.tools import spread_contract as sc
 from vgc_mcp_core.tools.build_helpers import build_pokemon
 from vgc_mcp_core.tools.spread_champions import (
     _design_spread_with_benchmarks_champions,
@@ -271,6 +273,8 @@ async def design_spread_with_benchmarks(
         hp_evs = 0
         def_evs = 0
         spd_evs = 0
+        contract_attackers: dict[str, PokemonBuild] = {}
+        smogon_meta = None
 
         if survive_pokemon and survive_move:
             try:
@@ -329,6 +333,7 @@ async def design_spread_with_benchmarks(
                 vessel_of_ruin = False
 
                 survive_pokemon_evs = offensive_investment(survive_pokemon_evs, is_physical)
+                smogon_meta = smogon_spread.get("meta") if smogon_spread and smogon_used else None
                 if survive_pokemon_ability:
                     ability_lower = normalize_ability_name(survive_pokemon_ability)
                     if ability_lower == "sword-of-ruin":
@@ -371,6 +376,7 @@ async def design_spread_with_benchmarks(
                     item=survive_pokemon_item,
                     tera_type=survive_pokemon_tera_type,
                 )
+                contract_attackers = {"attacker": attacker}
 
                 # Resolve defender ability (mega > Smogon > pokeapi) so all
                 # defensive ability interactions auto-apply, and pre-compute
@@ -707,7 +713,9 @@ async def design_spread_with_benchmarks(
         )
         results["showdown_paste"] = pokemon_build_to_showdown(optimized_pokemon)
 
-        return results
+        return sc.contract(results, optimized_pokemon, sc.benchmark_parts(results["benchmarks"]),
+                           contract_attackers, [smogon_meta],
+                           item=item, ability=ability)
 
     except Exception as e:
         return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
