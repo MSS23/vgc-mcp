@@ -5,7 +5,6 @@ from typing import Any, Optional
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.calc.bulk_optimization import (
     analyze_diminishing_returns,
-    calculate_optimal_bulk_distribution,
 )
 from vgc_mcp_core.calc.champions_optimization import (
     SP_TOTAL_MAX,
@@ -15,6 +14,7 @@ from vgc_mcp_core.config import EV_BREAKPOINTS_LV50, logger, normalize_evs
 from vgc_mcp_core.formats.showdown import pokemon_build_to_showdown
 from vgc_mcp_core.models.move import MoveCategory
 from vgc_mcp_core.models.pokemon import (
+    BaseStats,
     EVSpread,
     Nature,
     get_nature_modifier,
@@ -458,6 +458,7 @@ async def optimize_bulk(
     total_bulk_evs: int = 252,
     defense_bias: float = 0.5,
     item: Optional[str] = None,
+    include_analysis: bool = False,
 ) -> dict[str, Any]:
     try:
         base_stats = await pokeapi.get_base_stats(pokemon_name)
@@ -591,6 +592,8 @@ async def optimize_bulk(
         }
         if hp_optimization:
             result["hp_optimization"] = hp_optimization
+        if include_analysis and best_spread:
+            result.update(_bulk_analysis(base_stats, parsed_nature, total_bulk_evs, best_spread, defense_bias))
         return result
 
     except Exception as e:
@@ -775,97 +778,55 @@ async def optimize_bulk_math(
     defense_weight: float = 0.5,
     item: Optional[str] = None,
 ) -> dict[str, Any]:
-    try:
-        base_stats = await pokeapi.get_base_stats(pokemon_name)
+    """Deprecated alias: optimize_bulk with the analysis block included."""
+    result = await optimize_bulk(
+        pokeapi, pokemon_name, nature, total_bulk_evs, defense_bias=defense_weight,
+        item=item, include_analysis=True,
+    )
+    if "error" not in result:
+        result["defense_weight"] = defense_weight
+    return result
 
-        try:
-            parsed_nature = Nature(nature.lower())
-        except ValueError:
-            return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {nature}')
 
-        # --- Champions (Reg MA) Stat-Point branch ---------------------------
-        if detect_champions_format(pokemon_name):
-            total_bulk_sps = SP_TOTAL_MAX if total_bulk_evs == 252 else min(SP_TOTAL_MAX, total_bulk_evs)
-            return await _optimize_bulk_champions(pokeapi,
-                pokemon_name, base_stats, parsed_nature, total_bulk_sps, defense_weight, item
-            )
-
-        # Use the mathematical optimizer
-        result = calculate_optimal_bulk_distribution(
-            base_hp=base_stats.hp,
-            base_def=base_stats.defense,
-            base_spd=base_stats.special_defense,
-            nature=nature,
-            total_bulk_evs=total_bulk_evs,
-            defense_weight=defense_weight
-        )
-
-        # HP number optimization for item
-        hp_optimization = None
-        hp_evs_final = result.hp_evs
-        final_hp = result.final_hp
-        if item:
-            from vgc_mcp_core.calc.hp_optimization import adjust_hp_evs_for_item
-            hp_adj = adjust_hp_evs_for_item(base_stats.hp, result.hp_evs, item)
-            if hp_adj["adjusted_evs"] != result.hp_evs:
-                hp_evs_final = hp_adj["adjusted_evs"]
-                final_hp = hp_adj["adjusted_hp"]
-                hp_optimization = hp_adj
-
-        # Generate Showdown paste
-        types = await pokeapi.get_pokemon_types(pokemon_name)
-        optimized_pokemon = build_pokemon(
-            name=pokemon_name,
-            base_stats=base_stats,
-            types=types,
-            nature=parsed_nature,
-            spread=EVSpread(
-                hp=hp_evs_final,
-                attack=0,
-                defense=result.def_evs,
-                special_attack=0,
-                special_defense=result.spd_evs,
-                speed=0
-            ),
-        )
-        showdown_paste = pokemon_build_to_showdown(optimized_pokemon)
-
-        response = {
-            "pokemon": pokemon_name,
-            "nature": nature,
-            "base_stats": {
-                "hp": base_stats.hp,
-                "defense": base_stats.defense,
-                "special_defense": base_stats.special_defense
-            },
-            "total_bulk_evs": total_bulk_evs,
-            "defense_weight": defense_weight,
-            "optimal_spread": {
-                "hp_evs": hp_evs_final,
-                "def_evs": result.def_evs,
-                "spd_evs": result.spd_evs
-            },
-            "final_stats": {
-                "hp": final_hp,
-                "defense": result.final_def,
-                "special_defense": result.final_spd
-            },
-            "bulk_scores": {
-                "physical_bulk": result.physical_bulk,
-                "special_bulk": result.special_bulk,
-                "total_bulk": result.total_bulk
-            },
-            "efficiency_score": result.efficiency_score,
-            "explanation": result.explanation,
-            "comparison_vs_naive": result.comparison,
-            "showdown_paste": showdown_paste,
-        }
-        if hp_optimization:
-            response["hp_optimization"] = hp_optimization
-        return response
-
-    except Exception as e:
-        return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
+def _bulk_analysis(base_stats: BaseStats, nature: Nature, total_bulk_evs: int,
+                   spread: dict[str, Any], weight: float) -> dict[str, Any]:
+    """Final stats, weighted bulk and gain vs single-stat investment for a spread."""
+    hp, def_stat, spd_stat = spread["final_hp"], spread["final_def"], spread["final_spd"]
+    phys, spec = hp * def_stat, hp * spd_stat
+    def_mod = get_nature_modifier(nature, "defense")
+    spd_mod = get_nature_modifier(nature, "special_defense")
+    naive_evs = min(252, total_bulk_evs)
+    all_hp = calculate_hp(base_stats.hp, 31, naive_evs, 50) * calculate_stat(base_stats.defense, 31, 0, 50, def_mod)
+    all_def = calculate_hp(base_stats.hp, 31, 0, 50) * calculate_stat(base_stats.defense, 31, naive_evs, 50, def_mod)
+    efficiency = phys / max(all_hp, all_def) if max(all_hp, all_def) else 1.0
+    if base_stats.hp > base_stats.defense + 20:
+        parts = [f"High base HP ({base_stats.hp}) means investing more in Defense is efficient"]
+    elif base_stats.defense > base_stats.hp + 20:
+        parts = [f"High base Defense ({base_stats.defense}) means investing more in HP is efficient"]
+    else:
+        parts = [f"Balanced bases ({base_stats.hp} HP, {base_stats.defense} Def) benefit from split investment"]
+    if def_mod > 1:
+        parts.append("Defense-boosting nature reduces need for Defense EVs")
+    elif spd_mod > 1:
+        parts.append("SpD-boosting nature reduces need for SpD EVs")
+    if efficiency > 1.05:
+        parts.append(f"Optimal distribution is {(efficiency - 1) * 100:.1f}% more efficient than single-stat investment")
+    return {
+        "base_stats": {"hp": base_stats.hp, "defense": base_stats.defense,
+                       "special_defense": base_stats.special_defense},
+        "final_stats": {"hp": hp, "defense": def_stat, "special_defense": spd_stat},
+        "bulk_scores": {"physical_bulk": phys, "special_bulk": spec,
+                        "total_bulk": int(phys * weight + spec * (1 - weight))},
+        "efficiency_score": round(efficiency, 3),
+        "explanation": " | ".join(parts),
+        "comparison_vs_naive": {
+            "all_hp_bulk": all_hp,
+            "all_def_bulk": all_def,
+            "optimal_bulk": phys,
+            "efficiency_gain_vs_all_hp": round((phys / all_hp - 1) * 100, 1) if all_hp else 0,
+            "efficiency_gain_vs_all_def": round((phys / all_def - 1) * 100, 1) if all_def else 0,
+        },
+    }
 
 
 async def analyze_bulk_diminishing_returns(

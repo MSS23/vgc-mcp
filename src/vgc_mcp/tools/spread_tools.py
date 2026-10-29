@@ -107,11 +107,13 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         total_bulk_evs: Annotated[int, Field(ge=0, description="Total EVs to allocate to bulk; in Champions sessions the default (252) maps to the full 66 Stat Point budget")] = 252,
         defense_bias: Annotated[float, Field(description="0.5 = balanced, 1.0 = physical, 0.0 = special")] = 0.5,
         item: Annotated[Optional[str], Field(description="Held item for HP number optimization (e.g. 'leftovers', 'life-orb')")] = None,
+        include_analysis: Annotated[bool, Field(description="Also return final stats, weighted bulk scores, efficiency vs all-HP / all-Def investment and an explanation")] = False,
     ) -> dict:
         """Optimize HP/Def/SpD EVs for maximum effective bulk.
 
         Searches distributions to maximize HP*Def / HP*SpD weighted by
         defense_bias and returns the optimal spread with a Showdown paste.
+        Set include_analysis for the diminishing-returns breakdown.
         """
         return await spread_handlers.optimize_bulk(
             pokeapi,
@@ -120,6 +122,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             total_bulk_evs=total_bulk_evs,
             defense_bias=defense_bias,
             item=item,
+            include_analysis=include_analysis,
         )
 
     @mcp.tool(
@@ -167,13 +170,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         defense_weight: Annotated[float, Field(description="0.0 = all SpD, 0.5 = balanced, 1.0 = all Def")] = 0.5,
         item: Annotated[Optional[str], Field(description="Held item for HP number optimization (e.g. 'leftovers', 'life-orb')")] = None,
     ) -> dict:
-        """Find the mathematically optimal HP/Def/SpD split using diminishing returns analysis.
-
-        Uses the principle that Effective Bulk = HP * Defense and equalizes
-        marginal gains across stats: high base HP Pokemon should invest more
-        in defenses, high base Def/SpD Pokemon more in HP, and nature boosts
-        reduce the EVs needed in that stat. Returns the optimal distribution
-        with an efficiency comparison vs naive allocation.
+        """Deprecated alias of `optimize_bulk`; will be removed in the next release.
+        Call optimize_bulk(..., defense_bias=<defense_weight>, include_analysis=True) instead.
         """
         return await spread_handlers.optimize_bulk_math(
             pokeapi,
