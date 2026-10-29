@@ -18,6 +18,12 @@ updates:
           - pytest*
           - ruff
           - mypy
+    ignore:
+      # mcp 2.0 removed mcp.server.fastmcp, which the server is built on.
+      # Moving to 2.x is a migration (see the bound in pyproject.toml), so
+      # skip major bumps; minor and patch releases of 1.x still come through.
+      - dependency-name: mcp
+        update-types: ["version-update:semver-major"]
     commit-message:
       prefix: "deps"
 
