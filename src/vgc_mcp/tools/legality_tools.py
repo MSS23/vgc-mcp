@@ -460,20 +460,14 @@ def register_legality_tools(mcp: FastMCP, team_manager):
             min_length=1,
         )],
     ) -> dict:
-        """Override the current regulation for this session based on user phrasing.
+        """Set the regulation from the user's wording ("Reg F", "Champions", "Reg MB").
 
-        Routes natural inputs to the right format system:
-        - "Reg F" / "G" / "H" / "I" -> mainline regulations (EVs, 252/508)
-        - "Champions" / "Reg MC" -> reg_mc_champs (Stat Points, 32/66; current default)
-        - "Reg MB" -> reg_mb_champs (Stat Points, 32/66;
-          current default Champions roster)
-        - "Reg MA" -> reg_ma_champs (original Champions roster, subset of MB/MC)
+        - "Reg F" / "G" / "H" / "I": mainline (EVs, 252/508)
+        - "Champions" / "Reg MC": reg_mc_champs, the default (Stat Points, 32/66)
+        - "Reg MB" / "Reg MA": the earlier Champions rosters
 
-        Champions formats automatically use the matching gen9championsvgc2026regm*
-        Smogon JSON files; mainline regulations use the gen9vgc2025/2026
-        regulation-specific files. The format system flag flips downstream
-        stat / damage calcs to the correct math. Returns confirmation with the
-        resolved code and active format system.
+        Every later calc, stat display, paste and usage lookup in the session
+        follows the chosen format. Returns the resolved code and format system.
         """
         from vgc_mcp_core.rules.regulation_router import (
             describe_regulation,
@@ -518,23 +512,14 @@ def register_legality_tools(mcp: FastMCP, team_manager):
             description="Pokemon names from the conversation. Pass whatever the user wrote — Mega forms, restricteds, partial names — the inference normalizes everything",
         )],
     ) -> dict:
-        """ZERO-CONFIG REGULATION DETECTION — call this whenever a user mentions
-        Pokemon and you don't know the format yet. Combines inference and
-        session-set in one call.
+        """Infer the regulation from the Pokemon mentioned and set it for the session.
 
-        Behavior:
-        - If the user already explicitly chose a regulation (via
-          set_session_regulation), this is a no-op and returns
-          `{"action": "skipped"}` — explicit user choice always wins.
-        - Otherwise infers from Pokemon mentions and AUTO-SETS the session
-          regulation if confidence is high or medium.
-        - Returns action ("set" | "skipped" | "low_confidence"), the regulation
-          code, format_system, stat units, confidence, and the reasoning so you
-          can mention it to the user (e.g. "I noticed you have a Mega — using
-          Champions Reg MC").
-
-        Use when the user pastes a team, asks about a specific Pokemon or
-        damage matchup, or anytime the active regulation is unclear.
+        Call the first time Pokemon come up and the format is unknown (Megas
+        mean Champions Reg MC; restricteds mean Reg G/I). Sets the session when
+        confidence is high or medium; skips when the user already chose one.
+        Returns action ("set" | "skipped" | "low_confidence"), regulation,
+        format_system, stat units, confidence and reasoning to tell the user.
+        On low_confidence, ask which regulation they meant.
         """
         from vgc_mcp_core.rules.regulation_router import (
             auto_detect_regulation,

@@ -251,19 +251,15 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         item: Annotated[Optional[str], Field(description="Your Pokemon's held item")] = None,
         ability: Annotated[Optional[str], Field(description="Your Pokemon's ability")] = None,
     ) -> CalcResult:
-        """Design an EV spread that meets specific speed and SINGLE survival benchmarks.
+        """Spread that outspeeds a target and survives ONE attack (or maxes offense).
 
-        Use this for questions like "I need Entei to survive Surging Strikes and
-        outspeed Chien-Pao" or "Build a max Attack Entei that outspeeds Chien-Pao
-        after Icy Wind". For surviving TWO DIFFERENT attacks, use
-        optimize_dual_survival_spread instead. Returns a complete EV spread with
-        final stats and the survival calc.
+        Use for "Entei that survives Surging Strikes and outspeeds Chien-Pao" or
+        "max Attack Entei that outspeeds Chien-Pao after Icy Wind". Two
+        different attacks: optimize_dual_survival_spread. Returns the spread,
+        final stats, the survival calc and a Showdown paste.
 
-        IMPORTANT - ASK ABOUT TERA BEFORE CALLING: ask the user whether the
-        attacker is Terastallized and whether their own Pokemon is
-        Terastallizing (and the types). Tera significantly changes damage
-        (same-type Tera boosts STAB 1.5x -> 2.0x; Tera changes defensive
-        typing). Do NOT assume no Tera - always clarify first.
+        Ask first whether either side Terastallizes (and to what); Tera changes
+        STAB and defensive typing, so do not assume none.
         """
         return _calc(await spread_benchmark_handlers.design_spread_with_benchmarks(
             pokeapi,
@@ -332,22 +328,14 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         item: Annotated[Optional[str], Field(description="Your Pokemon's held item")] = None,
         ability: Annotated[Optional[str], Field(description="Your Pokemon's ability")] = None,
     ) -> CalcResult:
-        """Find the optimal EV spread to survive TWO DIFFERENT attacks while meeting a speed benchmark.
+        """Cheapest spread that survives TWO different attackers and hits a speed target.
 
-        PRIORITY ORDER: Speed EVs first (minimum needed), then bulk
-        optimization, nature selected last. If nature is not specified, the
-        tool automatically selects the best nature that needs minimum Speed
-        EVs, still survives both attacks, and leaves maximum EVs for
-        bulk/offense. Searches ALL valid (HP, Def, SpD) combinations and
-        returns the optimal spread with a per-attack survival breakdown, or
-        reports "IMPOSSIBLE" if no valid spread exists.
-
-        Use ONLY when the user wants to survive TWO DIFFERENT attacks from TWO
-        DIFFERENT attackers (e.g. "survive Wicked Blow AND Sludge Bomb"). Do
-        NOT use when only ONE attacker/move is mentioned (use
-        design_spread_with_benchmarks), when surviving the same attack twice
-        (that's a 2HKO check), or for max Attack/SpA builds (use
-        design_spread_with_benchmarks with prioritize='offense').
+        Use only for two different attacks ("survive Wicked Blow AND Sludge
+        Bomb"). One attack: design_spread_with_benchmarks. Three or more:
+        optimize_multi_survival_spread. Speed is set first, then HP/Def/SpD;
+        with no nature given it picks the one that leaves the most spare
+        investment. Returns the spread, a per-attack survival breakdown and a
+        Showdown paste, or "IMPOSSIBLE".
         """
         return _calc(await spread_survival_handlers.optimize_dual_survival_spread(
             pokeapi,
@@ -410,17 +398,12 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         item: Annotated[Optional[str], Field(description="Your Pokemon's held item")] = None,
         ability: Annotated[Optional[str], Field(description="Your Pokemon's ability")] = None,
     ) -> CalcResult:
-        """Find the optimal EV spread to survive 3-6 different attacks while meeting a speed benchmark.
+        """Cheapest spread that survives 3-6 different attacks and hits a speed target.
 
-        Extends optimize_dual_survival_spread to multiple threats using a
-        hybrid algorithm (HP-first optimization for 3 threats, hill climbing
-        for 4-6). Use when the user wants to survive THREE OR MORE different
-        attacks (e.g. "survive Urshifu, Flutter Mane, AND Chi-Yu"); for 2
-        threats use optimize_dual_survival_spread instead (faster).
-
-        Returns the optimal spread with per-threat survival analysis and a
-        Showdown paste, or partial solutions plus a Tera suggestion when the
-        benchmarks are impossible.
+        Use for "survive Urshifu, Flutter Mane AND Chi-Yu". Two attacks:
+        optimize_dual_survival_spread (faster). Returns the spread, per-threat
+        survival and a Showdown paste; when impossible, the best partial
+        solution plus a Tera suggestion. Takes 5-30 seconds.
         """
         return _calc(await spread_survival_handlers.optimize_multi_survival_spread(
             pokeapi,

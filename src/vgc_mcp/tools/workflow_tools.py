@@ -341,21 +341,15 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
         attacker_stage: Annotated[int, Field(ge=-6, le=6, description="Extra offensive stat stage on whichever side is attacking (e.g. +2 after Swords Dance). Do not pass -1 for Intimidate — use `intimidate`.")] = 0,
         intimidate: Annotated[Optional[bool], Field(description="Intimidate on the attacker. Omit (None) = automatic: applied only when the defending side's Pokemon actually has Intimidate (Incineroar, Landorus-T, Mega Manectric...). True = the user asked for the Intimidate calc (e.g. an Intimidate partner is on the field) — apply -1 Atk even if the defender itself lacks it. False = never apply it. Attacker-side blockers (Clear Body, Inner Focus...) are always respected.")] = None,
     ) -> CalcResult:
-        """Calculate damage using YOUR exact spread vs the top Smogon sets.
+        """Damage from YOUR exact spread against each of the top Smogon sets.
 
-        Answers questions like "how much damage does my 252 HP / 116 Def Entei
-        take from the top 3 Urshifu sets?" or "can my Flutter Mane OHKO the
-        common Incineroar spreads?". Returns your build's stats, the top N
-        Smogon sets with usage % and their exact spread, a damage calc per
-        set, a survival/KO summary, and `meta_info` naming the chaos
-        month/format/rating. Champions-aware: in a Champions session your
-        `my_*_evs` are Stat Points and the opponent sets are SP spreads.
-        If the defending side's Pokemon has Intimidate (or `intimidate=True`
-        was requested) and the move is physical, each set also carries
-        `after_intimidate` (the -1 Atk calc), unless the attacker's ability
-        blocks or reverses it — see the top-level `intimidate` field. For a head-to-head ("my X vs Y"), call once with
-        direction='to' for your move and once with direction='from' for
-        their retaliation.
+        Use for "how much does my 252 HP / 116 Def Entei take from the top
+        Urshifu sets?" or "does my Flutter Mane OHKO common Incineroar?".
+        Returns your stats, each set's usage % and spread, one calc per set, a
+        KO/survival summary and `meta_info` (chaos month/format/rating). In
+        Champions, `my_*_evs` are Stat Points. Physical moves into Intimidate
+        also get `after_intimidate`. For a head-to-head, call with
+        direction='to' and again with direction='from'.
         """
         return _calc(await workflow_calc_handlers.calc_damage_vs_smogon_sets(
             pokeapi,

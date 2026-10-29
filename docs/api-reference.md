@@ -120,14 +120,15 @@ Find minimum HP/Def/SpD EVs needed to survive a specific attack.
 **Returns:**
 ```json
 {
-  "defender_name": "Ogerpon-Hearthflame",
-  "required_hp_evs": 252,
-  "required_def_evs": 4,
-  "final_stats": {"hp": 187, "def": 111, "spd": 100},
+  "attacker": "urshifu-rapid-strike",
+  "attacker_nature": "Adamant",
+  "attacker_ev_spread": "4 HP / 252 Atk / 252 Spe",
+  "attacker_spread": {"pokemon": "urshifu-rapid-strike", "source": "smogon", "...": "..."},
+  "defender": "ogerpon-hearthflame",
+  "defender_recommended_spread": "252 HP / 4 Def",
+  "defender_showdown_paste": "...",
   "damage_range": "67.4-78.6%",
-  "survival_rate": 100.0,
-  "showdown_paste": "...",
-  "attacker_spread_info": "Adamant 4 HP / 252 Atk / 252 Spe Urshifu-Rapid-Strike @ Choice Scarf"
+  "survival_chance": "100.00%"
 }
 ```
 
