@@ -12,6 +12,7 @@ from vgc_mcp_core.calc.matchup import COMMON_THREATS, analyze_threat_matchup
 from vgc_mcp_core.config import logger
 from vgc_mcp_core.rules.format_detect import detect_champions_format
 from vgc_mcp_core.team.manager import TeamManager
+from vgc_mcp_core.tools.build_helpers import build_pokemon
 from vgc_mcp_core.utils.errors import ErrorCodes, api_error, error_response
 
 
@@ -72,21 +73,21 @@ def register_team_matchup_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Op
                         base_stats = await pokeapi.get_base_stats(pokemon_name)
                         types = await pokeapi.get_pokemon_types(pokemon_name)
                         if is_champions:
-                            team_slots.append(PokemonBuild(
+                            team_slots.append(build_pokemon(
                                 name=pokemon_name,
                                 base_stats=base_stats,
                                 types=types,
                                 nature=Nature.SERIOUS,
-                                format_system="champions",
-                                sps=StatPointSpread(),
+                                champions=True,
+                                spread=StatPointSpread(),
                             ))
                         else:
-                            team_slots.append(PokemonBuild(
+                            team_slots.append(build_pokemon(
                                 name=pokemon_name,
                                 base_stats=base_stats,
                                 types=types,
                                 nature=Nature.SERIOUS,
-                                evs=EVSpread()
+                                spread=EVSpread(),
                             ))
                     except Exception:
                         continue

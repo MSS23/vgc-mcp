@@ -19,6 +19,9 @@ from vgc_mcp_core.calc.damage import format_percent
 from vgc_mcp_core.formats.showdown import pokemon_build_to_showdown
 from vgc_mcp_core.models.pokemon import Nature, PokemonBuild, StatPointSpread
 from vgc_mcp_core.rules.format_detect import detect_champions_format
+from vgc_mcp_core.tools.build_helpers import build_pokemon
+from vgc_mcp_core.tools.build_helpers import parse_ev_string as _parse_ev_string
+from vgc_mcp_core.tools.build_helpers import parse_sp_string as _parse_sp_string
 from vgc_mcp_core.tools.smogon_helpers import sps_from_smogon_spread
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
@@ -29,32 +32,6 @@ logger = logging.getLogger(__name__)
 
 # Module-level Smogon client reference
 _smogon_client: Optional[SmogonStatsClient] = None
-
-
-def _parse_ev_string(ev_string: str) -> dict:
-    """Parse '252/0/0/252/0/4' format into EV dict."""
-    parts = ev_string.split("/")
-    if len(parts) != 6:
-        raise ValueError(f"EV string must have 6 values separated by '/', got: {ev_string}")
-    stat_names = ["hp", "attack", "defense", "special_attack", "special_defense", "speed"]
-    return {name: int(val) for name, val in zip(stat_names, parts)}
-
-
-def _parse_sp_string(sp_string: str) -> StatPointSpread:
-    """Parse 'HP/Atk/Def/SpA/SpD/Spe' Stat Points into a StatPointSpread.
-
-    Champions (Reg MA) caps: 0-32 per stat, 66 total (enforced by the model).
-    """
-    parts = [p.strip() for p in sp_string.replace(",", "/").split("/")]
-    if len(parts) != 6:
-        raise ValueError(
-            "Stat Points must be 'HP/Atk/Def/SpA/SpD/Spe' (six values)"
-        )
-    vals = [int(p) for p in parts]
-    return StatPointSpread(
-        hp=vals[0], attack=vals[1], defense=vals[2],
-        special_attack=vals[3], special_defense=vals[4], speed=vals[5],
-    )
 
 
 async def _build_champions_attacker(
@@ -104,13 +81,13 @@ async def _build_champions_attacker(
 
     nature_enum = Nature(nature.lower() if nature else "serious")
 
-    return PokemonBuild(
+    return build_pokemon(
         name=attacker_name,
         base_stats=base_stats,
         types=types,
         nature=nature_enum,
-        format_system="champions",
-        sps=sp_spread,
+        champions=True,
+        spread=sp_spread,
         item=item,
         ability=ability,
     )

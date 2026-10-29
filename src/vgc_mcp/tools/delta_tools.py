@@ -29,6 +29,7 @@ from vgc_mcp_core.models.pokemon import (
 )
 from vgc_mcp_core.rules.format_detect import detect_champions_format
 from vgc_mcp_core.tools import get_common_spread
+from vgc_mcp_core.tools.build_helpers import build_pokemon
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 from vgc_mcp_core.utils.normalize import normalize_move
 
@@ -85,13 +86,13 @@ async def _build_from_overrides(
                 special_defense=sp_src.get("special_defense", 0),
                 speed=sp_src.get("speed", 0),
             )
-        return PokemonBuild(
+        return build_pokemon(
             name=name,
             base_stats=base,
             types=types,
             nature=Nature(nature.lower()) if nature else Nature.SERIOUS,
-            format_system="champions",
-            sps=sp_obj,
+            champions=True,
+            spread=sp_obj,
             ivs=IVSpread(),
             item=item,
             ability=ability,
@@ -108,12 +109,12 @@ async def _build_from_overrides(
             special_defense=evs.get("special_defense", 0),
             speed=evs.get("speed", 0),
         )
-    return PokemonBuild(
+    return build_pokemon(
         name=name,
         base_stats=base,
         types=types,
         nature=Nature(nature.lower()) if nature else Nature.SERIOUS,
-        evs=ev_obj,
+        spread=ev_obj,
         ivs=IVSpread(),
         item=item,
         ability=ability,

@@ -52,6 +52,7 @@ from vgc_mcp_core.tools.ability_helpers import (
     compute_intimidate_attack_stage,
     resolve_ability,
 )
+from vgc_mcp_core.tools.build_helpers import build_pokemon
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 # Natures that boost / nerf each stat
@@ -273,10 +274,12 @@ def _sp_paste_for(me_name, me_base, nature_str, sp_dict):
         nat = Nature((nature_str or "serious").lower())
     except ValueError:
         nat = Nature.SERIOUS
-    build = PokemonBuild(
-        name=me_name, base_stats=me_base, nature=nat,
-        format_system="champions",
-        sps=StatPointSpread(**sp_dict),
+    build = build_pokemon(
+        name=me_name,
+        base_stats=me_base,
+        nature=nat,
+        champions=True,
+        spread=StatPointSpread(**sp_dict),
     )
     return pokemon_build_to_showdown(build)
 
@@ -448,11 +451,16 @@ def _build_champions_subject(me_base, me_types, me_name, nature, sp_dict,
         nat = Nature((nature or "serious").lower()) if isinstance(nature, str) else nature
     except ValueError:
         nat = Nature.SERIOUS
-    return PokemonBuild(
-        name=me_name, base_stats=me_base, types=me_types,
-        nature=nat, format_system="champions",
-        sps=StatPointSpread(**sp_dict), ivs=IVSpread(),
-        ability=ability, item=item,
+    return build_pokemon(
+        name=me_name,
+        base_stats=me_base,
+        types=me_types,
+        nature=nat,
+        champions=True,
+        spread=StatPointSpread(**sp_dict),
+        ivs=IVSpread(),
+        ability=ability,
+        item=item,
     )
 
 
@@ -488,9 +496,13 @@ def _min_invest_for_ko(me_base, me_types, me_name, off_stat, nat_mod, move, tgt_
 
     for ev in range(0, 256, 4):
         evs = EVSpread(**{off_stat: ev})
-        me_build = PokemonBuild(
-            name=me_name, base_stats=me_base, types=me_types,
-            nature=nature, evs=evs, ivs=IVSpread(),
+        me_build = build_pokemon(
+            name=me_name,
+            base_stats=me_base,
+            types=me_types,
+            nature=nature,
+            spread=evs,
+            ivs=IVSpread(),
             ability=me_ability,
         )
         result = calculate_damage(
@@ -598,19 +610,23 @@ def _build_from_spread(
     # Champions Smogon spreads carry `sps` (no `evs`) — build an SP build so
     # the target's stats aren't silently computed at zero investment.
     if spread.get("format_system") == "champions" or spread.get("sps"):
-        return PokemonBuild(
-            name=name, base_stats=base, types=types,
+        return build_pokemon(
+            name=name,
+            base_stats=base,
+            types=types,
             nature=Nature((spread.get("nature") or "serious").lower()),
-            format_system="champions",
-            sps=StatPointSpread.from_sps_dict(spread.get("sps") or {}),
+            champions=True,
+            spread=StatPointSpread.from_sps_dict(spread.get("sps") or {}),
             item=spread.get("item"),
             ability=spread.get("ability"),
         )
     evs = spread.get("evs") or {}
-    return PokemonBuild(
-        name=name, base_stats=base, types=types,
+    return build_pokemon(
+        name=name,
+        base_stats=base,
+        types=types,
         nature=Nature((spread.get("nature") or "serious").lower()),
-        evs=EVSpread(
+        spread=EVSpread(
             hp=evs.get("hp", 0),
             attack=evs.get("attack", 0),
             defense=evs.get("defense", 0),
@@ -672,9 +688,13 @@ def _min_total_invest_for_survival(me_base, me_types, me_name, def_stat,
             if hp_ev + def_ev >= best_total:
                 continue
             evs = EVSpread(hp=hp_ev, **{def_stat: def_ev})
-            me_build = PokemonBuild(
-                name=me_name, base_stats=me_base, types=me_types,
-                nature=nature, evs=evs, ivs=IVSpread(),
+            me_build = build_pokemon(
+                name=me_name,
+                base_stats=me_base,
+                types=me_types,
+                nature=nature,
+                spread=evs,
+                ivs=IVSpread(),
                 ability=me_ability,
             )
             result = calculate_damage(

@@ -26,6 +26,7 @@ from vgc_mcp_core.models.pokemon import (
     get_nature_modifier,
 )
 from vgc_mcp_core.rules.format_detect import detect_champions_format
+from vgc_mcp_core.tools.build_helpers import build_pokemon, parse_sp_string
 from vgc_mcp_core.tools.smogon_helpers import (
     get_common_spread as _shared_get_common_spread,
 )
@@ -394,16 +395,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             def _parse_sp_string(s: Optional[str]) -> Optional[StatPointSpread]:
                 if not s:
                     return None
-                parts = [p.strip() for p in s.replace(",", "/").split("/")]
-                if len(parts) != 6:
-                    raise ValueError(
-                        "Stat Points must be 'HP/Atk/Def/SpA/SpD/Spe' (six values)"
-                    )
-                vals = [int(p) for p in parts]
-                spread = StatPointSpread(
-                    hp=vals[0], attack=vals[1], defense=vals[2],
-                    special_attack=vals[3], special_defense=vals[4], speed=vals[5],
-                )
+                spread = parse_sp_string(s)
                 if not spread.is_valid():
                     raise ValueError(f"Total Stat Points ({spread.total}) exceed maximum of 66")
                 return spread
@@ -674,34 +666,34 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             # format_system='champions'; mainline keeps the EVSpread path
             # byte-for-byte unchanged.
             if is_champions:
-                attacker = PokemonBuild(
+                attacker = build_pokemon(
                     name=attacker_name,
                     base_stats=atk_base,
                     types=atk_types,
                     nature=atk_nature,
-                    format_system="champions",
-                    sps=attacker_sp_spread or StatPointSpread(),
+                    champions=True,
+                    spread=attacker_sp_spread or StatPointSpread(),
                     item=attacker_item,
                     ability=attacker_ability,
-                    tera_type=attacker_tera_type
+                    tera_type=attacker_tera_type,
                 )
-                defender = PokemonBuild(
+                defender = build_pokemon(
                     name=defender_name,
                     base_stats=def_base,
                     types=def_types,
                     nature=def_nature,
-                    format_system="champions",
-                    sps=defender_sp_spread or StatPointSpread(),
+                    champions=True,
+                    spread=defender_sp_spread or StatPointSpread(),
                     ability=defender_ability,
-                    tera_type=defender_tera_type
+                    tera_type=defender_tera_type,
                 )
             else:
-                attacker = PokemonBuild(
+                attacker = build_pokemon(
                     name=attacker_name,
                     base_stats=atk_base,
                     types=atk_types,
                     nature=atk_nature,
-                    evs=EVSpread(
+                    spread=EVSpread(
                         hp=attacker_hp_evs,
                         attack=attacker_atk_evs,
                         defense=attacker_def_evs,
@@ -711,15 +703,15 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     ),
                     item=attacker_item,
                     ability=attacker_ability,
-                    tera_type=attacker_tera_type
+                    tera_type=attacker_tera_type,
                 )
 
-                defender = PokemonBuild(
+                defender = build_pokemon(
                     name=defender_name,
                     base_stats=def_base,
                     types=def_types,
                     nature=def_nature,
-                    evs=EVSpread(
+                    spread=EVSpread(
                         hp=defender_hp_evs,
                         attack=defender_atk_evs,
                         defense=defender_def_evs,
@@ -728,7 +720,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         speed=defender_spe_evs,
                     ),
                     ability=defender_ability,
-                    tera_type=defender_tera_type
+                    tera_type=defender_tera_type,
                 )
 
             # Determine Protosynthesis/Quark Drive boost stats
@@ -853,42 +845,29 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         spread_nature_enum = def_nature
 
                     # Create defender build for this spread (SP-aware in Champions)
-                    if is_champions:
-                        spread_defender = PokemonBuild(
-                            name=defender_name,
-                            base_stats=def_base,
-                            types=def_types,
-                            nature=spread_nature_enum,
-                            format_system="champions",
-                            # Prefer the threat's champions-tagged SP spread; otherwise
-                            # convert its real mainline Smogon EVs to the SP grain so its
-                            # bulk is preserved (NOT zeroed out).
-                            sps=sps_from_smogon_spread(spread_data) or evs_to_sps_spread(
-                                EVSpread(
-                                    hp=spread_evs.get("hp", 0),
-                                    defense=spread_evs.get("defense", 0),
-                                    special_defense=spread_evs.get("special_defense", 0),
-                                )
-                            ),
-                            item=spread_item,
-                            ability=spread_ability,
-                            tera_type=defender_tera_type
-                        )
-                    else:
-                        spread_defender = PokemonBuild(
-                            name=defender_name,
-                            base_stats=def_base,
-                            types=def_types,
-                            nature=spread_nature_enum,
-                            evs=EVSpread(
-                                hp=spread_evs.get("hp", 0),
-                                defense=spread_evs.get("defense", 0),
-                                special_defense=spread_evs.get("special_defense", 0)
-                            ),
-                            item=spread_item,
-                            ability=spread_ability,
-                            tera_type=defender_tera_type
-                        )
+                    bulk_evs = EVSpread(
+                        hp=spread_evs.get("hp", 0),
+                        defense=spread_evs.get("defense", 0),
+                        special_defense=spread_evs.get("special_defense", 0),
+                    )
+                    spread_defender = build_pokemon(
+                        name=defender_name,
+                        base_stats=def_base,
+                        types=def_types,
+                        nature=spread_nature_enum,
+                        champions=is_champions,
+                        # Champions: prefer the threat's champions-tagged SP spread;
+                        # otherwise convert its real mainline Smogon EVs to the SP
+                        # grain so its bulk is preserved (NOT zeroed out).
+                        spread=(
+                            sps_from_smogon_spread(spread_data) or evs_to_sps_spread(bulk_evs)
+                            if is_champions
+                            else bulk_evs
+                        ),
+                        item=spread_item,
+                        ability=spread_ability,
+                        tera_type=defender_tera_type,
+                    )
 
                     # Update modifiers with this spread's item and ability
                     spread_modifiers = DamageModifiers(
@@ -1399,23 +1378,23 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             # The attacker's offensive allocation is what the threshold solver
             # sweeps, so it starts empty (EVSpread / StatPointSpread).
             if is_champions:
-                attacker = PokemonBuild(
+                attacker = build_pokemon(
                     name=attacker_name,
                     base_stats=atk_base,
                     types=atk_types,
                     nature=atk_nature,
-                    format_system="champions",
-                    sps=StatPointSpread(),
+                    champions=True,
+                    spread=StatPointSpread(),
                     item=attacker_item,
                     ability=attacker_ability,
                 )
-                defender = PokemonBuild(
+                defender = build_pokemon(
                     name=defender_name,
                     base_stats=def_base,
                     types=def_types,
                     nature=def_nature,
-                    format_system="champions",
-                    sps=StatPointSpread(
+                    champions=True,
+                    spread=StatPointSpread(
                         hp=ev_to_sp(defender_hp_evs, round_mode="ceil"),
                         defense=ev_to_sp(defender_def_evs, round_mode="ceil") if move.category.value == "physical" else 0,
                         special_defense=ev_to_sp(defender_def_evs, round_mode="ceil") if move.category.value == "special" else 0,
@@ -1423,22 +1402,22 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     ability=defender_ability,
                 )
             else:
-                attacker = PokemonBuild(
+                attacker = build_pokemon(
                     name=attacker_name,
                     base_stats=atk_base,
                     types=atk_types,
                     nature=atk_nature,
-                    evs=EVSpread(),
+                    spread=EVSpread(),
                     item=attacker_item,
                     ability=attacker_ability,
                 )
 
-                defender = PokemonBuild(
+                defender = build_pokemon(
                     name=defender_name,
                     base_stats=def_base,
                     types=def_types,
                     nature=def_nature,
-                    evs=EVSpread(
+                    spread=EVSpread(
                         hp=defender_hp_evs,
                         defense=defender_def_evs if move.category.value == "physical" else 0,
                         special_defense=defender_def_evs if move.category.value == "special" else 0
@@ -1514,23 +1493,23 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     attack=units_needed if is_atk_stat else 0,
                     special_attack=0 if is_atk_stat else units_needed,
                 )
-                attacker_pokemon = PokemonBuild(
+                attacker_pokemon = build_pokemon(
                     name=attacker_name,
                     base_stats=atk_base,
                     types=atk_types,
                     nature=atk_nature,
-                    format_system="champions",
-                    sps=ko_sps,
+                    champions=True,
+                    spread=ko_sps,
                     ability=attacker_ability,
                     item=attacker_item,
                 )
             else:
-                attacker_pokemon = PokemonBuild(
+                attacker_pokemon = build_pokemon(
                     name=attacker_name,
                     base_stats=atk_base,
                     types=atk_types,
                     nature=atk_nature,
-                    evs=EVSpread(
+                    spread=EVSpread(
                         attack=units_needed if is_atk_stat else 0,
                         special_attack=0 if is_atk_stat else units_needed,
                     ),
@@ -1778,32 +1757,32 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         attack=ev_to_sp(attacker_evs, round_mode="floor") if is_physical else 0,
                         special_attack=0 if is_physical else ev_to_sp(attacker_evs, round_mode="floor"),
                     )
-                attacker = PokemonBuild(
+                attacker = build_pokemon(
                     name=attacker_name,
                     base_stats=atk_base,
                     types=atk_types,
                     nature=atk_nature,
-                    format_system="champions",
-                    sps=attacker_sp_spread,
+                    champions=True,
+                    spread=attacker_sp_spread,
                     item=attacker_item,
                     ability=attacker_ability_name,
                 )
-                defender = PokemonBuild(
+                defender = build_pokemon(
                     name=defender_name,
                     base_stats=def_base,
                     types=def_types,
                     nature=def_nature,
-                    format_system="champions",
-                    sps=StatPointSpread(),
+                    champions=True,
+                    spread=StatPointSpread(),
                     ability=defender_ability,
                 )
             else:
-                attacker = PokemonBuild(
+                attacker = build_pokemon(
                     name=attacker_name,
                     base_stats=atk_base,
                     types=atk_types,
                     nature=atk_nature,
-                    evs=EVSpread(
+                    spread=EVSpread(
                         hp=attacker_full_evs.get("hp", 0),
                         attack=attacker_full_evs.get("attack", attacker_evs if is_physical else 0),
                         defense=attacker_full_evs.get("defense", 0),
@@ -1815,12 +1794,12 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     ability=attacker_ability_name,
                 )
 
-                defender = PokemonBuild(
+                defender = build_pokemon(
                     name=defender_name,
                     base_stats=def_base,
                     types=def_types,
                     nature=def_nature,
-                    evs=EVSpread(),
+                    spread=EVSpread(),
                     ability=defender_ability,
                 )
 
@@ -1964,20 +1943,20 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             is_def_physical = result["def_stat_name"] == "defense"
             if is_champions:
                 defender_ev_str = f"{hp_units} HP / {def_units} {def_stat_table_label} SP"
-                recommended_defender = PokemonBuild(
+                recommended_defender = build_pokemon(
                     name=defender_name,
                     base_stats=def_base,
                     types=def_types,
                     nature=def_nature,
-                    format_system="champions",
-                    sps=StatPointSpread(
+                    champions=True,
+                    spread=StatPointSpread(
                         hp=hp_units,
                         defense=def_units if is_def_physical else 0,
                         special_defense=0 if is_def_physical else def_units,
                     ),
                     ability=defender.ability,
                     item=defender.item,
-                    tera_type=defender.tera_type
+                    tera_type=defender.tera_type,
                 )
             else:
                 defender_ev_str = f"{result['hp_evs']} HP / {result['def_evs']} {result['def_stat_name']}"
@@ -1986,15 +1965,15 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     "defense": result["def_evs"] if result["def_stat_name"] == "Def" else 0,
                     "special_defense": result["def_evs"] if result["def_stat_name"] == "SpD" else 0,
                 }
-                recommended_defender = PokemonBuild(
+                recommended_defender = build_pokemon(
                     name=defender_name,
                     base_stats=def_base,
                     types=def_types,
                     nature=def_nature,
-                    evs=EVSpread(**defender_evs_dict),
+                    spread=EVSpread(**defender_evs_dict),
                     ability=defender.ability,
                     item=defender.item,
-                    tera_type=defender.tera_type
+                    tera_type=defender.tera_type,
                 )
             defender_showdown_paste = pokemon_build_to_showdown(recommended_defender)
 
@@ -2193,22 +2172,22 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             )
 
             # Create builds — stamp abilities so the engine auto-applies them.
-            attacker = PokemonBuild(
+            attacker = build_pokemon(
                 name=attacker_name,
                 base_stats=atk_base,
                 types=atk_types,
                 nature=atk_nature,
-                evs=EVSpread(attack=attacker_atk_evs, special_attack=attacker_spa_evs),
+                spread=EVSpread(attack=attacker_atk_evs, special_attack=attacker_spa_evs),
                 item=attacker_item,
                 ability=attacker_ability,
             )
 
-            defender = PokemonBuild(
+            defender = build_pokemon(
                 name=defender_name,
                 base_stats=def_base,
                 types=def_types,
                 nature=def_nature,
-                evs=EVSpread(hp=defender_hp_evs, defense=defender_def_evs, special_defense=defender_spd_evs),
+                spread=EVSpread(hp=defender_hp_evs, defense=defender_def_evs, special_defense=defender_spd_evs),
                 ability=defender_ability,
             )
 
@@ -2460,12 +2439,12 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 if sig_item:
                     attacker_item = sig_item
 
-            attacker = PokemonBuild(
+            attacker = build_pokemon(
                 name=attacker_name,
                 base_stats=atk_base,
                 types=atk_types,
                 nature=atk_nature,
-                evs=EVSpread(
+                spread=EVSpread(
                     attack=attacker_evs if is_physical else 0,
                     special_attack=0 if is_physical else attacker_evs
                 ),
@@ -2489,12 +2468,12 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     else:
                         test_evs.special_defense = def_ev
 
-                    defender = PokemonBuild(
+                    defender = build_pokemon(
                         name=defender_name,
                         base_stats=def_base,
                         types=def_types,
                         nature=def_nature_parsed,
-                        evs=test_evs,
+                        spread=test_evs,
                         ability=defender_ability,
                     )
 
@@ -2531,12 +2510,12 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                             break
 
             if best_spread is None:
-                max_defender = PokemonBuild(
+                max_defender = build_pokemon(
                     name=defender_name,
                     base_stats=def_base,
                     types=def_types,
                     nature=def_nature_parsed,
-                    evs=EVSpread(hp=252, defense=252 if is_physical else 0, special_defense=0 if is_physical else 252),
+                    spread=EVSpread(hp=252, defense=252 if is_physical else 0, special_defense=0 if is_physical else 252),
                     ability=defender_ability,
                 )
                 modifiers = DamageModifiers(
@@ -2838,27 +2817,27 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
 
             # Create Pokemon builds — abilities stamped so engine auto-applies
             # offensive/defensive ability interactions even without modifier override.
-            defender = PokemonBuild(
+            defender = build_pokemon(
                 name=defender_name,
                 base_stats=def_base,
                 types=def_types,
                 nature=def_nature,
-                evs=EVSpread(
+                spread=EVSpread(
                     hp=defender_hp_evs,
                     defense=defender_def_evs,
                     special_defense=defender_spd_evs
                 ),
                 item=defender_item,
                 ability=defender_ability,
-                tera_type=defender_tera_type
+                tera_type=defender_tera_type,
             )
 
-            attacker1 = PokemonBuild(
+            attacker1 = build_pokemon(
                 name=attacker1_name,
                 base_stats=atk1_base,
                 types=atk1_types,
                 nature=atk1_nature,
-                evs=EVSpread(
+                spread=EVSpread(
                     attack=attacker1_atk_evs,
                     special_attack=attacker1_spa_evs
                 ),
@@ -2866,12 +2845,12 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 ability=attacker1_ability,
             )
 
-            attacker2 = PokemonBuild(
+            attacker2 = build_pokemon(
                 name=attacker2_name,
                 base_stats=atk2_base,
                 types=atk2_types,
                 nature=atk2_nature,
-                evs=EVSpread(
+                spread=EVSpread(
                     attack=attacker2_atk_evs,
                     special_attack=attacker2_spa_evs
                 ),

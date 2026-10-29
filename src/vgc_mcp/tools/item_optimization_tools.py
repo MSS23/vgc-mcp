@@ -23,10 +23,10 @@ from vgc_mcp_core.models.pokemon import (
     BaseStats,
     EVSpread,
     Nature,
-    PokemonBuild,
     StatPointSpread,
 )
 from vgc_mcp_core.rules.format_detect import detect_champions_format
+from vgc_mcp_core.tools.build_helpers import build_pokemon
 from vgc_mcp_core.tools.smogon_helpers import (
     get_common_spread as _shared_get_common_spread,
 )
@@ -114,13 +114,13 @@ def _champions_ev_tradeoff(
         # Enforce the 32/stat, 66-total budget defensively.
         validate_sp_allocation(sps)
 
-        test_pokemon = PokemonBuild(
+        test_pokemon = build_pokemon(
             name=pokemon_name,
             base_stats=base_stats,
             types=types,
             nature=nature,
-            format_system="champions",
-            sps=StatPointSpread(**sps),
+            champions=True,
+            spread=StatPointSpread(**sps),
             item=item,
         )
 
@@ -262,22 +262,22 @@ def register_item_optimization_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogo
                 attacker_sps = sps_from_smogon_spread(attacker_spread)
                 if attacker_sps is None:
                     attacker_sps = _sps_from_evs_dict(attacker_evs_dict)
-                attacker = PokemonBuild(
+                attacker = build_pokemon(
                     name=pokemon_name,
                     base_stats=attacker_base,
                     types=attacker_types,
                     nature=attacker_nature_enum,
-                    format_system="champions",
-                    sps=attacker_sps,
-                    ability=attacker_ability
+                    champions=True,
+                    spread=attacker_sps,
+                    ability=attacker_ability,
                 )
             else:
-                attacker = PokemonBuild(
+                attacker = build_pokemon(
                     name=pokemon_name,
                     base_stats=attacker_base,
                     types=attacker_types,
                     nature=attacker_nature_enum,
-                    evs=EVSpread(
+                    spread=EVSpread(
                         hp=attacker_evs_dict.get("hp", 0),
                         attack=attacker_evs_dict.get("attack", 0),
                         defense=attacker_evs_dict.get("defense", 0),
@@ -285,7 +285,7 @@ def register_item_optimization_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogo
                         special_defense=attacker_evs_dict.get("special_defense", 0),
                         speed=attacker_evs_dict.get("speed", 0)
                     ),
-                    ability=attacker_ability
+                    ability=attacker_ability,
                 )
 
             # Build defender
@@ -312,30 +312,30 @@ def register_item_optimization_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogo
             # spread is explicitly champions-tagged (then honour the SP scale).
             defender_sps = sps_from_smogon_spread(defender_spread)
             if defender_sps is not None:
-                defender = PokemonBuild(
+                defender = build_pokemon(
                     name=target_name,
                     base_stats=defender_base,
                     types=defender_types,
                     nature=defender_nature_enum,
                     ability=defender_ability,
-                    format_system="champions",
-                    sps=defender_sps
+                    champions=True,
+                    spread=defender_sps,
                 )
             else:
-                defender = PokemonBuild(
+                defender = build_pokemon(
                     name=target_name,
                     base_stats=defender_base,
                     types=defender_types,
                     nature=defender_nature_enum,
                     ability=defender_ability,
-                    evs=EVSpread(
+                    spread=EVSpread(
                         hp=defender_evs_dict.get("hp", 0),
                         attack=defender_evs_dict.get("attack", 0),
                         defense=defender_evs_dict.get("defense", 0),
                         special_attack=defender_evs_dict.get("special_attack", 0),
                         special_defense=defender_evs_dict.get("special_defense", 0),
                         speed=defender_evs_dict.get("speed", 0)
-                    )
+                    ),
                 )
 
             # Create modifiers
@@ -376,9 +376,7 @@ def register_item_optimization_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogo
                     key_takeaways.append(f"Life Orb recoil: {life_orb_result.recoil_percent}% per attack ({life_orb_result.turns_sustainable} attacks sustainable)")
 
             # Generate Showdown paste for attacker
-            attacker_dict = attacker.model_dump()
-            attacker_dict["item"] = best_item.item
-            attacker_with_best_item = PokemonBuild(**attacker_dict)
+            attacker_with_best_item = attacker.model_copy(update={"item": best_item.item})
             showdown_paste = pokemon_build_to_showdown(attacker_with_best_item)
 
             return {
@@ -470,22 +468,22 @@ def register_item_optimization_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogo
                     # divides it by 4 (EV/4) in the HP formula; 1 SP ==
                     # "8 EVs of effectiveness" (EV slot SP*2), so pass SP*8 to
                     # reproduce the champions HP number exactly.
-                    pokemon = PokemonBuild(
+                    pokemon = build_pokemon(
                         name=pokemon_name,
                         base_stats=base_stats,
                         types=types,
                         nature=nature_enum,
-                        format_system="champions",
-                        sps=StatPointSpread(hp=hp_units),
+                        champions=True,
+                        spread=StatPointSpread(hp=hp_units),
                     )
                     hp_ev_equiv = hp_units * 8
                 else:
-                    pokemon = PokemonBuild(
+                    pokemon = build_pokemon(
                         name=pokemon_name,
                         base_stats=base_stats,
                         types=types,
                         nature=nature_enum,
-                        evs=EVSpread(hp=hp_units)
+                        spread=EVSpread(hp=hp_units),
                     )
                     hp_ev_equiv = hp_units
 
@@ -631,11 +629,11 @@ def register_item_optimization_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogo
                     },
                 }
 
-            pokemon = PokemonBuild(
+            pokemon = build_pokemon(
                 name=pokemon_name,
                 base_stats=base_stats,
                 types=types,
-                nature=Nature(nature.lower())
+                nature=Nature(nature.lower()),
             )
 
             # Calculate trade-offs

@@ -14,8 +14,9 @@ from vgc_mcp_core.calc.stats import (
     get_min_speed,
 )
 from vgc_mcp_core.calc.stats_champions import calculate_speed_sp
-from vgc_mcp_core.models.pokemon import EVSpread, IVSpread, Nature, PokemonBuild, StatPointSpread
+from vgc_mcp_core.models.pokemon import EVSpread, IVSpread, Nature, StatPointSpread
 from vgc_mcp_core.rules.format_detect import detect_champions_format
+from vgc_mcp_core.tools.build_helpers import build_pokemon
 from vgc_mcp_core.utils.errors import (
     api_error,
     invalid_evs_error,
@@ -36,13 +37,13 @@ def _champions_stats_response(
         hp=hp_sps, attack=atk_sps, defense=def_sps,
         special_attack=spa_sps, special_defense=spd_sps, speed=spe_sps,
     )
-    pokemon = PokemonBuild(
+    pokemon = build_pokemon(
         name=pokemon_name,
         base_stats=base_stats,
         types=types,
         nature=parsed_nature,
-        format_system="champions",
-        sps=sps,
+        champions=True,
+        spread=sps,
         ivs=IVSpread(),
         level=level,
     )
@@ -175,12 +176,12 @@ def register_stats_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             total_evs = total_invest
 
             # Create Pokemon build
-            pokemon = PokemonBuild(
+            pokemon = build_pokemon(
                 name=pokemon_name,
                 base_stats=base_stats,
                 types=types,
                 nature=parsed_nature,
-                evs=EVSpread(
+                spread=EVSpread(
                     hp=hp_evs,
                     attack=atk_evs,
                     defense=def_evs,
@@ -189,7 +190,7 @@ def register_stats_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                     speed=spe_evs
                 ),
                 ivs=IVSpread(),
-                level=level
+                level=level,
             )
 
             # Calculate stats

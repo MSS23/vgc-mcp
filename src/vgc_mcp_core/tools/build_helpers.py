@@ -14,9 +14,16 @@ N-defender case (which previously did N sequential awaits).
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Optional
+from typing import Any, Mapping, Optional, Union
 
-from ..models.pokemon import BaseStats, EVSpread, IVSpread, Nature, PokemonBuild
+from ..models.pokemon import (
+    BaseStats,
+    EVSpread,
+    IVSpread,
+    Nature,
+    PokemonBuild,
+    StatPointSpread,
+)
 
 
 async def fetch_pokemon_basics(
@@ -61,37 +68,109 @@ async def fetch_pokemon_basics_many(
     return await asyncio.gather(*[_one(n) for n in names])
 
 
+Allocation = Union[EVSpread, StatPointSpread, Mapping[str, int], str, None]
+"""A stat allocation in any accepted shape: an EVSpread / StatPointSpread, a
+stat dict, or a "HP/Atk/Def/SpA/SpD/Spe" slash string. None means no investment."""
+
+
+def parse_ev_string(ev_string: str) -> dict:
+    """Parse '252/0/0/252/0/4' format into EV dict."""
+    parts = ev_string.split("/")
+    if len(parts) != 6:
+        raise ValueError(f"EV string must have 6 values separated by '/', got: {ev_string}")
+    stat_names = ["hp", "attack", "defense", "special_attack", "special_defense", "speed"]
+    return {name: int(val) for name, val in zip(stat_names, parts)}
+
+
+def parse_sp_string(sp_string: str) -> StatPointSpread:
+    """Parse 'HP/Atk/Def/SpA/SpD/Spe' Stat Points into a StatPointSpread.
+
+    Champions caps: 0-32 per stat (enforced by the model); the 66 total is
+    enforced when the spread is placed on a PokemonBuild.
+    """
+    parts = [p.strip() for p in sp_string.replace(",", "/").split("/")]
+    if len(parts) != 6:
+        raise ValueError(
+            "Stat Points must be 'HP/Atk/Def/SpA/SpD/Spe' (six values)"
+        )
+    vals = [int(p) for p in parts]
+    return StatPointSpread(
+        hp=vals[0], attack=vals[1], defense=vals[2],
+        special_attack=vals[3], special_defense=vals[4], speed=vals[5],
+    )
+
+
+def to_allocation(
+    spread: Allocation, *, champions: bool
+) -> Union[EVSpread, StatPointSpread]:
+    """Coerce any accepted allocation shape into the format's spread model.
+
+    Champions -> StatPointSpread (dicts via `StatPointSpread.from_sps_dict`,
+    strings via `parse_sp_string`); mainline -> EVSpread (dicts via
+    `parse_ev_dict`, strings via `parse_ev_string`). Passing a spread model of
+    the other format is a programming error: convert explicitly with
+    `calc.conversion.evs_to_sps_spread` / `sps_to_evs_spread` instead.
+    """
+    if spread is None:
+        return StatPointSpread() if champions else EVSpread()
+    if isinstance(spread, StatPointSpread):
+        if not champions:
+            raise TypeError("StatPointSpread given for a mainline build")
+        return spread
+    if isinstance(spread, EVSpread):
+        if champions:
+            raise TypeError("EVSpread given for a Champions build")
+        return spread
+    if isinstance(spread, str):
+        return parse_sp_string(spread) if champions else EVSpread(**parse_ev_string(spread))
+    return StatPointSpread.from_sps_dict(dict(spread)) if champions else parse_ev_dict(dict(spread))
+
+
 def build_pokemon(
     name: str,
     base_stats: BaseStats,
-    types: list[str],
+    types: Optional[list[str]] = None,
     *,
     nature: Nature = Nature.SERIOUS,
-    evs: Optional[EVSpread] = None,
+    evs: Allocation = None,
     ivs: Optional[IVSpread] = None,
     item: Optional[str] = None,
     ability: Optional[str] = None,
     tera_type: Optional[str] = None,
     moves: Optional[list[str]] = None,
+    spread: Allocation = None,
+    champions: Optional[bool] = None,
+    level: int = 50,
 ) -> PokemonBuild:
-    """Construct a PokemonBuild with sensible defaults.
+    """Construct a format-correct PokemonBuild.
 
-    Removes the 12-line PokemonBuild constructor invocation that's repeated
-    78+ times across tool files. Pass only the fields that matter for your
-    calculation; everything else gets a safe default.
+    `spread` is the stat allocation in any `Allocation` shape (`evs` is the
+    legacy name for the same argument). `champions=True` yields a
+    `format_system="champions"` build carrying a StatPointSpread; False yields
+    a mainline build carrying an EVSpread. When `champions` is None it is
+    inferred from the spread type (a StatPointSpread means Champions).
     """
-    return PokemonBuild(
+    if spread is not None and evs is not None:
+        raise TypeError("Pass the allocation as `spread` or `evs`, not both")
+    alloc = spread if spread is not None else evs
+    if champions is None:
+        champions = isinstance(alloc, StatPointSpread)
+    stats = to_allocation(alloc, champions=champions)
+    common: dict[str, Any] = dict(
         name=name,
         base_stats=base_stats,
-        types=types,
+        types=types or [],
         nature=nature,
-        evs=evs or EVSpread(),
         ivs=ivs or IVSpread(),
+        level=level,
         item=item,
         ability=ability,
         tera_type=tera_type,
         moves=moves or [],
     )
+    if champions:
+        return PokemonBuild(format_system="champions", sps=stats, **common)
+    return PokemonBuild(evs=stats, **common)
 
 
 def parse_ev_dict(ev_dict: Optional[dict]) -> EVSpread:

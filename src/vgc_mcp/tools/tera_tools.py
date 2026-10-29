@@ -8,8 +8,9 @@ from pydantic import Field
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.config import logger
-from vgc_mcp_core.models.pokemon import EVSpread, Nature, PokemonBuild, StatPointSpread
+from vgc_mcp_core.models.pokemon import EVSpread, Nature, StatPointSpread
 from vgc_mcp_core.rules.format_detect import detect_champions_format
+from vgc_mcp_core.tools.build_helpers import build_pokemon
 from vgc_mcp_core.utils.errors import api_error, pokemon_not_found_error
 from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name
 
@@ -73,26 +74,26 @@ def register_tera_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 sps = StatPointSpread.from_sps_dict(sp_input) if any(
                     short in sp_input for short in ("hp", "at", "df", "sa", "sd", "sp")
                 ) else StatPointSpread(**sp_input)
-                pokemon = PokemonBuild(
+                pokemon = build_pokemon(
                     name=pokemon_name,
                     base_stats=base_stats,
                     types=types,
                     nature=nature,
-                    format_system="champions",
-                    sps=sps,
+                    champions=True,
+                    spread=sps,
                     item=item,
-                    ability=ability
+                    ability=ability,
                 )
             else:
                 evs = EVSpread(**spread.get("evs", {}))
-                pokemon = PokemonBuild(
+                pokemon = build_pokemon(
                     name=pokemon_name,
                     base_stats=base_stats,
                     types=types,
                     nature=nature,
-                    evs=evs,
+                    spread=evs,
                     item=item,
-                    ability=ability
+                    ability=ability,
                 )
 
             # Score each Tera type

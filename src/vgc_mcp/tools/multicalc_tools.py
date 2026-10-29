@@ -27,6 +27,7 @@ from vgc_mcp_core.models.pokemon import (
     StatPointSpread,
 )
 from vgc_mcp_core.rules.format_detect import detect_champions_format
+from vgc_mcp_core.tools.build_helpers import build_pokemon
 from vgc_mcp_core.tools.smogon_helpers import sps_from_smogon_spread
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
@@ -121,25 +122,25 @@ async def _build_pokemon_from_smogon(
         else:
             sp_spread = fetched_sp_spread or StatPointSpread()
 
-        return PokemonBuild(
+        return build_pokemon(
             name=pokemon_name,
             base_stats=base_stats,
             types=types,
             nature=nature_enum,
-            format_system="champions",
-            sps=sp_spread,
+            champions=True,
+            spread=sp_spread,
             item=item,
             ability=ability,
         )
 
     evs_dict = evs or {}
 
-    return PokemonBuild(
+    return build_pokemon(
         name=pokemon_name,
         base_stats=base_stats,
         types=types,
         nature=nature_enum,
-        evs=EVSpread(
+        spread=EVSpread(
             hp=evs_dict.get("hp", 0),
             attack=evs_dict.get("attack", 0),
             defense=evs_dict.get("defense", 0),
@@ -148,7 +149,7 @@ async def _build_pokemon_from_smogon(
             speed=evs_dict.get("speed", 0)
         ),
         item=item,
-        ability=ability
+        ability=ability,
     )
 
 

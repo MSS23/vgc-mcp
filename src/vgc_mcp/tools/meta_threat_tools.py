@@ -25,10 +25,10 @@ from vgc_mcp_core.formats.showdown import pokemon_build_to_showdown
 from vgc_mcp_core.models.pokemon import (
     EVSpread,
     Nature,
-    PokemonBuild,
     StatPointSpread,
 )
 from vgc_mcp_core.rules.format_detect import detect_champions_format
+from vgc_mcp_core.tools.build_helpers import build_pokemon
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 from vgc_mcp_core.utils.normalize import normalize_move
 
@@ -215,14 +215,14 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                 special_defense=spd_evs,
                 speed=spe_evs,
             ))
-            your_pokemon = PokemonBuild(
+            your_pokemon = build_pokemon(
                 name=pokemon_name,
                 base_stats=base_stats,
                 types=your_types,
                 nature=nature_enum,
-                format_system="champions",
-                sps=sps,
-                level=50
+                champions=True,
+                spread=sps,
+                level=50,
             )
         else:
             evs = EVSpread(
@@ -234,13 +234,13 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                 speed=spe_evs
             )
 
-            your_pokemon = PokemonBuild(
+            your_pokemon = build_pokemon(
                 name=pokemon_name,
                 base_stats=base_stats,
                 types=your_types,
                 nature=nature_enum,
-                evs=evs,
-                level=50
+                spread=evs,
+                level=50,
             )
 
         your_stats = calculate_all_stats(your_pokemon)
@@ -294,13 +294,13 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                         special_defense=top_spread["evs"].get("special_defense", 0),
                         speed=top_spread["evs"].get("speed", 0)
                     )
-                    threat_pokemon_build = PokemonBuild(
+                    threat_pokemon_build = build_pokemon(
                         name=threat_name,
                         base_stats=threat_base_stats,
                         types=threat_types,
                         nature=threat_nature,
-                        evs=threat_evs,
-                        level=50
+                        spread=threat_evs,
+                        level=50,
                     )
                     threat_stats = calculate_all_stats(threat_pokemon_build)
                     threat_spread = {
@@ -485,13 +485,13 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                         special_defense=top_spread["evs"].get("special_defense", 0),
                         speed=top_spread["evs"].get("speed", 0)
                     )
-                    threat_pokemon_build = PokemonBuild(
+                    threat_pokemon_build = build_pokemon(
                         name=threat_name,
                         base_stats=threat_base_stats,
                         types=threat_types,
                         nature=threat_nature,
-                        evs=threat_evs,
-                        level=50
+                        spread=threat_evs,
+                        level=50,
                     )
                     threat_stats = calculate_all_stats(threat_pokemon_build)
                     threat_spread = {
@@ -681,14 +681,14 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                 defense=def_evs,
                 special_defense=spd_evs,
             ))
-            your_pokemon = PokemonBuild(
+            your_pokemon = build_pokemon(
                 name=pokemon_name,
                 base_stats=base_stats,
                 types=your_types,
                 nature=nature_enum,
-                format_system="champions",
-                sps=sps,
-                level=50
+                champions=True,
+                spread=sps,
+                level=50,
             )
         else:
             evs = EVSpread(
@@ -697,13 +697,13 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                 special_defense=spd_evs
             )
 
-            your_pokemon = PokemonBuild(
+            your_pokemon = build_pokemon(
                 name=pokemon_name,
                 base_stats=base_stats,
                 types=your_types,
                 nature=nature_enum,
-                evs=evs,
-                level=50
+                spread=evs,
+                level=50,
             )
 
         your_stats = calculate_all_stats(your_pokemon)
@@ -725,13 +725,13 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                     special_defense=top_spread["evs"].get("special_defense", 0),
                     speed=top_spread["evs"].get("speed", 0)
                 )
-                threat_pokemon_build = PokemonBuild(
+                threat_pokemon_build = build_pokemon(
                     name=threat_pokemon,
                     base_stats=threat_base_stats,
                     types=threat_types,
                     nature=threat_nature,
-                    evs=threat_evs,
-                    level=50
+                    spread=threat_evs,
+                    level=50,
                 )
                 threat_stats = calculate_all_stats(threat_pokemon_build)
                 threat_spread = {
@@ -986,13 +986,13 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                     special_defense=top_spread["evs"].get("special_defense", 0),
                     speed=top_spread["evs"].get("speed", 0)
                 )
-                threat_pokemon_build = PokemonBuild(
+                threat_pokemon_build = build_pokemon(
                     name=threat_pokemon,
                     base_stats=threat_base_stats,
                     types=threat_types,
                     nature=threat_nature,
-                    evs=threat_evs_data,
-                    level=50
+                    spread=threat_evs_data,
+                    level=50,
                 )
                 threat_stats = calculate_all_stats(threat_pokemon_build)
                 threat_spread = {
@@ -1064,18 +1064,18 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                     continue
 
                 if is_champions:
-                    test_pokemon = PokemonBuild(
+                    test_pokemon = build_pokemon(
                         name=pokemon_name,
                         base_stats=base_stats,
                         types=your_types,
                         nature=nature_enum,
-                        format_system="champions",
-                        sps=StatPointSpread(
+                        champions=True,
+                        spread=StatPointSpread(
                             hp=hp_evs,
                             defense=def_evs if move_is_physical else 0,
                             special_defense=0 if move_is_physical else def_evs,
                         ),
-                        level=50
+                        level=50,
                     )
                 else:
                     evs = EVSpread(
@@ -1084,13 +1084,13 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                         special_defense=0 if move_is_physical else def_evs
                     )
 
-                    test_pokemon = PokemonBuild(
+                    test_pokemon = build_pokemon(
                         name=pokemon_name,
                         base_stats=base_stats,
                         types=your_types,
                         nature=nature_enum,
-                        evs=evs,
-                        level=50
+                        spread=evs,
+                        level=50,
                     )
 
                 test_stats = calculate_all_stats(test_pokemon)
@@ -1238,18 +1238,18 @@ def register_meta_threat_tools(mcp: FastMCP, smogon, pokeapi, team_manager):
                 "hp_remaining_percent": best_spread["hp_remaining_percent"],
             }
 
-            survival_build = PokemonBuild(
+            survival_build = build_pokemon(
                 name=pokemon_name,
                 base_stats=base_stats,
                 types=your_types,
                 nature=nature_enum,
-                format_system="champions",
-                sps=StatPointSpread(
+                champions=True,
+                spread=StatPointSpread(
                     hp=hp_sps,
                     defense=def_sps if move_is_physical else 0,
                     special_defense=0 if move_is_physical else spd_sps,
                 ),
-                level=50
+                level=50,
             )
 
             result = {

@@ -18,6 +18,7 @@ from vgc_mcp_core.tools.ability_helpers import (
     compute_intimidate_attack_stage,
     resolve_ability,
 )
+from vgc_mcp_core.tools.build_helpers import build_pokemon
 from vgc_mcp_core.utils.errors import ErrorCodes, api_error, error_response, pokemon_not_found_error
 from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name
 
@@ -102,14 +103,14 @@ def register_multi_threat_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon_cli
                         user_override=threat_ability,
                     )
 
-                    threat_build = PokemonBuild(
+                    threat_build = build_pokemon(
                         name=threat["name"],
                         base_stats=atk_base,
                         types=atk_types,
                         nature=threat_nature,
-                        evs=EVSpread(**threat_evs),
+                        spread=EVSpread(**threat_evs),
                         item=threat_item,
-                        ability=threat_ability
+                        ability=threat_ability,
                     )
 
                     is_physical = move.category.value == "physical"
@@ -159,13 +160,13 @@ def register_multi_threat_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon_cli
 
             def make_defender(hp_value: int, def_value: int, spd_value: int) -> PokemonBuild:
                 if is_champions:
-                    return PokemonBuild(
+                    return build_pokemon(
                         name=pokemon_name,
                         base_stats=def_base,
                         types=def_types,
                         nature=def_nature,
-                        format_system="champions",
-                        sps=StatPointSpread(
+                        champions=True,
+                        spread=StatPointSpread(
                             hp=hp_value,
                             defense=def_value,
                             special_defense=spd_value,
@@ -173,12 +174,12 @@ def register_multi_threat_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon_cli
                         item=item,
                         ability=ability,
                     )
-                return PokemonBuild(
+                return build_pokemon(
                     name=pokemon_name,
                     base_stats=def_base,
                     types=def_types,
                     nature=def_nature,
-                    evs=EVSpread(
+                    spread=EVSpread(
                         hp=hp_value,
                         defense=def_value,
                         special_defense=spd_value,
@@ -278,19 +279,19 @@ def register_multi_threat_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon_cli
             # Recommended defender build for the showdown paste. Champions emits
             # an 'SPs:' paste (32/stat, 66 total); mainline keeps the EVs paste.
             if is_champions:
-                recommended_defender = PokemonBuild(
+                recommended_defender = build_pokemon(
                     name=pokemon_name,
                     base_stats=def_base,
                     types=def_types,
                     nature=def_nature,
-                    format_system="champions",
-                    sps=StatPointSpread(
+                    champions=True,
+                    spread=StatPointSpread(
                         hp=best_spread["hp_evs"],
                         defense=best_spread["def_evs"],
                         special_defense=best_spread["spd_evs"],
                     ),
                     item=item,
-                    ability=ability
+                    ability=ability,
                 )
                 recommended_spread = {
                     "hp_sps": best_spread["hp_evs"],
@@ -300,18 +301,18 @@ def register_multi_threat_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon_cli
                     "leftover_sps": 66 - best_spread["total_evs"],
                 }
             else:
-                recommended_defender = PokemonBuild(
+                recommended_defender = build_pokemon(
                     name=pokemon_name,
                     base_stats=def_base,
                     types=def_types,
                     nature=def_nature,
-                    evs=EVSpread(
+                    spread=EVSpread(
                         hp=best_spread["hp_evs"],
                         defense=best_spread["def_evs"],
                         special_defense=best_spread["spd_evs"],
                     ),
                     item=item,
-                    ability=ability
+                    ability=ability,
                 )
                 recommended_spread = {
                     "hp_evs": best_spread["hp_evs"],

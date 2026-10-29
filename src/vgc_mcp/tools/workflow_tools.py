@@ -14,6 +14,7 @@ from vgc_mcp_core.calc.damage import format_percent
 from vgc_mcp_core.config import EV_BREAKPOINTS_LV50
 from vgc_mcp_core.formats.showdown import ShowdownParseError, parse_showdown_team
 from vgc_mcp_core.rules.regulation_loader import get_regulation_config
+from vgc_mcp_core.tools.build_helpers import build_pokemon
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response, success_response
 from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name
 
@@ -272,7 +273,6 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                             BaseStats,
                             EVSpread,
                             Nature,
-                            PokemonBuild,
                         )
 
                         base_stats = BaseStats(
@@ -298,17 +298,17 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                         except ValueError:
                             nature = Nature.SERIOUS
 
-                        build = PokemonBuild(
+                        build = build_pokemon(
                             name=pokemon_data["name"],
                             base_stats=base_stats,
                             types=pokemon_data.get("types", []),
                             nature=nature,
-                            evs=evs,
+                            spread=evs,
                             ability=pokemon.ability,
                             item=pokemon.item,
                             moves=pokemon.moves[:4] if pokemon.moves else [],
                             tera_type=pokemon.tera_type,
-                            level=50
+                            level=50,
                         )
 
                         team_manager.add(build)
@@ -720,7 +720,6 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                 BaseStats,
                 EVSpread,
                 Nature,
-                PokemonBuild,
             )
 
             ev_map = build["evs"]
@@ -766,13 +765,13 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                     "spd": sp_obj.special_defense,
                     "spe": sp_obj.speed,
                 }
-                pokemon_build = PokemonBuild(
+                pokemon_build = build_pokemon(
                     name=species_name,
                     base_stats=base_stats_obj,
                     types=types,
                     nature=nature,
-                    format_system="champions",
-                    sps=sp_obj,
+                    champions=True,
+                    spread=sp_obj,
                     ability=ability,
                     level=50,
                 )
@@ -785,14 +784,14 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                     special_defense=ev_map.get("spd", 0),
                     speed=ev_map.get("spe", 0)
                 )
-                pokemon_build = PokemonBuild(
+                pokemon_build = build_pokemon(
                     name=species_name,
                     base_stats=base_stats_obj,
                     types=types,
                     nature=nature,
-                    evs=evs,
+                    spread=evs,
                     ability=ability,
-                    level=50
+                    level=50,
                 )
 
             # Build payload reflects the active format's units.
@@ -897,7 +896,6 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
         from vgc_mcp_core.models.pokemon import (
             EVSpread,
             Nature,
-            PokemonBuild,
             get_nature_modifier,
         )
         from vgc_mcp_core.rules.regulation_loader import get_regulation_config
@@ -1049,17 +1047,17 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                             # AND the attacker is a physical mover. -1 Atk stage.
                             stage_attack = -1 if (mega_intimidate_active and is_phys) else 0
 
-                            attacker = PokemonBuild(
+                            attacker = build_pokemon(
                                 name=attacker_name,
                                 base_stats=atk_base,
                                 types=atk_types,
                                 nature=atk_nature,
-                                evs=EVSpread(
+                                spread=EVSpread(
                                     attack=252 if is_phys else 0,
                                     special_attack=0 if is_phys else 252
                                 ),
                                 ability=attacker_ability,
-                                item=attacker_item
+                                item=attacker_item,
                             )
 
                             best_hp = 0
@@ -1100,12 +1098,12 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                                     def_ev = def_alloc if is_phys else 0
                                     spd_ev = def_alloc if not is_phys else 0
 
-                                    defender = PokemonBuild(
+                                    defender = build_pokemon(
                                         name=pokemon_name,
                                         base_stats=base_stats_model,
                                         types=types,
                                         nature=parsed_nature,
-                                        evs=EVSpread(hp=hp_ev, defense=def_ev, special_defense=spd_ev),
+                                        spread=EVSpread(hp=hp_ev, defense=def_ev, special_defense=spd_ev),
                                         ability=defender_ability,
                                     )
 
@@ -1174,27 +1172,27 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                             is_phys = move.category == MoveCategory.PHYSICAL
 
                             # Create defender
-                            defender = PokemonBuild(
+                            defender = build_pokemon(
                                 name=defender_name,
                                 base_stats=def_base,
                                 types=def_types,
                                 nature=Nature.SERIOUS,
-                                evs=EVSpread(hp=defender_hp_evs)
+                                spread=EVSpread(hp=defender_hp_evs),
                             )
 
                             # Check if we can KO with remaining EVs
                             atk_ev_available = remaining_evs - hp_evs - def_evs - spd_evs
                             atk_ev = min(252, max(0, atk_ev_available))
 
-                            attacker = PokemonBuild(
+                            attacker = build_pokemon(
                                 name=pokemon_name,
                                 base_stats=base_stats_model,
                                 types=types,
                                 nature=parsed_nature,
-                                evs=EVSpread(
+                                spread=EVSpread(
                                     attack=atk_ev if is_phys else 0,
                                     special_attack=0 if is_phys else atk_ev
-                                )
+                                ),
                             )
 
                             modifiers = DamageModifiers(is_doubles=True)
@@ -1354,18 +1352,24 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                                 pass
 
                         stage_attack2 = -1 if (mega_intimidate_active and is_phys2) else 0
-                        attacker2 = PokemonBuild(
-                            name=attacker_name, base_stats=atk_base2, types=atk_types2,
+                        attacker2 = build_pokemon(
+                            name=attacker_name,
+                            base_stats=atk_base2,
+                            types=atk_types2,
                             nature=atk_nature2,
-                            evs=EVSpread(
+                            spread=EVSpread(
                                 attack=252 if is_phys2 else 0,
                                 special_attack=0 if is_phys2 else 252,
                             ),
-                            ability=attacker_ability, item=attacker_item,
+                            ability=attacker_ability,
+                            item=attacker_item,
                         )
-                        defender2 = PokemonBuild(
-                            name=pokemon_name, base_stats=base_stats_model, types=types,
-                            nature=parsed_nature, evs=final_defender_evs,
+                        defender2 = build_pokemon(
+                            name=pokemon_name,
+                            base_stats=base_stats_model,
+                            types=types,
+                            nature=parsed_nature,
+                            spread=final_defender_evs,
                             ability=defender_ability,
                         )
                         mods2 = DamageModifiers(
@@ -1552,7 +1556,7 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
         from vgc_mcp_core.calc.damage import calculate_damage
         from vgc_mcp_core.calc.modifiers import DamageModifiers
         from vgc_mcp_core.models.move import MoveCategory
-        from vgc_mcp_core.models.pokemon import BaseStats, EVSpread, Nature, PokemonBuild
+        from vgc_mcp_core.models.pokemon import BaseStats, EVSpread, Nature
 
         try:
             # Get Pokemon data
@@ -1577,30 +1581,30 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
 
             # Create attacker with competitive defaults
             atk_nature = Nature.ADAMANT if is_physical else Nature.MODEST
-            atk_build = PokemonBuild(
+            atk_build = build_pokemon(
                 name=attacker,
                 base_stats=BaseStats(**atk_data["base_stats"]),
                 types=atk_data.get("types", []),
                 nature=atk_nature,
-                evs=EVSpread(
+                spread=EVSpread(
                     attack=252 if is_physical else 0,
                     special_attack=0 if is_physical else 252
                 ),
                 ability=attacker_ability,
-                item=attacker_item
+                item=attacker_item,
             )
 
             # Create defender
-            def_build = PokemonBuild(
+            def_build = build_pokemon(
                 name=defender,
                 base_stats=BaseStats(**def_data["base_stats"]),
                 types=def_data.get("types", []),
                 nature=Nature.SERIOUS,
-                evs=EVSpread(
+                spread=EVSpread(
                     hp=defender_hp_evs,
                     defense=defender_def_evs if is_physical else 0,
                     special_defense=0 if is_physical else defender_def_evs
-                )
+                ),
             )
 
             # Calculate damage
@@ -1824,7 +1828,7 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
         """
         from vgc_mcp_core.calc.damage import calculate_damage
         from vgc_mcp_core.calc.modifiers import DamageModifiers
-        from vgc_mcp_core.models.pokemon import BaseStats, EVSpread, Nature, PokemonBuild
+        from vgc_mcp_core.models.pokemon import BaseStats, EVSpread, Nature
 
         try:
             if team_manager.size == 0:
@@ -1851,17 +1855,17 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
 
             is_physical = threat_data["base_stats"]["attack"] > threat_data["base_stats"]["special_attack"]
 
-            threat_build = PokemonBuild(
+            threat_build = build_pokemon(
                 name=threat_pokemon,
                 base_stats=BaseStats(**threat_data["base_stats"]),
                 types=threat_data.get("types", []),
                 nature=threat_nat,
-                evs=EVSpread(
+                spread=EVSpread(
                     attack=threat_offensive_evs if is_physical else 0,
                     special_attack=0 if is_physical else threat_offensive_evs
                 ),
                 ability=threat_ability,
-                item=threat_item
+                item=threat_item,
             )
 
             # Get common moves if not specified
@@ -2240,7 +2244,6 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
         from vgc_mcp_core.models.pokemon import (
             EVSpread,
             Nature,
-            PokemonBuild,
             StatPointSpread,
         )
         from vgc_mcp_core.rules.format_detect import detect_champions_format
@@ -2315,17 +2318,27 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                         ErrorCodes.INVALID_PARAMETER,
                         "Champions session: my_*_evs are Stat Points (0-32 per stat, 66 total)",
                     )
-                my_build = PokemonBuild(
-                    name=my_pokemon, base_stats=my_base_stats, types=defensive_types,
-                    nature=parsed_nature, format_system="champions",
-                    sps=StatPointSpread(**my_alloc),
-                    item=my_item, ability=my_ability, tera_type=my_tera_type,
+                my_build = build_pokemon(
+                    name=my_pokemon,
+                    base_stats=my_base_stats,
+                    types=defensive_types,
+                    nature=parsed_nature,
+                    champions=True,
+                    spread=StatPointSpread(**my_alloc),
+                    item=my_item,
+                    ability=my_ability,
+                    tera_type=my_tera_type,
                 )
             else:
-                my_build = PokemonBuild(
-                    name=my_pokemon, base_stats=my_base_stats, types=defensive_types,
-                    nature=parsed_nature, evs=EVSpread(**my_alloc),
-                    item=my_item, ability=my_ability, tera_type=my_tera_type,
+                my_build = build_pokemon(
+                    name=my_pokemon,
+                    base_stats=my_base_stats,
+                    types=defensive_types,
+                    nature=parsed_nature,
+                    spread=EVSpread(**my_alloc),
+                    item=my_item,
+                    ability=my_ability,
+                    tera_type=my_tera_type,
                 )
 
             # Final stats for display (format-aware: SP formula in Champions)
@@ -2439,17 +2452,15 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                     spread_nature = Nature.SERIOUS
 
                 # Build opponent with this spread (SP spread in Champions)
-                opp_build = PokemonBuild(
+                opp_build = build_pokemon(
                     name=opponent_pokemon,
                     base_stats=opp_base_stats,
                     types=opp_types,
                     nature=spread_nature,
                     item=top_item,
                     ability=top_ability,
-                    **(
-                        {"format_system": "champions", "sps": StatPointSpread(**spread_evs)}
-                        if is_champions else {"evs": EVSpread(**spread_evs)}
-                    ),
+                    champions=is_champions,
+                    spread=StatPointSpread(**spread_evs) if is_champions else EVSpread(**spread_evs),
                 )
 
                 # Set up modifiers based on direction
@@ -2713,7 +2724,6 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
             BaseStats,
             EVSpread,
             Nature,
-            PokemonBuild,
             get_nature_modifier,
         )
 
@@ -2949,16 +2959,16 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                                 if hp_ev + def_ev > remaining_evs:
                                     break
 
-                                defender = PokemonBuild(
+                                defender = build_pokemon(
                                     name=pokemon_name,
                                     base_stats=BaseStats(**base_stats),
                                     types=types,
                                     nature=parsed_nature,
-                                    evs=EVSpread(
+                                    spread=EVSpread(
                                         hp=hp_ev,
                                         defense=def_ev if is_phys_move else 0,
                                         special_defense=0 if is_phys_move else def_ev
-                                    )
+                                    ),
                                 )
 
                                 # Check against ALL attacker spreads
@@ -2966,14 +2976,14 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                                 max_damage_seen = 0
 
                                 for atk_spread in attacker_spreads:
-                                    attacker = PokemonBuild(
+                                    attacker = build_pokemon(
                                         name=survive_pokemon,
                                         base_stats=BaseStats(**atk_data["base_stats"]),
                                         types=atk_types,
                                         nature=atk_spread["nature"],
-                                        evs=atk_spread["evs"],
+                                        spread=atk_spread["evs"],
                                         ability=survive_pokemon_ability,
-                                        item=survive_pokemon_item
+                                        item=survive_pokemon_item,
                                     )
 
                                     modifiers = DamageModifiers(
@@ -2999,27 +3009,27 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
 
                         # Record damage calcs from each spread at the optimized EVs
                         if target_met or best_hp > 0 or best_def > 0:
-                            final_defender = PokemonBuild(
+                            final_defender = build_pokemon(
                                 name=pokemon_name,
                                 base_stats=BaseStats(**base_stats),
                                 types=types,
                                 nature=parsed_nature,
-                                evs=EVSpread(
+                                spread=EVSpread(
                                     hp=best_hp if target_met else 252,
                                     defense=(best_def if is_phys_move else 0) if target_met else (252 if is_phys_move else 0),
                                     special_defense=(0 if is_phys_move else best_def) if target_met else (0 if is_phys_move else 252)
-                                )
+                                ),
                             )
 
                             for atk_spread in attacker_spreads:
-                                attacker = PokemonBuild(
+                                attacker = build_pokemon(
                                     name=survive_pokemon,
                                     base_stats=BaseStats(**atk_data["base_stats"]),
                                     types=atk_types,
                                     nature=atk_spread["nature"],
-                                    evs=atk_spread["evs"],
+                                    spread=atk_spread["evs"],
                                     ability=survive_pokemon_ability,
-                                    item=survive_pokemon_item
+                                    item=survive_pokemon_item,
                                 )
 
                                 modifiers = DamageModifiers(

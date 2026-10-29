@@ -43,6 +43,7 @@ from vgc_mcp_core.models.pokemon import (
     get_nature_modifier,
 )
 from vgc_mcp_core.rules.format_detect import detect_champions_format
+from vgc_mcp_core.tools.build_helpers import build_pokemon
 from vgc_mcp_core.tools.smogon_helpers import (
     get_common_spread as _shared_get_common_spread,
 )
@@ -66,13 +67,13 @@ def _build_champions_pokemon(
     ability: Optional[str] = None,
 ) -> PokemonBuild:
     """Construct a format-aware Champions PokemonBuild (emits 'SPs:' pastes)."""
-    return PokemonBuild(
+    return build_pokemon(
         name=name,
         base_stats=base_stats,
         types=types,
         nature=nature,
-        format_system="champions",
-        sps=sps,
+        champions=True,
+        spread=sps,
         item=item,
         ability=ability,
         tera_type=tera_type,
@@ -281,15 +282,15 @@ class DamageCache:
             # damage engine auto-applies every defensive ability interaction
             # (Multiscale, Ice Scales, Thick Fat, Fluffy, Filter, Levitate, type
             # absorption, Heatproof, etc.).
-            defender = PokemonBuild(
+            defender = build_pokemon(
                 name=self.defender_name,
                 base_stats=self.defender_base,
                 types=self.defender_types,
                 nature=nature,
-                evs=EVSpread(hp=hp_ev, defense=def_ev, special_defense=spd_ev),
+                spread=EVSpread(hp=hp_ev, defense=def_ev, special_defense=spd_ev),
                 ability=self.defender_ability,
                 item=self.defender_item,
-                tera_type=defender_tera_type
+                tera_type=defender_tera_type,
             )
 
             threat = self.threats[threat_idx]
@@ -474,18 +475,18 @@ async def _prepare_threats(
                 tera_type = fixed_tera
 
         # Create attacker build
-        attacker_build = PokemonBuild(
+        attacker_build = build_pokemon(
             name=attacker_name,
             base_stats=atk_base,
             types=atk_types,
             nature=nature,
-            evs=EVSpread(
+            spread=EVSpread(
                 attack=evs if is_physical else 0,
                 special_attack=0 if is_physical else evs
             ),
             item=item,
             ability=ability,
-            tera_type=tera_type
+            tera_type=tera_type,
         )
 
         # Create damage modifiers
@@ -1058,13 +1059,13 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             tablets_of_ruin = al == "tablets-of-ruin"
             vessel_of_ruin = al == "vessel-of-ruin"
 
-        attacker = PokemonBuild(
+        attacker = build_pokemon(
             name=attacker_name,
             base_stats=atk_base,
             types=atk_types,
             nature=Nature(nature_str.lower()),
-            format_system="champions",
-            sps=StatPointSpread(**allocation),
+            champions=True,
+            spread=StatPointSpread(**allocation),
             item=item,
             ability=ability,
             tera_type=tera_type,
@@ -1124,11 +1125,16 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     allocation = {"hp": hp_sp, "defense": def_sp, "special_defense": spd_sp, "speed": speed_sps}
                     if offensive_sps and offensive_stat:
                         allocation[offensive_stat] = offensive_sps
-                    candidate = PokemonBuild(
-                        name=defender_name, base_stats=my_base, types=my_types,
-                        nature=parsed_nature, format_system="champions",
-                        sps=StatPointSpread(**allocation), ability=defender_ability,
-                        item=defender_item, tera_type=defender_tera_type,
+                    candidate = build_pokemon(
+                        name=defender_name,
+                        base_stats=my_base,
+                        types=my_types,
+                        nature=parsed_nature,
+                        champions=True,
+                        spread=StatPointSpread(**allocation),
+                        ability=defender_ability,
+                        item=defender_item,
+                        tera_type=defender_tera_type,
                     )
                     worst = 0.0
                     for threat in threats:
@@ -1665,19 +1671,19 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
 
             # Generate Showdown paste for the analyzed spread
             types = await pokeapi.get_pokemon_types(pokemon_name)
-            analyzed_pokemon = PokemonBuild(
+            analyzed_pokemon = build_pokemon(
                 name=pokemon_name,
                 base_stats=base_stats,
                 types=types,
                 nature=parsed_nature,
-                evs=EVSpread(
+                spread=EVSpread(
                     hp=hp_evs,
                     attack=atk_evs,
                     defense=def_evs,
                     special_attack=spa_evs,
                     special_defense=spd_evs,
                     speed=spe_evs
-                )
+                ),
             )
             showdown_paste = pokemon_build_to_showdown(analyzed_pokemon)
 
@@ -1936,36 +1942,36 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             types = await pokeapi.get_pokemon_types(pokemon_name)
 
             # Build current Pokemon
-            current_pokemon = PokemonBuild(
+            current_pokemon = build_pokemon(
                 name=pokemon_name,
                 base_stats=base_stats,
                 types=types,
                 nature=current_nature_enum,
-                evs=EVSpread(
+                spread=EVSpread(
                     hp=hp_evs,
                     attack=atk_evs,
                     defense=def_evs,
                     special_attack=spa_evs,
                     special_defense=spd_evs,
                     speed=spe_evs
-                )
+                ),
             )
             current_showdown = pokemon_build_to_showdown(current_pokemon)
 
             # Build optimized Pokemon
-            optimized_pokemon = PokemonBuild(
+            optimized_pokemon = build_pokemon(
                 name=pokemon_name,
                 base_stats=base_stats,
                 types=types,
                 nature=best_nature,
-                evs=EVSpread(
+                spread=EVSpread(
                     hp=best_evs["hp"],
                     attack=best_evs["attack"],
                     defense=best_evs["defense"],
                     special_attack=best_evs["special_attack"],
                     special_defense=best_evs["special_defense"],
                     speed=best_evs["speed"]
-                )
+                ),
             )
             optimized_showdown = pokemon_build_to_showdown(optimized_pokemon)
 
@@ -2124,19 +2130,19 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             showdown_paste = None
             if best_spread:
                 types = await pokeapi.get_pokemon_types(pokemon_name)
-                optimized_pokemon = PokemonBuild(
+                optimized_pokemon = build_pokemon(
                     name=pokemon_name,
                     base_stats=base_stats,
                     types=types,
                     nature=parsed_nature,
-                    evs=EVSpread(
+                    spread=EVSpread(
                         hp=best_spread["hp_evs"],
                         attack=0,
                         defense=best_spread["def_evs"],
                         special_attack=0,
                         special_defense=best_spread["spd_evs"],
                         speed=0
-                    )
+                    ),
                 )
                 showdown_paste = pokemon_build_to_showdown(optimized_pokemon)
 
@@ -2299,19 +2305,19 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             types = await pokeapi.get_pokemon_types(pokemon_name)
             nature_enum = Nature(spread["nature"].lower())
 
-            suggested_pokemon = PokemonBuild(
+            suggested_pokemon = build_pokemon(
                 name=pokemon_name,
                 base_stats=base_stats,
                 types=types,
                 nature=nature_enum,
-                evs=EVSpread(
+                spread=EVSpread(
                     hp=spread["evs"]["hp"],
                     attack=spread["evs"]["attack"],
                     defense=spread["evs"]["defense"],
                     special_attack=spread["evs"]["special_attack"],
                     special_defense=spread["evs"]["special_defense"],
                     speed=spread["evs"]["speed"]
-                )
+                ),
             )
             showdown_paste = pokemon_build_to_showdown(suggested_pokemon)
 
@@ -2403,19 +2409,19 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
 
             # Generate Showdown paste
             types = await pokeapi.get_pokemon_types(pokemon_name)
-            optimized_pokemon = PokemonBuild(
+            optimized_pokemon = build_pokemon(
                 name=pokemon_name,
                 base_stats=base_stats,
                 types=types,
                 nature=parsed_nature,
-                evs=EVSpread(
+                spread=EVSpread(
                     hp=hp_evs_final,
                     attack=0,
                     defense=result.def_evs,
                     special_attack=0,
                     special_defense=result.spd_evs,
                     speed=0
-                )
+                ),
             )
             showdown_paste = pokemon_build_to_showdown(optimized_pokemon)
 
@@ -2869,18 +2875,18 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                                 survive_pokemon_ability = "vessel-of-ruin"
 
                     # Create attacker build
-                    attacker = PokemonBuild(
+                    attacker = build_pokemon(
                         name=survive_pokemon,
                         base_stats=atk_base,
                         types=atk_types,
                         nature=atk_nature,
-                        evs=EVSpread(
+                        spread=EVSpread(
                             attack=survive_pokemon_evs if is_physical else 0,
                             special_attack=0 if is_physical else survive_pokemon_evs
                         ),
                         ability=survive_pokemon_ability,
                         item=survive_pokemon_item,
-                        tera_type=survive_pokemon_tera_type
+                        tera_type=survive_pokemon_tera_type,
                     )
 
                     # Resolve defender ability (mega > Smogon > pokeapi) so all
@@ -2933,19 +2939,19 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                                 spd_ev_norm = normalize_evs(min(252, spd_ev))
 
                                 # Create defender build
-                                defender = PokemonBuild(
+                                defender = build_pokemon(
                                     name=pokemon_name,
                                     base_stats=my_base,
                                     types=my_types,
                                     nature=parsed_nature,
-                                    evs=EVSpread(
+                                    spread=EVSpread(
                                         hp=hp_ev,
                                         defense=def_ev_norm,
                                         special_defense=spd_ev_norm
                                     ),
                                     ability=ability,
                                     item=item,
-                                    tera_type=defender_tera_type
+                                    tera_type=defender_tera_type,
                                 )
 
                                 # Calculate damage
@@ -3146,12 +3152,12 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     # Verify the adjustment doesn't break survival
                     apply_adj = True
                     if survive_pokemon and survive_move and best_result is not None:
-                        adj_defender = PokemonBuild(
+                        adj_defender = build_pokemon(
                             name=pokemon_name,
                             base_stats=my_base,
                             types=my_types,
                             nature=parsed_nature,
-                            evs=EVSpread(
+                            spread=EVSpread(
                                 hp=hp_adj["adjusted_evs"],
                                 defense=def_evs,
                                 special_defense=spd_evs,
@@ -3203,12 +3209,12 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             )
 
             # Create PokemonBuild with optimized spread for Showdown export
-            optimized_pokemon = PokemonBuild(
+            optimized_pokemon = build_pokemon(
                 name=pokemon_name,
                 base_stats=my_base,
                 types=my_types,
                 nature=parsed_nature,
-                evs=EVSpread(
+                spread=EVSpread(
                     hp=hp_evs,
                     attack=atk_evs if is_physical else 0,
                     defense=def_evs,
@@ -3216,7 +3222,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     special_defense=spd_evs,
                     speed=speed_evs_needed
                 ),
-                tera_type=defender_tera_type
+                tera_type=defender_tera_type,
             )
             results["showdown_paste"] = pokemon_build_to_showdown(optimized_pokemon)
 
@@ -3607,32 +3613,32 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             atk2_nature = Nature(survive_hit2_nature.lower())
 
             # Create attacker builds
-            attacker1 = PokemonBuild(
+            attacker1 = build_pokemon(
                 name=survive_hit1_attacker,
                 base_stats=atk1_base,
                 types=atk1_types,
                 nature=atk1_nature,
-                evs=EVSpread(
+                spread=EVSpread(
                     attack=survive_hit1_evs if is_physical1 else 0,
                     special_attack=0 if is_physical1 else survive_hit1_evs
                 ),
                 item=survive_hit1_item,
                 ability=survive_hit1_ability,
-                tera_type=survive_hit1_tera_type
+                tera_type=survive_hit1_tera_type,
             )
 
-            attacker2 = PokemonBuild(
+            attacker2 = build_pokemon(
                 name=survive_hit2_attacker,
                 base_stats=atk2_base,
                 types=atk2_types,
                 nature=atk2_nature,
-                evs=EVSpread(
+                spread=EVSpread(
                     attack=survive_hit2_evs if is_physical2 else 0,
                     special_attack=0 if is_physical2 else survive_hit2_evs
                 ),
                 item=survive_hit2_item,
                 ability=survive_hit2_ability,
-                tera_type=survive_hit2_tera_type
+                tera_type=survive_hit2_tera_type,
             )
 
             # Determine attack categories for HP-first optimization
@@ -3674,13 +3680,15 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
 
                 def test_spread(hp_ev: int, def_ev: int, spd_ev: int) -> tuple:
                     """Test a specific spread. Returns (survives_both, margin, result1, result2, pcts)."""
-                    defender = PokemonBuild(
-                        name=pokemon_name, base_stats=my_base, types=my_types,
+                    defender = build_pokemon(
+                        name=pokemon_name,
+                        base_stats=my_base,
+                        types=my_types,
                         nature=current_nature,
-                        evs=EVSpread(hp=hp_ev, defense=def_ev, special_defense=spd_ev),
+                        spread=EVSpread(hp=hp_ev, defense=def_ev, special_defense=spd_ev),
                         ability=ability,
                         item=item,
-                        tera_type=defender_tera_type
+                        tera_type=defender_tera_type,
                     )
                     modifiers1 = DamageModifiers(
                         is_doubles=True, attacker_item=survive_hit1_item,
@@ -3809,13 +3817,15 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     current_nature = Nature.SERIOUS
 
                 def test_spread_fallback(hp_ev: int, def_ev: int, spd_ev: int) -> tuple:
-                    defender = PokemonBuild(
-                        name=pokemon_name, base_stats=my_base, types=my_types,
+                    defender = build_pokemon(
+                        name=pokemon_name,
+                        base_stats=my_base,
+                        types=my_types,
                         nature=current_nature,
-                        evs=EVSpread(hp=hp_ev, defense=def_ev, special_defense=spd_ev),
+                        spread=EVSpread(hp=hp_ev, defense=def_ev, special_defense=spd_ev),
                         ability=ability,
                         item=item,
-                        tera_type=defender_tera_type
+                        tera_type=defender_tera_type,
                     )
                     modifiers1 = DamageModifiers(
                         is_doubles=True, attacker_item=survive_hit1_item,
@@ -3967,12 +3977,12 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
 
             # Create PokemonBuild with optimized spread for Showdown export
             chosen_nature_enum = Nature(chosen_nature.lower())
-            optimized_pokemon = PokemonBuild(
+            optimized_pokemon = build_pokemon(
                 name=pokemon_name,
                 base_stats=my_base,
                 types=my_types,
                 nature=chosen_nature_enum,
-                evs=EVSpread(
+                spread=EVSpread(
                     hp=best_spread["hp"],
                     attack=0,  # This is a defensive spread
                     defense=best_spread["def"],
@@ -4060,12 +4070,12 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 hp_adj = adjust_hp_evs_for_item(my_base.hp, best_spread["hp"], item)
                 if hp_adj["adjusted_evs"] != best_spread["hp"]:
                     # Verify survival still holds with adjusted HP
-                    adj_defender = PokemonBuild(
+                    adj_defender = build_pokemon(
                         name=pokemon_name,
                         base_stats=my_base,
                         types=my_types,
                         nature=Nature(chosen_nature),
-                        evs=EVSpread(
+                        spread=EVSpread(
                             hp=hp_adj["adjusted_evs"],
                             defense=best_spread["def"],
                             special_defense=final_spd_evs,
@@ -4492,18 +4502,18 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 final_spd = optimal_multi["final_spd"]
 
                 # Build optimized Pokemon for Showdown paste
-                optimized_pokemon = PokemonBuild(
+                optimized_pokemon = build_pokemon(
                     name=pokemon_name,
                     base_stats=my_base,
                     types=my_types,
                     nature=Nature(nature_name),
-                    evs=EVSpread(
+                    spread=EVSpread(
                         hp=best_spread["hp"],
                         defense=best_spread["def"],
                         special_defense=best_spread["spd"],
                         speed=speed_evs_needed
                     ),
-                    tera_type=defender_tera_type
+                    tera_type=defender_tera_type,
                 )
 
                 # Build threat survival analysis

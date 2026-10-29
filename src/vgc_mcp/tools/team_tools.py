@@ -12,12 +12,12 @@ from vgc_mcp_core.calc.conversion import coerce_champions_allocation
 from vgc_mcp_core.models.pokemon import (
     EVSpread,
     Nature,
-    PokemonBuild,
     StatPointSpread,
 )
 from vgc_mcp_core.rules.format_detect import auto_detect_champions_format
 from vgc_mcp_core.team.analysis import TeamAnalyzer
 from vgc_mcp_core.team.manager import TeamManager
+from vgc_mcp_core.tools.build_helpers import build_pokemon
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 
@@ -108,13 +108,13 @@ def register_team_tools(
 
             # Create Pokemon build (format-aware)
             if is_champions:
-                pokemon = PokemonBuild(
+                pokemon = build_pokemon(
                     name=pokemon_name,
                     base_stats=base_stats,
                     types=types,
                     nature=parsed_nature,
-                    format_system="champions",
-                    sps=StatPointSpread(
+                    champions=True,
+                    spread=StatPointSpread(
                         hp=hp_evs,
                         attack=atk_evs,
                         defense=def_evs,
@@ -125,15 +125,15 @@ def register_team_tools(
                     ability=ability,
                     item=item,
                     tera_type=tera_type,
-                    moves=moves
+                    moves=moves,
                 )
             else:
-                pokemon = PokemonBuild(
+                pokemon = build_pokemon(
                     name=pokemon_name,
                     base_stats=base_stats,
                     types=types,
                     nature=parsed_nature,
-                    evs=EVSpread(
+                    spread=EVSpread(
                         hp=hp_evs,
                         attack=atk_evs,
                         defense=def_evs,
@@ -144,7 +144,7 @@ def register_team_tools(
                     ability=ability,
                     item=item,
                     tera_type=tera_type,
-                    moves=moves
+                    moves=moves,
                 )
 
             success, message, data = team_manager.add_pokemon(pokemon)
@@ -284,13 +284,13 @@ def register_team_tools(
             moves = [m for m in [move1, move2, move3, move4] if m]
 
             if is_champions:
-                pokemon = PokemonBuild(
+                pokemon = build_pokemon(
                     name=pokemon_name,
                     base_stats=base_stats,
                     types=types,
                     nature=parsed_nature,
-                    format_system="champions",
-                    sps=StatPointSpread(
+                    champions=True,
+                    spread=StatPointSpread(
                         hp=hp_evs,
                         attack=atk_evs,
                         defense=def_evs,
@@ -301,15 +301,15 @@ def register_team_tools(
                     ability=ability,
                     item=item,
                     tera_type=tera_type,
-                    moves=moves
+                    moves=moves,
                 )
             else:
-                pokemon = PokemonBuild(
+                pokemon = build_pokemon(
                     name=pokemon_name,
                     base_stats=base_stats,
                     types=types,
                     nature=parsed_nature,
-                    evs=EVSpread(
+                    spread=EVSpread(
                         hp=hp_evs,
                         attack=atk_evs,
                         defense=def_evs,
@@ -320,7 +320,7 @@ def register_team_tools(
                     ability=ability,
                     item=item,
                     tera_type=tera_type,
-                    moves=moves
+                    moves=moves,
                 )
 
             success, message, data = team_manager.swap_pokemon(slot - 1, pokemon)
