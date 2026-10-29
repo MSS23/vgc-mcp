@@ -7,6 +7,7 @@ from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.bulk_calc_tools import _parse_ev_string, register_bulk_calc_tools
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
+from vgc_mcp_core.models.move import Move, MoveCategory
 from vgc_mcp_core.models.pokemon import BaseStats
 
 
@@ -20,6 +21,10 @@ def mock_pokeapi():
     ))
     client.get_pokemon_types = AsyncMock(return_value=["Fighting", "Water"])
     client.get_pokemon_abilities = AsyncMock(return_value=["Unseen Fist"])
+    client.get_move = AsyncMock(return_value=Move(
+        name="close-combat", type="fighting", category=MoveCategory.PHYSICAL,
+        power=120, accuracy=100, makes_contact=True,
+    ))
     return client
 
 
@@ -129,7 +134,8 @@ async def test_format_resolved_before_top_meta_fetch(tools, mock_smogon, monkeyp
         return await original(*a, **k)
 
     monkeypatch.setattr(mod, "_get_top_meta_pokemon", tracked)
-    await tools[tool_name].fn(attacker_name="urshifu-rapid-strike", move_names=["close-combat"])
+    result = await tools[tool_name].fn(attacker_name="urshifu-rapid-strike", move_names=["close-combat"])
+    assert result.get("error") is None, result
     assert order[:2] == ["detect", "top_meta"]
     # Current regulation decides, not a guess from the attacker's name.
     assert calls[0] == ()
