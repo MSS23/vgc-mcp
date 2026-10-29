@@ -6,12 +6,13 @@ import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.item_tools import register_item_tools
+from vgc_mcp_core.api.pokeapi import PokeAPIClient
 
 
 @pytest.fixture
 def mock_pokeapi():
     """Create a mock PokeAPI client."""
-    client = AsyncMock()
+    client = AsyncMock(spec=PokeAPIClient)
     # Flutter Mane stats
     client.get_pokemon_stats = AsyncMock(return_value={
         "hp": 55, "attack": 55, "defense": 55,

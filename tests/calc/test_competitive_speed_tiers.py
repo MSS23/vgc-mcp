@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.calc.speed import calculate_speed_tier, get_competitive_speed_benchmarks
 from vgc_mcp_core.models.pokemon import Nature
 
@@ -31,7 +32,7 @@ class TestGetCompetitiveSpeedBenchmarks:
 
         # Mock PokeAPIClient to raise an error (imported inside the function)
         with patch("vgc_mcp_core.api.pokeapi.PokeAPIClient") as mock_pokeapi_class:
-            mock_pokeapi = AsyncMock()
+            mock_pokeapi = AsyncMock(spec=PokeAPIClient)
             mock_pokeapi_class.return_value = mock_pokeapi
             mock_pokeapi.get_base_stats.side_effect = Exception("API error")
 

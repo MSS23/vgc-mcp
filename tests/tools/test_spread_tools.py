@@ -6,13 +6,14 @@ import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.spread_tools import register_spread_tools
+from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.models.pokemon import BaseStats
 
 
 @pytest.fixture
 def mock_pokeapi():
     """Create a mock PokeAPI client."""
-    client = AsyncMock()
+    client = AsyncMock(spec=PokeAPIClient)
 
     async def _get_base_stats(name):
         stats = {

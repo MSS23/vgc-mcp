@@ -6,6 +6,7 @@ import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.damage_tools import _normalize_smogon_name, register_damage_tools
+from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.models.move import Move, MoveCategory
 from vgc_mcp_core.models.pokemon import BaseStats
 
@@ -13,7 +14,7 @@ from vgc_mcp_core.models.pokemon import BaseStats
 @pytest.fixture
 def mock_pokeapi():
     """Create a mock PokeAPI client."""
-    client = AsyncMock()
+    client = AsyncMock(spec=PokeAPIClient)
 
     async def _get_base_stats(name):
         stats = {

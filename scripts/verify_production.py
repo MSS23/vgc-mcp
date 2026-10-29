@@ -214,14 +214,56 @@ def _close_session(mcp_url: str, session_id: str) -> None:
         pass
 
 
+def _call_tool(
+    mcp_url: str, session_id: str, request_id: int, name: str, arguments: dict[str, Any]
+) -> dict[str, Any] | None:
+    envelope, _ = _post_mcp(mcp_url, {
+        "jsonrpc": "2.0", "id": request_id, "method": "tools/call",
+        "params": {"name": name, "arguments": arguments},
+    }, session_id=session_id)
+    return envelope
+
+
+def verify_pokeapi_tools(mcp_url: str, session_id: str) -> None:
+    """Live PokeAPI paths: mocked tests stayed green while these broke in production."""
+    damage = _tool_payload(_call_tool(mcp_url, session_id, 20, "quick_damage_check", {
+        "attacker": "flutter-mane", "defender": "incineroar", "move": "moonblast",
+    }))
+    if not damage.get("damage_range") or not damage.get("ko_chance"):
+        raise RuntimeError(f"quick_damage_check returned no damage: {damage}")
+
+    # Base 95 HP, 0 EVs, 31 IVs -> 170 HP; sandstorm chips 1/16 = 10.
+    chip = _tool_payload(_call_tool(mcp_url, session_id, 21, "calculate_weather_damage", {
+        "pokemon_name": "incineroar", "weather": "sandstorm",
+    }))
+    if chip.get("max_hp") != 170 or chip.get("damage_per_turn") != 10:
+        raise RuntimeError(f"Production weather chip regression: {chip}")
+
+    _tool_payload(_call_tool(mcp_url, session_id, 22, "get_usage_stats", {
+        "pokemon_name": "incineroar",
+    }))
+
+    typo = _call_tool(mcp_url, session_id, 23, "calculate_weather_damage", {
+        "pokemon_name": "incineroa", "weather": "sandstorm",
+    })
+    result = (typo or {}).get("result", {})
+    payload = result.get("structuredContent") or json.loads(
+        "".join(c.get("text", "") for c in result.get("content", []) if c.get("type") == "text")
+        or "{}"
+    )
+    if payload.get("error") != "pokemon_not_found" or "incineroar" not in str(payload):
+        raise RuntimeError(f"Typo did not return pokemon_not_found with a suggestion: {payload}")
+
+
 def verify_full_profile(base_url: str, health: dict[str, Any]) -> None:
-    """/mcp/full must list every registered tool."""
+    """/mcp/full must list every registered tool and serve the PokeAPI paths."""
     if "tools_total" not in health:  # revision predates tool profiles
         return
     full_url = f"{base_url}/mcp/full"
     session_id = _open_session(full_url)
     try:
         tools = _list_tools(full_url, session_id)
+        verify_pokeapi_tools(full_url, session_id)
     finally:
         _close_session(full_url, session_id)
     if len(tools) != health["tools_total"] or len(tools) < 200:

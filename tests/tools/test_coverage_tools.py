@@ -6,6 +6,7 @@ import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.coverage_tools import register_coverage_tools
+from vgc_mcp_core.api.pokeapi import PokeAPIClient
 
 
 def _make_team_slot(name, types, moves):
@@ -36,7 +37,7 @@ def team_manager():
 @pytest.fixture
 def mock_pokeapi():
     """Create a mock PokeAPI client."""
-    client = AsyncMock()
+    client = AsyncMock(spec=PokeAPIClient)
     client.get_pokemon_types = AsyncMock(return_value=["Water", "Fighting"])
     # check_coverage_vs_target uses get_pokemon() which returns a dict with "types"
     client.get_pokemon = AsyncMock(return_value={"types": ["Water", "Fighting"]})

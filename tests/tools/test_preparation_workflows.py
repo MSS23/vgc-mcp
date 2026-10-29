@@ -11,6 +11,7 @@ from mcp.server.fastmcp import FastMCP
 from vgc_mcp.tools.preparation_tools import register_preparation_tools
 from vgc_mcp.tools.router_tools import register_router_tools
 from vgc_mcp.tools.usage_tools import register_usage_tools
+from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.models.move import Move
 from vgc_mcp_core.models.pokemon import BaseStats
 from vgc_mcp_core.rules.regulation_loader import get_regulation_config
@@ -36,7 +37,7 @@ Adamant Nature
 
 @pytest.fixture
 def workflow():
-    pokeapi = AsyncMock()
+    pokeapi = AsyncMock(spec=PokeAPIClient)
     async def stats(name):
         if "rillaboom" in name.lower():
             return BaseStats(hp=100, attack=125, defense=90, special_attack=60, special_defense=70, speed=85)

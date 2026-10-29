@@ -127,6 +127,8 @@ def _mock_pokeapi(move_methods: dict[str, list[str]]):
     """Build a mock PokeAPI whose _fetch returns a PokeAPI-shaped moves list."""
     from unittest.mock import AsyncMock
 
+    from vgc_mcp_core.api.pokeapi import PokeAPIClient
+
     moves = [
         {
             "move": {"name": name},
@@ -136,7 +138,7 @@ def _mock_pokeapi(move_methods: dict[str, list[str]]):
         }
         for name, methods in move_methods.items()
     ]
-    client = AsyncMock()
+    client = AsyncMock(spec=PokeAPIClient)
     client._fetch = AsyncMock(return_value={"name": "flutter-mane", "moves": moves})
     return client
 

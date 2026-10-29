@@ -6,6 +6,7 @@ import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.spread_tools import register_spread_tools
+from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.models.pokemon import BaseStats
 from vgc_mcp_core.rules.regulation_loader import get_regulation_config
 
@@ -27,7 +28,7 @@ def mainline():
 
 @pytest.fixture
 def pokeapi():
-    client = AsyncMock()
+    client = AsyncMock(spec=PokeAPIClient)
     client.get_base_stats = AsyncMock(side_effect=lambda n: BASES[n.lower()])
     client.get_pokemon_types = AsyncMock(return_value=["Fire", "Dark"])
     return client

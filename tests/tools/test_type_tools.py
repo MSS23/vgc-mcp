@@ -6,12 +6,13 @@ import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.type_tools import register_type_tools
+from vgc_mcp_core.api.pokeapi import PokeAPIClient
 
 
 @pytest.fixture
 def mock_pokeapi():
     """Create a mock PokeAPI client."""
-    client = AsyncMock()
+    client = AsyncMock(spec=PokeAPIClient)
     # Default: return Fire type for any Pokemon
     client.get_pokemon_types = AsyncMock(return_value=["Fire"])
     return client
