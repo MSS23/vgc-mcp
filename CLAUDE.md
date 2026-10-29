@@ -4,6 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
+**Objective:** Give competitive Pokémon players exact answers (damage, spreads, speed, team prep) inside the AI assistant they already use, for both mainline VGC and Pokémon Champions, readable on a phone. **Success:** Calcs match Pokémon Showdown's calculator roll for roll; the format is detected without the user asking; the model picks the right tool first time; the hosted server stays free.
+
 VGC MCP Server - A Model Context Protocol server for Pokemon VGC (Video Game Championships) team building. Provides 206 tools for damage calculations, stat analysis, team management, and competitive play optimization. Clients see a 34-tool **core profile** by default (`/mcp`); `/mcp/full` or `VGC_MCP_PROFILE=full` serves all 206. The total is pinned once, as `FULL_TOOL_COUNT` in `src/vgc_mcp/profiles.py`; tests check the registry, README and this file against it, and the CI catalog-drift gate checks `docs/tools-catalog.md`.
 
 Supports two parallel format systems:
@@ -13,6 +15,18 @@ Supports two parallel format systems:
 Each `PokemonBuild` carries a `format_system` flag (`"mainline"` default or
 `"champions"`); `calculate_all_stats` and damage calc dispatch on it
 automatically. All existing mainline tools and tests remain unchanged.
+
+## Keeping docs alive
+
+Docs are part of the change, not a follow-up. `scripts/hooks/check_docs.py` runs
+as the Claude Code Stop hook, before every `git commit` (Claude hook and
+`.githooks/pre-commit`), and in CI on every PR. It blocks on: behaviour changed
+under `src/` without a `CHANGELOG.md` line, a stale `docs/tools-catalog.md`, a
+broken Markdown link, or a wrong tool count. It also lists the docs that usually
+describe the code you touched (`DOC_MAP` in the script); update them or say why
+not. When a new area of code gets its own doc, add it to `DOC_MAP`. Durable
+project state (decisions, plan progress) also goes to the owner's Notion, per
+the global instructions; repo docs are the shared record for everyone else.
 
 ## Commands
 
@@ -195,7 +209,6 @@ has **Mega Evolution** (one per battle) and **no Terastallization**.
 - `find_speed_sps_to_outspeed(base, target, nature, ...)` → minimum SP
 - `find_optimal_hp_sps(base_hp, item)` → HP-number ranking under SP grain
 - `find_bulk_sps_to_survive(base_hp, base_def, raw_dmg)` → cheapest HP+Def SP allocation
-- `find_attack_sps_for_ko(...)` → minimum offensive SP to clear damage floor
 - `validate_sp_allocation(dict)` → 32/66 cap enforcement
 
 **Reg MA/MB/MC legality**: `regulations.json::reg_ma_champs` uses an explicit

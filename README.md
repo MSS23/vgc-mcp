@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-green.svg)](https://modelcontextprotocol.io/)
 [![Live](https://img.shields.io/badge/live-vgc--mcp.onrender.com-brightgreen)](https://vgc-mcp.onrender.com/health)
-[![Tests](https://img.shields.io/badge/tests-3763%20passing-success)](#)
+[![CI](https://github.com/MSS23/vgc-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/MSS23/vgc-mcp/actions/workflows/ci.yml)
 [![Tools](https://img.shields.io/badge/MCP%20tools-206-blueviolet)](docs/tools-catalog.md)
 
 A **Model Context Protocol** server that turns any LLM into a competitive Pokémon VGC coach. **206 tools** spanning the full Gen 9 damage formula, Smogon usage data, multi-threat EV optimization, replay analysis, and a turn-by-turn live battle copilot. Clients get a focused **34-tool core** by default, so the model picks the right tool first time, even on a phone.
@@ -30,6 +30,10 @@ Claude: [calls calculate_damage_output once]
 ---
 
 ## Why this exists
+
+**Objective:** Give competitive Pokémon players exact answers (damage, spreads, speed, team prep) inside the AI assistant they already use, for both mainline VGC and Pokémon Champions, readable on a phone.
+
+**Success looks like:** Calcs match Pokémon Showdown's calculator roll for roll; the format is detected without the user asking; the model picks the right tool first time; the hosted server stays free.
 
 Every VGC team-builder is a wall of UI: type into a calculator, copy-paste a paste, click through tabs, run again. **VGC MCP collapses that loop into a conversation.** Claude does the calc, picks the right tool from the 34 core tools (damage, speed, survival, spreads, team prep, live battle), and leads with a one-line answer laid out for a phone screen.
 

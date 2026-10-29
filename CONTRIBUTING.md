@@ -58,9 +58,21 @@ cd vgc-mcp
 # Install in development mode
 pip install -e ".[dev]"
 
+# Turn on the docs check before each commit (once per clone)
+git config core.hooksPath .githooks
+
 # Run tests to verify setup
 python -m pytest tests/ -v
 ```
+
+### Keeping docs current
+
+Every change that alters behaviour under `src/` needs a line in `CHANGELOG.md`
+under `[Unreleased]`, and any doc that describes the code you changed should be
+updated in the same PR. `scripts/hooks/check_docs.py` checks this before each
+commit (once `core.hooksPath` is set) and in CI. It prints the docs that usually
+cover the files you touched. For a pure refactor, put `[no changelog]` in the PR
+title.
 
 ## Development Workflow
 

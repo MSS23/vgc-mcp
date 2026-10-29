@@ -11,6 +11,11 @@ status: active
 **Repo:** https://github.com/MSS23/vgc-mcp.git (branch: main)
 **Status:** active
 
+## Objective
+Give competitive Pokémon players exact answers (damage, spreads, speed, team prep) inside the AI assistant they already use, for both mainline VGC and Pokémon Champions, readable on a phone.
+
+Success: Calcs match Pokémon Showdown's calculator roll for roll; the format is detected without the user asking; the model picks the right tool first time; the hosted server stays free.
+
 ## What it does
 A Model Context Protocol server that turns any LLM into a competitive Pokémon
 VGC coach: 206 tools covering the full Gen 9 damage formula, Smogon usage data,

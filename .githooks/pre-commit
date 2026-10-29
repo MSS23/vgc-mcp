@@ -1,0 +1,4 @@
+#!/bin/sh
+# Blocks a commit that would leave the docs stale (see scripts/hooks/check_docs.py).
+# Enable once per clone:  git config core.hooksPath .githooks
+exec python scripts/hooks/check_docs.py --staged

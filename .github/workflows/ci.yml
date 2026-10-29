@@ -120,6 +120,29 @@ jobs:
             exit 1;
           }
 
+  docs-freshness:
+    name: Docs freshness
+    # Same check as the pre-commit and Claude Code hooks: changelog, catalog,
+    # links and tool counts must keep up with the code on every PR.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[remote]"
+      - name: Check docs against the PR's changes
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: python scripts/hooks/check_docs.py --base "origin/${{ github.base_ref }}"
+
   validate-regulations:
     name: Validate regulations.json
     runs-on: ubuntu-latest

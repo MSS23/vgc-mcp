@@ -17,6 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `if not` checks after `get_pokemon_stats`, and the ignored `num_turns`
   parameter of `compare_item_damage_output`.
 
+### Docs stay current
+- `scripts/hooks/check_docs.py` blocks commits and PRs that change behaviour
+  without a changelog line, leave the tools catalog stale, break a Markdown link
+  or misstate the tool count, and lists the docs that cover the touched code.
+  It runs as Claude Code Stop and pre-commit hooks, as `.githooks/pre-commit`
+  (`git config core.hooksPath .githooks`) and in CI (`docs-freshness`).
+- README, CLAUDE.md and WIKI.md open with the project's objective; stale
+  numbers in `docs/ci-cd.md` replaced; the README test badge is the live CI badge.
+
 ### Fixed
 - `calculate_grassy_terrain_healing` now honours `is_flying` (Tera Flying,
   Air Balloon) instead of ignoring it.
