@@ -32,6 +32,7 @@ from vgc_mcp_core.tools.smogon_helpers import (
 from vgc_mcp_core.tools.smogon_helpers import (
     get_common_spreads as _shared_get_common_spreads,
 )
+from vgc_mcp_core.tools.smogon_helpers import sps_from_smogon_spread
 from vgc_mcp_core.utils.errors import (
     ErrorCodes,
     api_error,
@@ -59,31 +60,6 @@ async def _get_common_spreads(pokemon_name: str, limit: int = 3) -> list[dict]:
 async def _get_common_spread(pokemon_name: str) -> Optional[dict]:
     """Module-local wrapper — passes the registered Smogon client through."""
     return await _shared_get_common_spread(_smogon_client, pokemon_name)
-
-
-def _detect_champions(*pokemon_names: str) -> bool:
-    """Return True when the active format resolves to Champions (Reg MA).
-
-    Read-only: an explicit session regulation wins, otherwise the format is
-    INFERRED from the mentioned Pokemon without mutating session state (a plain
-    damage calc must not silently rewrite a mainline user's session).
-    """
-    return detect_champions_format(*pokemon_names)
-
-
-def _sps_from_smogon_spread(spread: dict) -> Optional[StatPointSpread]:
-    """Build a StatPointSpread from a Champions Smogon spread dict.
-
-    Wave-1's smogon helper carries `sps` (canonical-stat-name dict) +
-    `format_system` alongside `evs`. Returns None when the spread isn't a
-    champions spread or has no SP data.
-    """
-    if spread.get("format_system") != "champions":
-        return None
-    sps = spread.get("sps")
-    if not sps:
-        return None
-    return StatPointSpread.from_sps_dict(sps)
 
 
 def format_transparent_output(
@@ -411,7 +387,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             # Champions (Reg MA) detection. When the session resolves to the
             # Stat-Point format we build PokemonBuilds with format_system=
             # 'champions' + a StatPointSpread (32/stat, 66 total) instead of EVs.
-            is_champions = _detect_champions(attacker_name, defender_name)
+            is_champions = detect_champions_format(attacker_name, defender_name)
 
             # Parse explicit SP inputs ("HP/Atk/Def/SpA/SpD/Spe"). These win over
             # any EV params / Smogon fetch when the session is Champions.
@@ -492,7 +468,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         # carries 'sps' + format_system) rather than the empty
                         # 'evs' dict.
                         if is_champions and attacker_sp_spread is None:
-                            attacker_sp_spread = _sps_from_smogon_spread(atk_spread)
+                            attacker_sp_spread = sps_from_smogon_spread(atk_spread)
                         # Also use common item/ability if not specified
                         if attacker_item is None and atk_spread.get("item"):
                             attacker_item = _normalize_smogon_name(atk_spread["item"])
@@ -538,7 +514,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         if defender_spe_evs is None:
                             defender_spe_evs = evs.get("speed", 0)
                         if is_champions and defender_sp_spread is None:
-                            defender_sp_spread = _sps_from_smogon_spread(def_spread)
+                            defender_sp_spread = sps_from_smogon_spread(def_spread)
                         if defender_ability is None and def_spread.get("ability"):
                             defender_ability = _normalize_smogon_name(def_spread["ability"])
                         # Also get defender item from Smogon if not specified
@@ -887,7 +863,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                             # Prefer the threat's champions-tagged SP spread; otherwise
                             # convert its real mainline Smogon EVs to the SP grain so its
                             # bulk is preserved (NOT zeroed out).
-                            sps=_sps_from_smogon_spread(spread_data) or evs_to_sps_spread(
+                            sps=sps_from_smogon_spread(spread_data) or evs_to_sps_spread(
                                 EVSpread(
                                     hp=spread_evs.get("hp", 0),
                                     defense=spread_evs.get("defense", 0),
@@ -1410,7 +1386,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             # Points (0-32) and calculate_ko_threshold returns 'sps_needed'.
             # Detect from the SUBJECT (the attacker being optimized), not the
             # opposing defender, so a Mega/Reg-MA opponent can't flip the format.
-            is_champions = _detect_champions(attacker_name)
+            is_champions = detect_champions_format(attacker_name)
 
             # Auto-fill signature items
             if attacker_item is None:
@@ -1653,7 +1629,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             # Champions (Reg MA) detection — defender invests Stat Points, and
             # calculate_bulk_threshold returns 'hp_sps'/'def_sps'. Detect from the
             # SUBJECT (the defender being optimized), not the attacking threat.
-            is_champions = _detect_champions(defender_name)
+            is_champions = detect_champions_format(defender_name)
             attacker_sp_spread: Optional[StatPointSpread] = None
 
             # Track attacker spread info for output
@@ -1687,7 +1663,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     # Champions: capture the attacker's Stat-Point allocation so
                     # the threat's damage is computed on the real SP investment.
                     if is_champions:
-                        attacker_sp_spread = _sps_from_smogon_spread(atk_spread)
+                        attacker_sp_spread = sps_from_smogon_spread(atk_spread)
 
                     if attacker_item is None and atk_spread.get("item"):
                         attacker_item = _normalize_smogon_name(atk_spread["item"])

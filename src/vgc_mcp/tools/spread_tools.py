@@ -42,23 +42,12 @@ from vgc_mcp_core.models.pokemon import (
     StatPointSpread,
     get_nature_modifier,
 )
+from vgc_mcp_core.rules.format_detect import detect_champions_format
 from vgc_mcp_core.tools.smogon_helpers import (
     get_common_spread as _shared_get_common_spread,
 )
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 from vgc_mcp_core.utils.normalize import normalize_move
-
-
-def _detect_champions(pokemon_name: Optional[str] = None) -> bool:
-    """Return True when the active session is the Champions (Reg MA) SP system.
-
-    Reads the session regulation's format system. Optionally runs Pokemon-name
-    inference first (mirroring workflow_tools.suggest_ev_spread) so a Mega/Reg MA
-    mention auto-selects Champions without the user having to set it explicitly.
-    The mainline path is taken whenever this returns False.
-    """
-    from vgc_mcp_core.rules.format_detect import detect_champions_format
-    return detect_champions_format(pokemon_name)
 
 
 def _champions_offensive_stat(base_stats: BaseStats) -> str:
@@ -642,7 +631,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
     # These mirror the EV tools but emit SP-scale spreads (0-32/stat, <=66
     # total) via StatPointSpread + format_system='champions', so any returned
     # showdown_paste is an 'SPs:' paste. They are only reached when the active
-    # session is the Champions format (see _detect_champions); the mainline
+    # session is the Champions format (see detect_champions_format); the mainline
     # path is unchanged.
     # ======================================================================
 
@@ -1603,7 +1592,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             # --- Champions (Reg MA) Stat-Point branch ---------------------------
             # In a Champions session the *_evs args carry SP-scale numbers
             # (0-32/stat, <=66 total). Validate on the SP grain instead of 508/4.
-            if _detect_champions(pokemon_name):
+            if detect_champions_format(pokemon_name):
                 return await _check_spread_efficiency_champions(
                     pokemon_name, base_stats, parsed_nature, nature,
                     hp_evs, atk_evs, def_evs, spa_evs, spd_evs, spe_evs,
@@ -1748,7 +1737,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             # In a Champions session the *_evs args carry SP-scale numbers
             # (0-32/stat). Search for a nature that hits the same stats on the SP
             # grain with fewer total Stat Points.
-            if _detect_champions(pokemon_name):
+            if detect_champions_format(pokemon_name):
                 return await _suggest_nature_optimization_champions(
                     pokemon_name, base_stats, current_nature, current_nature_enum,
                     hp_evs, atk_evs, def_evs, spa_evs, spd_evs, spe_evs, moves,
@@ -2040,7 +2029,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {nature}')
 
             # --- Champions (Reg MA) Stat-Point branch ---------------------------
-            if _detect_champions(pokemon_name):
+            if detect_champions_format(pokemon_name):
                 # Default EV budget (252) maps to the full SP bulk budget (66);
                 # an explicit smaller request is clamped onto the SP scale.
                 total_bulk_sps = SP_TOTAL_MAX if total_bulk_evs == 252 else min(SP_TOTAL_MAX, total_bulk_evs)
@@ -2193,7 +2182,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             base_stats = await pokeapi.get_base_stats(pokemon_name)
 
             # --- Champions (Reg MA) Stat-Point branch ---------------------------
-            if _detect_champions(pokemon_name):
+            if detect_champions_format(pokemon_name):
                 return await _suggest_spread_champions(
                     pokemon_name, base_stats, role, speed_target, item
                 )
@@ -2384,7 +2373,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {nature}')
 
             # --- Champions (Reg MA) Stat-Point branch ---------------------------
-            if _detect_champions(pokemon_name):
+            if detect_champions_format(pokemon_name):
                 total_bulk_sps = SP_TOTAL_MAX if total_bulk_evs == 252 else min(SP_TOTAL_MAX, total_bulk_evs)
                 return await _optimize_bulk_champions(
                     pokemon_name, base_stats, parsed_nature, total_bulk_sps, defense_weight, item
@@ -2595,7 +2584,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             my_types = await pokeapi.get_pokemon_types(pokemon_name)
 
             # --- Champions (Reg MA) Stat-Point branch ---------------------------
-            if _detect_champions(pokemon_name):
+            if detect_champions_format(pokemon_name):
                 return await _design_spread_with_benchmarks_champions(
                     pokemon_name=pokemon_name,
                     my_base=my_base,
@@ -3354,7 +3343,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             my_types = await pokeapi.get_pokemon_types(pokemon_name)
 
             # --- Champions (Reg MA) Stat-Point branch ---------------------------
-            if _detect_champions(pokemon_name):
+            if detect_champions_format(pokemon_name):
                 threats = [
                     {
                         "attacker": survive_hit1_attacker, "move": survive_hit1_move,
@@ -4179,7 +4168,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             my_types = await pokeapi.get_pokemon_types(pokemon_name)
 
             # --- Champions (Reg MA) Stat-Point branch ---------------------------
-            if _detect_champions(pokemon_name):
+            if detect_champions_format(pokemon_name):
                 return await _optimize_multi_survival_champions(
                     pokemon_name=pokemon_name,
                     my_base=my_base,

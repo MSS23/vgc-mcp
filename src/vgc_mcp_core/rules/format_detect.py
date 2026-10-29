@@ -21,7 +21,7 @@ from __future__ import annotations
 from typing import Optional
 
 from .regulation_loader import RegulationConfig, get_regulation_config
-from .regulation_router import infer_format_from_pokemon
+from .regulation_router import auto_detect_regulation, infer_format_from_pokemon
 
 
 def detect_champions_format(
@@ -57,4 +57,23 @@ def detect_champions_format(
             pass
 
     # 3. Fall back to the session's current (possibly default) format.
+    return (cfg.get_format_system() or "mainline") == "champions"
+
+
+def auto_detect_champions_format(
+    *pokemon_names: str,
+    cfg: Optional[RegulationConfig] = None,
+) -> bool:
+    """MUTATING variant for build/team/import flows.
+
+    Runs `auto_detect_regulation`, which may persist an auto-detected session
+    regulation (an explicit user choice still wins), then reports whether the
+    resolved format is Champions. Use `detect_champions_format` for pure
+    calc/spread/stat tools that must not touch session state.
+    """
+    cfg = cfg or get_regulation_config()
+    try:
+        auto_detect_regulation(list(pokemon_names), cfg)
+    except Exception:  # noqa: BLE001 — detection must never break a build
+        pass
     return (cfg.get_format_system() or "mainline") == "champions"

@@ -1,6 +1,6 @@
 """MCP tools for stat calculations."""
 
-from typing import Annotated, Optional
+from typing import Annotated
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
@@ -15,6 +15,7 @@ from vgc_mcp_core.calc.stats import (
 )
 from vgc_mcp_core.calc.stats_champions import calculate_speed_sp
 from vgc_mcp_core.models.pokemon import EVSpread, IVSpread, Nature, PokemonBuild, StatPointSpread
+from vgc_mcp_core.rules.format_detect import detect_champions_format
 from vgc_mcp_core.utils.errors import (
     api_error,
     invalid_evs_error,
@@ -22,18 +23,6 @@ from vgc_mcp_core.utils.errors import (
     pokemon_not_found_error,
 )
 from vgc_mcp_core.utils.fuzzy import suggest_nature, suggest_pokemon_name
-
-
-def _detect_champions(pokemon_name: Optional[str] = None) -> bool:
-    """Return True when the active session is the Champions (Reg MA) SP system.
-
-    Mirrors spread_tools._detect_champions: optionally runs Pokemon-name
-    inference first so a Mega/Reg MA mention auto-selects Champions without the
-    user having to set it explicitly. The mainline path is taken whenever this
-    returns False.
-    """
-    from vgc_mcp_core.rules.format_detect import detect_champions_format
-    return detect_champions_format(pokemon_name)
 
 
 def _champions_stats_response(
@@ -145,7 +134,7 @@ def register_stats_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         SP formula (e.g. Flutter Mane 32 Spe SP -> 205 Speed).
         """
         try:
-            is_champions = _detect_champions(pokemon_name)
+            is_champions = detect_champions_format(pokemon_name)
 
             # Validate investment under the active format's cap.
             total_invest = hp_evs + atk_evs + def_evs + spa_evs + spd_evs + spe_evs
@@ -281,7 +270,7 @@ def register_stats_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         Mane 32 Spe SP -> 205).
         """
         try:
-            is_champions = _detect_champions(pokemon_name)
+            is_champions = detect_champions_format(pokemon_name)
             base_stats = await pokeapi.get_base_stats(pokemon_name)
             base_speed = base_stats.speed
 

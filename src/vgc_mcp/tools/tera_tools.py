@@ -9,19 +9,9 @@ from pydantic import Field
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.config import logger
 from vgc_mcp_core.models.pokemon import EVSpread, Nature, PokemonBuild, StatPointSpread
+from vgc_mcp_core.rules.format_detect import detect_champions_format
 from vgc_mcp_core.utils.errors import api_error, pokemon_not_found_error
 from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name
-
-
-def _detect_champions(pokemon_name: Optional[str] = None) -> bool:
-    """Return True when the active session is the Champions (Reg MA) SP system.
-
-    Optionally runs Pokemon-name inference first (mirroring the wave-2 tools)
-    so a Mega/Reg MA mention auto-selects Champions without an explicit set.
-    The mainline path is taken whenever this returns False.
-    """
-    from vgc_mcp_core.rules.format_detect import detect_champions_format
-    return detect_champions_format(pokemon_name)
 
 # All 18 Pokemon types
 ALL_TYPES = [
@@ -69,7 +59,7 @@ def register_tera_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             # StatPointSpread + format_system='champions' so stats and any
             # returned paste use the SP scale (32/66, 'SPs:'); mainline keeps
             # the EVSpread path byte-for-byte unchanged.
-            is_champions = _detect_champions(pokemon_name)
+            is_champions = detect_champions_format(pokemon_name)
             if is_champions:
                 # Accept either an explicit 'sps' dict or treat a passed 'evs'
                 # dict as SP-scale (capping each stat at 32) so callers in a

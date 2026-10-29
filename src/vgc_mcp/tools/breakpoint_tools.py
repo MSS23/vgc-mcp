@@ -46,24 +46,13 @@ from vgc_mcp_core.models.pokemon import (
     PokemonBuild,
     StatPointSpread,
 )
+from vgc_mcp_core.rules.format_detect import detect_champions_format
 from vgc_mcp_core.tools import get_common_spread
 from vgc_mcp_core.tools.ability_helpers import (
     compute_intimidate_attack_stage,
     resolve_ability,
 )
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
-
-
-def _session_is_champions(pokemon_name: Optional[str] = None) -> bool:
-    """Return True when the active session is the Champions (Reg MA) SP system.
-
-    Mirrors spread_tools._session_is_champions: optionally runs Pokemon-name
-    inference first so a Mega/Reg MA mention auto-selects Champions without the
-    user having to set it explicitly. The mainline path is taken when False.
-    """
-    from vgc_mcp_core.rules.format_detect import detect_champions_format
-    return detect_champions_format(pokemon_name)
-
 
 # Natures that boost / nerf each stat
 _PLUS_NATURES = {
@@ -176,7 +165,7 @@ def register_breakpoint_tools(
 
         # Only the USER's subject Pokemon becomes a Champions (SP) build; the
         # opposing target stays mainline (it's an opposing meta reference).
-        is_champions = _session_is_champions(pokemon_name)
+        is_champions = detect_champions_format(pokemon_name)
 
         if benchmark_type == "outspeed":
             return _find_speed_breakpoint(me_base, tgt_base, tgt_spread,

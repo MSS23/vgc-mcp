@@ -10,18 +10,9 @@ from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
 from vgc_mcp_core.calc.matchup import COMMON_THREATS, analyze_threat_matchup
 from vgc_mcp_core.config import logger
+from vgc_mcp_core.rules.format_detect import detect_champions_format
 from vgc_mcp_core.team.manager import TeamManager
 from vgc_mcp_core.utils.errors import ErrorCodes, api_error, error_response
-
-
-def _detect_champions(pokemon_names: Optional[List[str]] = None) -> bool:
-    """Return True when the active session is the Champions (Reg MA) SP system.
-
-    Optionally runs Pokemon-name inference first so a Mega/Reg MA team
-    auto-selects Champions without the user having to set it explicitly.
-    """
-    from vgc_mcp_core.rules.format_detect import detect_champions_format
-    return detect_champions_format(*(pokemon_names or []))
 
 
 def register_team_matchup_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[SmogonStatsClient], team_manager: TeamManager):
@@ -53,7 +44,7 @@ def register_team_matchup_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Op
 
             # Detect format once. Champions team members use the SP system so
             # matchup stats/speed are correct; meta threats stay mainline.
-            is_champions = _detect_champions(team_pokemon)
+            is_champions = detect_champions_format(*(team_pokemon or []))
 
             # Analyze against meta threats if requested
             threat_coverage = {}

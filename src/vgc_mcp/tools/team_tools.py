@@ -15,25 +15,10 @@ from vgc_mcp_core.models.pokemon import (
     PokemonBuild,
     StatPointSpread,
 )
-from vgc_mcp_core.rules.regulation_loader import get_regulation_config
-from vgc_mcp_core.rules.regulation_router import auto_detect_regulation
+from vgc_mcp_core.rules.format_detect import auto_detect_champions_format
 from vgc_mcp_core.team.analysis import TeamAnalyzer
 from vgc_mcp_core.team.manager import TeamManager
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
-
-
-def _detect_champions(pokemon_name: str) -> bool:
-    """Resolve session format, falling back to name-based inference.
-
-    Returns True when the active regulation uses the Champions (Reg MA)
-    Stat-Point system. Mainline behavior is unchanged.
-    """
-    cfg = get_regulation_config()
-    try:
-        auto_detect_regulation([pokemon_name], cfg)
-    except Exception:
-        pass
-    return (cfg.get_format_system() or "mainline") == "champions"
 
 
 def register_team_tools(
@@ -78,7 +63,7 @@ def register_team_tools(
         an `sp_conversion` note.
         """
         try:
-            is_champions = _detect_champions(pokemon_name)
+            is_champions = auto_detect_champions_format(pokemon_name)
             sp_conversion_note = None
 
             # Validate stat investment against the active format's caps.
@@ -256,7 +241,7 @@ def register_team_tools(
         `sp_conversion` note.
         """
         try:
-            is_champions = _detect_champions(pokemon_name)
+            is_champions = auto_detect_champions_format(pokemon_name)
             sp_conversion_note = None
 
             # Validate stat investment against the active format's caps.

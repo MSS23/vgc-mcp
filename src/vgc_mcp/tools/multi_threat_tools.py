@@ -13,23 +13,13 @@ from vgc_mcp_core.calc.stats_champions import SP_BREAKPOINTS_LV50
 from vgc_mcp_core.config import EV_BREAKPOINTS_LV50, logger
 from vgc_mcp_core.formats.showdown import pokemon_build_to_showdown
 from vgc_mcp_core.models.pokemon import EVSpread, Nature, PokemonBuild, StatPointSpread
+from vgc_mcp_core.rules.format_detect import detect_champions_format
 from vgc_mcp_core.tools.ability_helpers import (
     compute_intimidate_attack_stage,
     resolve_ability,
 )
 from vgc_mcp_core.utils.errors import ErrorCodes, api_error, error_response, pokemon_not_found_error
 from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name
-
-
-def _detect_champions(pokemon_name: Optional[str] = None) -> bool:
-    """Return True when the active session is the Champions (Reg MA) SP system.
-
-    Mirrors spread_tools._detect_champions: reads the session regulation's
-    format system, optionally running Pokemon-name inference first so a Mega /
-    Reg MA mention auto-selects Champions. Mainline path is taken when False.
-    """
-    from vgc_mcp_core.rules.format_detect import detect_champions_format
-    return detect_champions_format(pokemon_name)
 
 
 def register_multi_threat_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon_client=None):
@@ -151,7 +141,7 @@ def register_multi_threat_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon_cli
             # champions defender vs mainline attackers is correct. Mainline keeps
             # the EV sweep (0-252 per stat, 508 total) byte-for-byte. Loop vars
             # stay named *_ev but hold SP units in the champions branch.
-            is_champions = _detect_champions(pokemon_name)
+            is_champions = detect_champions_format(pokemon_name)
             breakpoints = SP_BREAKPOINTS_LV50 if is_champions else EV_BREAKPOINTS_LV50
             total_budget = 66 if is_champions else 508
 

@@ -18,6 +18,8 @@ from vgc_mcp_core.calc.bulk_calc import (
 from vgc_mcp_core.calc.damage import format_percent
 from vgc_mcp_core.formats.showdown import pokemon_build_to_showdown
 from vgc_mcp_core.models.pokemon import Nature, PokemonBuild, StatPointSpread
+from vgc_mcp_core.rules.format_detect import detect_champions_format
+from vgc_mcp_core.tools.smogon_helpers import sps_from_smogon_spread
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 from .damage_tools import _get_common_spread
@@ -38,20 +40,6 @@ def _parse_ev_string(ev_string: str) -> dict:
     return {name: int(val) for name, val in zip(stat_names, parts)}
 
 
-def _detect_champions(*pokemon_names: str) -> bool:
-    """Return True when the active session resolves to the Champions (Reg MA)
-    Stat-Point format.
-
-    Mirrors the format-detection pattern in the other wave-2 tools: an explicit
-    session regulation wins, otherwise Pokemon-name inference (Mega forms, the
-    Reg MA allowlist, etc.) sets the session, then we read the resolved format
-    system. Inference failures are swallowed so a missing data file never breaks
-    the mainline path.
-    """
-    from vgc_mcp_core.rules.format_detect import detect_champions_format
-    return detect_champions_format(*pokemon_names)
-
-
 def _parse_sp_string(sp_string: str) -> StatPointSpread:
     """Parse 'HP/Atk/Def/SpA/SpD/Spe' Stat Points into a StatPointSpread.
 
@@ -67,21 +55,6 @@ def _parse_sp_string(sp_string: str) -> StatPointSpread:
         hp=vals[0], attack=vals[1], defense=vals[2],
         special_attack=vals[3], special_defense=vals[4], speed=vals[5],
     )
-
-
-def _sps_from_smogon_spread(spread: Optional[dict]) -> Optional[StatPointSpread]:
-    """Build a StatPointSpread from a champions-tagged Smogon spread dict.
-
-    Wave-1's smogon helper carries `sps` (canonical-stat-name dict) +
-    `format_system` alongside `evs`. Returns None when the spread isn't a
-    champions spread or has no SP data, so callers fall back to the mainline path.
-    """
-    if not spread or spread.get("format_system") != "champions":
-        return None
-    sps = spread.get("sps")
-    if not sps:
-        return None
-    return StatPointSpread.from_sps_dict(sps)
 
 
 async def _build_champions_attacker(
@@ -109,7 +82,7 @@ async def _build_champions_attacker(
             if nature is None:
                 nature = smogon_spread.get("nature")
             if sp_spread is None:
-                sp_spread = _sps_from_smogon_spread(smogon_spread)
+                sp_spread = sps_from_smogon_spread(smogon_spread)
             if item is None:
                 item = smogon_spread.get("item")
             if ability is None:
@@ -259,7 +232,7 @@ def register_bulk_calc_tools(
 
             # Detect Champions (Reg MA) session — only the user's subject
             # attacker becomes a Stat-Point build; meta defenders stay mainline.
-            is_champions = _detect_champions(attacker_name)
+            is_champions = detect_champions_format(attacker_name)
 
             # Build attacker (format-aware)
             if is_champions:
@@ -503,7 +476,7 @@ def register_bulk_calc_tools(
 
             # Detect Champions (Reg MA) session — only the user's subject
             # attacker becomes a Stat-Point build; meta defenders stay mainline.
-            is_champions = _detect_champions(attacker_name)
+            is_champions = detect_champions_format(attacker_name)
 
             # Build attacker (format-aware)
             if is_champions:

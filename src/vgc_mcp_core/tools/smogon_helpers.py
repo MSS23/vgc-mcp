@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Optional
 
+from ..models.pokemon import StatPointSpread
 from ..utils.synergies import get_synergy_ability
 
 logger = logging.getLogger(__name__)
@@ -80,3 +81,18 @@ async def get_common_spread(
     """Fetch the single most common spread for a Pokemon. None if not found."""
     spreads = await get_common_spreads(smogon_client, pokemon_name, limit=1)
     return spreads[0] if spreads else None
+
+
+def sps_from_smogon_spread(spread: Optional[dict]) -> Optional[StatPointSpread]:
+    """Build a StatPointSpread from a Champions-tagged Smogon spread dict.
+
+    Smogon spreads carry `sps` (canonical-stat-name dict) + `format_system`
+    alongside `evs`. Returns None when the spread isn't a Champions spread or
+    has no SP data, so callers fall back to the mainline path.
+    """
+    if not spread or spread.get("format_system") != "champions":
+        return None
+    sps = spread.get("sps")
+    if not sps:
+        return None
+    return StatPointSpread.from_sps_dict(sps)

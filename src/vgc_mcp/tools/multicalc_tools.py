@@ -26,10 +26,12 @@ from vgc_mcp_core.models.pokemon import (
     PokemonBuild,
     StatPointSpread,
 )
+from vgc_mcp_core.rules.format_detect import detect_champions_format
+from vgc_mcp_core.tools.smogon_helpers import sps_from_smogon_spread
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 # Import helper functions from damage_tools (do NOT edit that module — reuse only)
-from .damage_tools import _detect_champions, _get_common_spread, _sps_from_smogon_spread
+from .damage_tools import _get_common_spread
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +102,7 @@ async def _build_pokemon_from_smogon(
     # A fetched spread that is itself champions-tagged forces SP scale even for
     # an opposing reference mon (matches the calc's per-build format_system read).
     fetched_sp_spread = (
-        _sps_from_smogon_spread(smogon_spread) if smogon_spread else None
+        sps_from_smogon_spread(smogon_spread) if smogon_spread else None
     )
     use_champions = subject_is_champions or fetched_sp_spread is not None
 
@@ -191,7 +193,7 @@ def register_multicalc_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
             # Champions (Reg MA) detection — only the user's subject (the
             # attacker) becomes SP-scale. Opposing defenders stay mainline
             # unless their own fetched Smogon spread is champions-tagged.
-            is_champions = _detect_champions(attacker_name)
+            is_champions = detect_champions_format(attacker_name)
 
             # Fetch attacker data
             await pokeapi.get_base_stats(attacker_name)
@@ -352,7 +354,7 @@ def register_multicalc_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
             # Champions (Reg MA) detection — only the user's subject (the
             # defender) becomes SP-scale. Opposing attacker threats stay mainline
             # unless their own fetched Smogon spread is champions-tagged.
-            is_champions = _detect_champions(defender_name)
+            is_champions = detect_champions_format(defender_name)
 
             # Build defender (subject — SP-scale in a champions session)
             defender = await _build_pokemon_from_smogon(
@@ -500,7 +502,7 @@ def register_multicalc_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
             # subjects) become SP-scale. Meta threats stay mainline unless their
             # own fetched Smogon spread is champions-tagged. Infer from the full
             # set of team-member names so any Mega/Champions signal is caught.
-            is_champions = _detect_champions(
+            is_champions = detect_champions_format(
                 *[c.get("name") for c in team_pokemon if c.get("name")]
             )
 

@@ -27,19 +27,10 @@ from vgc_mcp_core.models.pokemon import (
     PokemonBuild,
     StatPointSpread,
 )
+from vgc_mcp_core.rules.format_detect import detect_champions_format
 from vgc_mcp_core.tools import get_common_spread
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 from vgc_mcp_core.utils.normalize import normalize_move
-
-
-def _session_is_champions(pokemon_name: Optional[str] = None) -> bool:
-    """Return True when the active session is the Champions (Reg MA) SP system.
-
-    Mirrors spread_tools._session_is_champions — runs name inference first so a
-    Mega/Reg MA mention auto-selects Champions without explicit user setup.
-    """
-    from vgc_mcp_core.rules.format_detect import detect_champions_format
-    return detect_champions_format(pokemon_name)
 
 
 def _verdict(min_pct: float, max_pct: float) -> str:
@@ -168,7 +159,7 @@ def register_delta_tools(
 
         # Only the USER's subject (pokemon_name) becomes a Champions (SP) build;
         # opposing threats stay mainline meta references.
-        is_champions = _session_is_champions(pokemon_name)
+        is_champions = detect_champions_format(pokemon_name)
 
         try:
             me_before = await _build_from_overrides(

@@ -26,37 +26,15 @@ from vgc_mcp_core.models.pokemon import (
     PokemonBuild,
     StatPointSpread,
 )
+from vgc_mcp_core.rules.format_detect import detect_champions_format
 from vgc_mcp_core.tools.smogon_helpers import (
     get_common_spread as _shared_get_common_spread,
 )
+from vgc_mcp_core.tools.smogon_helpers import sps_from_smogon_spread
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 # Import META_SYNERGIES from spread_tools
 from .spread_tools import META_SYNERGIES
-
-
-def _detect_champions(pokemon_name: Optional[str] = None) -> bool:
-    """Return True when the active session is the Champions (Reg MA) SP system.
-
-    Optionally runs Pokemon-name inference first so a Mega/Reg MA mention
-    auto-selects Champions. The mainline path is taken when this is False.
-    """
-    from vgc_mcp_core.rules.format_detect import detect_champions_format
-    return detect_champions_format(pokemon_name)
-
-
-def _sps_from_smogon_spread(spread: Optional[dict]) -> Optional[StatPointSpread]:
-    """Build a StatPointSpread from a champions-tagged Smogon spread dict.
-
-    Returns None when the spread isn't tagged format_system=='champions' or
-    carries no `sps` data — callers then fall back to other SP sources.
-    """
-    if not spread or spread.get("format_system") != "champions":
-        return None
-    sps = spread.get("sps")
-    if not sps:
-        return None
-    return StatPointSpread.from_sps_dict(sps)
 
 
 def _sps_from_evs_dict(evs: Optional[dict]) -> StatPointSpread:
@@ -279,9 +257,9 @@ def register_item_optimization_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogo
             # so its stats and damage use the correct formula; mainline keeps
             # the EVSpread path byte-for-byte. The defender (opposing target)
             # below stays mainline unless its own fetched spread is champions.
-            is_champions = _detect_champions(pokemon_name)
+            is_champions = detect_champions_format(pokemon_name)
             if is_champions:
-                attacker_sps = _sps_from_smogon_spread(attacker_spread)
+                attacker_sps = sps_from_smogon_spread(attacker_spread)
                 if attacker_sps is None:
                     attacker_sps = _sps_from_evs_dict(attacker_evs_dict)
                 attacker = PokemonBuild(
@@ -332,7 +310,7 @@ def register_item_optimization_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogo
 
             # Opposing target stays MAINLINE unless its own fetched Smogon
             # spread is explicitly champions-tagged (then honour the SP scale).
-            defender_sps = _sps_from_smogon_spread(defender_spread)
+            defender_sps = sps_from_smogon_spread(defender_spread)
             if defender_sps is not None:
                 defender = PokemonBuild(
                     name=target_name,
@@ -463,7 +441,7 @@ def register_item_optimization_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogo
             # The SUBJECT is the user's Pokemon. In a Champions session reason
             # on the SP grain (0 vs 32 / specific SP, capped at 32) instead of
             # 0 vs 252 EVs; mainline keeps the EV grain byte-for-byte.
-            is_champions = _detect_champions(pokemon_name)
+            is_champions = detect_champions_format(pokemon_name)
 
             # Determine HP investment values to test (SP units for champions,
             # EV units for mainline).
@@ -630,7 +608,7 @@ def register_item_optimization_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogo
             # EV-grain trade-off reasoning runs on the SP grain instead (32 per
             # stat / 66 total, 'SPs:' pastes); mainline keeps the shared
             # EV-grain calc byte-for-byte.
-            is_champions = _detect_champions(pokemon_name)
+            is_champions = detect_champions_format(pokemon_name)
 
             if is_champions:
                 tradeoff_analysis, best_entry = _champions_ev_tradeoff(
