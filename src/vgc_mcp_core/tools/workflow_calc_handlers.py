@@ -5,6 +5,7 @@ from typing import Any, Optional
 from vgc_mcp_core.calc.damage import format_percent
 from vgc_mcp_core.config import EV_BREAKPOINTS_LV50
 from vgc_mcp_core.tools.build_helpers import build_pokemon
+from vgc_mcp_core.tools.spread_common import slash_values
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response, success_response
 from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name
 
@@ -463,6 +464,7 @@ async def calc_damage_vs_smogon_sets(
     my_spa_evs: int = 0,
     my_spd_evs: int = 0,
     my_spe_evs: int = 0,
+    my_spread: Optional[str] = None,
     my_item: Optional[str] = None,
     my_ability: Optional[str] = None,
     my_tera_type: Optional[str] = None,
@@ -473,6 +475,11 @@ async def calc_damage_vs_smogon_sets(
     attacker_stage: int = 0,
     intimidate: Optional[bool] = None,
 ) -> dict[str, Any]:
+    if my_spread:
+        try:
+            my_hp_evs, my_atk_evs, my_def_evs, my_spa_evs, my_spd_evs, my_spe_evs = slash_values(my_spread)
+        except ValueError as e:
+            return error_response(ErrorCodes.INVALID_PARAMETER, str(e))
     from vgc_mcp_core.calc.damage import DamageResult, calculate_damage
     from vgc_mcp_core.calc.modifiers import DamageModifiers
     from vgc_mcp_core.calc.stats import calculate_all_stats

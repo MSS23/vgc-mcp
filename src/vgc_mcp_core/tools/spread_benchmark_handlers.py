@@ -24,6 +24,7 @@ from vgc_mcp_core.tools.spread_champions import (
 from vgc_mcp_core.tools.spread_common import (
     META_SYNERGIES,
     SPEED_STAGE_MULTIPLIERS,
+    offensive_investment,
 )
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
@@ -44,7 +45,7 @@ async def design_spread_with_benchmarks(
     survive_pokemon: Optional[str] = None,
     survive_move: Optional[str] = None,
     survive_pokemon_nature: str = 'adamant',
-    survive_pokemon_evs: int = 252,
+    survive_pokemon_evs: int | str = 252,
     survive_pokemon_ability: Optional[str] = None,
     survive_pokemon_item: Optional[str] = None,
     survive_pokemon_tera_type: Optional[str] = None,
@@ -327,6 +328,7 @@ async def design_spread_with_benchmarks(
                 tablets_of_ruin = False
                 vessel_of_ruin = False
 
+                survive_pokemon_evs = offensive_investment(survive_pokemon_evs, is_physical)
                 if survive_pokemon_ability:
                     ability_lower = normalize_ability_name(survive_pokemon_ability)
                     if ability_lower == "sword-of-ruin":

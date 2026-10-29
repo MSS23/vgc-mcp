@@ -1,6 +1,6 @@
 """MCP tools for EV spread optimization."""
 
-from typing import Annotated, Optional
+from typing import Annotated, Optional, Union
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
@@ -32,7 +32,8 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         def_evs: Annotated[int, Field(ge=0, le=252, description="Defense EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0,
         spa_evs: Annotated[int, Field(ge=0, le=252, description="Special Attack EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0,
         spd_evs: Annotated[int, Field(ge=0, le=252, description="Special Defense EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0,
-        spe_evs: Annotated[int, Field(ge=0, le=252, description="Speed EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0
+        spe_evs: Annotated[int, Field(ge=0, le=252, description="Speed EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0,
+        spread: Annotated[Optional[str], Field(description="Whole allocation as an 'HP/Atk/Def/SpA/SpD/Spe' slash string (e.g. '4/0/0/252/0/252'; Stat Points in Champions); overrides the per-stat values")] = None,
     ) -> dict:
         """Check an EV spread for efficiency (wasted EVs, optimal distribution).
 
@@ -51,6 +52,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             spa_evs=spa_evs,
             spd_evs=spd_evs,
             spe_evs=spe_evs,
+            spread=spread,
         )
 
     @mcp.tool(
@@ -65,13 +67,14 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
     async def suggest_nature_optimization(
         pokemon_name: Annotated[str, Field(description="Pokemon name", min_length=1)],
         current_nature: Annotated[str, Field(description="Current nature (e.g. 'serious', 'timid')", min_length=1)],
-        hp_evs: Annotated[int, Field(ge=0, le=252, description="Current HP EVs (0-252); Stat Points 0-32 in Champions sessions")],
-        atk_evs: Annotated[int, Field(ge=0, le=252, description="Current Attack EVs (0-252); Stat Points 0-32 in Champions sessions")],
-        def_evs: Annotated[int, Field(ge=0, le=252, description="Current Defense EVs (0-252); Stat Points 0-32 in Champions sessions")],
-        spa_evs: Annotated[int, Field(ge=0, le=252, description="Current Special Attack EVs (0-252); Stat Points 0-32 in Champions sessions")],
-        spd_evs: Annotated[int, Field(ge=0, le=252, description="Current Special Defense EVs (0-252); Stat Points 0-32 in Champions sessions")],
-        spe_evs: Annotated[int, Field(ge=0, le=252, description="Current Speed EVs (0-252); Stat Points 0-32 in Champions sessions")],
-        moves: Annotated[Optional[list[str]], Field(description="Optional list of moves used to determine physical/special preference")] = None
+        hp_evs: Annotated[int, Field(ge=0, le=252, description="Current HP EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0,
+        atk_evs: Annotated[int, Field(ge=0, le=252, description="Current Attack EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0,
+        def_evs: Annotated[int, Field(ge=0, le=252, description="Current Defense EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0,
+        spa_evs: Annotated[int, Field(ge=0, le=252, description="Current Special Attack EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0,
+        spd_evs: Annotated[int, Field(ge=0, le=252, description="Current Special Defense EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0,
+        spe_evs: Annotated[int, Field(ge=0, le=252, description="Current Speed EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0,
+        moves: Annotated[Optional[list[str]], Field(description="Optional list of moves used to determine physical/special preference")] = None,
+        spread: Annotated[Optional[str], Field(description="Whole allocation as an 'HP/Atk/Def/SpA/SpD/Spe' slash string (e.g. '4/0/0/252/0/252'; Stat Points in Champions); overrides the per-stat values")] = None,
     ) -> dict:
         """Suggest a nature change that achieves the same stats with fewer EVs.
 
@@ -90,6 +93,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             spd_evs=spd_evs,
             spe_evs=spe_evs,
             moves=moves,
+            spread=spread,
         )
 
     @mcp.tool(
@@ -230,7 +234,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         survive_pokemon: Annotated[Optional[str], Field(description="Attacker to survive")] = None,
         survive_move: Annotated[Optional[str], Field(description="Move to survive")] = None,
         survive_pokemon_nature: Annotated[str, Field(description="Attacker's nature")] = "adamant",
-        survive_pokemon_evs: Annotated[int, Field(ge=0, le=252, description="Attacker's offensive EVs (0-252)")] = 252,
+        survive_pokemon_evs: Annotated[Union[Annotated[int, Field(ge=0, le=252)], str], Field(description="Attacker's offensive EVs (0-252), or its full 'HP/Atk/Def/SpA/SpD/Spe' slash string (e.g. '4/0/0/252/0/252'; Stat Points in Champions) whose Atk/SpA is used")] = 252,
         survive_pokemon_ability: Annotated[Optional[str], Field(description="Attacker's ability if relevant")] = None,
         survive_pokemon_item: Annotated[Optional[str], Field(description="Attacker's item (e.g. 'choice-band')")] = None,
         survive_pokemon_tera_type: Annotated[Optional[str], Field(description="Attacker's Tera type if Terastallized - ASK THE USER FIRST!")] = None,
@@ -307,12 +311,12 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         my_pokemon_has_tailwind: Annotated[bool, Field(description="True if YOUR Pokemon has Tailwind active (2x speed)")] = False,
         speed_evs: Annotated[Optional[int], Field(ge=0, le=252, description="Override Speed EVs directly instead of calculating from the outspeed target")] = None,
         survive_hit1_nature: Annotated[Optional[str], Field(description="First attacker's nature (auto-fetched from Smogon if not specified)")] = None,
-        survive_hit1_evs: Annotated[Optional[int], Field(ge=0, le=252, description="First attacker's offensive EVs (auto-fetched if not specified)")] = None,
+        survive_hit1_evs: Annotated[Optional[Union[Annotated[int, Field(ge=0, le=252)], str]], Field(description="First attacker's offensive EVs (auto-fetched if not specified), or its full 'HP/Atk/Def/SpA/SpD/Spe' slash string (e.g. '4/0/0/252/0/252'; Stat Points in Champions) whose Atk/SpA is used")] = None,
         survive_hit1_item: Annotated[Optional[str], Field(description="First attacker's item")] = None,
         survive_hit1_ability: Annotated[Optional[str], Field(description="First attacker's ability")] = None,
         survive_hit1_tera_type: Annotated[Optional[str], Field(description="First attacker's Tera type if Terastallized")] = None,
         survive_hit2_nature: Annotated[Optional[str], Field(description="Second attacker's nature (auto-fetched from Smogon if not specified)")] = None,
-        survive_hit2_evs: Annotated[Optional[int], Field(ge=0, le=252, description="Second attacker's offensive EVs (auto-fetched if not specified)")] = None,
+        survive_hit2_evs: Annotated[Optional[Union[Annotated[int, Field(ge=0, le=252)], str]], Field(description="Second attacker's offensive EVs (auto-fetched if not specified), or its full 'HP/Atk/Def/SpA/SpD/Spe' slash string (e.g. '4/0/0/252/0/252'; Stat Points in Champions) whose Atk/SpA is used")] = None,
         survive_hit2_item: Annotated[Optional[str], Field(description="Second attacker's item")] = None,
         survive_hit2_ability: Annotated[Optional[str], Field(description="Second attacker's ability")] = None,
         survive_hit2_tera_type: Annotated[Optional[str], Field(description="Second attacker's Tera type if Terastallized")] = None,
@@ -383,7 +387,7 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
     )
     async def optimize_multi_survival_spread(
         pokemon_name: Annotated[str, Field(description="Your Pokemon (e.g. 'ogerpon-hearthflame')", min_length=1)],
-        threats: Annotated[list[dict], Field(description="List of 3-6 threat dicts, each with required 'attacker' and 'move' plus optional 'nature', 'evs', 'item', 'ability' (auto-fetched from Smogon if omitted) and 'tera_type' (None = no Tera)")],
+        threats: Annotated[list[dict], Field(description="List of 3-6 threat dicts, each with required 'attacker' and 'move' plus optional 'nature', 'evs' (offensive EVs, or a full 'HP/Atk/Def/SpA/SpD/Spe' slash string, e.g. '4/252/0/0/0/252', SP-scale in Champions), 'item', 'ability' (auto-fetched from Smogon if omitted) and 'tera_type' (None = no Tera)")],
         nature: Annotated[Optional[str], Field(description="Your Pokemon's nature (auto-selected if None)")] = None,
         outspeed_pokemon: Annotated[Optional[str], Field(description="Pokemon to outspeed (optional)")] = None,
         outspeed_pokemon_nature: Annotated[str, Field(description="Speed target's nature")] = "timid",

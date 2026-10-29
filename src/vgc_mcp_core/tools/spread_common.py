@@ -1,7 +1,7 @@
 """Shared helpers for EV/SP spread tools: stat inversion, threat caches, constants."""
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
@@ -17,10 +17,32 @@ from vgc_mcp_core.models.pokemon import (
     PokemonBuild,
     StatPointSpread,
 )
-from vgc_mcp_core.tools.build_helpers import build_pokemon, parse_ev_dict
+from vgc_mcp_core.tools.build_helpers import build_pokemon, parse_ev_dict, parse_ev_string
 from vgc_mcp_core.tools.smogon_helpers import (
     get_common_spread as _shared_get_common_spread,
 )
+
+
+def slash_values(spread: str) -> tuple[int, int, int, int, int, int]:
+    """Six per-stat values from an 'HP/Atk/Def/SpA/SpD/Spe' string, each 0-252."""
+    hp, atk, df, spa, spd, spe = parse_ev_string(spread.replace(" ", "")).values()
+    vals = (hp, atk, df, spa, spd, spe)
+    if any(not 0 <= v <= 252 for v in vals):
+        raise ValueError(f"Each value in {spread!r} must be 0-252 (0-32 Stat Points in Champions)")
+    return vals
+
+
+def offensive_investment(value: Any, is_physical: bool) -> Any:
+    """Attacker investment as one number: a slash string or stat dict yields its Atk or SpA."""
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value)
+    if isinstance(value, str):
+        value = dict(zip(("hp", "attack", "defense", "special_attack", "special_defense", "speed"),
+                         slash_values(value)))
+    if isinstance(value, dict):
+        parsed = parse_ev_dict(value)
+        return parsed.attack if is_physical else parsed.special_attack
+    return value
 
 
 def _champions_offensive_stat(base_stats: BaseStats) -> str:
@@ -370,8 +392,7 @@ async def _prepare_threats(
         nature = Nature(nature_str.lower())
 
         evs = threat_dict.get("evs")
-        if isinstance(evs, dict):
-            evs = parse_ev_dict(evs).attack if is_physical else parse_ev_dict(evs).special_attack
+        evs = offensive_investment(evs, is_physical)
         if evs is None and smogon_data:
             evs_dict = smogon_data.get("evs", {})
             evs = evs_dict.get("attack" if is_physical else "special_attack", 252)

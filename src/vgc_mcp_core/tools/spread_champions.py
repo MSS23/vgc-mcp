@@ -35,10 +35,11 @@ from vgc_mcp_core.models.pokemon import (
     get_nature_modifier,
 )
 from vgc_mcp_core.tools import spread_common
-from vgc_mcp_core.tools.build_helpers import build_pokemon, parse_ev_dict
+from vgc_mcp_core.tools.build_helpers import build_pokemon
 from vgc_mcp_core.tools.spread_common import (
     META_SYNERGIES,
     _build_champions_pokemon,
+    offensive_investment,
 )
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 from vgc_mcp_core.utils.normalize import normalize_move
@@ -416,7 +417,7 @@ async def _prepare_single_threat_build(
     attacker_name: str,
     move_name: str,
     nature_str: Optional[str],
-    evs: Optional[int | dict[str, int]],
+    evs: Optional[int | str | dict[str, int]],
     item: Optional[str],
     ability: Optional[str],
     tera_type: Optional[str],
@@ -432,8 +433,7 @@ async def _prepare_single_threat_build(
     is_physical = move.category == MoveCategory.PHYSICAL
 
     off_stat = "attack" if is_physical else "special_attack"
-    if isinstance(evs, dict):
-        evs = getattr(parse_ev_dict(evs), off_stat)
+    evs = offensive_investment(evs, is_physical)
     allocation: dict[str, int] = {}
     sourced = await spread_common._get_common_spread(smogon, attacker_name)
     if sourced:

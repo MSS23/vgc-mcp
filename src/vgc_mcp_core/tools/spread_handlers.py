@@ -30,6 +30,7 @@ from vgc_mcp_core.tools.spread_champions import (
 from vgc_mcp_core.tools.spread_common import (
     _find_min_evs_for_hp,
     _find_min_evs_for_stat,
+    slash_values,
 )
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
@@ -44,7 +45,13 @@ async def check_spread_efficiency(
     spa_evs: int = 0,
     spd_evs: int = 0,
     spe_evs: int = 0,
+    spread: Optional[str] = None,
 ) -> dict[str, Any]:
+    if spread:
+        try:
+            hp_evs, atk_evs, def_evs, spa_evs, spd_evs, spe_evs = slash_values(spread)
+        except ValueError as e:
+            return error_response(ErrorCodes.INVALID_PARAMETER, str(e))
     try:
         base_stats = await pokeapi.get_base_stats(pokemon_name)
 
@@ -167,14 +174,20 @@ async def suggest_nature_optimization(
     pokeapi: PokeAPIClient,
     pokemon_name: str,
     current_nature: str,
-    hp_evs: int,
-    atk_evs: int,
-    def_evs: int,
-    spa_evs: int,
-    spd_evs: int,
-    spe_evs: int,
+    hp_evs: int = 0,
+    atk_evs: int = 0,
+    def_evs: int = 0,
+    spa_evs: int = 0,
+    spd_evs: int = 0,
+    spe_evs: int = 0,
     moves: Optional[list[str]] = None,
+    spread: Optional[str] = None,
 ) -> dict[str, Any]:
+    if spread:
+        try:
+            hp_evs, atk_evs, def_evs, spa_evs, spd_evs, spe_evs = slash_values(spread)
+        except ValueError as e:
+            return error_response(ErrorCodes.INVALID_PARAMETER, str(e))
     try:
         base_stats = await pokeapi.get_base_stats(pokemon_name)
 

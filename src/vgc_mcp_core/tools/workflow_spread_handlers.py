@@ -6,6 +6,7 @@ from vgc_mcp_core.calc.damage import format_percent
 from vgc_mcp_core.config import EV_BREAKPOINTS_LV50
 from vgc_mcp_core.rules.regulation_loader import get_regulation_config
 from vgc_mcp_core.tools.build_helpers import build_pokemon
+from vgc_mcp_core.tools.spread_common import slash_values
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response, success_response
 from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name
 
@@ -669,6 +670,7 @@ async def optimize_spread(
     current_spa_evs: int = 0,
     current_spd_evs: int = 0,
     current_spe_evs: int = 0,
+    current_spread: Optional[str] = None,
     target_speed: Optional[int] = None,
     outspeed_pokemon: Optional[str] = None,
     outspeed_pokemon_nature: str = 'jolly',
@@ -689,6 +691,11 @@ async def optimize_spread(
     target_spa_stat: Optional[int] = None,
     target_spd_stat: Optional[int] = None,
 ) -> dict[str, Any]:
+    if current_spread:
+        try:
+            current_hp_evs, current_atk_evs, current_def_evs, current_spa_evs, current_spd_evs, current_spe_evs = slash_values(current_spread)
+        except ValueError as e:
+            return error_response(ErrorCodes.INVALID_PARAMETER, str(e))
     from vgc_mcp_core.calc.damage import calculate_damage
     from vgc_mcp_core.calc.modifiers import DamageModifiers
     from vgc_mcp_core.calc.stats import calculate_hp, calculate_stat

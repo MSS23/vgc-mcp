@@ -32,6 +32,7 @@ from vgc_mcp_core.tools.spread_common import (
     _generate_nature_explanation,
     _prepare_threats,
     _quick_feasibility_check,
+    offensive_investment,
 )
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
@@ -55,12 +56,12 @@ async def optimize_dual_survival_spread(
     my_pokemon_has_tailwind: bool = False,
     speed_evs: Optional[int] = None,
     survive_hit1_nature: Optional[str] = None,
-    survive_hit1_evs: Optional[int] = None,
+    survive_hit1_evs: Optional[int | str] = None,
     survive_hit1_item: Optional[str] = None,
     survive_hit1_ability: Optional[str] = None,
     survive_hit1_tera_type: Optional[str] = None,
     survive_hit2_nature: Optional[str] = None,
-    survive_hit2_evs: Optional[int] = None,
+    survive_hit2_evs: Optional[int | str] = None,
     survive_hit2_item: Optional[str] = None,
     survive_hit2_ability: Optional[str] = None,
     survive_hit2_tera_type: Optional[str] = None,
@@ -181,6 +182,9 @@ async def optimize_dual_survival_spread(
         else:
             survive_hit2_nature = survive_hit2_nature or ("adamant" if is_physical2 else "modest")
             survive_hit2_evs = survive_hit2_evs if survive_hit2_evs is not None else 252
+
+        survive_hit1_evs = offensive_investment(survive_hit1_evs, is_physical1)
+        survive_hit2_evs = offensive_investment(survive_hit2_evs, is_physical2)
 
         # Apply meta synergies fallback
         atk1_key = survive_hit1_attacker.lower().replace(" ", "-")
