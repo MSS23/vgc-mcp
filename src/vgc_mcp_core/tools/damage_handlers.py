@@ -42,7 +42,9 @@ from vgc_mcp_core.utils.normalize import (
     normalize_smogon_name as _normalize_smogon_name,  # noqa: F401  (re-exported for back-compat)
 )
 
-# Module-level Smogon client reference (set during registration)
+# Smogon client registered by damage_tools. Only the module-level
+# _get_common_spread(s) helpers (imported by other tool modules) read it; the
+# handlers below take the client explicitly.
 _smogon_client: Optional[SmogonStatsClient] = None
 
 
@@ -235,6 +237,7 @@ def format_transparent_output(
 
 async def calculate_damage_output(
     pokeapi: PokeAPIClient,
+    smogon: Optional[SmogonStatsClient],
     *,
     attacker_name: str,
     defender_name: str,
@@ -377,13 +380,13 @@ async def calculate_damage_output(
                 (attacker_nature is None or attacker_atk_evs is None or attacker_spa_evs is None)
             )
             if attacker_needs_spread:
-                atk_spread = await _get_common_spread(attacker_name)
+                atk_spread = await _shared_get_common_spread(smogon, attacker_name)
                 if atk_spread:
                     attacker_spread_source = "smogon"
                     attacker_spread_info = atk_spread
                     # Add regulation info
-                    if _smogon_client and _smogon_client.current_regulation_from_data:
-                        attacker_spread_info["regulation"] = f"Reg {_smogon_client.current_regulation_from_data}"
+                    if smogon and smogon.current_regulation_from_data:
+                        attacker_spread_info["regulation"] = f"Reg {smogon.current_regulation_from_data}"
                     if attacker_nature is None:
                         attacker_nature = atk_spread["nature"]
                     evs = atk_spread.get("evs", {})
@@ -427,7 +430,7 @@ async def calculate_damage_output(
                  defender_def_evs is None or defender_spd_evs is None)
             )
             if defender_needs_spread:
-                defender_spreads_list = await _get_common_spreads(defender_name, limit=num_defender_spreads)
+                defender_spreads_list = await _shared_get_common_spreads(smogon, defender_name, limit=num_defender_spreads)
                 if defender_spreads_list:
                     defender_spread_source = "smogon"
                     # Use first spread as the primary for backwards compatibility
@@ -503,12 +506,12 @@ async def calculate_damage_output(
         from vgc_mcp_core.tools.ability_helpers import resolve_ability
         if attacker_ability is None:
             attacker_ability, _ = await resolve_ability(
-                attacker_name, pokeapi=pokeapi, smogon_client=_smogon_client,
+                attacker_name, pokeapi=pokeapi, smogon_client=smogon,
                 use_smogon=use_smogon_spreads,
             )
         if defender_ability is None:
             defender_ability, _ = await resolve_ability(
-                defender_name, pokeapi=pokeapi, smogon_client=_smogon_client,
+                defender_name, pokeapi=pokeapi, smogon_client=smogon,
                 use_smogon=use_smogon_spreads,
             )
         # Normalize both inferred and explicitly supplied values so the
@@ -1237,6 +1240,7 @@ async def calculate_damage_output(
 
 async def find_ko_evs(
     pokeapi: PokeAPIClient,
+    smogon: Optional[SmogonStatsClient],
     *,
     attacker_name: str,
     defender_name: str,
@@ -1271,11 +1275,11 @@ async def find_ko_evs(
         # Levitate, Heatproof, type absorption, Wonder Guard, etc.).
         from vgc_mcp_core.tools.ability_helpers import resolve_ability
         attacker_ability, attacker_ability_source = await resolve_ability(
-            attacker_name, pokeapi=pokeapi, smogon_client=_smogon_client,
+            attacker_name, pokeapi=pokeapi, smogon_client=smogon,
             user_override=attacker_ability, use_smogon=use_smogon_spreads,
         )
         defender_ability, defender_ability_source = await resolve_ability(
-            defender_name, pokeapi=pokeapi, smogon_client=_smogon_client,
+            defender_name, pokeapi=pokeapi, smogon_client=smogon,
             user_override=defender_ability, use_smogon=use_smogon_spreads,
         )
         atk_norm = (attacker_ability or "").lower().replace(" ", "-")
@@ -1480,6 +1484,7 @@ async def find_ko_evs(
 
 async def find_survival_evs(
     pokeapi: PokeAPIClient,
+    smogon: Optional[SmogonStatsClient],
     *,
     attacker_name: str,
     defender_name: str,
@@ -1522,13 +1527,13 @@ async def find_survival_evs(
 
         # Auto-fetch Smogon spread if enabled and not fully specified
         if use_smogon_spreads and (attacker_nature is None or attacker_evs is None or attacker_item is None):
-            atk_spread = await _get_common_spread(attacker_name)
+            atk_spread = await _shared_get_common_spread(smogon, attacker_name)
             if atk_spread:
                 attacker_spread_info["source"] = "smogon"
                 attacker_spread_info["usage_percent"] = atk_spread.get("usage", 0)
                 # Add regulation info from Smogon data
-                if _smogon_client and _smogon_client.current_regulation_from_data:
-                    attacker_spread_info["regulation"] = f"Reg {_smogon_client.current_regulation_from_data}"
+                if smogon and smogon.current_regulation_from_data:
+                    attacker_spread_info["regulation"] = f"Reg {smogon.current_regulation_from_data}"
 
                 if attacker_nature is None:
                     attacker_nature = atk_spread["nature"]
@@ -1641,7 +1646,7 @@ async def find_survival_evs(
         #  Rod/Motor Drive/Dry Skin, etc.) flow through calculate_damage.
         from vgc_mcp_core.tools.ability_helpers import resolve_ability
         defender_ability, defender_ability_source = await resolve_ability(
-            defender_name, pokeapi=pokeapi, smogon_client=_smogon_client,
+            defender_name, pokeapi=pokeapi, smogon_client=smogon,
             user_override=defender_ability, use_smogon=use_smogon_spreads,
         )
 
@@ -1939,6 +1944,7 @@ async def find_survival_evs(
 
 async def survive_multiple_hits(
     pokeapi: PokeAPIClient,
+    smogon: Optional[SmogonStatsClient],
     *,
     attacker_name: str,
     defender_name: str,
@@ -1977,7 +1983,7 @@ async def survive_multiple_hits(
         # Auto-fetch Smogon spreads if enabled
         if use_smogon_spreads:
             if attacker_nature is None or attacker_atk_evs is None or attacker_spa_evs is None:
-                atk_spread = await _get_common_spread(attacker_name)
+                atk_spread = await _shared_get_common_spread(smogon, attacker_name)
                 if atk_spread:
                     if attacker_nature is None:
                         attacker_nature = atk_spread["nature"]
@@ -1990,7 +1996,7 @@ async def survive_multiple_hits(
                         attacker_item = _normalize_smogon_name(atk_spread["item"])
 
             if defender_nature is None or defender_hp_evs is None or defender_def_evs is None or defender_spd_evs is None:
-                def_spread = await _get_common_spread(defender_name)
+                def_spread = await _shared_get_common_spread(smogon, defender_name)
                 if def_spread:
                     if defender_nature is None:
                         defender_nature = def_spread["nature"]
@@ -2042,11 +2048,11 @@ async def survive_multiple_hits(
             resolve_ability,
         )
         attacker_ability, attacker_ability_source = await resolve_ability(
-            attacker_name, pokeapi=pokeapi, smogon_client=_smogon_client,
+            attacker_name, pokeapi=pokeapi, smogon_client=smogon,
             user_override=attacker_ability, use_smogon=use_smogon_spreads,
         )
         defender_ability, defender_ability_source = await resolve_ability(
-            defender_name, pokeapi=pokeapi, smogon_client=_smogon_client,
+            defender_name, pokeapi=pokeapi, smogon_client=smogon,
             user_override=defender_ability, use_smogon=use_smogon_spreads,
         )
         intimidate_stage, intimidate_note = compute_intimidate_attack_stage(
@@ -2250,6 +2256,7 @@ async def survive_multiple_hits(
 
 async def find_bulk_to_survive_hits(
     pokeapi: PokeAPIClient,
+    smogon: Optional[SmogonStatsClient],
     *,
     attacker_name: str,
     defender_name: str,
@@ -2291,11 +2298,11 @@ async def find_bulk_to_survive_hits(
             resolve_ability,
         )
         attacker_ability, attacker_ability_source = await resolve_ability(
-            attacker_name, pokeapi=pokeapi, smogon_client=_smogon_client,
+            attacker_name, pokeapi=pokeapi, smogon_client=smogon,
             user_override=attacker_ability, use_smogon=use_smogon_spreads,
         )
         defender_ability, defender_ability_source = await resolve_ability(
-            defender_name, pokeapi=pokeapi, smogon_client=_smogon_client,
+            defender_name, pokeapi=pokeapi, smogon_client=smogon,
             user_override=defender_ability, use_smogon=use_smogon_spreads,
         )
         intimidate_stage, intimidate_note = compute_intimidate_attack_stage(
@@ -2508,6 +2515,7 @@ async def find_bulk_to_survive_hits(
 
 async def survive_double_up(
     pokeapi: PokeAPIClient,
+    smogon: Optional[SmogonStatsClient],
     *,
     defender_name: str,
     attacker1_name: str,
@@ -2563,7 +2571,7 @@ async def survive_double_up(
         if use_smogon_spreads:
             # Defender spread
             if defender_nature is None or defender_hp_evs is None or defender_def_evs is None or defender_spd_evs is None:
-                def_spread = await _get_common_spread(defender_name)
+                def_spread = await _shared_get_common_spread(smogon, defender_name)
                 if def_spread:
                     if defender_nature is None:
                         defender_nature = def_spread["nature"]
@@ -2581,7 +2589,7 @@ async def survive_double_up(
 
             # Attacker 1 spread
             if attacker1_nature is None or attacker1_atk_evs is None or attacker1_spa_evs is None:
-                atk1_spread = await _get_common_spread(attacker1_name)
+                atk1_spread = await _shared_get_common_spread(smogon, attacker1_name)
                 if atk1_spread:
                     if attacker1_nature is None:
                         attacker1_nature = atk1_spread["nature"]
@@ -2597,7 +2605,7 @@ async def survive_double_up(
 
             # Attacker 2 spread
             if attacker2_nature is None or attacker2_atk_evs is None or attacker2_spa_evs is None:
-                atk2_spread = await _get_common_spread(attacker2_name)
+                atk2_spread = await _shared_get_common_spread(smogon, attacker2_name)
                 if atk2_spread:
                     if attacker2_nature is None:
                         attacker2_nature = atk2_spread["nature"]
@@ -2641,17 +2649,17 @@ async def survive_double_up(
         )
         if attacker1_ability is None:
             attacker1_ability, _ = await resolve_ability(
-                attacker1_name, pokeapi=pokeapi, smogon_client=_smogon_client,
+                attacker1_name, pokeapi=pokeapi, smogon_client=smogon,
                 use_smogon=use_smogon_spreads,
             )
         if attacker2_ability is None:
             attacker2_ability, _ = await resolve_ability(
-                attacker2_name, pokeapi=pokeapi, smogon_client=_smogon_client,
+                attacker2_name, pokeapi=pokeapi, smogon_client=smogon,
                 use_smogon=use_smogon_spreads,
             )
         if defender_ability is None:
             defender_ability, _ = await resolve_ability(
-                defender_name, pokeapi=pokeapi, smogon_client=_smogon_client,
+                defender_name, pokeapi=pokeapi, smogon_client=smogon,
                 use_smogon=use_smogon_spreads,
             )
 

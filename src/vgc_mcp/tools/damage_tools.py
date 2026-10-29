@@ -130,6 +130,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         """
         return await damage_handlers.calculate_damage_output(
             pokeapi,
+            smogon,
             attacker_name=attacker_name,
             defender_name=defender_name,
             move_name=move_name,
@@ -213,6 +214,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         """
         return await damage_handlers.find_ko_evs(
             pokeapi,
+            smogon,
             attacker_name=attacker_name,
             defender_name=defender_name,
             move_name=move_name,
@@ -271,6 +273,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         """
         return await damage_handlers.find_survival_evs(
             pokeapi,
+            smogon,
             attacker_name=attacker_name,
             defender_name=defender_name,
             move_name=move_name,
@@ -331,6 +334,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         """
         return await damage_handlers.survive_multiple_hits(
             pokeapi,
+            smogon,
             attacker_name=attacker_name,
             defender_name=defender_name,
             move_name=move_name,
@@ -394,6 +398,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         """
         return await damage_handlers.find_bulk_to_survive_hits(
             pokeapi,
+            smogon,
             attacker_name=attacker_name,
             defender_name=defender_name,
             move_name=move_name,
@@ -471,6 +476,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         """
         return await damage_handlers.survive_double_up(
             pokeapi,
+            smogon,
             defender_name=defender_name,
             attacker1_name=attacker1_name,
             move1_name=move1_name,
