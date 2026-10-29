@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-VGC MCP Server - A Model Context Protocol server for Pokemon VGC (Video Game Championships) team building. Provides 208 tools for damage calculations, stat analysis, team management, and competitive play optimization. (The count is pinned in `tests/server/test_deploy_smoke.py` and the CI catalog-drift gate — update both when adding/removing tools.)
+VGC MCP Server - A Model Context Protocol server for Pokemon VGC (Video Game Championships) team building. Provides 213 tools for damage calculations, stat analysis, team management, and competitive play optimization. (The count is pinned in `tests/server/test_deploy_smoke.py` and the CI catalog-drift gate — update both when adding/removing tools.)
 
 Supports two parallel format systems:
 - **Mainline VGC** (Reg F/G/H/I) — classic EV system, 0-252 per stat / 508 total
@@ -46,6 +46,10 @@ mypy src/vgc_mcp_core src/vgc_mcp
 
 # Regenerate tool catalog (CI catalog-drift job fails if out of date)
 python scripts/build_catalog.py
+
+# Check Smogon for a VGC/Champions format regulations.json doesn't know; add a
+# provisional entry (weekly GitHub Action opens a PR with the same script)
+python scripts/sync_regulations.py --dry-run
 ```
 
 ## Architecture
@@ -74,7 +78,7 @@ src/
 │   ├── presentation.py   # MCP server `instructions=` block (table format rules)
 │   └── config.py         # Settings (API URLs, VGC defaults, EV limits)
 │
-└── vgc_mcp/              # MCP server (208 tools) — entry: vgc-mcp / vgc-mcp-http
+└── vgc_mcp/              # MCP server (213 tools) — entry: vgc-mcp / vgc-mcp-http
     ├── server.py         # FastMCP setup + tool registration loop
     └── tools/            # Thin register_*_tools(mcp, deps) wrappers
                           # Auto-discovered by tools/__init__.py
@@ -126,7 +130,7 @@ Located in `vgc_mcp_core/calc/modifiers.py`. Key mechanics:
 - Champions Reg MA: 66 max total Stat Points, 32 per stat
 - Doubles format (spread moves get 0.75x multiplier)
 
-### Pokemon Champions Reg MA/MB — Stat Point System
+### Pokemon Champions Reg MA/MB/MC — Stat Point System
 
 Champions builds use `StatPointSpread` (in `models/pokemon.py`) instead of
 `EVSpread`. Field names match canonical stat names; the NCP (Nimbasa City Post
@@ -166,11 +170,24 @@ has **Mega Evolution** (one per battle) and **no Terastallization**.
 - `find_attack_sps_for_ko(...)` → minimum offensive SP to clear damage floor
 - `validate_sp_allocation(dict)` → 32/66 cap enforcement
 
-**Reg MA/MB legality**: `regulations.json::reg_ma_champs` uses an explicit
+**Reg MA/MB/MC legality**: `regulations.json::reg_ma_champs` uses an explicit
 `legal_pokemon` allowlist (186 species from Serebii); `reg_mb_champs` is a
-standalone 208-species list (a superset of MA's — 22 MB-only additions). Use `RegulationConfig.is_pokemon_legal(name, "reg_ma_champs")`
+standalone 208-species list (a superset of MA's — 22 MB-only additions);
+`reg_mc_champs` (current default, live 2026-09-09, Smogon format
+`gen9championsvgc2026regmc`) is a 232-species list (MB + 24, incl. Rillaboom,
+Cinderace, Inteleon, Indeedee, Baxcalibur, Salamence, Golisopod) with six new
+Megas (Salamence, Baxcalibur, Golisopod, Absol Z, Garchomp Z, Lucario Z — all
+present in PokeAPI). Generic "Champions" wording and Mega-based auto-detection
+resolve to the newest Champions reg by `start_date` (`regulation_router._champions_code`),
+and "Reg MX" / "MX" phrasings resolve by pattern, so a regulation added only to
+`regulations.json` works end to end. `scripts/sync_regulations.py` (run weekly by
+`.github/workflows/sync-regulations.yml`, which opens a PR) appends such entries
+flagged `"provisional": true` with a usage-derived roster; verify against the
+official list before dropping the flag. Older regs stay reachable via explicit
+"Reg MB" / "Reg MA". Use
+`RegulationConfig.is_pokemon_legal(name, "reg_mc_champs")`
 rather than `is_pokemon_banned`, since banlist mode doesn't apply to allowlist
-regulations. Both regulations enforce item clause, level 50, and the 32/66 SP
+regulations. All three enforce item clause, level 50, and the 32/66 SP
 caps (`sp_per_stat_max` / `sp_total_max`).
 
 ### Critical Hits and Ruin Abilities
@@ -858,3 +875,21 @@ This ensures consistent onboarding and shows users the available capabilities.
 3. **Damage Check**: "Does X OHKO Y?" → Calculate → Show transparent breakdown
 4. **EV Optimization**: "What EVs to survive X?" → Calculate bulk → Suggest spread
 5. **Learning**: "Explain [term]" → Show glossary entry → Provide examples
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in this repo's GitHub Issues via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Tooling
+
+Use caveman (prose), ponytail (code) and graphify (codebase graph). Links and install in `docs/agents/tooling.md`.
+
+### Domain docs
+
+Single-context: `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.

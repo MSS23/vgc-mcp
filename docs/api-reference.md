@@ -598,7 +598,7 @@ Valid natures:
 
 ## Complete Tool List
 
-For a complete list of all 157+ tools, run in Claude Desktop:
+For a complete list of all 213 tools, run in Claude Desktop:
 
 > "List all your VGC tools"
 

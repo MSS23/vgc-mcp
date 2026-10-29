@@ -13,14 +13,14 @@ status: active
 
 ## What it does
 A Model Context Protocol server that turns any LLM into a competitive Pokémon
-VGC coach: 208 tools covering the full Gen 9 damage formula, Smogon usage data,
+VGC coach: 213 tools covering the full Gen 9 damage formula, Smogon usage data,
 EV/spread optimization, team analysis, legality checking, replay analysis and a
 live battle copilot. Supports both mainline VGC (EVs, Reg F/G/H/I) and Pokémon
 Champions (Stat Points, Reg MA/MB) with zero-config regulation auto-detection.
 
 ## How it works
-- `src/vgc_mcp/server.py` — FastMCP server entry; registers 51 tool modules
-  (208 tools). `main()` = stdio transport, `main_http()` = SSE over Starlette
+- `src/vgc_mcp/server.py` — FastMCP server entry; registers 52 tool modules
+  (213 tools). `main()` = stdio transport, `main_http()` = SSE over Starlette
   (`/sse`, `/health`) for remote use (deployed at vgc-mcp.onrender.com).
 - `src/vgc_mcp_core/` — engine: damage calc (`calc/`), models, Smogon/PokeAPI
   clients (`api/`), regulation rules (`rules/`), team analysis (`team/`).

@@ -4,7 +4,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 ## Project Overview
 
-VGC MCP Server - A Model Context Protocol server for Pokemon VGC (Video Game Championships) team building. Provides 120+ tools for damage calculations, stat analysis, team management, and competitive play optimization.
+VGC MCP Server - A Model Context Protocol server for Pokemon VGC (Video Game Championships) team building. Provides 213 tools for damage calculations, stat analysis, team management, and competitive play optimization.
 
 Supports two parallel format systems:
 - **Mainline VGC** (Reg F/G/H/I) — classic EV system, 0-252 per stat / 508 total
@@ -71,7 +71,7 @@ src/
 │   ├── presentation.py   # MCP server `instructions=` block (table format rules)
 │   └── config.py         # Settings (API URLs, VGC defaults, EV limits)
 │
-└── vgc_mcp/              # MCP server (200+ tools) — entry: vgc-mcp / vgc-mcp-http
+└── vgc_mcp/              # MCP server (213 tools) — entry: vgc-mcp / vgc-mcp-http
     ├── server.py         # FastMCP setup + tool registration loop
     └── tools/            # Thin register_*_tools(mcp, deps) wrappers
                           # Auto-discovered by tools/__init__.py
