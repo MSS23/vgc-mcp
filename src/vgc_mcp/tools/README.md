@@ -2,68 +2,13 @@
 
 MCP tools exposed to AI assistants. Each module registers tools via `register_*_tools()`.
 
-## Tool Modules (213 tools total)
+## Tool Modules
 
-### Core Tools
-
-| Module | Tools | Description |
-|--------|-------|-------------|
-| `team_tools.py` | 9 | Team management (add, remove, view, analyze) |
-| `damage_tools.py` | 3 | Damage calculations with Smogon auto-fetch |
-| `stats_tools.py` | 2 | Pokemon stat calculations |
-| `speed_tools.py` | 4 | Speed comparisons |
-| `usage_tools.py` | 6 | Smogon usage data |
-
-### Analysis Tools
-
-| Module | Tools | Description |
-|--------|-------|-------------|
-| `coverage_tools.py` | 6 | Type coverage analysis |
-| `matchup_tools.py` | 6 | Pokemon matchup scoring |
-| `spread_tools.py` | 6 | EV optimization |
-| `speed_tier_tools.py` | 3 | Speed tier visualization |
-| `speed_probability_tools.py` | 4 | Outspeed probabilities |
-
-### Import/Export
-
-| Module | Tools | Description |
-|--------|-------|-------------|
-| `import_export_tools.py` | 4 | Showdown paste import/export |
-| `pokepaste_tools.py` | 3 | PokePaste URL fetching |
-
-### Legality & Rules
-
-| Module | Tools | Description |
-|--------|-------|-------------|
-| `legality_tools.py` | 12 | VGC format legality checks |
-| `move_tools.py` | 7 | Move validation and suggestions |
-
-### Battle Mechanics
-
-| Module | Tools | Description |
-|--------|-------|-------------|
-| `priority_tools.py` | 5 | Priority move analysis |
-| `ability_tools.py` | 6 | Ability synergy |
-| `speed_control_tools.py` | 6 | Trick Room/Tailwind |
-| `item_tools.py` | 4 | Item effects |
-| `chip_damage_tools.py` | 3 | Residual damage |
-
-### Meta Analysis
-
-| Module | Tools | Description |
-|--------|-------|-------------|
-| `meta_threat_tools.py` | 5 | Threat identification |
-| `core_tools.py` | 6 | Core building suggestions |
-| `lead_tools.py` | 3 | Lead matchup analysis |
-
-### User Experience
-
-| Module | Tools | Description |
-|--------|-------|-------------|
-| `workflow_tools.py` | 12 | High-level coordinators |
-| `context_tools.py` | 4 | Pokemon context persistence |
-| `preset_tools.py` | 3 | Preset spread suggestions |
-| `sample_team_tools.py` | 2 | Sample team archetypes |
+The server registers **206 tools** across these modules (`FULL_TOOL_COUNT` in
+[`../profiles.py`](../profiles.py) pins the total). The per-module list with
+every tool's one-line description is generated from the running server in
+[`docs/tools-catalog.md`](../../../docs/tools-catalog.md); CI fails if it
+drifts, so use it rather than keeping counts here.
 
 ---
 
@@ -91,18 +36,16 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: SmogonSt
         return {...}
 ```
 
-### Registration in server.py
+### Registration
 
-```python
-from .tools.damage_tools import register_damage_tools
-from .tools.team_tools import register_team_tools
-
-# In server.py
-register_damage_tools(mcp, pokeapi, smogon)
-register_team_tools(mcp, pokeapi, team_manager, analyzer)
-```
+There is no list to edit in `server.py`. `tools/__init__.py` imports every
+`*_tools.py` module here, calls its `register_<module>()` function, and passes
+the dependencies it names (`pokeapi`, `smogon`, `team_manager`, ...). A new
+module is picked up automatically; then bump `FULL_TOOL_COUNT` and regenerate
+the catalog with `python scripts/build_catalog.py`.
 
 ---
+
 
 ## Key Tools
 
@@ -164,16 +107,15 @@ return api_error("Smogon", str(e), is_retryable=True)
 
 ---
 
-## Lite Server Tools
+## Profiles
 
-`server_lite.py` includes only these modules (49 tools):
-- team_tools (9)
-- damage_tools (3)
-- stats_tools (2)
-- speed_tools (4)
-- speed_tier_tools (3)
-- import_export_tools (4)
-- spread_tools (6)
-- coverage_tools (6)
-- matchup_tools (6)
-- usage_tools (6)
+Every tool is registered on one server. What a client sees depends on the
+profile:
+
+- **core** (default, `/mcp`): the 34 tools in `CORE_TOOLS` in
+  [`../profiles.py`](../profiles.py). They cover damage, survival and spreads,
+  speed, team prep, usage, legality, the battle copilot, onboarding and export.
+- **full** (`/mcp/full`, or `VGC_MCP_PROFILE=full`): all 206 tools.
+
+The catalog marks core tools with ★. Add a new tool to `CORE_TOOLS` only if
+most users need it.
