@@ -4,6 +4,7 @@ This module provides consistent error responses across all tools,
 making it easier for users to understand what went wrong and how to fix it.
 """
 
+import re
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -94,6 +95,11 @@ def error_response(
          'message': "Pokemon 'Charzard' not found",
          'suggestions': ['Did you mean: Charizard, Charmeleon?']}
     """
+    # Catch-all handlers pass str(e); a PokeAPI 404 is a typo, not a crash.
+    not_found = _not_found_from_message(message)
+    if not_found is not None:
+        return not_found
+
     response: dict[str, Any] = {
         "success": False,
         "error": code,
@@ -110,6 +116,36 @@ def error_response(
     response.update(extra_fields)
 
     return response
+
+
+# PokeAPIClient raises PokeAPIError(f"Not found: {endpoint}") on a 404.
+_POKEAPI_NOT_FOUND = re.compile(r"Not found: (pokemon|pokemon-species|move|item|ability)/([\w-]+)")
+
+
+def _not_found_from_message(message: str) -> Optional[dict[str, Any]]:
+    """Turn a PokeAPI 404 message into the matching *_not_found error."""
+    match = _POKEAPI_NOT_FOUND.search(message)
+    if match is None:
+        return None
+    from .fuzzy import suggest_move_name, suggest_pokemon_name
+
+    resource, name = match.groups()
+    if resource in ("pokemon", "pokemon-species"):
+        close = suggest_pokemon_name(name)
+        tips = [f"Did you mean: {', '.join(close)}?"] if close else None
+        return pokemon_not_found_error(name, tips)
+    if resource == "move":
+        close = suggest_move_name(name)
+        tips = [f"Did you mean: {', '.join(close)}?"] if close else [
+            "Check spelling (use hyphens: 'close-combat', 'heat-wave')"
+        ]
+        return error_response(ErrorCodes.MOVE_NOT_FOUND, f"Move '{name}' not found", tips)
+    code = ErrorCodes.ITEM_NOT_FOUND if resource == "item" else ErrorCodes.ABILITY_NOT_FOUND
+    return error_response(
+        code,
+        f"{resource.capitalize()} '{name}' not found",
+        [f"Check spelling (use hyphens: '{'choice-scarf' if resource == 'item' else 'sword-of-ruin'}')"],
+    )
 
 
 def success_response(message: str, **data: Any) -> dict[str, Any]:

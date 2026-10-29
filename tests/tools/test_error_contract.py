@@ -44,3 +44,18 @@ def test_team_empty_error_names_real_tools():
     text = " ".join(team_empty_error()["suggestions"])
     for name in ("add_to_team", "import_showdown_team", "add_pokemon_smart"):
         assert name in text and name in registered
+
+
+def test_pokeapi_404_becomes_not_found_with_suggestion():
+    typo = api_error("Not found: pokemon/flutter-maen")
+    assert typo["error"] == "pokemon_not_found"
+    assert "flutter-mane" in typo["next_step"]
+
+    move = error_response(ErrorCodes.INTERNAL_ERROR, "Not found: move/moonblst")
+    assert move["error"] == "move_not_found"
+    assert "moonblast" in move["next_step"]
+
+    assert error_response("calculation_error", "Not found: pokemon/incineroa")["error"] == (
+        "pokemon_not_found"
+    )
+    assert error_response(ErrorCodes.INTERNAL_ERROR, "boom")["error"] == "internal_error"

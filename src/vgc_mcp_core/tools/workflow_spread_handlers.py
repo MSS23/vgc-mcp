@@ -710,13 +710,6 @@ async def optimize_spread(
     try:
         # Get Pokemon data
         pokemon_data = await pokeapi.get_pokemon(pokemon_name)
-        if not pokemon_data:
-            suggestions = suggest_pokemon_name(pokemon_name)
-            return error_response(
-                ErrorCodes.POKEMON_NOT_FOUND,
-                f"Pokemon '{pokemon_name}' not found",
-                suggestions=[f"Did you mean: {', '.join(suggestions)}?"] if suggestions else []
-            )
 
         base_stats = pokemon_data["base_stats"]
         types = pokemon_data.get("types", [])

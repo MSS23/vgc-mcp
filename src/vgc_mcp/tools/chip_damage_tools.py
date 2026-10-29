@@ -25,6 +25,8 @@ from vgc_mcp_core.calc.chip_damage import (
     calculate_total_chip_damage,
     calculate_weather_chip,
 )
+from vgc_mcp_core.calc.stats import calculate_stat_for_format
+from vgc_mcp_core.rules.format_detect import detect_champions_format
 from vgc_mcp_core.utils.errors import error_response
 
 
@@ -43,7 +45,7 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
     async def calculate_weather_damage(
         pokemon_name: Annotated[str, Field(description="Pokemon name", min_length=1)],
         weather: Annotated[str, Field(description="Weather condition (sandstorm, hail, snow, sun, rain)", min_length=1)],
-        hp_evs: Annotated[int, Field(ge=0, le=252, description="HP EVs (0-252)")] = 0,
+        hp_evs: Annotated[int, Field(ge=0, le=252, description="HP EVs (0-252), or Stat Points (0-32) in Champions")] = 0,
         hp_ivs: Annotated[int, Field(ge=0, le=31, description="HP IVs (0-31)")] = 31,
         ability: Annotated[str, Field(description="Pokemon's ability (for immunity check, e.g. Magic Guard, Overcoat)")] = ""
     ) -> dict:
@@ -58,8 +60,6 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         try:
             # Get Pokemon data
             pokemon_data = await pokeapi.get_pokemon(pokemon_name)
-            if not pokemon_data:
-                return error_response("pokemon_not_found", f"Could not find Pokemon: {pokemon_name}")
 
             stats = await pokeapi.get_pokemon_stats(pokemon_name)
             if not stats:
@@ -70,7 +70,8 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
 
             # Calculate HP
             base_hp = stats.get("hp", 100)
-            max_hp = (2 * base_hp + hp_ivs + hp_evs // 4) * 50 // 100 + 50 + 10
+            champions = detect_champions_format(pokemon_name)
+            max_hp = calculate_stat_for_format(base_hp, hp_evs, hp_ivs, is_hp=True, champions=champions)
 
             result = calculate_weather_chip(weather, max_hp, max_hp, types, ability)
 
@@ -134,7 +135,7 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         pokemon_name: Annotated[str, Field(description="Pokemon name", min_length=1)],
         status: Annotated[str, Field(description="Status condition (burn, poison, toxic)", min_length=1)],
         toxic_turn: Annotated[int, Field(ge=1, description="For Toxic, which turn of poison (1-15; counter caps at 15)")] = 1,
-        hp_evs: Annotated[int, Field(ge=0, le=252, description="HP EVs (0-252)")] = 0,
+        hp_evs: Annotated[int, Field(ge=0, le=252, description="HP EVs (0-252), or Stat Points (0-32) in Champions")] = 0,
         hp_ivs: Annotated[int, Field(ge=0, le=31, description="HP IVs (0-31)")] = 31,
         ability: Annotated[str, Field(description="Pokemon's ability (Poison Heal, Magic Guard, Guts)")] = ""
     ) -> dict:
@@ -152,7 +153,8 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
 
             # Calculate HP
             base_hp = stats.get("hp", 100)
-            max_hp = (2 * base_hp + hp_ivs + hp_evs // 4) * 50 // 100 + 50 + 10
+            champions = detect_champions_format(pokemon_name)
+            max_hp = calculate_stat_for_format(base_hp, hp_evs, hp_ivs, is_hp=True, champions=champions)
 
             result = calculate_status_damage(status, max_hp, max_hp, toxic_turn, ability)
 
@@ -203,7 +205,7 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
     )
     async def calculate_grassy_terrain_healing(
         pokemon_name: Annotated[str, Field(description="Pokemon name", min_length=1)],
-        hp_evs: Annotated[int, Field(ge=0, le=252, description="HP EVs (0-252)")] = 0,
+        hp_evs: Annotated[int, Field(ge=0, le=252, description="HP EVs (0-252), or Stat Points (0-32) in Champions")] = 0,
         hp_ivs: Annotated[int, Field(ge=0, le=31, description="HP IVs (0-31)")] = 31,
         is_flying: Annotated[bool, Field(description="Whether Pokemon is Flying-type (not grounded); Flying is also auto-detected from the API")] = False,
         has_levitate: Annotated[bool, Field(description="Whether Pokemon has Levitate (not grounded)")] = False
@@ -227,7 +229,8 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
 
             # Calculate HP
             base_hp = stats.get("hp", 100)
-            max_hp = (2 * base_hp + hp_ivs + hp_evs // 4) * 50 // 100 + 50 + 10
+            champions = detect_champions_format(pokemon_name)
+            max_hp = calculate_stat_for_format(base_hp, hp_evs, hp_ivs, is_hp=True, champions=champions)
 
             result = calculate_terrain_healing("grassy", max_hp, max_hp, is_grounded)
 
@@ -264,7 +267,7 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
     async def calculate_leftovers_healing(
         pokemon_name: Annotated[str, Field(description="Pokemon name", min_length=1)],
         item: Annotated[str, Field(description="'leftovers' or 'black-sludge'")] = "leftovers",
-        hp_evs: Annotated[int, Field(ge=0, le=252, description="HP EVs (0-252)")] = 0,
+        hp_evs: Annotated[int, Field(ge=0, le=252, description="HP EVs (0-252), or Stat Points (0-32) in Champions")] = 0,
         hp_ivs: Annotated[int, Field(ge=0, le=31, description="HP IVs (0-31)")] = 31,
         is_poison_type: Annotated[bool, Field(description="Override for the Poison-type check (Black Sludge); Poison typing is also auto-detected from the API")] = False
     ) -> dict:
@@ -287,7 +290,8 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
 
             # Calculate HP
             base_hp = stats.get("hp", 100)
-            max_hp = (2 * base_hp + hp_ivs + hp_evs // 4) * 50 // 100 + 50 + 10
+            champions = detect_champions_format(pokemon_name)
+            max_hp = calculate_stat_for_format(base_hp, hp_evs, hp_ivs, is_hp=True, champions=champions)
 
             item_lower = item.lower().replace(" ", "-")
 
@@ -340,7 +344,7 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         status: Annotated[str, Field(description="Status condition (burn, poison, toxic); empty for none")] = "",
         terrain: Annotated[str, Field(description="Active terrain (grassy, electric, psychic, misty); empty for none")] = "",
         item: Annotated[str, Field(description="Held item (leftovers, black-sludge); empty for none")] = "",
-        hp_evs: Annotated[int, Field(ge=0, le=252, description="HP EVs (0-252)")] = 0,
+        hp_evs: Annotated[int, Field(ge=0, le=252, description="HP EVs (0-252), or Stat Points (0-32) in Champions")] = 0,
         hp_ivs: Annotated[int, Field(ge=0, le=31, description="HP IVs (0-31)")] = 31,
         ability: Annotated[str, Field(description="Pokemon's ability (affects immunities and grounding)")] = "",
         starting_hp_percent: Annotated[float, Field(ge=0, le=100, description="Starting HP as percentage of max (0-100)")] = 100.0
@@ -357,8 +361,6 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
 
             # Get Pokemon data
             pokemon_data = await pokeapi.get_pokemon(pokemon_name)
-            if not pokemon_data:
-                return error_response("pokemon_not_found", f"Could not find Pokemon: {pokemon_name}")
 
             stats = await pokeapi.get_pokemon_stats(pokemon_name)
             if not stats:
@@ -370,7 +372,8 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
 
             # Calculate HP
             base_hp = stats.get("hp", 100)
-            max_hp = (2 * base_hp + hp_ivs + hp_evs // 4) * 50 // 100 + 50 + 10
+            champions = detect_champions_format(pokemon_name)
+            max_hp = calculate_stat_for_format(base_hp, hp_evs, hp_ivs, is_hp=True, champions=champions)
             starting_hp = int(max_hp * starting_hp_percent / 100)
 
             result = calculate_total_chip_damage(
@@ -449,7 +452,7 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         status: Annotated[str, Field(description="Status condition (burn, poison, toxic); empty for none")] = "",
         terrain: Annotated[str, Field(description="Active terrain (grassy, electric, psychic, misty); empty for none")] = "",
         item: Annotated[str, Field(description="Held item (leftovers, black-sludge); empty for none")] = "",
-        hp_evs: Annotated[int, Field(ge=0, le=252, description="HP EVs (0-252)")] = 0,
+        hp_evs: Annotated[int, Field(ge=0, le=252, description="HP EVs (0-252), or Stat Points (0-32) in Champions")] = 0,
         hp_ivs: Annotated[int, Field(ge=0, le=31, description="HP IVs (0-31)")] = 31,
         ability: Annotated[str, Field(description="Pokemon's ability (affects immunities and grounding)")] = ""
     ) -> dict:
@@ -463,8 +466,6 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         try:
             # Get Pokemon data
             pokemon_data = await pokeapi.get_pokemon(pokemon_name)
-            if not pokemon_data:
-                return error_response("pokemon_not_found", f"Could not find Pokemon: {pokemon_name}")
 
             stats = await pokeapi.get_pokemon_stats(pokemon_name)
             types = [t.lower() for t in pokemon_data.get("types", [])]
@@ -472,7 +473,8 @@ def register_chip_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
 
             # Calculate HP
             base_hp = stats.get("hp", 100)
-            max_hp = (2 * base_hp + hp_ivs + hp_evs // 4) * 50 // 100 + 50 + 10
+            champions = detect_champions_format(pokemon_name)
+            max_hp = calculate_stat_for_format(base_hp, hp_evs, hp_ivs, is_hp=True, champions=champions)
 
             # Calculate damage from attack
             attack_damage = int(max_hp * incoming_damage_percent / 100)
