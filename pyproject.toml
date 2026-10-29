@@ -50,6 +50,12 @@ markers = [
     "integration: tests that hit real network/API endpoints (skipped by default in CI)",
 ]
 
+[tool.coverage.run]
+# sys.monitoring tracer: the default C tracer runs the suite ~3x slower on
+# Python 3.12. 3.11 has no sys.monitoring and falls back to the C tracer (warning silenced).
+core = "sysmon"
+disable_warnings = ["no-sysmon"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"
