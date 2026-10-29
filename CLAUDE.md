@@ -328,7 +328,6 @@ Tools use consistent field naming for Showdown paste output:
 - `suggest_nature_optimization` - Returns `current_showdown_paste` and `optimized_showdown_paste`
 - `suggest_spread` - Returns `showdown_paste`
 - `optimize_bulk` - Returns `showdown_paste`
-- `optimize_bulk_math` - Returns `showdown_paste`
 - `check_spread_efficiency` - Returns `showdown_paste` for analyzed spread
 - `design_spread_with_benchmarks` - Returns `showdown_paste`
 - `optimize_dual_survival_spread` - Returns `showdown_paste`

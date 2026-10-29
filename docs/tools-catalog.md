@@ -181,7 +181,7 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 - **`analyze_spread_vs_threats`** — Analyze a spread against the top meta threats.
 - **`analyze_stored_pokemon_threats`** — Analyze a stored Pokemon's spread against the top meta threats.
 - **`check_survival_benchmark`** — ⚠️ NARROW USE ONLY. Prefer `calculate_damage_output` for general damage/survival.
-- **`find_survival_evs_meta`** — Find minimum bulk EVs needed to survive a specific attack (meta-threat variant).
+- **`find_survival_evs_meta`** — Deprecated alias of `find_survival_evs`; will be removed in the next release.
 
 ## move_tools  (7 tools)
 
@@ -195,7 +195,7 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 
 ## multi_threat_tools  (1 tools)
 
-- **`find_multi_threat_bulk_evs`** — Find the minimum HP/Def/SpD EV distribution that survives multiple threats simultaneously.
+- **`find_multi_threat_bulk_evs`** — Deprecated alias of `optimize_multi_survival_spread`; will be removed in the next release.
 
 ## multicalc_tools  (3 tools)
 
@@ -276,7 +276,7 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 - **`find_speed_benchmark`** — Find what Pokemon/spreads hit a specific speed stat.
 - **`find_speed_evs_to_outspeed`** ★ — Find minimum Speed EVs needed to reach or exceed a target Speed stat.
 - **`get_full_speed_analysis`** — Get comprehensive speed control analysis for the current team.
-- **`get_meta_speed_tiers`** — Get common speed tiers in the current VGC metagame.
+- **`get_meta_speed_tiers`** — Deprecated alias of `get_speed_tiers`; will be removed in the next release.
 - **`get_speed_tiers`** — Get speed tier benchmarks for common VGC Pokemon.
 - **`visualize_speed_tiers`** — Visualize speed tiers as a text-based chart.
 
@@ -284,8 +284,8 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 
 - **`compare_speed_investment`** — Compare different Speed EV investments against a target.
 - **`meta_outspeed_analysis`** — Analyze what percentage of the top meta Pokemon you outspeed.
-- **`outspeed_probability`** — Calculate the probability of outspeeding a specific opponent.
-- **`outspeed_probability_stored`** — Calculate outspeed probability using a Pokemon previously stored with set_my_pokemon.
+- **`outspeed_probability`** — Deprecated alias of `analyze_outspeed_probability`; will be removed in the next release.
+- **`outspeed_probability_stored`** — Deprecated alias of `analyze_outspeed_probability`; will be removed in the next release.
 - **`speed_creep_calculator`** — Calculate how many Speed EVs are needed to outspeed a target.
 
 ## speed_tools  (1 tools)
@@ -294,7 +294,7 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 
 ## speed_viz_tools  (1 tools)
 
-- **`visualize_team_speed_tiers`** — Generate a speed tier chart comparing your team against common meta Pokemon.
+- **`visualize_team_speed_tiers`** — Deprecated alias of `visualize_speed_tiers`; will be removed in the next release.
 
 ## spread_tools  (10 tools)
 
@@ -303,7 +303,7 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 - **`check_spread_efficiency`** — Check an EV spread for efficiency (wasted EVs, optimal distribution).
 - **`design_spread_with_benchmarks`** ★ — Design an EV spread that meets specific speed and SINGLE survival benchmarks.
 - **`optimize_bulk`** — Optimize HP/Def/SpD EVs for maximum effective bulk.
-- **`optimize_bulk_math`** — Find the mathematically optimal HP/Def/SpD split using diminishing returns analysis.
+- **`optimize_bulk_math`** — Deprecated alias of `optimize_bulk`; will be removed in the next release.
 - **`optimize_dual_survival_spread`** ★ — Find the optimal EV spread to survive TWO DIFFERENT attacks while meeting a speed benchmark.
 - **`optimize_multi_survival_spread`** ★ — Find the optimal EV spread to survive 3-6 different attacks while meeting a speed benchmark.
 - **`suggest_nature_optimization`** — Suggest a nature change that achieves the same stats with fewer EVs.
