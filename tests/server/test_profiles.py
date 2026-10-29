@@ -96,11 +96,7 @@ def test_smithery_listing_matches_the_served_profile():
     text = (ROOT / "smithery.yaml").read_text(encoding="utf-8")
     count = int(re.search(r"^  count: (\d+)$", text, re.M).group(1))
     total = int(re.search(r"^  total_at_full_endpoint: (\d+)$", text, re.M).group(1))
-    tools_block = text.split("
-tools:
-", 1)[1].split("
-prompts:
-", 1)[0]
+    tools_block = text.split("\ntools:\n", 1)[1].split("\nprompts:\n", 1)[0]
     highlights = set(re.findall(r"^    - ([a-z_]+)$", tools_block, re.M))
     prompt_ids = set(re.findall(r"^  - id: ([a-z_]+)$", text, re.M))
 
