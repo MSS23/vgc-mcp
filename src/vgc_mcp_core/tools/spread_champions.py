@@ -35,7 +35,7 @@ from vgc_mcp_core.models.pokemon import (
     get_nature_modifier,
 )
 from vgc_mcp_core.tools import spread_common
-from vgc_mcp_core.tools.build_helpers import build_pokemon
+from vgc_mcp_core.tools.build_helpers import build_pokemon, parse_ev_dict
 from vgc_mcp_core.tools.spread_common import (
     META_SYNERGIES,
     _build_champions_pokemon,
@@ -416,7 +416,7 @@ async def _prepare_single_threat_build(
     attacker_name: str,
     move_name: str,
     nature_str: Optional[str],
-    evs: Optional[int],
+    evs: Optional[int | dict[str, int]],
     item: Optional[str],
     ability: Optional[str],
     tera_type: Optional[str],
@@ -432,6 +432,8 @@ async def _prepare_single_threat_build(
     is_physical = move.category == MoveCategory.PHYSICAL
 
     off_stat = "attack" if is_physical else "special_attack"
+    if isinstance(evs, dict):
+        evs = getattr(parse_ev_dict(evs), off_stat)
     allocation: dict[str, int] = {}
     sourced = await spread_common._get_common_spread(smogon, attacker_name)
     if sourced:
@@ -773,8 +775,13 @@ async def _optimize_multi_survival_champions(
     booster: bool = False,
     tailwind: bool = False,
     speed_override: Optional[int] = None,
+    fill_remaining: bool = True,
 ) -> dict[str, Any]:
-    """SP-scale multi/dual survival optimizer (cap 32/stat, 66 total)."""
+    """SP-scale multi/dual survival optimizer (cap 32/stat, 66 total).
+
+    fill_remaining=False returns the minimum survival allocation instead of
+    spending the leftover budget on HP/Def/SpD.
+    """
     if defender_tera_type or any(threat.get("tera_type") for threat in threats):
         return error_response(ErrorCodes.INVALID_PARAMETER, "Terastallization is not available in Champions")
     is_physical = my_base.attack >= my_base.special_attack
@@ -848,10 +855,11 @@ async def _optimize_multi_survival_champions(
             "speed_benchmark": speed_info,
         }
 
-    sps = StatPointSpread(**complete_sp_allocation({
+    minimum = {
         "hp": alloc["hp_sp"], "defense": alloc["def_sp"],
         "special_defense": alloc["spd_sp"], "speed": speed_sps,
-    }))
+    }
+    sps = StatPointSpread(**(complete_sp_allocation(minimum) if fill_remaining else minimum))
     optimized_pokemon = _build_champions_pokemon(
         pokemon_name, my_base, my_types, parsed_nature, sps,
         item=item, tera_type=defender_tera_type, ability=resolved_ability,

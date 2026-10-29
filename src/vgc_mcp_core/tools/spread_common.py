@@ -17,7 +17,7 @@ from vgc_mcp_core.models.pokemon import (
     PokemonBuild,
     StatPointSpread,
 )
-from vgc_mcp_core.tools.build_helpers import build_pokemon
+from vgc_mcp_core.tools.build_helpers import build_pokemon, parse_ev_dict
 from vgc_mcp_core.tools.smogon_helpers import (
     get_common_spread as _shared_get_common_spread,
 )
@@ -370,6 +370,8 @@ async def _prepare_threats(
         nature = Nature(nature_str.lower())
 
         evs = threat_dict.get("evs")
+        if isinstance(evs, dict):
+            evs = parse_ev_dict(evs).attack if is_physical else parse_ev_dict(evs).special_attack
         if evs is None and smogon_data:
             evs_dict = smogon_data.get("evs", {})
             evs = evs_dict.get("attack" if is_physical else "special_attack", 252)

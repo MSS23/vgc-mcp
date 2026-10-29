@@ -879,12 +879,17 @@ async def optimize_multi_survival_spread(
     target_survival: float = 93.75,
     item: Optional[str] = None,
     ability: Optional[str] = None,
+    min_threats: int = 3,
+    fill_remaining: bool = True,
 ) -> dict[str, Any]:
+    """min_threats / fill_remaining exist for the find_multi_threat_bulk_evs alias."""
     start_time = time.time()
 
     try:
         # Validate threat count
-        if len(threats) < 3:
+        if len(threats) < min_threats:
+            if min_threats < 3:
+                return error_response(ErrorCodes.INVALID_PARAMETER, f'At least {min_threats} threat(s) required.')
             return error_response(ErrorCodes.INTERNAL_ERROR, 'This tool requires 3-6 threats. For 2 threats, use optimize_dual_survival_spread instead.')
         if len(threats) > 6:
             return error_response(ErrorCodes.INVALID_PARAMETER, 'Maximum 6 threats supported. Please reduce the number of threats or prioritize the most important ones.')
@@ -921,6 +926,7 @@ async def optimize_multi_survival_spread(
                 target_survival=target_survival,
                 item=item,
                 ability=ability,
+                fill_remaining=fill_remaining,
             )
 
         # Resolve defender's ability so the engine auto-applies defensive
@@ -1236,6 +1242,8 @@ async def optimize_multi_survival_spread(
                     special_defense=best_spread["spd"],
                     speed=speed_evs_needed
                 ),
+                item=item,
+                ability=ability,
                 tera_type=defender_tera_type,
             )
 
@@ -1328,3 +1336,102 @@ async def optimize_multi_survival_spread(
 
     except Exception as e:
         return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
+
+
+async def find_multi_threat_bulk_evs(
+    pokeapi: PokeAPIClient,
+    smogon: Optional[SmogonStatsClient],
+    pokemon_name: str,
+    threats: list[dict[str, Any]],
+    nature: str = "bold",
+    item: Optional[str] = None,
+    ability: Optional[str] = None,
+    target_survival_chance: float = 100.0,
+) -> dict[str, Any]:
+    """Deprecated alias: optimize_multi_survival_spread with a fixed nature and no Speed.
+
+    Translates the legacy threat shape ({'name', 'move', 'spread': {nature,
+    evs, item, ability}}) and adds the legacy keys (recommended_spread,
+    survival_results, markdown_summary) on top of the canonical payload.
+    """
+    translated = []
+    for i, threat in enumerate(threats):
+        if not isinstance(threat, dict):
+            return error_response(ErrorCodes.INVALID_PARAMETER, f"Threat {i + 1} must be a dict with 'name' and 'move' keys")
+        if not threat.get("name") or not threat.get("move"):
+            return error_response(ErrorCodes.INVALID_PARAMETER, f"Threat {i + 1} missing 'name' or 'move'")
+        row: dict[str, Any] = {"attacker": threat["name"], "move": threat["move"]}
+        spread = threat.get("spread")
+        if spread:
+            # A supplied spread is taken literally: unspecified nature/EVs
+            # mean Serious / no investment, as before.
+            row.update(nature=spread.get("nature", "serious"), evs=spread.get("evs", {}),
+                       item=spread.get("item"), ability=spread.get("ability"))
+        translated.append(row)
+
+    result = await optimize_multi_survival_spread(
+        pokeapi, smogon, pokemon_name=pokemon_name, threats=translated, nature=nature,
+        item=item, ability=ability, target_survival=target_survival_chance,
+        min_threats=1, fill_remaining=False,
+    )
+    if "error" in result:
+        return result
+
+    champions = result.get("format_system") == "champions"
+    rows: list[tuple[str, str, str, float, bool]] = []
+    if champions and result.get("verdict") != "IMPOSSIBLE":
+        s = result["spread"]
+        hp, df, sd = s["hp_sps"], s["def_sps"], s["spd_sps"]
+        rows = [(r["attacker"], r["move"], r["damage_percent"], r["survival_pct"], r["survives"])
+                for r in result["threat_breakdown"]]
+    elif not champions and result.get("success"):
+        s = result["optimal_spread"]
+        hp, df, sd = s["hp_evs"], s["def_evs"], s["spd_evs"]
+        rows = [(r["attacker"], r["move"], r["damage_range"], float(r["survival_rate"].rstrip("%")), r["survives"])
+                for r in result["threat_survival_analysis"]]
+    else:
+        return error_response(
+            ErrorCodes.POKEMON_NOT_FOUND,
+            "Could not find a spread that survives all threats with the given constraints",
+            threats=[t["name"] for t in threats],
+        )
+
+    unit, label, budget = ("sps", "SP", 66) if champions else ("evs", "EVs", 508)
+    total = hp + df + sd
+    survival = [
+        {"threat_name": name, "move_name": move, "damage_range": dmg, "survival_chance": pct, "survives": ok}
+        for name, move, dmg, pct, ok in rows
+    ]
+    lines = [
+        f"## Multi-Threat Bulk Analysis: {pokemon_name.title()}",
+        "",
+        "### Recommended Spread",
+        "| Nature | HP | Atk | Def | SpA | SpD | Spe |",
+        "|--------|-----|-----|-----|-----|-----|-----|",
+        f"| {nature.title()} | {hp} | 0 | {df} | 0 | {sd} | 0 |",
+        "",
+        "### Survival Results",
+        "| Threat | Damage | Survives? |",
+        "|--------|--------|-----------|",
+        *[f"| {r['threat_name'].title()} {r['move_name'].title()} | {r['damage_range']} | "
+          f"{'✓' if r['survives'] else '✗'} |" for r in survival],
+        "",
+        f"**{label} Used:** {total}/{budget}",
+        f"**Leftover {label}:** {budget - total}",
+    ]
+    result.update({
+        "pokemon": pokemon_name,
+        "nature": nature.title(),
+        "item": item or "None",
+        "ability": ability.replace("-", " ").title() if ability else "Auto-detected",
+        "format_system": "champions" if champions else "mainline",
+        "units": "Stat Points" if champions else "EVs",
+        "recommended_spread": {
+            f"hp_{unit}": hp, f"def_{unit}": df, f"spd_{unit}": sd,
+            f"total_{unit}": total, f"leftover_{unit}": budget - total,
+        },
+        "survival_results": survival,
+        "all_survive": all(r["survives"] for r in survival),
+        "markdown_summary": "\n".join(lines),
+    })
+    return result

@@ -18,11 +18,11 @@ import pytest
 from mcp.server.fastmcp import FastMCP
 
 from vgc_mcp.tools.meta_threat_tools import register_meta_threat_tools
-from vgc_mcp.tools.multi_threat_tools import calculate_damage as real_calculate_damage
 from vgc_mcp.tools.multi_threat_tools import register_multi_threat_tools
 from vgc_mcp_core.models.move import Move, MoveCategory
 from vgc_mcp_core.models.pokemon import BaseStats
 from vgc_mcp_core.rules.regulation_loader import get_regulation_config
+from vgc_mcp_core.tools.spread_champions import calculate_damage as real_calculate_damage
 
 _BASE = {
     "garchomp": BaseStats(hp=108, attack=130, defense=95,
@@ -233,7 +233,7 @@ class TestFindMultiThreatBulkEvsChampions:
     def test_sp_units_and_caps(self, champions_session):
         tools = _register_multi(_fake_pokeapi(_close_combat()))
         with patch(
-            "vgc_mcp.tools.multi_threat_tools.calculate_damage",
+            "vgc_mcp_core.tools.spread_champions.calculate_damage",
             wraps=real_calculate_damage,
         ) as damage_mock:
             res = asyncio.run(tools["find_multi_threat_bulk_evs"](

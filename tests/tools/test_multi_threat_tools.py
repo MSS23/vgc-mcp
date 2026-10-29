@@ -34,7 +34,7 @@ def mock_pokeapi():
     async def _get_abilities(name):
         return ["Intimidate"]
 
-    async def _get_move(name):
+    async def _get_move(name, user_name=None):
         moves = {
             "surging-strikes": Move(name="surging-strikes", power=25, type="water", category=MoveCategory.PHYSICAL, accuracy=100, pp=5, priority=0),
             "moonblast": Move(name="moonblast", power=95, type="fairy", category=MoveCategory.SPECIAL, accuracy=100, pp=15, priority=0),
