@@ -9,7 +9,7 @@
 [![Tests](https://img.shields.io/badge/tests-3681%20passing-success)](#)
 [![Tools](https://img.shields.io/badge/MCP%20tools-213-blueviolet)](docs/tools-catalog.md)
 
-A **Model Context Protocol** server that turns any LLM into a competitive Pokémon VGC coach. **213 tools** spanning the full Gen 9 damage formula, Smogon usage data, multi-threat EV optimization, replay analysis, and a turn-by-turn live battle copilot.
+A **Model Context Protocol** server that turns any LLM into a competitive Pokémon VGC coach. **213 tools** spanning the full Gen 9 damage formula, Smogon usage data, multi-threat EV optimization, replay analysis, and a turn-by-turn live battle copilot. Clients get a focused **34-tool core** by default, so the model picks the right tool first time, even on a phone.
 
 ```
 You:    Does Tera-Normal Entei live a Sheer-Force Life-Orb Earth Power
@@ -31,7 +31,7 @@ Claude: [calls calculate_damage_output once]
 
 ## Why this exists
 
-Every VGC team-builder is a wall of UI: type into a calculator, copy-paste a paste, click through tabs, run again. **VGC MCP collapses that loop into a conversation.** Claude does the calc, picks the right tool from 213 (damage, speed, survival, replay, breakpoints, archetype, live battle), and renders results as scannable tables — not prose.
+Every VGC team-builder is a wall of UI: type into a calculator, copy-paste a paste, click through tabs, run again. **VGC MCP collapses that loop into a conversation.** Claude does the calc, picks the right tool from the 34 core tools (damage, speed, survival, spreads, team prep, live battle), and leads with a one-line answer laid out for a phone screen.
 
 **Built for:**
 - 🏆 **Competitive players** — pre-tournament prep, live in-game coaching, post-game replay analysis
@@ -54,9 +54,9 @@ Every VGC team-builder is a wall of UI: type into a calculator, copy-paste a pas
 
 **📼 Replay analyzer** — Paste a `replay.pokemonshowdown.com` URL. Get turn-by-turn breakdown, key moments (KOs, Tera timing, weather wars), and concrete coaching takeaways.
 
-**🎯 Smart routing** — `what_tool_should_i_use(question)` cuts through 213 tools when the agent is unsure. Spread iteration deltas, archetype classification, breakpoint Pareto-optimal options.
+**🎯 Focused by default** — `/mcp` serves 34 core tools; `/mcp/full` serves all 213, including spread iteration deltas, archetype classification and breakpoint Pareto-optimal options.
 
-**🌐 Live and free** — Hosted at `https://vgc-mcp.onrender.com/mcp` (Streamable HTTP; legacy SSE at `/sse`) ready for any MCP-compatible client.
+**🌐 Live and free** — Hosted at `https://vgc-mcp.onrender.com/mcp` (Streamable HTTP; legacy SSE at `/sse`) and kept awake around the clock on the free tier.
 
 [**→ Browse the full 213-tool catalog**](docs/tools-catalog.md)
 
@@ -72,12 +72,15 @@ In **Claude.ai → Settings → Connectors → Add custom connector**, paste:
 https://vgc-mcp.onrender.com/mcp
 ```
 
-Start a new chat. Done. (Older clients that only speak the legacy HTTP+SSE
-transport can use `https://vgc-mcp.onrender.com/sse` instead.)
+Start a new chat. Done. It also works in the Claude phone app once added.
 
-> **Note:** the free hosting tier sleeps after ~15 min idle — the first
-> request after a quiet period can take 30-60 s to wake the server. Retry
-> once if the initial connection stalls.
+Want every tool, not just the core 34? Use `https://vgc-mcp.onrender.com/mcp/full`.
+Older clients that only speak the legacy HTTP+SSE transport can use
+`https://vgc-mcp.onrender.com/sse`.
+
+> **Note:** the server runs on Render's free tier, which sleeps after 15
+> idle minutes. A scheduled keep-alive keeps it awake, so replies should be
+> instant; if one ever takes 30-60 s, it was asleep and the next will be quick.
 
 ### Option B — Local (Claude Desktop, free)
 
@@ -158,18 +161,18 @@ and rating for the preceding month.
 
 ## Tool catalog (highlights)
 
-Full list: [`docs/tools-catalog.md`](docs/tools-catalog.md). The headline tools:
+Full list, with the core tools starred: [`docs/tools-catalog.md`](docs/tools-catalog.md).
 
-| Category | Key tools |
+| Core area | Tools at `/mcp` |
 |---|---|
-| **Damage** | `calculate_damage_output`, `calculate_bulk_offensive_calcs`, `find_ko_evs`, `find_breakpoint` |
-| **Survival** | `find_survival_evs`, `optimize_multi_survival_spread` (3-6 threats), `find_breakpoint` (Pareto-optimal cheapest spread) |
-| **Speed** | `find_speed_evs_to_outspeed`, `find_breakpoint`, `outspeed_probability`, `visualize_speed_tiers` |
-| **Live battle** | `start_battle`, `record_turn`, `suggest_next_move`, `get_battle_state`, `end_battle` |
-| **Replay** | `analyze_replay` (any Showdown replay URL or ID) |
-| **Iteration** | `compare_build_changes` (delta table for any spread/item/Tera change) |
-| **Team** | `analyze_team`, `classify_team_archetype`, `generate_game_plan`, `analyze_team_matchup` |
-| **Discovery** | `what_tool_should_i_use(question)` — when 213 is too many |
+| **Damage** | `calculate_damage_output`, `calc_damage_vs_smogon_sets`, `calculate_bulk_offensive_calcs`, `calculate_move_outcomes` |
+| **Spreads** | `find_survival_evs`, `optimize_multi_survival_spread`, `design_spread_with_benchmarks`, `verify_spread_benchmarks` |
+| **Speed** | `compare_speed`, `find_speed_evs_to_outspeed`, `analyze_outspeed_probability` |
+| **Teams** | `prepare_team`, `import_and_analyze`, `get_usage_stats`, `validate_team_legality` |
+| **Live battle** | `start_battle`, `record_turn`, `suggest_next_move`, `analyze_replay` |
+
+`/mcp/full` adds breakpoints, KO thresholds, archetypes, game plans, spread
+deltas, the tool router and more.
 
 ---
 
@@ -183,7 +186,8 @@ src/
 │   ├── state/            # BuildStateManager, BattleStateManager
 │   └── ...
 └── vgc_mcp/              # MCP server — auto-discovers tool modules
-    └── tools/            # 52 modules × ~213 tools
+    ├── profiles.py       # 34 core tools at /mcp; all 213 at /mcp/full
+    └── tools/            # 52 auto-discovered modules
 ```
 
 Auto-discovery means **adding a tool requires zero edits** to `server.py` — drop a `<area>_tools.py` in `vgc_mcp/tools/` exposing `register_<area>_tools(mcp, ...)` and it's picked up.
@@ -223,8 +227,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/development.md](docs/developmen
 
 ## Status
 
-- ✅ Live at `https://vgc-mcp.onrender.com/mcp` (legacy SSE at `/sse`)
-- ✅ 213 tools registered, 3,681 offline tests passing
+- ✅ Live at `https://vgc-mcp.onrender.com/mcp` (core) and `/mcp/full` (all 213 tools)
+- ✅ Kept awake on the free tier by a chained keep-alive workflow
+- ✅ Full offline test suite, strict lint and a ratcheting mypy gate in CI
 - ✅ CI-gated deploys from `main`, followed by exact-revision production MCP verification
 - ✅ MIT licensed — fork it, ship it, no strings
 

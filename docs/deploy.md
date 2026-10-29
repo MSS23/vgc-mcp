@@ -341,6 +341,8 @@ Add DNS records as instructed, then:
    - Render supplies `PORT` automatically; do not hardcode it.
    - Optional: `VGC_MCP_API_KEY` to require bearer authentication.
    - Optional: `VGC_MCP_RATE_LIMIT` and `VGC_MCP_RATE_WINDOW` for per-IP limits.
+   - Optional: `VGC_MCP_PROFILE=full` to serve every tool at `/mcp` instead of
+     the 34-tool core profile. `/mcp/full` always serves every tool.
    - Optional: `VGC_MCP_TRUSTED_PROXY_HOPS` (default 1) — how many proxies
      append to `X-Forwarded-For`. The limiter keys on that hop, never the
      client-supplied leftmost entry.
@@ -384,7 +386,9 @@ See [ci-cd.md](ci-cd.md) for the full pipeline.
 
 After deployment, Render provides URL: `https://vgc-mcp.onrender.com`
 
-MCP endpoint: `https://vgc-mcp.onrender.com/mcp`
+MCP endpoints: `https://vgc-mcp.onrender.com/mcp` (core profile) and
+`https://vgc-mcp.onrender.com/mcp/full` (every tool). `/health` reports
+`profile`, `tools` (served at `/mcp`) and `tools_total`.
 
 ### Staying awake on the free tier
 
