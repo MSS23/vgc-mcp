@@ -61,12 +61,6 @@ def register_item_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         try:
             # Fetch base stats
             stats = await pokeapi.get_pokemon_stats(pokemon_name)
-            if not stats:
-                return error_response(
-                    "pokemon_not_found",
-                    f"Could not find Pokemon: {pokemon_name}",
-                    suggestions=["Check spelling", "Use hyphenated names (e.g., flutter-mane)"]
-                )
 
             # Get nature modifiers
             nature_data = await pokeapi.get_nature(nature)
@@ -125,8 +119,6 @@ def register_item_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         """
         try:
             stats = await pokeapi.get_pokemon_stats(pokemon_name)
-            if not stats:
-                return error_response("pokemon_not_found", f"Could not find Pokemon: {pokemon_name}")
 
             # Get nature modifier
             nature_data = await pokeapi.get_nature(nature)
@@ -206,8 +198,6 @@ def register_item_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             stat_key, api_stat = stat_map[item_lower]
 
             stats = await pokeapi.get_pokemon_stats(pokemon_name)
-            if not stats:
-                return error_response("pokemon_not_found", f"Could not find Pokemon: {pokemon_name}")
 
             # Get nature modifier
             nature_data = await pokeapi.get_nature(nature)
@@ -272,8 +262,6 @@ def register_item_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         """
         try:
             stats = await pokeapi.get_pokemon_stats(pokemon_name)
-            if not stats:
-                return error_response("pokemon_not_found", f"Could not find Pokemon: {pokemon_name}")
 
             # Get nature modifiers
             nature_data = await pokeapi.get_nature(nature)
@@ -357,8 +345,6 @@ def register_item_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         """
         try:
             stats = await pokeapi.get_pokemon_stats(pokemon_name)
-            if not stats:
-                return error_response("pokemon_not_found", f"Could not find Pokemon: {pokemon_name}")
 
             base_hp = stats.get("hp", 100)
             # HP calculation at level 50
@@ -411,8 +397,6 @@ def register_item_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         """
         try:
             stats = await pokeapi.get_pokemon_stats(pokemon_name)
-            if not stats:
-                return error_response("pokemon_not_found", f"Could not find Pokemon: {pokemon_name}")
 
             base_hp = stats.get("hp", 100)
             champions = detect_champions_format(pokemon_name)
@@ -461,8 +445,6 @@ def register_item_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         """
         try:
             stats = await pokeapi.get_pokemon_stats(pokemon_name)
-            if not stats:
-                return error_response("pokemon_not_found", f"Could not find Pokemon: {pokemon_name}")
 
             base_hp = stats.get("hp", 100)
             champions = detect_champions_format(pokemon_name)

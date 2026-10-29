@@ -99,6 +99,13 @@ class TestCalculateGrassyTerrainHealing:
         result = await fn(pokemon_name="tornadus")
         assert result["is_grounded"] is False
 
+    async def test_is_flying_flag_ungrounds_a_non_flying_type(self, tools):
+        """Tera Flying / Air Balloon: the flag ungrounds an Incineroar."""
+        fn = tools["calculate_grassy_terrain_healing"].fn
+        result = await fn(pokemon_name="incineroar", is_flying=True)
+        assert result["is_grounded"] is False
+        assert result["receives_healing"] is False
+
 
 class TestCalculateLeftoversHealing:
     """Tests for calculate_leftovers_healing."""
