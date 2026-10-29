@@ -33,6 +33,7 @@ from vgc_mcp_core.calc.stats import calculate_speed, find_speed_evs
 from vgc_mcp_core.config import EV_BREAKPOINTS_LV50
 from vgc_mcp_core.models.pokemon import Nature
 from vgc_mcp_core.team.manager import TeamManager
+from vgc_mcp_core.tools import speed_handlers
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 
@@ -323,60 +324,33 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
             readOnlyHint=True,
             destructiveHint=False,
             idempotentHint=True,
-            openWorldHint=False,
+            openWorldHint=True,
         ),
     )
     async def get_speed_tiers(
         min_base_speed: Annotated[int, Field(description="Minimum base speed to include")] = 50,
         max_base_speed: Annotated[int, Field(description="Maximum base speed to include")] = 200,
         investment: Annotated[str, Field(
-            description="'max' (252 EVs, +nature), 'neutral' (252 EVs, neutral nature), or 'min' (0 EVs, -nature, 0 IV)",
-        )] = "max"
+            description="'max' (252 EVs, +nature), 'neutral' (252 EVs, neutral nature), 'min' (0 EVs, -nature, 0 IV), or 'meta' (the current metagame's real Smogon speed spreads per Pokemon, falling back to theoretical meta tiers)",
+        )] = "max",
+        format_type: Annotated[str, Field(
+            description="'general', 'trick_room' (slowest first), or 'tailwind' (adds doubled speeds)",
+        )] = "general",
     ) -> dict:
         """Get speed tier benchmarks for common VGC Pokemon.
 
         Returns a list of benchmark Pokemon with their final Speed stats at the
-        specified investment level, sorted fastest first.
+        specified investment level, sorted fastest first. investment='meta'
+        returns the live metagame's competitive speed spreads instead.
         """
-        try:
-            tiers = []
-
-            for mon_name, data in SPEED_BENCHMARKS.items():
-                base = data.get("base", 0)
-
-                if not (min_base_speed <= base <= max_base_speed):
-                    continue
-
-                if investment == "max":
-                    speed = data.get("max_positive", calculate_speed(base, 31, 252, 50, Nature.JOLLY))
-                    config = "+Speed nature, 252 EVs, 31 IV"
-                elif investment == "neutral":
-                    speed = data.get("max_neutral", calculate_speed(base, 31, 252, 50, Nature.SERIOUS))
-                    config = "Neutral nature, 252 EVs, 31 IV"
-                elif investment == "min":
-                    speed = data.get("min_negative", calculate_speed(base, 0, 0, 50, Nature.BRAVE))
-                    config = "-Speed nature, 0 EVs, 0 IV"
-                else:
-                    speed = data.get("neutral_0ev", calculate_speed(base, 31, 0, 50, Nature.SERIOUS))
-                    config = "Neutral nature, 0 EVs, 31 IV"
-
-                tiers.append({
-                    "pokemon": mon_name.replace("-", " ").title(),
-                    "base_speed": base,
-                    "final_speed": speed,
-                    "config": config
-                })
-
-            # Sort by final speed descending
-            tiers.sort(key=lambda x: x["final_speed"], reverse=True)
-
-            return {
-                "investment": investment,
-                "speed_tiers": tiers
-            }
-
-        except Exception as e:
-            return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
+        return await speed_handlers.speed_tiers(
+            pokeapi,
+            smogon_client,
+            min_base_speed=min_base_speed,
+            max_base_speed=max_base_speed,
+            investment=investment,
+            format_type=format_type,
+        )
 
     @mcp.tool(
         title="Analyze Speed Spread",
@@ -456,8 +430,9 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
     async def visualize_speed_tiers(
         pokemon_speeds: Annotated[list[dict], Field(
             description=(
-                "List of dicts with 'name' and 'speed' keys, "
-                "e.g. [{\"name\": \"Entei\", \"speed\": 157}, {\"name\": \"Flutter Mane\", \"speed\": 205}]"
+                "List of dicts with 'name' and either 'speed' (final Speed stat) or "
+                "'nature' + 'evs' (EV dict, 'HP/Atk/Def/SpA/SpD/Spe' slash string, or Speed EVs int), "
+                "e.g. [{\"name\": \"Entei\", \"speed\": 157}, {\"name\": \"Flutter Mane\", \"nature\": \"timid\", \"evs\": \"0/0/0/252/4/252\"}]"
             ),
         )],
         include_tailwind: Annotated[bool, Field(description="Also show doubled (Tailwind) speeds")] = False,
@@ -469,103 +444,13 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
         Your Pokemon are marked in the chart; optionally interleaves common
         meta Pokemon and shows Tailwind or Trick Room ordering.
         """
-        all_pokemon = []
-
-        # Add user's Pokemon
-        for p in pokemon_speeds:
-            all_pokemon.append({
-                "name": p["name"],
-                "speed": p["speed"],
-                "is_yours": True,
-                "tailwind_speed": p["speed"] * 2 if include_tailwind else None
-            })
-
-        # Add meta Pokemon for reference
-        if compare_to_meta:
-            from vgc_mcp_core.calc.speed import get_meta_speed_tier
-            for mon in META_SPEED_TIERS.keys():
-                data = get_meta_speed_tier(mon)
-                if data:
-                    common_speeds = data.get("common_speeds", [])
-                    for speed in common_speeds[:2]:  # Top 2 common speeds
-                        all_pokemon.append({
-                            "name": mon,
-                            "speed": speed,
-                            "is_yours": False,
-                            "base_speed": data["base"],
-                            "tailwind_speed": speed * 2 if include_tailwind else None
-                        })
-
-        # Sort by speed (descending for normal, ascending for TR)
-        if include_trick_room:
-            all_pokemon.sort(key=lambda x: x["speed"])
-        else:
-            all_pokemon.sort(key=lambda x: -x["speed"])
-
-        # Build visualization
-        lines = []
-        mode = "Trick Room" if include_trick_room else "Normal"
-        lines.append(f"=== SPEED TIERS ({mode}) ===")
-        lines.append("")
-
-        current_tier = None
-        for p in all_pokemon:
-            speed = p["speed"]
-
-            # Determine tier
-            if speed >= 200:
-                tier = "ULTRA FAST"
-            elif speed >= 150:
-                tier = "VERY FAST"
-            elif speed >= 120:
-                tier = "FAST"
-            elif speed >= 90:
-                tier = "MEDIUM"
-            elif speed >= 60:
-                tier = "SLOW"
-            else:
-                tier = "VERY SLOW"
-
-            if tier != current_tier:
-                lines.append(f"--- {tier} ---")
-                current_tier = tier
-
-            marker = ">>>" if p["is_yours"] else "   "
-            tw_info = f" (TW: {p['tailwind_speed']})" if p.get("tailwind_speed") else ""
-            lines.append(f"{marker} {speed:3d} | {p['name']}{tw_info}")
-
-        # Summary
-        your_pokemon = [p for p in all_pokemon if p["is_yours"]]
-        if your_pokemon:
-            lines.append("")
-            lines.append("=== YOUR TEAM SUMMARY ===")
-            fastest = max(your_pokemon, key=lambda x: x["speed"])
-            slowest = min(your_pokemon, key=lambda x: x["speed"])
-            lines.append(f"Fastest: {fastest['name']} ({fastest['speed']})")
-            lines.append(f"Slowest: {slowest['name']} ({slowest['speed']})")
-
-            # What you outspeed/underspeed
-            outspeeds = []
-            underspeeds = []
-            for p in all_pokemon:
-                if not p["is_yours"]:
-                    if fastest["speed"] > p["speed"]:
-                        outspeeds.append(p["name"])
-                    elif slowest["speed"] < p["speed"]:
-                        underspeeds.append(p["name"])
-
-            if outspeeds:
-                lines.append(f"Your fastest outspeeds: {', '.join(list(set(outspeeds))[:5])}")
-            if underspeeds:
-                lines.append(f"Faster than your slowest: {', '.join(list(set(underspeeds))[:5])}")
-
-        result = {
-            "visualization": "\n".join(lines),
-            "your_pokemon": your_pokemon,
-            "mode": mode
-        }
-
-        return result
+        return await speed_handlers.visualize_speed_tiers(
+            pokeapi,
+            pokemon_speeds=pokemon_speeds,
+            include_tailwind=include_tailwind,
+            include_trick_room=include_trick_room,
+            compare_to_meta=compare_to_meta,
+        )
 
     @mcp.tool(
         title="Get Meta Speed Tiers",
@@ -587,113 +472,19 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
             description="Use Smogon competitive spreads; if False (or Smogon is unavailable), uses theoretical meta speed tiers",
         )] = True
     ) -> dict:
-        """Get common speed tiers in the current VGC metagame.
+        """Deprecated alias of `get_speed_tiers`; will be removed in the next release.
+        Call `get_speed_tiers(investment="meta", format_type=..., min_base_speed=..., max_base_speed=...)` instead.
 
         Returns speed tier information for meta Pokemon based on real
         competitive usage data, with theoretical max/min speeds for reference.
         """
-        result = []
-
-        if use_competitive_data:
-            # Fetch competitive speed benchmarks from Smogon
-            try:
-                competitive_benchmarks = await get_competitive_speed_benchmarks(
-                    smogon_client,
-                    top_n_pokemon=30,
-                    top_n_speeds=3
-                )
-
-                for mon_name, speeds in competitive_benchmarks.items():
-                    if not speeds:
-                        continue
-
-                    # Get base speed for categorization
-                    base = SPEED_BENCHMARKS.get(mon_name, {}).get("base", 0)
-                    if base == 0:
-                        # Try to fetch from PokeAPI if not in benchmarks
-                        try:
-                            base_stats = await pokeapi.get_base_stats(mon_name)
-                            base = base_stats.speed
-                        except Exception:
-                            continue
-
-                    entry = {
-                        "pokemon": mon_name,
-                        "base_speed": base,
-                        "competitive_speeds": speeds,  # List of dicts with speed, nature, evs, usage
-                        "max_speed_positive": calculate_speed(base, 31, 252, 50, Nature.JOLLY),
-                        "max_speed_neutral": calculate_speed(base, 31, 252, 50, Nature.HARDY),
-                        "min_speed": calculate_speed(base, 0, 0, 50, Nature.BRAVE),
-                    }
-
-                    # Categorize
-                    if base >= 120:
-                        entry["tier"] = "fast"
-                    elif base >= 80:
-                        entry["tier"] = "medium"
-                    else:
-                        entry["tier"] = "slow"
-
-                    # Filter by tier if specified
-                    if tier and entry["tier"] != tier.lower():
-                        continue
-
-                    result.append(entry)
-
-            except Exception:
-                # Fallback to META_SPEED_TIERS if Smogon fetch fails
-                use_competitive_data = False
-
-        if not use_competitive_data:
-            # Fallback to theoretical speeds from META_SPEED_TIERS
-            from vgc_mcp_core.calc.speed import get_meta_speed_tier
-
-            for mon in META_SPEED_TIERS.keys():
-                data = get_meta_speed_tier(mon)
-                if not data:
-                    continue
-                base = data["base"]
-                speeds = data.get("common_speeds", [])
-
-                entry = {
-                    "pokemon": mon,
-                    "base_speed": base,
-                    "common_speeds": speeds,
-                    "max_speed_positive": calculate_speed(base, 31, 252, 50, Nature.JOLLY),
-                    "max_speed_neutral": calculate_speed(base, 31, 252, 50, Nature.HARDY),
-                    "min_speed": calculate_speed(base, 0, 0, 50, Nature.BRAVE),
-                }
-
-                # Categorize
-                if base >= 120:
-                    entry["tier"] = "fast"
-                elif base >= 80:
-                    entry["tier"] = "medium"
-                else:
-                    entry["tier"] = "slow"
-
-                # Filter by tier if specified
-                if tier and entry["tier"] != tier.lower():
-                    continue
-
-                result.append(entry)
-
-        # Sort by base speed
-        result.sort(key=lambda x: -x["base_speed"])
-
-        # Add tailwind/TR info if requested
-        if format_type == "tailwind":
-            for entry in result:
-                entry["tailwind_max"] = entry["max_speed_positive"] * 2
-        elif format_type == "trick_room":
-            result.sort(key=lambda x: x["base_speed"])  # Reverse order
-
-        return {
-            "format": format_type,
-            "tier_filter": tier,
-            "pokemon_count": len(result),
-            "speed_tiers": result
-        }
+        return await speed_handlers.meta_speed_tiers(
+            pokeapi,
+            smogon_client,
+            format_type=format_type,
+            tier=tier,
+            use_competitive_data=use_competitive_data,
+        )
 
     @mcp.tool(
         title="Find Speed Benchmark",
