@@ -1,6 +1,6 @@
 # VGC Team Builder - Complete Guide
 
-Your AI-powered Pokemon VGC team building assistant with 213 tools!
+Your AI-powered Pokemon VGC team building assistant with 206 tools!
 
 ---
 
