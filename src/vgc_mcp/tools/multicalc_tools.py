@@ -238,16 +238,14 @@ def register_multicalc_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
                         attacker_ability=attacker.ability,
                         is_physical=is_phys,
                     )
-                    modifiers = DamageModifiers(
-                        is_doubles=True,
-                        attacker_item=attacker.item,
-                        attacker_ability=attacker.ability,
-                        defender_ability=defender.ability,
+                    modifiers = DamageModifiers.from_scenario(
+                        attacker=attacker,
+                        defender=defender,
                         tera_type=attacker_tera_type,
-                        tera_active=attacker_tera_type is not None,
                         weather=weather,
                         terrain=terrain,
-                        attack_stage=intim if is_phys else 0,
+                        intimidate_stage=intim,
+                        is_physical=is_phys,
                     )
 
                     # Calculate damage
@@ -409,16 +407,13 @@ def register_multicalc_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
                         attacker_ability=attacker.ability,
                         is_physical=is_phys,
                     )
-                    modifiers = DamageModifiers(
-                        is_doubles=True,
-                        attacker_item=attacker.item,
-                        attacker_ability=attacker.ability,
-                        defender_ability=defender.ability,
+                    modifiers = DamageModifiers.from_scenario(
+                        attacker=attacker,
+                        defender=defender,
                         tera_type=attacker.tera_type,
-                        tera_active=attacker.tera_type is not None,
                         defender_tera_type=defender.tera_type,
-                        defender_tera_active=defender.tera_type is not None,
-                        attack_stage=intim if is_phys else 0,
+                        intimidate_stage=intim,
+                        is_physical=is_phys,
                     )
 
                     # Calculate damage
@@ -584,12 +579,11 @@ def register_multicalc_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optio
                                 attacker_ability=member["pokemon"].ability,
                                 is_physical=is_phys,
                             )
-                            modifiers = DamageModifiers(
-                                is_doubles=True,
-                                attacker_item=member["pokemon"].item,
-                                attacker_ability=member["pokemon"].ability,
-                                defender_ability=threat.ability,
-                                attack_stage=intim if is_phys else 0,
+                            modifiers = DamageModifiers.from_scenario(
+                                attacker=member["pokemon"],
+                                defender=threat,
+                                intimidate_stage=intim,
+                                is_physical=is_phys,
                             )
 
                             result = calculate_damage(member["pokemon"], threat, member["move"], modifiers)

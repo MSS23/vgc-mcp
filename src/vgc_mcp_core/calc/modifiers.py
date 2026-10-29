@@ -1,7 +1,7 @@
 """Damage modifiers including type effectiveness, weather, terrain, etc."""
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 from ..utils.normalize import normalize_item
 
@@ -254,6 +254,46 @@ class DamageModifiers:
     times_hit: int = 0
     # For Last Respects: number of fainted party members
     fainted_party_count: int = 0
+
+    @classmethod
+    def from_scenario(
+        cls,
+        attacker: Any = None,
+        defender: Any = None,
+        *,
+        intimidate_stage: int = 0,
+        is_physical: bool = True,
+        **fields: Any,
+    ) -> "DamageModifiers":
+        """Build modifiers for a battle scenario with the shared tool rules.
+
+        - `attacker` / `defender`: optional PokemonBuilds. The attacker's item
+          and ability, and the defender's ability, are copied in unless passed
+          explicitly. (calculate_damage fills any still-None item/ability from
+          the builds itself.)
+        - `intimidate_stage`: Intimidate's attacker stage change (see
+          `tools.ability_helpers.compute_intimidate_attack_stage`). It only
+          applies to physical moves and stacks onto any explicit `attack_stage`.
+        - `tera_type` / `defender_tera_type`: Tera is active whenever a type is
+          given, unless `tera_active` / `defender_tera_active` is passed.
+        - Ruin abilities and Booster Energy / paradox boosts need no flags:
+          calculate_damage derives them from the abilities and items, and Ruin
+          always applies, including on critical hits.
+        - Every other keyword (weather, terrain, screens, helping_hand,
+          is_critical, multiple_targets, stat stages, ...) is a plain field.
+        """
+        if attacker is not None:
+            fields.setdefault("attacker_item", attacker.item)
+            fields.setdefault("attacker_ability", attacker.ability)
+        if defender is not None:
+            fields.setdefault("defender_ability", defender.ability)
+        if is_physical and intimidate_stage:
+            fields["attack_stage"] = fields.get("attack_stage", 0) + intimidate_stage
+        fields.setdefault("tera_active", fields.get("tera_type") is not None)
+        fields.setdefault(
+            "defender_tera_active", fields.get("defender_tera_type") is not None
+        )
+        return cls(**fields)
 
     def get_weather_modifier(self, move_type: str) -> float:
         """Get weather damage modifier for a move type."""

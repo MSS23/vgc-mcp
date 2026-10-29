@@ -1107,8 +1107,7 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                                         ability=defender_ability,
                                     )
 
-                                    modifiers = DamageModifiers(
-                                        is_doubles=True,
+                                    modifiers = DamageModifiers.from_scenario(
                                         attacker_ability=attacker_ability,
                                         attacker_item=attacker_item,
                                         attack_stage=stage_attack,
@@ -1195,7 +1194,7 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                                 ),
                             )
 
-                            modifiers = DamageModifiers(is_doubles=True)
+                            modifiers = DamageModifiers.from_scenario()
                             result = calculate_damage(attacker, defender, move, modifiers)
 
                             if result.min_percent >= 100:
@@ -1372,8 +1371,7 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                             spread=final_defender_evs,
                             ability=defender_ability,
                         )
-                        mods2 = DamageModifiers(
-                            is_doubles=True,
+                        mods2 = DamageModifiers.from_scenario(
                             attacker_ability=attacker_ability,
                             attacker_item=attacker_item,
                             attack_stage=stage_attack2,
@@ -1608,10 +1606,10 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
             )
 
             # Calculate damage
-            modifiers = DamageModifiers(
+            modifiers = DamageModifiers.from_scenario(
                 is_doubles=is_doubles,
                 attacker_item=attacker_item,
-                attacker_ability=attacker_ability
+                attacker_ability=attacker_ability,
             )
             result = calculate_damage(atk_build, def_build, move_data, modifiers)
 
@@ -1918,10 +1916,9 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                     try:
                         move = await pokeapi.get_move(move_name)
                         if move:
-                            modifiers = DamageModifiers(
-                                is_doubles=True,
+                            modifiers = DamageModifiers.from_scenario(
                                 attacker_ability=threat_ability,
-                                attacker_item=threat_item
+                                attacker_item=threat_item,
                             )
                             result = calculate_damage(threat_build, pokemon, move, modifiers)
 
@@ -1943,7 +1940,7 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                         try:
                             move = await pokeapi.get_move(move_name.lower().replace(" ", "-"))
                             if move:
-                                modifiers = DamageModifiers(is_doubles=True)
+                                modifiers = DamageModifiers.from_scenario()
                                 result = calculate_damage(pokemon, threat_build, move, modifiers)
 
                                 if result.max_percent >= 100:
@@ -2468,14 +2465,12 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                     # Opponent attacks me
                     attacker = opp_build
                     defender = my_build
-                    modifiers = DamageModifiers(
-                        is_doubles=True,
+                    modifiers = DamageModifiers.from_scenario(
                         attacker_item=top_item,
                         attacker_ability=top_ability,
                         defender_item=my_item,
                         defender_ability=my_ability,
                         defender_tera_type=my_tera_type,
-                        defender_tera_active=my_tera_type is not None,
                         attack_stage=attacker_stage,
                         special_attack_stage=attacker_stage,
                     )
@@ -2483,14 +2478,12 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                     # I attack opponent
                     attacker = my_build
                     defender = opp_build
-                    modifiers = DamageModifiers(
-                        is_doubles=True,
+                    modifiers = DamageModifiers.from_scenario(
                         attacker_item=my_item,
                         attacker_ability=my_ability,
                         defender_item=top_item,
                         defender_ability=top_ability,
                         tera_type=my_tera_type,
-                        tera_active=my_tera_type is not None,
                         attack_stage=attacker_stage,
                         special_attack_stage=attacker_stage,
                     )
@@ -2986,10 +2979,9 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                                         item=survive_pokemon_item,
                                     )
 
-                                    modifiers = DamageModifiers(
-                                        is_doubles=True,
+                                    modifiers = DamageModifiers.from_scenario(
                                         attacker_ability=survive_pokemon_ability,
-                                        attacker_item=survive_pokemon_item
+                                        attacker_item=survive_pokemon_item,
                                     )
                                     result = calculate_damage(attacker, defender, move, modifiers)
 
@@ -3032,10 +3024,9 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                                     item=survive_pokemon_item,
                                 )
 
-                                modifiers = DamageModifiers(
-                                    is_doubles=True,
+                                modifiers = DamageModifiers.from_scenario(
                                     attacker_ability=survive_pokemon_ability,
-                                    attacker_item=survive_pokemon_item
+                                    attacker_item=survive_pokemon_item,
                                 )
                                 result = calculate_damage(attacker, final_defender, move, modifiers)
 

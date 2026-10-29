@@ -305,7 +305,7 @@ class DamageCache:
             )
 
             # Update modifiers with defender Tera if specified
-            modifiers = DamageModifiers(
+            modifiers = DamageModifiers.from_scenario(
                 is_doubles=threat.modifiers.is_doubles,
                 attacker_item=threat.modifiers.attacker_item,
                 attacker_ability=threat.modifiers.attacker_ability,
@@ -313,13 +313,13 @@ class DamageCache:
                 tera_type=threat.modifiers.tera_type,
                 tera_active=threat.modifiers.tera_active,
                 defender_tera_type=defender_tera_type,
-                defender_tera_active=defender_tera_type is not None,
                 is_critical=threat.modifiers.is_critical,
                 sword_of_ruin=threat.modifiers.sword_of_ruin,
                 beads_of_ruin=threat.modifiers.beads_of_ruin,
                 vessel_of_ruin=threat.modifiers.vessel_of_ruin,
                 tablets_of_ruin=threat.modifiers.tablets_of_ruin,
-                attack_stage=intim_stage if threat.is_physical else 0,
+                intimidate_stage=intim_stage,
+                is_physical=threat.is_physical,
             )
 
             # Calculate damage
@@ -490,17 +490,15 @@ async def _prepare_threats(
         )
 
         # Create damage modifiers
-        modifiers = DamageModifiers(
-            is_doubles=True,
+        modifiers = DamageModifiers.from_scenario(
             attacker_item=item,
             attacker_ability=ability,
             tera_type=tera_type,
-            tera_active=tera_type is not None,
             is_critical=move.always_crit,
             sword_of_ruin=sword_of_ruin,
             beads_of_ruin=beads_of_ruin,
             vessel_of_ruin=vessel_of_ruin,
-            tablets_of_ruin=tablets_of_ruin
+            tablets_of_ruin=tablets_of_ruin,
         )
 
         prepared.append(ThreatSpec(
@@ -1070,12 +1068,10 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             ability=ability,
             tera_type=tera_type,
         )
-        modifiers = DamageModifiers(
-            is_doubles=True,
+        modifiers = DamageModifiers.from_scenario(
             attacker_item=item,
             attacker_ability=ability,
             tera_type=tera_type,
-            tera_active=tera_type is not None,
             is_critical=move.always_crit,
             sword_of_ruin=sword_of_ruin,
             beads_of_ruin=beads_of_ruin,
@@ -2955,21 +2951,19 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                                 )
 
                                 # Calculate damage
-                                modifiers = DamageModifiers(
-                                    is_doubles=True,
+                                modifiers = DamageModifiers.from_scenario(
                                     attacker_ability=survive_pokemon_ability,
                                     attacker_item=survive_pokemon_item,
                                     defender_ability=ability,
                                     tera_type=survive_pokemon_tera_type,
-                                    tera_active=survive_pokemon_tera_type is not None,
                                     defender_tera_type=defender_tera_type,
-                                    defender_tera_active=defender_tera_type is not None,
                                     is_critical=move.always_crit,
                                     sword_of_ruin=sword_of_ruin,
                                     beads_of_ruin=beads_of_ruin,
                                     tablets_of_ruin=tablets_of_ruin,
                                     vessel_of_ruin=vessel_of_ruin,
-                                    attack_stage=intim_stage if is_physical else 0,
+                                    intimidate_stage=intim_stage,
+                                    is_physical=is_physical,
                                 )
                                 result = calculate_damage(attacker, defender, move, modifiers)
 
@@ -3690,30 +3684,30 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         item=item,
                         tera_type=defender_tera_type,
                     )
-                    modifiers1 = DamageModifiers(
-                        is_doubles=True, attacker_item=survive_hit1_item,
-                        attacker_ability=survive_hit1_ability, tera_type=survive_hit1_tera_type,
-                        tera_active=survive_hit1_tera_type is not None,
+                    modifiers1 = DamageModifiers.from_scenario(
+                        attacker_item=survive_hit1_item,
+                        attacker_ability=survive_hit1_ability,
+                        tera_type=survive_hit1_tera_type,
                         defender_tera_type=defender_tera_type,
-                        defender_tera_active=defender_tera_type is not None,
                         is_critical=move1.always_crit,
                         sword_of_ruin=sword_of_ruin1,
                         beads_of_ruin=beads_of_ruin1,
                         defender_ability=ability,
-                        attack_stage=intim1_stage if is_physical1 else 0,
+                        intimidate_stage=intim1_stage,
+                        is_physical=is_physical1,
                     )
                     result1 = calculate_damage(attacker1, defender, move1, modifiers1)
-                    modifiers2 = DamageModifiers(
-                        is_doubles=True, attacker_item=survive_hit2_item,
-                        attacker_ability=survive_hit2_ability, tera_type=survive_hit2_tera_type,
-                        tera_active=survive_hit2_tera_type is not None,
+                    modifiers2 = DamageModifiers.from_scenario(
+                        attacker_item=survive_hit2_item,
+                        attacker_ability=survive_hit2_ability,
+                        tera_type=survive_hit2_tera_type,
                         defender_tera_type=defender_tera_type,
-                        defender_tera_active=defender_tera_type is not None,
                         is_critical=move2.always_crit,
                         sword_of_ruin=sword_of_ruin2,
                         beads_of_ruin=beads_of_ruin2,
                         defender_ability=ability,
-                        attack_stage=intim2_stage if is_physical2 else 0,
+                        intimidate_stage=intim2_stage,
+                        is_physical=is_physical2,
                     )
                     result2 = calculate_damage(attacker2, defender, move2, modifiers2)
                     survival_pct1 = result1.survival_percent
@@ -3827,30 +3821,30 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         item=item,
                         tera_type=defender_tera_type,
                     )
-                    modifiers1 = DamageModifiers(
-                        is_doubles=True, attacker_item=survive_hit1_item,
-                        attacker_ability=survive_hit1_ability, tera_type=survive_hit1_tera_type,
-                        tera_active=survive_hit1_tera_type is not None,
+                    modifiers1 = DamageModifiers.from_scenario(
+                        attacker_item=survive_hit1_item,
+                        attacker_ability=survive_hit1_ability,
+                        tera_type=survive_hit1_tera_type,
                         defender_tera_type=defender_tera_type,
-                        defender_tera_active=defender_tera_type is not None,
                         is_critical=move1.always_crit,
                         sword_of_ruin=sword_of_ruin1,
                         beads_of_ruin=beads_of_ruin1,
                         defender_ability=ability,
-                        attack_stage=intim1_stage if is_physical1 else 0,
+                        intimidate_stage=intim1_stage,
+                        is_physical=is_physical1,
                     )
                     result1 = calculate_damage(attacker1, defender, move1, modifiers1)
-                    modifiers2 = DamageModifiers(
-                        is_doubles=True, attacker_item=survive_hit2_item,
-                        attacker_ability=survive_hit2_ability, tera_type=survive_hit2_tera_type,
-                        tera_active=survive_hit2_tera_type is not None,
+                    modifiers2 = DamageModifiers.from_scenario(
+                        attacker_item=survive_hit2_item,
+                        attacker_ability=survive_hit2_ability,
+                        tera_type=survive_hit2_tera_type,
                         defender_tera_type=defender_tera_type,
-                        defender_tera_active=defender_tera_type is not None,
                         is_critical=move2.always_crit,
                         sword_of_ruin=sword_of_ruin2,
                         beads_of_ruin=beads_of_ruin2,
                         defender_ability=ability,
-                        attack_stage=intim2_stage if is_physical2 else 0,
+                        intimidate_stage=intim2_stage,
+                        is_physical=is_physical2,
                     )
                     result2 = calculate_damage(attacker2, defender, move2, modifiers2)
                     survival_pct1 = result1.survival_percent
@@ -4084,29 +4078,29 @@ def register_spread_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         item=item,
                         tera_type=defender_tera_type,
                     )
-                    adj_mods1 = DamageModifiers(
-                        is_doubles=True, attacker_item=survive_hit1_item,
-                        attacker_ability=survive_hit1_ability, tera_type=survive_hit1_tera_type,
-                        tera_active=survive_hit1_tera_type is not None,
+                    adj_mods1 = DamageModifiers.from_scenario(
+                        attacker_item=survive_hit1_item,
+                        attacker_ability=survive_hit1_ability,
+                        tera_type=survive_hit1_tera_type,
                         defender_tera_type=defender_tera_type,
-                        defender_tera_active=defender_tera_type is not None,
                         is_critical=move1.always_crit,
                         sword_of_ruin=sword_of_ruin1,
                         beads_of_ruin=beads_of_ruin1,
                         defender_ability=ability,
-                        attack_stage=intim1_stage if is_physical1 else 0,
+                        intimidate_stage=intim1_stage,
+                        is_physical=is_physical1,
                     )
-                    adj_mods2 = DamageModifiers(
-                        is_doubles=True, attacker_item=survive_hit2_item,
-                        attacker_ability=survive_hit2_ability, tera_type=survive_hit2_tera_type,
-                        tera_active=survive_hit2_tera_type is not None,
+                    adj_mods2 = DamageModifiers.from_scenario(
+                        attacker_item=survive_hit2_item,
+                        attacker_ability=survive_hit2_ability,
+                        tera_type=survive_hit2_tera_type,
                         defender_tera_type=defender_tera_type,
-                        defender_tera_active=defender_tera_type is not None,
                         is_critical=move2.always_crit,
                         sword_of_ruin=sword_of_ruin2,
                         beads_of_ruin=beads_of_ruin2,
                         defender_ability=ability,
-                        attack_stage=intim2_stage if is_physical2 else 0,
+                        intimidate_stage=intim2_stage,
+                        is_physical=is_physical2,
                     )
                     adj_r1 = calculate_damage(attacker1, adj_defender, move1, adj_mods1)
                     adj_r2 = calculate_damage(attacker2, adj_defender, move2, adj_mods2)

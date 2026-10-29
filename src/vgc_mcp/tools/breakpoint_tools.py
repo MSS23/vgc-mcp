@@ -484,10 +484,10 @@ def _min_invest_for_ko(me_base, me_types, me_name, off_stat, nat_mod, move, tgt_
             )
             result = calculate_damage(
                 me_build, tgt_build, move,
-                DamageModifiers(
-                    is_doubles=True,
+                DamageModifiers.from_scenario(
                     attacker_ability=me_ability,
-                    attack_stage=intim_stage if is_physical else 0,
+                    intimidate_stage=intim_stage,
+                    is_physical=is_physical,
                 ),
             )
             if result.is_guaranteed_ohko:
@@ -507,10 +507,10 @@ def _min_invest_for_ko(me_base, me_types, me_name, off_stat, nat_mod, move, tgt_
         )
         result = calculate_damage(
             me_build, tgt_build, move,
-            DamageModifiers(
-                is_doubles=True,
+            DamageModifiers.from_scenario(
                 attacker_ability=me_ability,
-                attack_stage=intim_stage if is_physical else 0,
+                intimidate_stage=intim_stage,
+                is_physical=is_physical,
             ),
         )
         if result.is_guaranteed_ohko:
@@ -668,11 +668,12 @@ def _min_total_invest_for_survival(me_base, me_types, me_name, def_stat,
                 )
                 result = calculate_damage(
                     tgt_build, me_build, move,
-                    DamageModifiers(is_doubles=True,
-                                    attacker_item=tgt_build.item,
-                                    attacker_ability=tgt_build.ability,
-                                    defender_ability=me_ability,
-                                    attack_stage=intim_stage if is_physical else 0),
+                    DamageModifiers.from_scenario(
+                        attacker=tgt_build,
+                        defender_ability=me_ability,
+                        intimidate_stage=intim_stage,
+                        is_physical=is_physical,
+                    ),
                 )
                 if result.survival_percent >= threshold_rolls / 16 * 100:
                     best = (hp_sp, def_sp)
@@ -699,11 +700,12 @@ def _min_total_invest_for_survival(me_base, me_types, me_name, def_stat,
             )
             result = calculate_damage(
                 tgt_build, me_build, move,
-                DamageModifiers(is_doubles=True,
-                                attacker_item=tgt_build.item,
-                                attacker_ability=tgt_build.ability,
-                                defender_ability=me_ability,
-                                attack_stage=intim_stage if is_physical else 0),
+                DamageModifiers.from_scenario(
+                    attacker=tgt_build,
+                    defender_ability=me_ability,
+                    intimidate_stage=intim_stage,
+                    is_physical=is_physical,
+                ),
             )
             if result.survival_percent >= threshold_rolls / 16 * 100:
                 best = (hp_ev, def_ev)

@@ -339,7 +339,7 @@ def register_item_optimization_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogo
                 )
 
             # Create modifiers
-            modifiers = DamageModifiers(is_doubles=True)
+            modifiers = DamageModifiers.from_scenario()
 
             # Compare items
             comparison_results = compare_items_damage(

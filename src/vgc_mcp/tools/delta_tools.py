@@ -50,8 +50,7 @@ def _verdict(min_pct: float, max_pct: float) -> str:
 
 
 def _mods_for(spread: dict, item_field: str, ability_field: str) -> DamageModifiers:
-    return DamageModifiers(
-        is_doubles=True,
+    return DamageModifiers.from_scenario(
         attacker_item=spread.get(item_field),
         attacker_ability=spread.get(ability_field),
     )
@@ -236,13 +235,9 @@ def register_delta_tools(
                 me_move = await pokeapi.get_move(_first_stab_move(me_before),
                                                   user_name=pokemon_name)
                 r_b = calculate_damage(me_before, td["build"], me_move,
-                                       DamageModifiers(is_doubles=True,
-                                                       attacker_item=me_before.item,
-                                                       attacker_ability=me_before.ability))
+                                       DamageModifiers.from_scenario(attacker=me_before))
                 r_a = calculate_damage(me_after, td["build"], me_move,
-                                       DamageModifiers(is_doubles=True,
-                                                       attacker_item=me_after.item,
-                                                       attacker_ability=me_after.ability))
+                                       DamageModifiers.from_scenario(attacker=me_after))
             else:
                 # Defender Intimidate event (per "before" / "after" defender state),
                 # honouring attacker blockers/punishers.
@@ -259,17 +254,19 @@ def register_delta_tools(
                     is_physical=is_phys,
                 )
                 r_b = calculate_damage(td["build"], me_before, td["move"],
-                                       DamageModifiers(is_doubles=True,
-                                                       attacker_item=td["build"].item,
-                                                       attacker_ability=td["build"].ability,
-                                                       defender_ability=me_before.ability,
-                                                       attack_stage=intim_b if is_phys else 0))
+                                       DamageModifiers.from_scenario(
+                                           attacker=td["build"],
+                                           defender=me_before,
+                                           intimidate_stage=intim_b,
+                                           is_physical=is_phys,
+                                       ))
                 r_a = calculate_damage(td["build"], me_after, td["move"],
-                                       DamageModifiers(is_doubles=True,
-                                                       attacker_item=td["build"].item,
-                                                       attacker_ability=td["build"].ability,
-                                                       defender_ability=me_after.ability,
-                                                       attack_stage=intim_a if is_phys else 0))
+                                       DamageModifiers.from_scenario(
+                                           attacker=td["build"],
+                                           defender=me_after,
+                                           intimidate_stage=intim_a,
+                                           is_physical=is_phys,
+                                       ))
 
             v_b = _verdict(r_b.min_percent, r_b.max_percent)
             v_a = _verdict(r_a.min_percent, r_a.max_percent)

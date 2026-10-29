@@ -748,11 +748,11 @@ def register_tournament_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi:
                             attacker_ability=threat_ability,
                             is_physical=is_phys,
                         )
-                        per_move_modifiers = DamageModifiers(
-                            is_doubles=True,
+                        per_move_modifiers = DamageModifiers.from_scenario(
+                            defender=your_pokemon,
                             attacker_ability=threat_ability,
-                            defender_ability=your_pokemon.ability,
-                            attack_stage=intim if is_phys else 0,
+                            intimidate_stage=intim,
+                            is_physical=is_phys,
                         )
                         # Calculate damage
                         result = calculate_damage(threat_pokemon, your_pokemon, move, per_move_modifiers)

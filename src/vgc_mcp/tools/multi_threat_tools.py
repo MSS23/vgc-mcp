@@ -189,15 +189,11 @@ def register_multi_threat_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon_cli
                 )
 
             def evaluate_threat(threat_data: dict, defender: PokemonBuild) -> dict:
-                mods = DamageModifiers(
-                    is_doubles=True,
-                    attack_stage=(
-                        threat_data["intimidate_stage"]
-                        if threat_data["is_physical"]
-                        else 0
-                    ),
+                mods = DamageModifiers.from_scenario(
                     attacker_ability=threat_data["attacker_ability"],
                     attacker_item=threat_data["attacker_item"],
+                    intimidate_stage=threat_data["intimidate_stage"],
+                    is_physical=threat_data["is_physical"],
                 )
                 result = calculate_damage(
                     threat_data["build"],

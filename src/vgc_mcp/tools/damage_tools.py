@@ -581,11 +581,11 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             from vgc_mcp_core.calc.abilities import apply_ruin_abilities
             from vgc_mcp_core.calc.modifiers import DamageModifiers
 
-            temp_modifiers = DamageModifiers(
+            temp_modifiers = DamageModifiers.from_scenario(
                 sword_of_ruin=sword_of_ruin,
                 beads_of_ruin=beads_of_ruin,
                 tablets_of_ruin=tablets_of_ruin,
-                vessel_of_ruin=vessel_of_ruin
+                vessel_of_ruin=vessel_of_ruin,
             )
             apply_ruin_abilities(
                 attacker_ability=attacker_ability,
@@ -791,8 +791,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         )
 
             # Set up modifiers
-            modifiers = DamageModifiers(
-                is_doubles=True,
+            modifiers = DamageModifiers.from_scenario(
                 multiple_targets=is_spread,
                 weather=weather,
                 terrain=terrain,
@@ -801,9 +800,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 attacker_ability=attacker_ability,
                 defender_ability=defender_ability,
                 tera_type=attacker_tera_type,
-                tera_active=attacker_tera_type is not None,
                 defender_tera_type=defender_tera_type,
-                defender_tera_active=defender_tera_type is not None,
                 reflect_up=reflect,
                 light_screen_up=light_screen,
                 aurora_veil_up=aurora_veil,
@@ -824,7 +821,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 attack_stage=attacker_attack_stage,
                 special_attack_stage=attacker_special_attack_stage,
                 defense_stage=defender_defense_stage,
-                special_defense_stage=defender_special_defense_stage
+                special_defense_stage=defender_special_defense_stage,
             )
 
             # Calculate damage against multiple defender spreads if available
@@ -870,8 +867,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     )
 
                     # Update modifiers with this spread's item and ability
-                    spread_modifiers = DamageModifiers(
-                        is_doubles=True,
+                    spread_modifiers = DamageModifiers.from_scenario(
                         multiple_targets=is_spread,
                         weather=weather,
                         terrain=terrain,
@@ -880,9 +876,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         attacker_ability=attacker_ability,
                         defender_ability=spread_ability,
                         tera_type=attacker_tera_type,
-                        tera_active=attacker_tera_type is not None,
                         defender_tera_type=defender_tera_type,
-                        defender_tera_active=defender_tera_type is not None,
                         reflect_up=reflect,
                         light_screen_up=light_screen,
                         aurora_veil_up=aurora_veil,
@@ -903,7 +897,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         attack_stage=attacker_attack_stage,
                         special_attack_stage=attacker_special_attack_stage,
                         defense_stage=defender_defense_stage,
-                        special_defense_stage=defender_special_defense_stage
+                        special_defense_stage=defender_special_defense_stage,
                     )
 
                     # Calculate damage for this spread
@@ -1426,8 +1420,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 )
 
             # Create modifiers with Ruinous abilities + ability/item bridge
-            modifiers = DamageModifiers(
-                is_doubles=True,
+            modifiers = DamageModifiers.from_scenario(
                 sword_of_ruin=sword_of_ruin,
                 beads_of_ruin=beads_of_ruin,
                 attacker_item=attacker_item,
@@ -1812,8 +1805,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             )
 
             # Create modifiers with Ruinous abilities, item, Paradox boosts, and Intimidate
-            modifiers = DamageModifiers(
-                is_doubles=True,
+            modifiers = DamageModifiers.from_scenario(
                 sword_of_ruin=sword_of_ruin,
                 beads_of_ruin=beads_of_ruin,
                 attacker_item=attacker_item,
@@ -2195,8 +2187,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             # with defender Intimidate's auto-detected -1).
             effective_attack_stage = attacker_attack_stage + (intimidate_stage if is_physical else 0)
             effective_spa_stage = attacker_attack_stage if not is_physical else 0
-            modifiers = DamageModifiers(
-                is_doubles=True,
+            modifiers = DamageModifiers.from_scenario(
                 weather=weather,
                 terrain=terrain,
                 attacker_item=attacker_item,
@@ -2208,7 +2199,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 attack_stage=effective_attack_stage if is_physical else 0,
                 special_attack_stage=effective_spa_stage,
                 defense_stage=defender_defense_stage if is_physical else 0,
-                special_defense_stage=defender_defense_stage if not is_physical else 0
+                special_defense_stage=defender_defense_stage if not is_physical else 0,
             )
 
             # Calculate single hit damage
@@ -2477,8 +2468,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                         ability=defender_ability,
                     )
 
-                    modifiers = DamageModifiers(
-                        is_doubles=True,
+                    modifiers = DamageModifiers.from_scenario(
                         attack_stage=effective_attack_stage if is_physical else 0,
                         special_attack_stage=attacker_attack_stage if not is_physical else 0,
                         defense_stage=defender_defense_stage if is_physical else 0,
@@ -2518,8 +2508,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                     spread=EVSpread(hp=252, defense=252 if is_physical else 0, special_defense=0 if is_physical else 252),
                     ability=defender_ability,
                 )
-                modifiers = DamageModifiers(
-                    is_doubles=True,
+                modifiers = DamageModifiers.from_scenario(
                     attack_stage=effective_attack_stage if is_physical else 0,
                     special_attack_stage=attacker_attack_stage if not is_physical else 0,
                     defense_stage=defender_defense_stage if is_physical else 0,
@@ -2878,8 +2867,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
             effective_atk2_stage = attacker2_attack_stage + (intim2_stage if is_physical2 else 0)
 
             # Set up modifiers for both attacks
-            modifiers1 = DamageModifiers(
-                is_doubles=True,
+            modifiers1 = DamageModifiers.from_scenario(
                 weather=weather,
                 terrain=terrain,
                 attacker_item=attacker1_item,
@@ -2887,7 +2875,6 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 attacker_ability=attacker1_ability,
                 defender_ability=defender_ability,
                 defender_tera_type=defender_tera_type,
-                defender_tera_active=defender_tera_type is not None,
                 reflect_up=reflect,
                 light_screen_up=light_screen,
                 aurora_veil_up=aurora_veil,
@@ -2899,11 +2886,10 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 attack_stage=effective_atk1_stage if is_physical1 else 0,
                 special_attack_stage=attacker1_attack_stage if not is_physical1 else 0,
                 defense_stage=defender_defense_stage if is_physical1 else 0,
-                special_defense_stage=defender_special_defense_stage if not is_physical1 else 0
+                special_defense_stage=defender_special_defense_stage if not is_physical1 else 0,
             )
 
-            modifiers2 = DamageModifiers(
-                is_doubles=True,
+            modifiers2 = DamageModifiers.from_scenario(
                 weather=weather,
                 terrain=terrain,
                 attacker_item=attacker2_item,
@@ -2911,7 +2897,6 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 attacker_ability=attacker2_ability,
                 defender_ability=defender_ability,
                 defender_tera_type=defender_tera_type,
-                defender_tera_active=defender_tera_type is not None,
                 reflect_up=reflect,
                 light_screen_up=light_screen,
                 aurora_veil_up=aurora_veil,
@@ -2923,7 +2908,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
                 attack_stage=effective_atk2_stage if is_physical2 else 0,
                 special_attack_stage=attacker2_attack_stage if not is_physical2 else 0,
                 defense_stage=defender_defense_stage if is_physical2 else 0,
-                special_defense_stage=defender_special_defense_stage if not is_physical2 else 0
+                special_defense_stage=defender_special_defense_stage if not is_physical2 else 0,
             )
 
             # Calculate damage from each attack
