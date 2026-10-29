@@ -2,6 +2,7 @@
 
 import hashlib
 import logging
+import os
 from pathlib import Path
 from types import TracebackType
 from typing import Any, Optional
@@ -19,7 +20,9 @@ class APICache:
     def __init__(self, cache_dir: Optional[str] = None) -> None:
         """Initialize cache with optional custom directory."""
         if cache_dir is None:
-            # Default to data/cache in the project root
+            cache_dir = os.environ.get("VGC_CACHE_DIR")
+        if cache_dir is None:
+            # Default to data/cache in the project root (editable installs)
             cache_path = Path(__file__).parent.parent.parent.parent / "data" / "cache"
         else:
             cache_path = Path(cache_dir)
