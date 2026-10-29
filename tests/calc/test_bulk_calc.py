@@ -896,6 +896,32 @@ class TestExportGeneration:
         ohko_cell = ws.cell(row=5, column=14)
         assert "C6EFCE" in str(ohko_cell.fill.start_color.rgb)
 
+    def test_sheet_rows_shared_by_excel_and_pdf(self):
+        from vgc_mcp_core.calc.bulk_calc import get_results_for_scenario
+        from vgc_mcp_core.export.damage_report import SHEET_HEADERS, _sheet_rows
+
+        summary = _make_bulk_summary()
+        rows = _sheet_rows(
+            summary, get_results_for_scenario(summary, "normal"),
+            ["incineroar", "flutter-mane"],
+        )
+        row, ko = rows[0]
+        assert len(row) == len(SHEET_HEADERS)
+        assert row[:9] == ["Incineroar", "Careful", "252", "0", "128", "0", "128", "0", "EV"]
+        assert row[9:11] == ["Sitrus Berry", "Close Combat"]
+        assert row[11].endswith(" / 189")
+        assert ko == row[13]
+
+    def test_pdf_missing_calc_renders(self):
+        """A target with no result prints '-' (core PDF fonts are Latin-1 only)."""
+        from vgc_mcp_core.export.damage_report import generate_pdf_report
+
+        summary = _make_bulk_summary()
+        summary.move_names.append("aqua-jet")  # no results for this move
+        output = os.path.join(self.tmpdir, "test_missing.pdf")
+        generate_pdf_report(summary, output)
+        assert os.path.getsize(output) > 0
+
     def test_excel_rows_show_target_spread_and_roll(self):
         from openpyxl import load_workbook
 

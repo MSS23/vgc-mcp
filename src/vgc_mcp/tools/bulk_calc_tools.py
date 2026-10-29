@@ -460,7 +460,7 @@ def register_bulk_calc_tools(
         """Export bulk damage calculations as an Excel spreadsheet or PDF file on disk.
 
         Generates a color-coded report (green=OHKO, yellow=2HKO, orange=3HKO,
-        red=4HKO+) with one sheet/page per scenario. Each Excel row is one
+        red=4HKO+) with one sheet/page per scenario. Each row, Excel or PDF, is one
         target × move: the target's nature and per-stat EVs/SPs, item, move,
         damage roll and % HP. Returns the file path and
         total calc count.
