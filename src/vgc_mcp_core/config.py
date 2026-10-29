@@ -35,9 +35,6 @@ logger = setup_logging()
 class Settings:
     """Application settings."""
 
-    # Cache settings (directory: APICache, overridable with VGC_CACHE_DIR)
-    CACHE_EXPIRE_DAYS: int = 7
-
     # API settings
     POKEAPI_BASE_URL: str = "https://pokeapi.co/api/v2"
     SMOGON_STATS_BASE_URL: str = "https://www.smogon.com/stats"
@@ -48,24 +45,6 @@ class Settings:
 
     # Smogon rating cutoffs
     SMOGON_RATING_CUTOFFS: list[int] = [0, 1500, 1630, 1760]
-
-    # VGC defaults
-    DEFAULT_LEVEL: int = 50
-    DEFAULT_FORMAT: str = "gen9vgc2026regfbo3"
-    # Canonical short regulation code for the active mainline format (Reg F).
-    # Single source of truth for anything that needs a default reg id — e.g.
-    # the battle copilot's starting format — so it never drifts from the
-    # Smogon DEFAULT_FORMAT above.
-    DEFAULT_REGULATION: str = "reg_f"
-    DEFAULT_RATING: int = 1630  # Standard competitive Smogon weighting
-
-    # Team settings
-    MAX_TEAM_SIZE: int = 6
-    MAX_TOTAL_EVS: int = 508
-    MAX_STAT_EVS: int = 252
-
-    # Damage calculation
-    DAMAGE_ROLL_COUNT: int = 16
 
 
 settings = Settings()
@@ -118,104 +97,6 @@ def normalize_evs(evs: int) -> int:
         return EV_BREAKPOINTS_LV50[idx]
 
     return 0
-
-
-def distribute_remaining_evs(
-    current_evs: dict[str, int],
-    remaining: int,
-    priority_stats: list[str] | None = None
-) -> dict[str, int]:
-    """
-    Distribute remaining EVs across stats using valid breakpoints.
-
-    At level 50, EVs must be at valid breakpoints (0, 4, 12, 20, 28...).
-    This function distributes leftover EVs properly.
-
-    Args:
-        current_evs: Dict of stat_name -> current EV value
-        remaining: Number of EVs left to distribute
-        priority_stats: Stats to prioritize (in order). If None, uses default order.
-
-    Returns:
-        Updated EV dict with remaining EVs distributed at valid breakpoints
-
-    Example:
-        # Have 88 EVs remaining, want to put in Attack
-        distribute_remaining_evs({'hp': 84, 'spd': 84, 'spe': 252}, 88, ['atk'])
-        # Returns: {'hp': 84, 'spd': 84, 'spe': 252, 'atk': 84, 'def': 4}
-        # Because 88 = 84 (valid) + 4 (valid), not 88 (invalid)
-    """
-    if remaining <= 0:
-        return current_evs
-
-    result = current_evs.copy()
-
-    # Default priority: atk, spa, def, spd, hp (offense first, then bulk)
-    if priority_stats is None:
-        priority_stats = ['atk', 'attack', 'spa', 'special_attack', 'def', 'defense',
-                         'spd', 'special_defense', 'hp']
-
-    # Normalize stat names
-    stat_mapping = {
-        'hp': 'hp', 'health': 'hp',
-        'atk': 'attack', 'attack': 'attack',
-        'def': 'defense', 'defense': 'defense',
-        'spa': 'special_attack', 'special_attack': 'special_attack', 'spatk': 'special_attack',
-        'spd': 'special_defense', 'special_defense': 'special_defense', 'spdef': 'special_defense',
-        'spe': 'speed', 'speed': 'speed',
-    }
-
-    # All stats in normalized form
-    all_stats = ['hp', 'attack', 'defense', 'special_attack', 'special_defense', 'speed']
-
-    # Convert priority list to normalized names
-    normalized_priority = []
-    for stat in priority_stats:
-        normalized = stat_mapping.get(stat.lower(), stat.lower())
-        if normalized in all_stats and normalized not in normalized_priority:
-            normalized_priority.append(normalized)
-
-    # Add remaining stats not in priority
-    for stat in all_stats:
-        if stat not in normalized_priority:
-            normalized_priority.append(stat)
-
-    # Distribute remaining EVs
-    evs_left = remaining
-    for stat in normalized_priority:
-        if evs_left <= 0:
-            break
-
-        current = result.get(stat, 0)
-        if current >= settings.MAX_STAT_EVS:
-            continue
-
-        # Find max we can add to this stat
-        max_addable = settings.MAX_STAT_EVS - current
-
-        # Find the largest valid breakpoint we can add
-        for bp in reversed(EV_BREAKPOINTS_LV50):
-            if bp <= min(evs_left, max_addable):
-                if bp > 0:
-                    # Only add if it results in a valid total for this stat
-                    new_value = current + bp
-                    if new_value in EV_BREAKPOINTS_LV50 or new_value == 0:
-                        result[stat] = new_value
-                        evs_left -= bp
-                        break
-                    else:
-                        # Current + bp doesn't give valid breakpoint
-                        # Try to find a bp that makes the total valid
-                        for test_bp in reversed(EV_BREAKPOINTS_LV50):
-                            if test_bp <= min(evs_left, max_addable):
-                                test_total = current + test_bp
-                                if test_total in EV_BREAKPOINTS_LV50:
-                                    result[stat] = test_total
-                                    evs_left -= test_bp
-                                    break
-                        break
-
-    return result
 
 
 def validate_ev_spread(evs: dict[str, int]) -> tuple[bool, str]:

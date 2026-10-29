@@ -7,7 +7,6 @@ Functions here are pure — they take raw numbers and return raw allocations.
 Tool handlers should dispatch to this module when `pokemon.is_champions()`.
 """
 
-import math
 from typing import Any, Optional
 
 from ..models.pokemon import Nature, StatPointSpread
@@ -89,32 +88,6 @@ def design_speed_benchmark_sps(
 
 
 # ---------- HP / Survival ----------
-
-def find_survival_hp_sps(
-    base_hp: int,
-    base_def: int,
-    raw_damage_max: int,
-    iv_hp: int = 31,
-    iv_def: int = 31,
-    def_nature_mod: float = 1.0,
-    def_sp: int = 0,
-    level: int = 50,
-) -> Optional[int]:
-    """Minimum HP SP needed so that `final_hp > raw_damage_max` survives the hit.
-
-    `raw_damage_max` is the unrolled max damage already adjusted for the
-    defender's existing Defense/SpDef (caller computes that, since damage scales
-    with the defensive stat). For Champions we sweep HP SP 0-32 and return the
-    smallest value at which HP exceeds the rolled max.
-
-    Returns None if max HP investment still cannot survive.
-    """
-    for sp in SP_BREAKPOINTS_LV50:
-        hp = calculate_hp_sp(base_hp, iv_hp, sp, level)
-        if hp > raw_damage_max:
-            return sp
-    return None
-
 
 def find_optimal_hp_sps(
     base_hp: int,
@@ -224,32 +197,6 @@ def find_bulk_sps_to_survive(
 
 
 # ---------- Offensive thresholds ----------
-
-def find_attack_sps_for_ko(
-    base_atk: int,
-    target_dmg_floor: int,
-    base_dmg_at_zero_atk: int,
-    iv: int = 31,
-    nature_mod: float = 1.0,
-    level: int = 50,
-) -> Optional[int]:
-    """Minimum offensive SP to push damage above `target_dmg_floor`.
-
-    `base_dmg_at_zero_atk` is the damage that would be dealt with 0 SP at the
-    given nature/item config; we scale linearly with the offensive stat (same
-    approximation used by the EV-side ko-search) and find the smallest SP at
-    which damage clears the floor.
-    """
-    base_stat = calculate_stat_sp(base_atk, iv, 0, level, nature_mod)
-    if base_stat <= 0:
-        return None
-    for sp in SP_BREAKPOINTS_LV50:
-        new_stat = calculate_stat_sp(base_atk, iv, sp, level, nature_mod)
-        scaled = math.floor(base_dmg_at_zero_atk * new_stat / base_stat)
-        if scaled > target_dmg_floor:
-            return sp
-    return None
-
 
 # ---------- Validators ----------
 

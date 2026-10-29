@@ -49,11 +49,6 @@ def offensive_investment(value: int | str | dict[str, int] | None, is_physical: 
     return value
 
 
-def _champions_offensive_stat(base_stats: BaseStats) -> str:
-    """Pick the offensive stat ('attack' or 'special_attack') for an SP build."""
-    return "attack" if base_stats.attack >= base_stats.special_attack else "special_attack"
-
-
 def _build_champions_pokemon(
     name: str,
     base_stats: BaseStats,

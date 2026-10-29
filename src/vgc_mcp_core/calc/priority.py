@@ -1,29 +1,11 @@
 """Priority move and turn order analysis for VGC."""
 
 from dataclasses import dataclass
-from enum import IntEnum
 from typing import Any, Optional
 
 from ..utils.normalize import (
     normalize_move_name as normalize_move_name,  # re-export for back-compat
 )
-
-
-class PriorityBracket(IntEnum):
-    """Priority bracket values for moves."""
-    HELPING_HAND = 5
-    PROTECT = 4
-    FAKE_OUT = 3
-    EXTREME_SPEED = 2
-    PRIORITY = 1
-    NORMAL = 0
-    VITAL_THROW = -1
-    FOCUS_PUNCH = -3
-    REVENGE = -4
-    COUNTER = -5
-    ROAR = -6
-    TRICK_ROOM = -7
-
 
 # Complete priority move database
 PRIORITY_MOVES: dict[str, int] = {

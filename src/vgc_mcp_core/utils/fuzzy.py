@@ -219,26 +219,3 @@ def suggest_move_name(
 
     return matches
 
-
-def format_suggestions(suggestions: list[str], prefix: str = "Did you mean") -> str:
-    """
-    Format a list of suggestions into a readable string.
-
-    Args:
-        suggestions: List of suggested values
-        prefix: Prefix for the suggestion message
-
-    Returns:
-        Formatted suggestion string
-
-    Example:
-        >>> format_suggestions(["charizard", "charmeleon"])
-        "Did you mean: charizard, charmeleon?"
-    """
-    if not suggestions:
-        return ""
-
-    if len(suggestions) == 1:
-        return f"{prefix}: {suggestions[0]}?"
-
-    return f"{prefix}: {', '.join(suggestions)}?"

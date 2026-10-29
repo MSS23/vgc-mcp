@@ -207,16 +207,6 @@ class PokeAPIClient:
         ]
         return {**data, "base_stats": stats, "types": types}
 
-    async def get_pokemon_species(self, name_or_id: str | int) -> dict[str, Any]:
-        """Get Pokemon species data (for species clause)."""
-        name = self._normalize_name(str(name_or_id))
-        try:
-            return await self._fetch(f"pokemon-species/{name}")
-        except PokeAPIError:
-            # Some Pokemon forms don't have species data, try base form
-            base_name = name.split("-")[0]
-            return await self._fetch(f"pokemon-species/{base_name}")
-
     async def get_base_stats(self, name_or_id: str | int) -> BaseStats:
         """Extract base stats from Pokemon data."""
         s = (await self.get_pokemon(name_or_id))["base_stats"]
@@ -315,21 +305,6 @@ class PokeAPIClient:
             max_hits=max_hits,
             always_crit=always_crit
         )
-
-    async def get_type(self, name: str) -> dict[str, Any]:
-        """Get type data including damage relations."""
-        name = self._normalize_name(name, apply_form_aliases=False)
-        return await self._fetch(f"type/{name}")
-
-    async def get_ability(self, name_or_id: str | int) -> dict[str, Any]:
-        """Get ability data."""
-        name = self._normalize_name(str(name_or_id), apply_form_aliases=False)
-        return await self._fetch(f"ability/{name}")
-
-    async def get_item(self, name_or_id: str | int) -> dict[str, Any]:
-        """Get item data."""
-        name = self._normalize_name(str(name_or_id), apply_form_aliases=False)
-        return await self._fetch(f"item/{name}")
 
     async def close(self) -> None:
         """Close the HTTP client."""

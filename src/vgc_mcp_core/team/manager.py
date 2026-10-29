@@ -493,12 +493,6 @@ class TeamManager:
             self._active_pokemon = None
             return True, f"Cleared {count} stored Pokemon"
 
-    def get_active_pokemon(self) -> Optional[PokemonBuild]:
-        """Get the most recently referenced Pokemon."""
-        if self._active_pokemon:
-            return self._pokemon_context.get(self._active_pokemon)
-        return None
-
     @property
     def active_pokemon_name(self) -> Optional[str]:
         """Get the name of the most recently referenced Pokemon."""
