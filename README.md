@@ -191,7 +191,7 @@ src/
 │   └── ...
 └── vgc_mcp/              # MCP server — auto-discovers tool modules
     ├── profiles.py       # 34 core tools at /mcp; all 206 at /mcp/full
-    └── tools/            # 52 auto-discovered modules
+    └── tools/            # 50 auto-discovered modules
 ```
 
 Auto-discovery means **adding a tool requires zero edits** to `server.py` — drop a `<area>_tools.py` in `vgc_mcp/tools/` exposing `register_<area>_tools(mcp, ...)` and it's picked up.
