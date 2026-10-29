@@ -13,12 +13,12 @@ from pydantic import Field
 
 from vgc_mcp_core.calc.speed_probability import (
     calculate_meta_outspeed_rate,
-    calculate_outspeed_from_distribution,
     calculate_outspeed_probability,
     calculate_speed_creep_evs,
 )
-from vgc_mcp_core.calc.stats import calculate_speed
+from vgc_mcp_core.calc.stats import calculate_all_stats, calculate_speed
 from vgc_mcp_core.models.pokemon import Nature
+from vgc_mcp_core.tools import speed_handlers
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 
@@ -40,88 +40,22 @@ def register_speed_probability_tools(mcp: FastMCP, smogon, pokeapi, team_manager
         your_nature: Annotated[str, Field(description="Your nature (e.g. 'Adamant', 'Jolly')", min_length=1)],
         target_pokemon: Annotated[str, Field(description="Opponent's Pokemon (e.g. 'Landorus-Therian')", min_length=1)]
     ) -> dict:
-        """Calculate the probability of outspeeding a specific opponent.
+        """Deprecated alias of `analyze_outspeed_probability`; will be removed in the next release.
+        Call `analyze_outspeed_probability(pokemon_name=your_pokemon, target_pokemon=..., nature=your_nature, speed_evs=your_speed_evs)` instead.
 
-        Uses live Smogon usage data to determine what percentage of the
-        target's common spreads you will outspeed, tie, or underspeed.
-        Example: "What's the probability my Entei outspeeds Landorus?"
+        Returns the canonical result plus this tool's legacy keys
+        (outspeed_probability, speed_tie_probability, underspeed_probability,
+        your_build, target_speed_breakdown, meta_info).
         """
-        # Get your Pokemon's base stats
-        try:
-            your_base_stats = await pokeapi.get_base_stats(your_pokemon)
-        except Exception:
-            return error_response(ErrorCodes.POKEMON_NOT_FOUND, f'Pokemon not found: {your_pokemon}')
-
-        your_base_speed = your_base_stats.speed
-
-        # Parse nature to get speed modifier
-        try:
-            nature_enum = Nature(your_nature.lower())
-        except ValueError:
-            return error_response(ErrorCodes.INVALID_NATURE, f'Invalid nature: {your_nature}')
-
-        # Calculate your speed stat
-        your_speed = calculate_speed(your_base_speed, ev=your_speed_evs, nature=nature_enum)
-
-        # Get target Pokemon's base stats
-        try:
-            target_base_stats = await pokeapi.get_base_stats(target_pokemon)
-        except Exception:
-            return error_response(ErrorCodes.POKEMON_NOT_FOUND, f'Pokemon not found: {target_pokemon}')
-
-        target_base_speed = target_base_stats.speed
-
-        # Try to use get_speed_distribution() first (more efficient)
-        speed_dist = await smogon.get_speed_distribution(target_pokemon, target_base_speed)
-
-        if speed_dist and speed_dist.get("distribution"):
-            # Use the new optimized path with pre-calculated speeds
-            distribution = speed_dist["distribution"]
-
-            result = calculate_outspeed_from_distribution(
-                your_speed,
-                distribution,
-                target_pokemon,
-                target_base_speed
-            )
-
-            meta_info = {"data_source": "speed_distribution"}
-        else:
-            # Fallback to raw spreads
-            target_usage = await smogon.get_pokemon_usage(target_pokemon)
-            if not target_usage:
-                return error_response(ErrorCodes.INTERNAL_ERROR, f'No usage data found for {target_pokemon}', note='Target may not be common enough in the current meta')
-
-            target_spreads = target_usage.get("spreads", [])
-            meta_info = target_usage.get("_meta", {})
-
-            result = calculate_outspeed_probability(
-                your_speed,
-                target_base_speed,
-                target_spreads,
-                target_pokemon
-            )
-
-        return {
-            "your_pokemon": your_pokemon,
-            "your_speed": your_speed,
-            "your_build": {
-                "nature": your_nature,
-                "speed_evs": your_speed_evs,
-                "base_speed": your_base_speed
-            },
-            "target_pokemon": target_pokemon,
-            "target_base_speed": target_base_speed,
-            "outspeed_probability": result.outspeed_probability,
-            "speed_tie_probability": result.speed_tie_probability,
-            "underspeed_probability": result.underspeed_probability,
-            "analysis": result.analysis,
-            "target_speed_breakdown": result.target_speed_distribution[:5],  # Top 5 spreads
-            "meta_info": {
-                "format": meta_info.get("format"),
-                "month": meta_info.get("month")
-            }
-        }
+        result = await speed_handlers.analyze_outspeed_probability(
+            pokeapi,
+            smogon,
+            pokemon_name=your_pokemon,
+            target_pokemon=target_pokemon,
+            nature=your_nature,
+            speed_evs=your_speed_evs,
+        )
+        return _with_legacy_outspeed_keys(result, your_pokemon, your_nature, your_speed_evs)
 
     @mcp.tool(
         title="Outspeed Probability (Stored Pokemon)",
@@ -138,74 +72,28 @@ def register_speed_probability_tools(mcp: FastMCP, smogon, pokeapi, team_manager
             description="Reference to a stored Pokemon (e.g. 'my Entei'); None uses the most recently stored",
         )] = None
     ) -> dict:
-        """Calculate outspeed probability using a Pokemon previously stored with set_my_pokemon."""
-        # Get stored Pokemon
+        """Deprecated alias of `analyze_outspeed_probability`; will be removed in the next release.
+        Call `analyze_outspeed_probability(pokemon_name=..., target_pokemon=..., speed_stat=<your final Speed>)` instead.
+
+        Reads the stored Pokemon's final Speed (format-aware) and passes it as
+        `speed_stat`; the result carries this tool's legacy keys too.
+        """
         pokemon = team_manager.get_pokemon_context(your_pokemon_reference)
         if not pokemon:
             stored = team_manager.list_pokemon_context()
             return error_response(ErrorCodes.INTERNAL_ERROR, 'No stored Pokemon found', hint='Use set_my_pokemon first to store a Pokemon', stored_pokemon=[p['reference'] for p in stored])
 
-        your_base_speed = pokemon.base_stats.speed
-        # Format-aware (Champions builds carry SPs, not EVs)
-        from vgc_mcp_core.calc.stats import calculate_all_stats
-        your_speed = calculate_all_stats(pokemon)["speed"]
-
-        # Get target Pokemon's base stats
-        try:
-            target_base_stats = await pokeapi.get_base_stats(target_pokemon)
-        except Exception:
-            return error_response(ErrorCodes.POKEMON_NOT_FOUND, f'Pokemon not found: {target_pokemon}')
-
-        target_base_speed = target_base_stats.speed
-
-        # Try to use get_speed_distribution() first (more efficient)
-        speed_dist = await smogon.get_speed_distribution(target_pokemon, target_base_speed)
-
-        if speed_dist and speed_dist.get("distribution"):
-            # Use the new optimized path with pre-calculated speeds
-            distribution = speed_dist["distribution"]
-
-            result = calculate_outspeed_from_distribution(
-                your_speed,
-                distribution,
-                target_pokemon,
-                target_base_speed
-            )
-
-            meta_info = {"data_source": "speed_distribution"}
-        else:
-            # Fallback to raw spreads
-            target_usage = await smogon.get_pokemon_usage(target_pokemon)
-            if not target_usage:
-                return error_response(ErrorCodes.INTERNAL_ERROR, f'No usage data found for {target_pokemon}')
-
-            target_spreads = target_usage.get("spreads", [])
-            meta_info = target_usage.get("_meta", {})
-
-            result = calculate_outspeed_probability(
-                your_speed,
-                target_base_speed,
-                target_spreads,
-                target_pokemon
-            )
-
-        return {
-            "your_pokemon": pokemon.name,
-            "your_speed": your_speed,
-            "your_build": {
-                "nature": pokemon.nature.value.title(),
-                "speed_evs": pokemon.evs.speed,
-                "base_speed": your_base_speed
-            },
-            "target_pokemon": target_pokemon,
-            "target_base_speed": target_base_speed,
-            "outspeed_probability": result.outspeed_probability,
-            "speed_tie_probability": result.speed_tie_probability,
-            "underspeed_probability": result.underspeed_probability,
-            "analysis": result.analysis,
-            "target_speed_breakdown": result.target_speed_distribution[:5],
-            "meta_info": meta_info
-        }
+        result = await speed_handlers.analyze_outspeed_probability(
+            pokeapi,
+            smogon,
+            pokemon_name=pokemon.name,
+            target_pokemon=target_pokemon,
+            speed_stat=calculate_all_stats(pokemon)["speed"],
+        )
+        alloc = pokemon.sps if pokemon.is_champions() and pokemon.sps else pokemon.evs
+        return _with_legacy_outspeed_keys(
+            result, pokemon.name, pokemon.nature.value.title(), alloc.speed
+        )
 
     @mcp.tool(
         title="Analyze Meta Outspeed Rate",
@@ -450,6 +338,22 @@ def register_speed_probability_tools(mcp: FastMCP, smogon, pokeapi, team_manager
             "comparisons": comparisons,
             "recommendation": _get_speed_recommendation(comparisons)
         }
+
+
+def _with_legacy_outspeed_keys(result: dict, pokemon: str, nature: str, speed_alloc: int) -> dict:
+    """Add the pre-merge outspeed_probability keys to a canonical result."""
+    if "error" in result:
+        return result
+    return {
+        **result,
+        "your_pokemon": pokemon,
+        "your_build": {"nature": nature, "speed_evs": speed_alloc},
+        "outspeed_probability": result["outspeed_percent"],
+        "speed_tie_probability": result["tie_percent"],
+        "underspeed_probability": result["outsped_by_percent"],
+        "target_speed_breakdown": (result.get("target_spreads") or [])[:5],
+        "meta_info": {"data_source": result.get("data_source")},
+    }
 
 
 def _get_speed_recommendation(comparisons: list) -> str:

@@ -138,9 +138,9 @@ def setup_claude_desktop():
     print("You can also try:")
     print("  - 'Does Flutter Mane OHKO Incineroar?'")
     print("  - 'Help me build a Rain team'")
-    print("  - '/help' to see all commands")
+    print("  - 'What can you do?' to see every category")
     print()
-    print("For more help, see USER_GUIDE.md in the project folder.")
+    print("For more help, see docs/user-guide.md in the project folder.")
     print()
 
 

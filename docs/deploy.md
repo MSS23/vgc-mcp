@@ -37,7 +37,7 @@ Comprehensive guide for deploying the VGC MCP Server on various platforms.
 
 ## Local Deployment (stdio)
 
-**For end users** - See [LOCAL_SETUP.md](local-setup.md) for detailed instructions.
+**For end users** - See the [user guide](user-guide.md#connect-2-minutes) for step-by-step setup.
 
 **Quick Setup:**
 
@@ -341,6 +341,11 @@ Add DNS records as instructed, then:
    - Render supplies `PORT` automatically; do not hardcode it.
    - Optional: `VGC_MCP_API_KEY` to require bearer authentication.
    - Optional: `VGC_MCP_RATE_LIMIT` and `VGC_MCP_RATE_WINDOW` for per-IP limits.
+   - Optional: `VGC_MCP_PROFILE=full` to serve every tool at `/mcp` instead of
+     the 34-tool core profile. `/mcp/full` always serves every tool.
+   - Optional: `VGC_MCP_TRUSTED_PROXY_HOPS` (default 1) — how many proxies
+     append to `X-Forwarded-For`. The limiter keys on that hop, never the
+     client-supplied leftmost entry.
 
 4. **Deploy**
 
@@ -354,34 +359,74 @@ services:
     name: vgc-mcp
     runtime: python
     plan: free
+    branch: main
     buildCommand: python -m pip install -e ".[remote]"
     startCommand: vgc-mcp-http
     healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
         value: "3.12"
+    autoDeployTrigger: checksPass
 ```
 
 Push to GitHub, then connect repository in Render dashboard.
 
 ### Auto-Deploy from GitHub
 
-1. Connect GitHub repository
-2. Select branch (main)
-3. Enable auto-deploy
-4. Push to GitHub → Automatic deployment
+`autoDeployTrigger: checksPass` makes Render deploy `main` only after GitHub
+CI passes. After a deploy, confirm the live revision and tool surface:
+
+```bash
+python scripts/verify_production.py --expected-sha "$(git rev-parse origin/main)"
+```
+
+See [ci-cd.md](ci-cd.md) for the full pipeline.
 
 ### Get Your URL
 
 After deployment, Render provides URL: `https://vgc-mcp.onrender.com`
 
-MCP endpoint: `https://vgc-mcp.onrender.com/mcp`
+MCP endpoints: `https://vgc-mcp.onrender.com/mcp` (core profile) and
+`https://vgc-mcp.onrender.com/mcp/full` (every tool). `/health` reports
+`profile`, `tools` (served at `/mcp`) and `tools_total`.
 
-### Free Tier Limitations
+### Staying awake on the free tier
 
-- Server spins down after 15 minutes of inactivity
-- First request after spin-down takes ~30 seconds (cold start)
-- Upgrade to paid plan for always-on service
+Render's free plan sleeps after 15 minutes without traffic, and waking takes
+20-60 seconds. The `Keep Render dyno warm` workflow
+(`.github/workflows/keep-alive.yml`) prevents that at no cost:
+
+- Each run pings `/health` every 10 minutes for ~5h50m, just under GitHub's
+  6-hour job limit.
+- Its concurrency group keeps one run active and one queued, so GitHub's
+  late-firing schedules still chain into continuous coverage.
+- One always-on free service uses ~744 of the 750 free instance-hours a
+  month, so keep only one free service on the account.
+
+GitHub pauses scheduled workflows after 60 days with no repository activity.
+If that happens, re-enable the workflow in the Actions tab. An external
+5-minute monitor on `/health` (see [Uptime Monitoring](#uptime-monitoring))
+is a good second pinger. A paid plan (`plan: starter`) never sleeps.
+
+### Troubleshooting a Render deploy
+
+Run Render's exact commands locally first:
+
+```bash
+python -m pip install -e ".[remote]"
+vgc-mcp-http
+curl http://localhost:8000/health
+```
+
+| Log error | Fix |
+|-----------|-----|
+| `ModuleNotFoundError` | Add the dependency to `pyproject.toml` |
+| `vgc-mcp-http: command not found` | The build step failed; read the build log |
+| Port binding failed | Read `PORT` from the environment; never hardcode it |
+| Health check fails | `/health` must answer 200 within Render's timeout |
+
+To roll back, pick the last good deploy in the Render dashboard and choose
+**Rollback**.
 
 ---
 

@@ -1,7 +1,7 @@
 """Speed comparison and tier utilities."""
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from ..config import EV_BREAKPOINTS_LV50
 from ..models.pokemon import Nature, PokemonBuild
@@ -231,7 +231,7 @@ def get_speed_benchmark(pokemon_name: str, benchmark_type: str = "max_positive")
 # This data tracks what speed investments are commonly used in VGC
 # paradox_type: "ancient" (Protosynthesis - Sun) or "future" (Quark Drive - Electric Terrain)
 # spreads: list of common spreads with nature, evs, and usage percentage
-META_SPEED_TIERS = {
+META_SPEED_TIERS: dict[str, dict[str, Any]] = {
     # Ultra fast (200+)
     "regieleki": {
         "base": 200,
@@ -783,7 +783,7 @@ META_SPEED_TIERS = {
 }
 
 
-def get_speed_tier_info(pokemon_name: str) -> Optional[dict]:
+def get_speed_tier_info(pokemon_name: str) -> Optional[dict[str, Any]]:
     """
     Get speed benchmark info for a Pokemon with dynamically calculated values.
 
@@ -804,7 +804,7 @@ def get_speed_tier_info(pokemon_name: str) -> Optional[dict]:
     }
 
 
-def get_meta_speed_tier(pokemon_name: str) -> Optional[dict]:
+def get_meta_speed_tier(pokemon_name: str) -> Optional[dict[str, Any]]:
     """
     Get VGC meta speed tier info for a Pokemon with dynamically calculated speeds.
 
@@ -879,7 +879,7 @@ async def get_competitive_speed_benchmarks(
     rating: Optional[int] = None,
     top_n_pokemon: int = 30,
     top_n_speeds: int = 3,
-) -> dict[str, list[dict]]:
+) -> dict[str, list[dict[str, Any]]]:
     """
     Get competitive speed benchmarks from Smogon usage data.
 
@@ -921,7 +921,7 @@ async def get_competitive_speed_benchmarks(
         reverse=True,
     )[:top_n_pokemon]
 
-    benchmarks: dict[str, list[dict]] = {}
+    benchmarks: dict[str, list[dict[str, Any]]] = {}
     pokeapi = PokeAPIClient()
 
     for pokemon_name, _ in top_pokemon:
@@ -1014,8 +1014,8 @@ def calculate_speed_tier(
     evs: int,
     iv: int = 31,
     level: int = 50,
-    competitive_benchmarks: Optional[dict] = None,
-) -> dict:
+    competitive_benchmarks: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
     """
     Calculate speed tier information for a specific spread.
 

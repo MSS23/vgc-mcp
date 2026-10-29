@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-VGC MCP Server - A Model Context Protocol server for Pokemon VGC (Video Game Championships) team building. Provides 213 tools for damage calculations, stat analysis, team management, and competitive play optimization. (The count is pinned in `tests/server/test_deploy_smoke.py` and the CI catalog-drift gate — update both when adding/removing tools.)
+VGC MCP Server - A Model Context Protocol server for Pokemon VGC (Video Game Championships) team building. Provides 213 tools for damage calculations, stat analysis, team management, and competitive play optimization. Clients see a 34-tool **core profile** by default (`/mcp`); `/mcp/full` or `VGC_MCP_PROFILE=full` serves all 213. The total is pinned once, as `FULL_TOOL_COUNT` in `src/vgc_mcp/profiles.py`; tests check the registry, README and this file against it, and the CI catalog-drift gate checks `docs/tools-catalog.md`.
 
 Supports two parallel format systems:
 - **Mainline VGC** (Reg F/G/H/I) — classic EV system, 0-252 per stat / 508 total
-- **Pokemon Champions VGC** (Reg MA) — Stat Point system, 0-32 per stat / 66 total
+- **Pokemon Champions VGC** (Reg MA/MB/MC, MC is the default) — Stat Point system, 0-32 per stat / 66 total
 
 Each `PokemonBuild` carries a `format_system` flag (`"mainline"` default or
 `"champions"`); `calculate_all_stats` and damage calc dispatch on it
@@ -75,11 +75,12 @@ src/
 │   ├── tools/            # Shared tool handlers (pure functions returning dicts)
 │   ├── utils/            # errors, fuzzy matching, normalize, synergies, verdicts
 │   ├── validation/       # learnset validation
-│   ├── presentation.py   # MCP server `instructions=` block (table format rules)
+│   ├── presentation.py   # MCP server `instructions=` block (phone-width output rules)
 │   └── config.py         # Settings (API URLs, VGC defaults, EV limits)
 │
 └── vgc_mcp/              # MCP server (213 tools) — entry: vgc-mcp / vgc-mcp-http
-    ├── server.py         # FastMCP setup + tool registration loop
+    ├── server.py         # FastMCP setup, registration, core + full servers, HTTP app
+    ├── profiles.py       # CORE_TOOLS (served at /mcp) and FULL_TOOL_COUNT
     └── tools/            # Thin register_*_tools(mcp, deps) wrappers
                           # Auto-discovered by tools/__init__.py
 ```
@@ -88,7 +89,9 @@ src/
 - New calc/data logic → `vgc_mcp_core/`
 - New tool handler logic → `vgc_mcp_core/tools/<area>_handlers.py`
 - New tool registration → `vgc_mcp/tools/<area>_tools.py` (thin wrapper)
-  — auto-discovered, no edit to `server.py` required.
+  — auto-discovered, no edit to `server.py` required. Bump `FULL_TOOL_COUNT`
+  in `vgc_mcp/profiles.py`, regenerate the catalog, and add the tool to
+  `CORE_TOOLS` only if most users need it.
 
 ### Key Patterns
 
@@ -104,13 +107,38 @@ suggestions = suggest_pokemon_name(pokemon_name)
 return pokemon_not_found_error(pokemon_name, suggestions)
 
 # Good - generic structured error
-return error_response(ErrorCodes.INVALID_INPUT, "Maximum 4 moves supported")
+return error_response(ErrorCodes.INVALID_PARAMETER, "Maximum 4 moves supported")
 
 # AVOID - raw error strings (clients can't branch on these)
 return {"error": f"Pokemon not found: {name}"}  # Don't do this
 ```
 
 **Name Normalization**: One canonical module — `vgc_mcp_core/utils/normalize.py`. It exposes `normalize_pokemon`, `normalize_move`, `normalize_item`, `normalize_ability`, plus the `ITEM_ALIASES` / `ABILITY_ALIASES` dicts for Smogon's concatenated format. Do not re-implement these per-file.
+
+Errors carry one `next_step` (the first suggestion) and at most three
+`suggestions`, so a retry fits on a phone screen. `api_error(str(e))` is the
+catch-all form for unexpected exceptions.
+
+**Building Pokemon**: Never call `PokemonBuild(...)` in a tool module. Use
+`vgc_mcp_core/tools/build_helpers.py::build_pokemon`, which takes an
+allocation as a spread object, a dict, or the `"HP/Atk/Def/SpA/SpD/Spe"`
+slash string and returns a format-correct build (EVs for mainline, Stat
+Points for Champions).
+
+**Format detection**: Calc, spread and stat tools call the read-only
+`vgc_mcp_core/rules/format_detect.py::detect_champions_format`. Build, team
+and import flows call `auto_detect_champions_format`, which may set the
+session regulation. Do not add private `_detect_champions` helpers.
+
+**Damage modifiers**: Build `DamageModifiers` with
+`DamageModifiers.from_scenario(...)` (weather, terrain, screens, stages,
+Intimidate, Tera, Helping Hand, crits) instead of field by field.
+
+**Response contract**: Calc tools return `headline`, `spreads_used`,
+`data_source` and `showdown_paste` via
+`vgc_mcp_core/tools/response_contract.py::apply_contract`, and annotate
+`-> CalcResult` so clients get a typed output schema. `CalcResult` allows
+extra fields, so tools keep their full payload.
 
 **Pydantic Models**: All data structures use Pydantic for validation. `PokemonBuild` is the central model containing base stats, nature, EVs, IVs, item, ability, and tera type.
 
@@ -228,9 +256,12 @@ def make_pokemon(name, types, base_hp=80, ...):
 
 ## Deployment
 
-Production runs on Render (`render.yaml`): `vgc-mcp-http` on the `main` branch,
-auto-deploying only after GitHub CI passes (`autoDeployTrigger: checksPass`).
-`scripts/verify_production.py` smoke-tests the live MCP endpoint after deploy.
+Production runs on Render's free plan (`render.yaml`): `vgc-mcp-http` on the
+`main` branch, auto-deploying only after GitHub CI passes
+(`autoDeployTrigger: checksPass`). `.github/workflows/keep-alive.yml` keeps the
+free instance awake with chained ~6-hour ping runs (see docs/deploy.md).
+`scripts/verify_production.py --expected-sha <sha>` waits for that revision and
+smoke-tests `/mcp` (core profile) and `/mcp/full` (every tool).
 
 ## Smogon Data Source
 
@@ -246,35 +277,36 @@ Usage stats are pulled from Smogon's chaos JSON files:
 
 ## Damage Calculation Output Format
 
-When presenting damage calculation results to users, format them as markdown tables for readability:
+Most users read results in the Claude phone app, where the chat column is
+about 40 characters wide. Follow the same rules as the server instructions in
+`presentation.py`: lead with a one-line verdict, keep tables to at most 4
+columns, put spreads on their own lines, and send wide grids to
+`export_damage_report`.
 
-**Header format:**
+**Single calc:**
 ```
-Your [Pokemon Name]
-[Nature] | [HP] HP / [Atk] Atk / [Def] Def / [SpD] SpD / [Spe] Spe | [Item]
+Yes, Earth Power 2HKOs Entei (78-93%).
+
+**Attacker:** Timid 0/0/0/252/4/252 Landorus @ Life Orb (Sheer Force)
+**Defender:** Adamant 0/252/0/0/4/252 Entei @ Choice Band (Inner Focus)
+
+| Move | Damage | % HP | Verdict |
+|------|--------|------|---------|
+| Earth Power | 149-177 | 78.4-93.1% | 2HKO |
 ```
 
-**Damage dealt table:**
-| Target | Their Spread | Item | Damage | Result |
-|--------|--------------|------|--------|--------|
-| Rillaboom | Adamant 252/116/4/0/60/76 | Assault Vest | 130-154% | OHKO |
+**Against several opponent sets:** one short block per set, top 3 in chat:
+```
+**1. Adamant 252/116/4/0/60/76 Rillaboom @ Assault Vest (28%)**
+- Your Flare Blitz: 130-154% (OHKO)
+- Their Wood Hammer → you: 62-74%
+```
 
-**Damage taken table:**
-| Attacker | Their Spread | Item | Move | Damage |
-|----------|--------------|------|------|--------|
-| Tornadus | Timid 36/0/12/204/4/252 | Covert Cloak | Bleakwind Storm | 85-100% |
+**Result values:** OHKO, X% OHKO, 2HKO, 3HKO, or "Resists" below 30%.
 
-**Result column values:**
-- OHKO (guaranteed one-hit KO)
-- X% OHKO (probability)
-- 2HKO, 3HKO for multi-hit KOs
-- "Resists" for low damage (<30%)
-
-**Include a "Key Takeaways" section** summarizing:
-- Biggest threats (moves that can OHKO or come close)
-- Pokemon you OHKO reliably
-- Notable type resistances/immunities
-- Weather/terrain interactions
+**Key Takeaways** (≤5 bullets: biggest threats, reliable KOs, resistances,
+weather/terrain) go right under the headline when there are more than 3 rows,
+otherwise at the end.
 
 ## Showdown Paste Export
 
@@ -296,7 +328,6 @@ Tools use consistent field naming for Showdown paste output:
 - `suggest_nature_optimization` - Returns `current_showdown_paste` and `optimized_showdown_paste`
 - `suggest_spread` - Returns `showdown_paste`
 - `optimize_bulk` - Returns `showdown_paste`
-- `optimize_bulk_math` - Returns `showdown_paste`
 - `check_spread_efficiency` - Returns `showdown_paste` for analyzed spread
 - `design_spread_with_benchmarks` - Returns `showdown_paste`
 - `optimize_dual_survival_spread` - Returns `showdown_paste`

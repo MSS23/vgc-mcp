@@ -6,6 +6,7 @@ their actual usage spread distributions from Smogon stats.
 
 import math
 from dataclasses import dataclass
+from typing import Any
 
 from ..config import EV_BREAKPOINTS_LV50
 from ..models.pokemon import NATURE_MODIFIERS, Nature
@@ -20,7 +21,7 @@ class SpeedTierResult:
     outspeed_probability: float  # 0-100%
     speed_tie_probability: float  # 0-100%
     underspeed_probability: float  # 0-100%
-    target_speed_distribution: list[dict]  # [{speed, usage_pct, nature, evs}, ...]
+    target_speed_distribution: list[dict[str, Any]]  # [{speed, usage_pct, nature, evs}, ...]
     analysis: str
 
 
@@ -30,7 +31,7 @@ class MetaSpeedResult:
     your_speed: int
     your_pokemon: str
     total_outspeed_rate: float  # Usage-weighted % of meta you outspeed
-    pokemon_analysis: list[dict]  # Per-Pokemon breakdown
+    pokemon_analysis: list[dict[str, Any]]  # Per-Pokemon breakdown
     speed_tier_summary: str
     threats: list[str]  # Pokemon that outspeed you
     outspeeds: list[str]  # Pokemon you outspeed
@@ -78,7 +79,7 @@ def calculate_speed_stat(
 
 def parse_spread_to_speed(
     base_speed: int,
-    spread: dict,
+    spread: dict[str, Any],
     level: int = 50
 ) -> int:
     """
@@ -102,7 +103,7 @@ def parse_spread_to_speed(
 def calculate_outspeed_probability(
     your_speed: int,
     target_base_speed: int,
-    target_spreads: list[dict],
+    target_spreads: list[dict[str, Any]],
     target_pokemon: str = "Target"
 ) -> SpeedTierResult:
     """
@@ -207,7 +208,7 @@ def calculate_outspeed_probability(
 def calculate_meta_outspeed_rate(
     your_speed: int,
     your_pokemon: str,
-    top_pokemon_data: list[dict],
+    top_pokemon_data: list[dict[str, Any]],
     usage_weighted: bool = True
 ) -> MetaSpeedResult:
     """
@@ -299,8 +300,8 @@ def calculate_meta_outspeed_rate(
 
 
 def build_speed_distribution_data(
-    top_pokemon_data: list[dict],
-) -> list[dict]:
+    top_pokemon_data: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     """
     Build cumulative speed distribution for UI visualization.
 
@@ -323,7 +324,7 @@ def build_speed_distribution_data(
         }]
     """
     # Collect all speed values with their usage weights
-    speed_entries: list[dict] = []
+    speed_entries: list[dict[str, Any]] = []
 
     for pokemon_data in top_pokemon_data:
         pokemon_name = pokemon_data.get("name", "Unknown")
@@ -352,7 +353,7 @@ def build_speed_distribution_data(
             })
 
     # Group by speed value
-    speed_map: dict[int, dict] = {}
+    speed_map: dict[int, dict[str, Any]] = {}
     for entry in speed_entries:
         speed = entry["speed"]
         if speed not in speed_map:
@@ -386,9 +387,9 @@ def calculate_speed_creep_evs(
     your_base_speed: int,
     your_nature: str,
     target_base_speed: int,
-    target_spreads: list[dict],
+    target_spreads: list[dict[str, Any]],
     desired_outspeed_pct: float = 100.0
-) -> dict:
+) -> dict[str, Any]:
     """
     Calculate how many Speed EVs needed to outspeed a target percentage of spreads.
 
@@ -466,7 +467,7 @@ def calculate_speed_creep_evs(
 
 def calculate_outspeed_from_distribution(
     your_speed: int,
-    speed_distribution: list[dict],
+    speed_distribution: list[dict[str, Any]],
     target_pokemon: str = "Target",
     target_base_speed: int = 0
 ) -> SpeedTierResult:

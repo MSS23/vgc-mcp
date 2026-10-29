@@ -18,6 +18,7 @@ from pathlib import Path
 def main() -> None:
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 
+    from vgc_mcp.profiles import CORE_TOOLS  # noqa: PLC0415
     from vgc_mcp.server import mcp  # noqa: PLC0415  (must run after PYTHONPATH set)
 
     tools = mcp._tool_manager._tools
@@ -37,6 +38,11 @@ def main() -> None:
         "organized by module."
     )
     lines.append("")
+    lines.append(
+        f"★ marks the **{len(CORE_TOOLS)} core tools** that `/mcp` serves by "
+        "default. `/mcp/full` (or `VGC_MCP_PROFILE=full`) serves all of them."
+    )
+    lines.append("")
     lines.append("To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`")
     lines.append("")
 
@@ -44,7 +50,8 @@ def main() -> None:
         lines.append(f"## {mod}  ({len(groups[mod])} tools)")
         lines.append("")
         for name, desc in sorted(groups[mod]):
-            lines.append(f"- **`{name}`** — {desc}")
+            star = " ★" if name in CORE_TOOLS else ""
+            lines.append(f"- **`{name}`**{star} — {desc}")
         lines.append("")
 
     out_path.write_text("\n".join(lines), encoding="utf-8")

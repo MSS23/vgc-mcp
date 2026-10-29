@@ -3,9 +3,10 @@
 import hashlib
 import logging
 from pathlib import Path
+from types import TracebackType
 from typing import Any, Optional
 
-import diskcache
+import diskcache  # type: ignore[import-untyped]  # no stubs or py.typed
 
 logger = logging.getLogger(__name__)
 
@@ -15,16 +16,16 @@ class APICache:
 
     DEFAULT_EXPIRE = 7 * 24 * 60 * 60  # 7 days in seconds
 
-    def __init__(self, cache_dir: Optional[str] = None):
+    def __init__(self, cache_dir: Optional[str] = None) -> None:
         """Initialize cache with optional custom directory."""
         if cache_dir is None:
             # Default to data/cache in the project root
-            cache_dir = Path(__file__).parent.parent.parent.parent / "data" / "cache"
+            cache_path = Path(__file__).parent.parent.parent.parent / "data" / "cache"
         else:
-            cache_dir = Path(cache_dir)
+            cache_path = Path(cache_dir)
 
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        self.cache = diskcache.Cache(str(cache_dir))
+        cache_path.mkdir(parents=True, exist_ok=True)
+        self.cache = diskcache.Cache(str(cache_path))
         self._hits = 0
         self._misses = 0
 
@@ -64,7 +65,7 @@ class APICache:
         self.cache.clear()
 
     @property
-    def stats(self) -> dict:
+    def stats(self) -> dict[str, Any]:
         """Return cache hit/miss statistics."""
         total = self._hits + self._misses
         return {
@@ -92,5 +93,10 @@ class APICache:
     def __enter__(self) -> "APICache":
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
         self.close()

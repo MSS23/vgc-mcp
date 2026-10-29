@@ -9,7 +9,7 @@ This module handles competitive item mechanics including:
 """
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 # Paradox Pokemon that can use Booster Energy
 PARADOX_POKEMON = {
@@ -184,7 +184,7 @@ class ItemEffect:
 def calculate_booster_energy_boost(
     pokemon_name: str,
     base_stats: dict[str, int],
-    nature_modifiers: dict[str, float] = None
+    nature_modifiers: Optional[dict[str, float]] = None
 ) -> ItemEffect:
     """
     Calculate Booster Energy stat boost for Paradox Pokemon.
@@ -227,7 +227,7 @@ def calculate_booster_energy_boost(
             if stat in stats_to_check:
                 stats_to_check[stat] = int(stats_to_check[stat] * mod)
 
-    highest_stat = max(stats_to_check, key=stats_to_check.get)
+    highest_stat = max(stats_to_check, key=stats_to_check.__getitem__)
     # Speed gets 1.5x, other stats get 1.3x
     boost = 1.5 if highest_stat == "speed" else 1.3
 
@@ -377,7 +377,7 @@ def calculate_choice_item_boost(
     )
 
 
-def calculate_life_orb_effect(damage: int, attacker_hp: int) -> dict:
+def calculate_life_orb_effect(damage: int, attacker_hp: int) -> dict[str, Any]:
     """
     Calculate Life Orb damage boost and recoil.
 
@@ -409,7 +409,7 @@ def check_berry_activation(
     current_hp: int,
     max_hp: int,
     stat_to_boost: Optional[str] = None
-) -> dict:
+) -> dict[str, Any]:
     """
     Check if a berry would activate and what it does.
 
@@ -486,7 +486,7 @@ def check_focus_sash_survival(
     damage: int,
     current_hp: int,
     max_hp: int
-) -> dict:
+) -> dict[str, Any]:
     """
     Check if Focus Sash would save the Pokemon.
 

@@ -18,6 +18,17 @@ from vgc_mcp_core.calc.bulk_calc import (
 from vgc_mcp_core.calc.damage import format_percent
 from vgc_mcp_core.formats.showdown import pokemon_build_to_showdown
 from vgc_mcp_core.models.pokemon import Nature, PokemonBuild, StatPointSpread
+from vgc_mcp_core.rules.format_detect import detect_champions_format
+from vgc_mcp_core.tools.build_helpers import build_pokemon
+from vgc_mcp_core.tools.build_helpers import parse_ev_string as _parse_ev_string
+from vgc_mcp_core.tools.build_helpers import parse_sp_string as _parse_sp_string
+from vgc_mcp_core.tools.calc_result import CalcResultDict
+from vgc_mcp_core.tools.response_contract import (
+    apply_contract,
+    data_source_from_meta,
+    spread_label,
+)
+from vgc_mcp_core.tools.smogon_helpers import sps_from_smogon_spread
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 from .damage_tools import _get_common_spread
@@ -27,61 +38,6 @@ logger = logging.getLogger(__name__)
 
 # Module-level Smogon client reference
 _smogon_client: Optional[SmogonStatsClient] = None
-
-
-def _parse_ev_string(ev_string: str) -> dict:
-    """Parse '252/0/0/252/0/4' format into EV dict."""
-    parts = ev_string.split("/")
-    if len(parts) != 6:
-        raise ValueError(f"EV string must have 6 values separated by '/', got: {ev_string}")
-    stat_names = ["hp", "attack", "defense", "special_attack", "special_defense", "speed"]
-    return {name: int(val) for name, val in zip(stat_names, parts)}
-
-
-def _detect_champions(*pokemon_names: str) -> bool:
-    """Return True when the active session resolves to the Champions (Reg MA)
-    Stat-Point format.
-
-    Mirrors the format-detection pattern in the other wave-2 tools: an explicit
-    session regulation wins, otherwise Pokemon-name inference (Mega forms, the
-    Reg MA allowlist, etc.) sets the session, then we read the resolved format
-    system. Inference failures are swallowed so a missing data file never breaks
-    the mainline path.
-    """
-    from vgc_mcp_core.rules.format_detect import detect_champions_format
-    return detect_champions_format(*pokemon_names)
-
-
-def _parse_sp_string(sp_string: str) -> StatPointSpread:
-    """Parse 'HP/Atk/Def/SpA/SpD/Spe' Stat Points into a StatPointSpread.
-
-    Champions (Reg MA) caps: 0-32 per stat, 66 total (enforced by the model).
-    """
-    parts = [p.strip() for p in sp_string.replace(",", "/").split("/")]
-    if len(parts) != 6:
-        raise ValueError(
-            "Stat Points must be 'HP/Atk/Def/SpA/SpD/Spe' (six values)"
-        )
-    vals = [int(p) for p in parts]
-    return StatPointSpread(
-        hp=vals[0], attack=vals[1], defense=vals[2],
-        special_attack=vals[3], special_defense=vals[4], speed=vals[5],
-    )
-
-
-def _sps_from_smogon_spread(spread: Optional[dict]) -> Optional[StatPointSpread]:
-    """Build a StatPointSpread from a champions-tagged Smogon spread dict.
-
-    Wave-1's smogon helper carries `sps` (canonical-stat-name dict) +
-    `format_system` alongside `evs`. Returns None when the spread isn't a
-    champions spread or has no SP data, so callers fall back to the mainline path.
-    """
-    if not spread or spread.get("format_system") != "champions":
-        return None
-    sps = spread.get("sps")
-    if not sps:
-        return None
-    return StatPointSpread.from_sps_dict(sps)
 
 
 async def _build_champions_attacker(
@@ -109,7 +65,7 @@ async def _build_champions_attacker(
             if nature is None:
                 nature = smogon_spread.get("nature")
             if sp_spread is None:
-                sp_spread = _sps_from_smogon_spread(smogon_spread)
+                sp_spread = sps_from_smogon_spread(smogon_spread)
             if item is None:
                 item = smogon_spread.get("item")
             if ability is None:
@@ -131,13 +87,13 @@ async def _build_champions_attacker(
 
     nature_enum = Nature(nature.lower() if nature else "serious")
 
-    return PokemonBuild(
+    return build_pokemon(
         name=attacker_name,
         base_stats=base_stats,
         types=types,
         nature=nature_enum,
-        format_system="champions",
-        sps=sp_spread,
+        champions=True,
+        spread=sp_spread,
         item=item,
         ability=ability,
     )
@@ -224,7 +180,7 @@ def register_bulk_calc_tools(
             description="Attacker's nature (auto-fetched from Smogon if not specified)",
         )] = None,
         attacker_evs: Annotated[Optional[str], Field(
-            description="Attacker's EVs in 'HP/Atk/Def/SpA/SpD/Spe' format, e.g. '4/252/0/0/0/252' (mainline only)",
+            description="Attacker's spread as an 'HP/Atk/Def/SpA/SpD/Spe' slash string, e.g. '4/252/0/0/0/252'. In Champions sessions it is read as Stat Points (e.g. '0/32/0/0/2/32') when attacker_sps is not given.",
         )] = None,
         attacker_sps: Annotated[Optional[str], Field(
             description="Champions (Reg MA) only. Attacker Stat Points in 'HP/Atk/Def/SpA/SpD/Spe' format (0-32 per stat, 66 total), e.g. '0/0/0/32/0/32'. Ignored outside a Champions session.",
@@ -235,7 +191,7 @@ def register_bulk_calc_tools(
         defender_tera_types: Annotated[Optional[dict[str, str]], Field(
             description="Map of defender name to their Tera type (e.g. {'incineroar': 'water', 'rillaboom': 'fire'})",
         )] = None,
-    ) -> dict:
+    ) -> CalcResultDict:
         """Run bulk offensive damage calculations: 1 attacker x N moves x M defenders x K scenarios.
 
         Replaces running dozens of individual damage calcs. Returns structured
@@ -259,12 +215,14 @@ def register_bulk_calc_tools(
 
             # Detect Champions (Reg MA) session — only the user's subject
             # attacker becomes a Stat-Point build; meta defenders stay mainline.
-            is_champions = _detect_champions(attacker_name)
+            is_champions = detect_champions_format(attacker_name)
 
             # Build attacker (format-aware)
             if is_champions:
                 try:
-                    sp_spread = _parse_sp_string(attacker_sps) if attacker_sps else None
+                    # attacker_evs is read on the SP scale in Champions.
+                    sp_text = attacker_sps or attacker_evs
+                    sp_spread = _parse_sp_string(sp_text) if sp_text else None
                 except ValueError as ve:
                     return error_response(ErrorCodes.INVALID_PARAMETER, str(ve))
                 attacker = await _build_champions_attacker(
@@ -273,7 +231,10 @@ def register_bulk_calc_tools(
                 )
             else:
                 # Parse attacker EVs if provided
-                evs_dict = _parse_ev_string(attacker_evs) if attacker_evs else None
+                try:
+                    evs_dict = _parse_ev_string(attacker_evs) if attacker_evs else None
+                except ValueError as ve:
+                    return error_response(ErrorCodes.INVALID_PARAMETER, f"attacker_evs: {ve}")
                 attacker = await _build_pokemon_from_smogon(
                     attacker_name, pokeapi,
                     attacker_nature, evs_dict, attacker_item, attacker_ability,
@@ -295,7 +256,7 @@ def register_bulk_calc_tools(
             defenders = []
             failed_defenders = []
             for name, result in zip(defender_names, defender_results):
-                if isinstance(result, Exception):
+                if isinstance(result, BaseException):
                     failed_defenders.append({"name": name, "error": str(result)})
                 else:
                     defenders.append(result)
@@ -404,7 +365,15 @@ def register_bulk_calc_tools(
             else:
                 attacker_spread_display = summary.attacker_spread_str
 
-            return {
+            first = summary.scenario_names[0]
+            ohko = {r.defender_name for r in summary.results if r.scenario_name == first and r.min_pct >= 100}
+            meta = None
+            if _smogon_client is not None:
+                try:
+                    meta = (await _smogon_client.get_usage_stats()).get("_meta")
+                except Exception:  # noqa: BLE001 - provenance is best effort
+                    meta = None
+            return apply_contract({
                 "attacker": {
                     "name": attacker_name,
                     "spread": attacker_spread_display,
@@ -421,7 +390,15 @@ def register_bulk_calc_tools(
                 "twohko_summary": summary.twohko_counts,
                 "calc_strings": calc_strings,
                 "failed_defenders": failed_defenders if failed_defenders else None,
-            }
+            },
+                headline=(
+                    f"{attacker_name.replace('-', ' ').title()} guarantees an OHKO on "
+                    f"{len(ohko)}/{len(defenders)} defenders ({first})"
+                ),
+                spreads_used={"attacker": spread_label(attacker), **{d.name: spread_label(d) for d in defenders}},
+                data_source=data_source_from_meta(meta if isinstance(meta, dict) else None),
+                showdown_paste=attacker_paste,
+            )
 
         except Exception as e:
             return error_response(ErrorCodes.INTERNAL_ERROR, str(e))
@@ -462,7 +439,7 @@ def register_bulk_calc_tools(
             description="Attacker's nature (auto-fetched if not specified)",
         )] = None,
         attacker_evs: Annotated[Optional[str], Field(
-            description="Attacker's EVs in 'HP/Atk/Def/SpA/SpD/Spe' format (mainline only)",
+            description="Attacker's spread as an 'HP/Atk/Def/SpA/SpD/Spe' slash string, e.g. '4/252/0/0/0/252'. In Champions sessions it is read as Stat Points when attacker_sps is not given.",
         )] = None,
         attacker_sps: Annotated[Optional[str], Field(
             description="Champions (Reg MA) only. Attacker Stat Points in 'HP/Atk/Def/SpA/SpD/Spe' format (0-32 per stat, 66 total)",
@@ -503,12 +480,14 @@ def register_bulk_calc_tools(
 
             # Detect Champions (Reg MA) session — only the user's subject
             # attacker becomes a Stat-Point build; meta defenders stay mainline.
-            is_champions = _detect_champions(attacker_name)
+            is_champions = detect_champions_format(attacker_name)
 
             # Build attacker (format-aware)
             if is_champions:
                 try:
-                    sp_spread = _parse_sp_string(attacker_sps) if attacker_sps else None
+                    # attacker_evs is read on the SP scale in Champions.
+                    sp_text = attacker_sps or attacker_evs
+                    sp_spread = _parse_sp_string(sp_text) if sp_text else None
                 except ValueError as ve:
                     return error_response(ErrorCodes.INVALID_PARAMETER, str(ve))
                 attacker = await _build_champions_attacker(
@@ -517,7 +496,10 @@ def register_bulk_calc_tools(
                 )
             else:
                 # Parse attacker EVs
-                evs_dict = _parse_ev_string(attacker_evs) if attacker_evs else None
+                try:
+                    evs_dict = _parse_ev_string(attacker_evs) if attacker_evs else None
+                except ValueError as ve:
+                    return error_response(ErrorCodes.INVALID_PARAMETER, f"attacker_evs: {ve}")
                 attacker = await _build_pokemon_from_smogon(
                     attacker_name, pokeapi,
                     attacker_nature, evs_dict, attacker_item, attacker_ability,

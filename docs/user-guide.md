@@ -1,41 +1,50 @@
 # VGC Team Builder - User Guide
 
-Build competitive Pokemon VGC teams with AI assistance in Claude Desktop!
+Damage calcs, spreads, speed checks and team reviews for Pokemon VGC and
+Pokemon Champions, inside Claude on your phone or computer.
 
-## Quick Setup (5 minutes)
+## Connect (2 minutes)
 
-### Step 1: Install Python
+### Option 1: Claude app or claude.ai (recommended, works on phone)
 
-Download Python 3.10+ from https://python.org
+1. Open **claude.ai → Settings → Connectors → Add custom connector**.
+2. Paste `https://vgc-mcp.onrender.com/mcp` and save. This gives you the
+   34 core tools, which cover almost every question. Power users can use
+   `https://vgc-mcp.onrender.com/mcp/full` for all 213.
+3. Start a new chat and say hi. The connector also appears in the Claude
+   phone app once it is added on the web.
 
-During installation, check "Add Python to PATH".
+The hosted server stays awake around the clock, so the first reply should
+come back in a second or two. If it ever takes 30-60 seconds, it was asleep;
+try again and it will be quick.
 
-### Step 2: Download VGC Tools
+### Option 2: Run it on your own computer (Claude Desktop)
 
-Option A - Clone with Git:
+You need Python 3.11 or newer (tick "Add Python to PATH" on Windows).
+
 ```bash
 git clone https://github.com/MSS23/vgc-mcp.git
 cd vgc-mcp
-```
-
-Option B - Download ZIP from GitHub and extract.
-
-### Step 3: Run Setup Script
-
-Open a terminal/command prompt in the vgc-mcp folder:
-
-```bash
 python -m vgc_mcp.setup
 ```
 
-This automatically:
-- Installs the package
-- Configures Claude Desktop
-- Sets everything up
+The setup script installs the package and adds the server to Claude
+Desktop's config. Close and reopen Claude Desktop and you're ready.
 
-### Step 4: Restart Claude Desktop
+To edit the config by hand instead, add this to
+`%APPDATA%\Claude\claude_desktop_config.json` (Windows) or
+`~/Library/Application Support/Claude/claude_desktop_config.json` (Mac):
 
-Close and reopen Claude Desktop. You're ready!
+```json
+{
+  "mcpServers": {
+    "vgc": { "command": "vgc-mcp" }
+  }
+}
+```
+
+If Windows can't find `vgc-mcp`, use the full Python path instead:
+`"command": "C:\\Path\\To\\python.exe", "args": ["-m", "vgc_mcp"]`.
 
 ---
 
@@ -49,21 +58,17 @@ The easiest way to use VGC tools is just asking questions naturally:
 |---------------|------------------|
 | **Damage calc** | "Does Flutter Mane OHKO Incineroar?" |
 | **Build team** | "Help me build a Rain team" |
-| **Optimize EVs** | "What EVs does Incineroar need to survive Flutter Mane?" |
+| **Spreads** | "What does Incineroar need to survive Flutter Mane?" |
 | **Compare speed** | "Is my Landorus faster than Tornadus?" |
-| **Learn** | "Explain what EVs are" |
+| **Prep a team** | "Get my team ready for a Regional" + paste |
 
-### Quick Action Buttons
+### Starter prompts
 
-In Claude Desktop, you'll see quick action buttons:
-- **Check Damage** - Calculate damage between Pokemon
-- **Build Team** - Start building a VGC team
-- **Analyze Paste** - Analyze a team you paste
-- **Learn VGC** - Learn competitive basics
-- **Optimize Spread** - Optimize EV spreads
-- **Compare Speeds** - Speed tier analysis
-
-Just click any button to get started!
+Clients that show MCP prompts (Claude Desktop's attachment menu, for
+example) list ready-made starting points: Prepare for Tournament, Explain
+Replay, Check Damage, Build Team, Analyze Paste, Optimize Spread, Find
+Survival Spread, Check Survival, Compare Speeds and Learn VGC. On the phone,
+just type the question instead.
 
 ---
 
@@ -129,11 +134,11 @@ Incineroar @ Assault Vest
 - Tailwind/Trick Room calculations
 - Probability of outspeeding (using Smogon data)
 
-### EV Optimization
-- Find efficient EV spreads
-- Nature optimization (save EVs)
+### Spreads (EVs or Champions Stat Points)
+- Find efficient spreads for either system
+- Nature optimization (save points)
 - Bulk calculator with diminishing returns
-- Benchmark-based spreads
+- Benchmark-based spreads (outspeed X and survive Y)
 
 ### Learning VGC
 - VGC glossary (EVs, STAB, OHKO, etc.)
@@ -173,32 +178,30 @@ Claude will automatically parse and analyze it!
 
 ### "Claude doesn't see the VGC tools"
 
-1. Make sure you ran the setup script: `python -m vgc_mcp.setup`
-2. Restart Claude Desktop completely (close and reopen)
-3. Check the config file exists:
-   - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-   - Mac: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Connector:** check it is switched on for the chat (tools menu in the
+  message box) and start a new chat after adding it.
+- **Claude Desktop:** restart it completely, and check the config file is
+  valid JSON (no missing commas or brackets).
 
-### "I get Python errors"
+### "Python not found" or "Module not found: vgc_mcp"
 
-1. Make sure Python 3.10+ is installed: `python --version`
-2. Try reinstalling: `pip install -e .` from the project folder
-3. Check all dependencies installed: `pip install httpx pydantic diskcache mcp`
+1. Check the version: `python --version` must be 3.11 or newer.
+2. Reinstall from the project folder: `pip install -e .`
+3. On Windows, put the full Python path in the config (see above).
 
 ### "Calculations seem wrong"
 
 The tool uses the exact Gen 9 damage formula. If results differ from Showdown:
-1. Check both Pokemon have the same EVs/nature/item
-2. Check weather, terrain, and other modifiers match
-3. Remember: Pokemon uses special rounding (0.5 rounds DOWN)
+1. Check both Pokemon have the same spread, nature and item.
+2. Check weather, terrain, Tera and stat stages match.
+3. Remember Pokemon rounding: 0.5 rounds down.
 
 ### "What format is this for?"
 
-VGC Regulation H (current format) by default. The tool uses:
-- Level 50
-- Doubles format
-- 508 max EVs
-- Smogon usage data for meta analysis
+The default is **Pokemon Champions Regulation MC** (Stat Points: 32 per stat,
+66 total, no IVs, Mega Evolution). Mainline VGC Regulations F, G, H and I
+(EVs: 252 per stat, 508 total) are supported too. The server picks the format
+from the Pokemon you mention, or you can just say "Reg F" or "Champions".
 
 ---
 
@@ -219,7 +222,7 @@ VGC Regulation H (current format) by default. The tool uses:
 ## Getting Help
 
 - Say "What can you do?" to see all capabilities
-- Say "help damage" for damage calculation help
+- Say "What can you do for damage?" (or team, spreads, speed, learn) for examples
 - Check the VGC glossary: "explain [term]"
 
 For bugs or feature requests: https://github.com/MSS23/vgc-mcp/issues

@@ -1,7 +1,7 @@
 """Matchup analysis for team threat assessment."""
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 from ..models.move import Move, MoveCategory
 from ..models.pokemon import BaseStats, EVSpread, IVSpread, Nature, PokemonBuild
@@ -51,7 +51,7 @@ class TeamThreatSummary:
 
 
 # Common threat Pokemon with typical sets
-COMMON_THREATS = {
+COMMON_THREATS: dict[str, dict[str, Any]] = {
     "flutter-mane": {
         "base_stats": BaseStats(hp=55, attack=55, defense=55, special_attack=135, special_defense=135, speed=135),
         "types": ["Ghost", "Fairy"],
@@ -329,8 +329,8 @@ def analyze_single_matchup(
     attacker: PokemonBuild,
     defender: PokemonBuild,
     attacker_moves: list[Move],
-    defender_moves: list[Move] = None,
-    modifiers: DamageModifiers = None
+    defender_moves: Optional[list[Move]] = None,
+    modifiers: Optional[DamageModifiers] = None
 ) -> MatchupResult:
     """
     Analyze how well an attacker matches up against a defender.
@@ -366,7 +366,7 @@ def analyze_single_matchup(
     # Find best move and damage
     best_result = None
     best_move_name = None
-    best_damage_pct = 0
+    best_damage_pct: float = 0
 
     for move in attacker_moves:
         if not move.is_damaging:
@@ -430,7 +430,7 @@ def analyze_single_matchup(
 def analyze_threat_matchup(
     team: Team,
     threat_name: str,
-    team_moves: dict[str, list[Move]] = None
+    team_moves: Optional[dict[str, list[Move]]] = None
 ) -> ThreatAnalysis:
     """
     Analyze how a team handles a specific threat Pokemon.
@@ -462,11 +462,11 @@ def analyze_threat_matchup(
 
     # Get threat's moves
     threat_data = COMMON_THREATS[threat_name]
-    threat_moves = [
+    raw_threat_moves = [
         create_threat_move(threat_name, move)
         for move in threat_data["moves"]
     ]
-    threat_moves = [m for m in threat_moves if m is not None]
+    threat_moves = [m for m in raw_threat_moves if m is not None]
 
     ohko_by = []
     twohko_by = []
@@ -588,7 +588,7 @@ def find_team_threats(team: Team) -> TeamThreatSummary:
     )
 
 
-def check_type_coverage(team: Team, target_type: str) -> dict:
+def check_type_coverage(team: Team, target_type: str) -> dict[str, Any]:
     """
     Check how well a team can hit a specific type.
 
@@ -636,7 +636,7 @@ def check_type_coverage(team: Team, target_type: str) -> dict:
     }
 
 
-def analyze_defensive_matchup(team: Team, attacking_type: str) -> dict:
+def analyze_defensive_matchup(team: Team, attacking_type: str) -> dict[str, Any]:
     """
     Check how well a team resists a specific attacking type.
 

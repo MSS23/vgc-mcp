@@ -21,7 +21,7 @@ Reference: https://bulbapedia.bulbagarden.net/wiki/Damage
 
 import math
 from dataclasses import dataclass, replace
-from typing import Optional
+from typing import Any, Optional
 
 from ..config import EV_BREAKPOINTS_LV50
 from ..models.move import (
@@ -38,10 +38,8 @@ from ..utils.damage_verdicts import (
     calculate_multi_hit_ko_probability,
 )
 from ..utils.normalize import normalize_ability, normalize_item, normalize_move
-from .modifiers import (
-    DamageModifiers,
-    get_type_effectiveness,
-)
+from .modifiers import DamageModifiers as DamageModifiers  # re-exported for callers
+from .modifiers import get_type_effectiveness
 from .stats import calculate_all_stats
 
 # =============================================================================
@@ -350,7 +348,7 @@ RESISTANCE_BERRIES = {
 def _calculate_variable_bp(
     move_name: str,
     base_power: int,
-    special_move_data: dict,
+    special_move_data: dict[str, Any],
     attacker_speed: int,
     defender_speed: int,
     modifiers: "DamageModifiers",
@@ -541,7 +539,7 @@ class DamageResult:
     ko_chance: str
     is_guaranteed_ohko: bool
     is_possible_ohko: bool
-    details: dict
+    details: dict[str, Any]
     ko_probability: Optional[KOProbability] = None  # Detailed KO probability analysis
 
     @property
@@ -1060,6 +1058,7 @@ def _calculate_damage_rolls(
 
     # Get base power (may be variable for special moves)
     power = move.power
+    assert power is not None  # guaranteed by the is_damaging early return above
 
     # Weather Ball doubles power in weather (50 -> 100)
     if weather_ball_boosted:
@@ -1879,7 +1878,7 @@ def calculate_ko_threshold(
     move: Move,
     modifiers: Optional[DamageModifiers] = None,
     target_ko_chance: float = 100.0
-) -> Optional[dict]:
+) -> Optional[dict[str, Any]]:
     """
     Find minimum EVs needed to achieve a certain KO probability.
 
@@ -1963,7 +1962,7 @@ def calculate_bulk_threshold(
     move: Move,
     modifiers: Optional[DamageModifiers] = None,
     target_survival_chance: float = 100.0
-) -> Optional[dict]:
+) -> Optional[dict[str, Any]]:
     """
     Find minimum bulk EVs to survive an attack.
 
@@ -1986,7 +1985,7 @@ def calculate_bulk_threshold(
     # Champions (Reg MA) defenders invest Stat Points (0-32 per stat / 66
     # total), not EVs. Sweep SP breakpoints and return the result in SP units.
     if defender.format_system == "champions":
-        best_sp_result = None
+        best_sp_result: Optional[dict[str, Any]] = None
         best_total_sps = float("inf")
         for hp_sp in SP_BREAKPOINTS_LV50:
             for def_sp in SP_BREAKPOINTS_LV50:
@@ -2012,7 +2011,9 @@ def calculate_bulk_threshold(
                 if survival_pct >= target_survival_chance:
                     # Prefer lower total SP, or higher HP when totals are equal.
                     if total < best_total_sps or (
-                        total == best_total_sps and hp_sp > best_sp_result["hp_sps"]
+                        total == best_total_sps
+                        and best_sp_result is not None
+                        and hp_sp > best_sp_result["hp_sps"]
                     ):
                         best_total_sps = total
                         best_sp_result = {
@@ -2025,7 +2026,7 @@ def calculate_bulk_threshold(
                         }
         return best_sp_result  # None if no SP combination achieves survival
 
-    best_result = None
+    best_result: Optional[dict[str, Any]] = None
     best_total_evs = float('inf')
 
     # Test all valid EV combinations to find minimum total investment
@@ -2056,7 +2057,11 @@ def calculate_bulk_threshold(
             if survival_pct >= target_survival_chance:
                 # Found a valid solution - check if it's better
                 # Prefer lower total EVs, or higher HP when totals are equal
-                if total < best_total_evs or (total == best_total_evs and hp_ev > best_result["hp_evs"]):
+                if total < best_total_evs or (
+                    total == best_total_evs
+                    and best_result is not None
+                    and hp_ev > best_result["hp_evs"]
+                ):
                     best_total_evs = total
                     best_result = {
                         "hp_evs": hp_ev,

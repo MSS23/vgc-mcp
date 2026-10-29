@@ -153,3 +153,49 @@ class TestGetStarterPrompts:
         result = await fn()
         assert result["count"] >= 3  # At least 3 starter prompts
         assert result["count"] <= 20  # Not too many
+
+
+class TestOnboardingAgainstFullRegistry:
+    """Against the real server: every curated tool exists and output fits a phone."""
+
+    @pytest.fixture
+    def server(self):
+        from vgc_mcp.server import mcp
+
+        return mcp
+
+    async def _registered(self, server) -> set[str]:
+        return {t.name for t in await server.list_tools()}
+
+    async def test_every_curated_tool_is_registered(self, server):
+        from vgc_mcp.tools.onboarding_tools import _CATEGORIES
+
+        registered = await self._registered(server)
+        for key, cat in _CATEGORIES.items():
+            missing = set(cat["tools"]) - registered
+            assert not missing, f"{key} lists unregistered tools: {missing}"
+
+    async def test_categories_list_one_to_five_real_tools(self, server):
+        from vgc_mcp.tools.onboarding_tools import _CATEGORIES
+
+        fn = server._tool_manager.get_tool("show_capabilities").fn
+        registered = await self._registered(server)
+        for key in _CATEGORIES:
+            result = await fn(category=key)
+            assert 1 <= len(result["tools"]) <= 5
+            assert set(result["tools"]) <= registered
+
+    async def test_sp_alias_maps_to_spreads(self, server):
+        fn = server._tool_manager.get_tool("show_capabilities").fn
+        assert (await fn(category="SPs"))["category"] == "evs"
+
+    async def test_overview_and_welcome_have_no_tables_or_slash_commands(self, server):
+        from vgc_mcp.tools.onboarding_tools import _STARTER_QUESTIONS
+
+        overview = await server._tool_manager.get_tool("show_capabilities").fn()
+        welcome = await server._tool_manager.get_tool("welcome_new_user").fn()
+        assert "|" not in overview["markdown_summary"]
+        assert "|" not in welcome["markdown_summary"]
+        assert "/help" not in welcome["markdown_summary"]
+        assert welcome["suggested_prompts"] == _STARTER_QUESTIONS
+        assert len(_STARTER_QUESTIONS) == 3

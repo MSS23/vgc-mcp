@@ -1,6 +1,6 @@
 """MCP tools for stat calculations."""
 
-from typing import Annotated, Optional
+from typing import Annotated
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
@@ -14,7 +14,12 @@ from vgc_mcp_core.calc.stats import (
     get_min_speed,
 )
 from vgc_mcp_core.calc.stats_champions import calculate_speed_sp
+from vgc_mcp_core.formats.showdown import format_showdown_species, pokemon_build_to_showdown
 from vgc_mcp_core.models.pokemon import EVSpread, IVSpread, Nature, PokemonBuild, StatPointSpread
+from vgc_mcp_core.rules.format_detect import detect_champions_format
+from vgc_mcp_core.tools.build_helpers import build_pokemon
+from vgc_mcp_core.tools.calc_result import CalcResultDict
+from vgc_mcp_core.tools.response_contract import apply_contract, spread_label
 from vgc_mcp_core.utils.errors import (
     api_error,
     invalid_evs_error,
@@ -24,36 +29,23 @@ from vgc_mcp_core.utils.errors import (
 from vgc_mcp_core.utils.fuzzy import suggest_nature, suggest_pokemon_name
 
 
-def _detect_champions(pokemon_name: Optional[str] = None) -> bool:
-    """Return True when the active session is the Champions (Reg MA) SP system.
-
-    Mirrors spread_tools._detect_champions: optionally runs Pokemon-name
-    inference first so a Mega/Reg MA mention auto-selects Champions without the
-    user having to set it explicitly. The mainline path is taken whenever this
-    returns False.
-    """
-    from vgc_mcp_core.rules.format_detect import detect_champions_format
-    return detect_champions_format(pokemon_name)
-
-
 def _champions_stats_response(
     pokemon_name, base_stats, types, parsed_nature, level, nature,
     hp_sps, atk_sps, def_sps, spa_sps, spd_sps, spe_sps, total_sps,
 ) -> dict:
     """Build the get_pokemon_stats response for a Champions (SP) subject build."""
-    from vgc_mcp_core.formats.showdown import pokemon_build_to_showdown
 
     sps = StatPointSpread(
         hp=hp_sps, attack=atk_sps, defense=def_sps,
         special_attack=spa_sps, special_defense=spd_sps, speed=spe_sps,
     )
-    pokemon = PokemonBuild(
+    pokemon = build_pokemon(
         name=pokemon_name,
         base_stats=base_stats,
         types=types,
         nature=parsed_nature,
-        format_system="champions",
-        sps=sps,
+        champions=True,
+        spread=sps,
         ivs=IVSpread(),
         level=level,
     )
@@ -76,7 +68,7 @@ def _champions_stats_response(
         f"{stats['special_defense']} SpD / {stats['speed']} Spe ({nature} nature, Stat Points)"
     )
 
-    return {
+    return _stats_contract({
         "pokemon": pokemon_name,
         "level": level,
         "nature": nature,
@@ -104,7 +96,19 @@ def _champions_stats_response(
         "summary_table": "\n".join(table_lines),
         "analysis": analysis_str,
         "showdown_paste": pokemon_build_to_showdown(pokemon),
-    }
+    }, pokemon, stats)
+
+
+def _stats_contract(result: dict, pokemon: PokemonBuild, stats: dict) -> dict:
+    """Add the calc response contract to a get_pokemon_stats result."""
+    finals = "/".join(str(stats[k]) for k in (
+        "hp", "attack", "defense", "special_attack", "special_defense", "speed"))
+    return apply_contract(
+        result,
+        headline=f"{format_showdown_species(pokemon.name)} final stats: {finals} (HP/Atk/Def/SpA/SpD/Spe)",
+        spreads_used={"pokemon": spread_label(pokemon)},
+        showdown_paste=pokemon_build_to_showdown(pokemon),
+    )
 
 
 def register_stats_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
@@ -134,7 +138,7 @@ def register_stats_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         spd_evs: Annotated[int, Field(ge=0, le=252, description="Special Defense EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0,
         spe_evs: Annotated[int, Field(ge=0, le=252, description="Speed EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0,
         level: Annotated[int, Field(ge=1, le=100, description="Pokemon level (VGC standard is 50)")] = 50,
-    ) -> dict:
+    ) -> CalcResultDict:
         """Calculate all six final stats for a Pokemon at level 50 (VGC standard).
 
         Returns base stats, the investment used, final calculated stats, a
@@ -145,7 +149,7 @@ def register_stats_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         SP formula (e.g. Flutter Mane 32 Spe SP -> 205 Speed).
         """
         try:
-            is_champions = _detect_champions(pokemon_name)
+            is_champions = detect_champions_format(pokemon_name)
 
             # Validate investment under the active format's cap.
             total_invest = hp_evs + atk_evs + def_evs + spa_evs + spd_evs + spe_evs
@@ -186,12 +190,12 @@ def register_stats_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             total_evs = total_invest
 
             # Create Pokemon build
-            pokemon = PokemonBuild(
+            pokemon = build_pokemon(
                 name=pokemon_name,
                 base_stats=base_stats,
                 types=types,
                 nature=parsed_nature,
-                evs=EVSpread(
+                spread=EVSpread(
                     hp=hp_evs,
                     attack=atk_evs,
                     defense=def_evs,
@@ -200,7 +204,7 @@ def register_stats_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                     speed=spe_evs
                 ),
                 ivs=IVSpread(),
-                level=level
+                level=level,
             )
 
             # Calculate stats
@@ -221,7 +225,7 @@ def register_stats_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
             # Build analysis prose
             analysis_str = f"{pokemon_name} at Lv{level}: {stats['hp']} HP / {stats['attack']} Atk / {stats['defense']} Def / {stats['special_attack']} SpA / {stats['special_defense']} SpD / {stats['speed']} Spe ({nature} nature)"
 
-            return {
+            return _stats_contract({
                 "pokemon": pokemon_name,
                 "level": level,
                 "nature": nature,
@@ -247,7 +251,7 @@ def register_stats_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
                 "final_stats": stats,
                 "summary_table": "\n".join(table_lines),
                 "analysis": analysis_str
-            }
+            }, pokemon, stats)
 
         except Exception as e:
             error_str = str(e).lower()
@@ -281,7 +285,7 @@ def register_stats_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         Mane 32 Spe SP -> 205).
         """
         try:
-            is_champions = _detect_champions(pokemon_name)
+            is_champions = detect_champions_format(pokemon_name)
             base_stats = await pokeapi.get_base_stats(pokemon_name)
             base_speed = base_stats.speed
 

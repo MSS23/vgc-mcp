@@ -29,6 +29,7 @@ from ..utils.normalize import (
     normalize_move,
     normalize_pokemon_name,
 )
+from . import spread_contract as sc
 
 
 def resolve_regulation(regulation: str | None) -> tuple[str, FormatSystem]:
@@ -147,9 +148,27 @@ async def benchmark_handler(
 ) -> dict[str, Any]:
     pokemon = await single_build(paste, pokeapi, regulation)
     resolved = await resolve_benchmarks(benchmarks, pokemon, pokeapi, smogon, regulation)
+    opponents = {(f"opponent_{i}" if len(resolved) > 1 else "opponent"): sc.spread_label(r.opponent)
+                 for i, r in enumerate(resolved, 1)}
+    spreads = {"pokemon": sc.spread_label(pokemon), **opponents}
+    source = sc.data_source_from_meta(sc.first_meta(
+        r.source for r in resolved if r.source.get("kind") == "usage_components"))
     if recommend:
-        return await asyncio.to_thread(recommend_verified_candidates, pokemon, resolved, natures)
-    return verify_benchmarks(pokemon, resolved)
+        result = await asyncio.to_thread(recommend_verified_candidates, pokemon, resolved, natures)
+        candidates = result.get("candidates") or []
+        if candidates:
+            best = candidates[0]
+            headline = (f"{len(candidates)} verified {sc.species(pokemon.name)} spread(s); "
+                        f"{best['purpose'].replace('_', ' ')} uses {best['investment']} {best['units']}s")
+        else:
+            headline = f"No verified {sc.species(pokemon.name)} spread found in the searched natures and allocations"
+        return sc.apply_contract(result, headline=headline, spreads_used=spreads, data_source=source,
+                                 showdown_paste=candidates[0]["showdown_paste"] if candidates else result.get("current_showdown_paste"))
+    result = verify_benchmarks(pokemon, resolved)
+    rows = result["benchmarks"]
+    passed = sum(1 for row in rows if row["passed"])
+    return sc.apply_contract(result, headline=f"{sc.subject(pokemon)} passes {passed}/{len(rows)} benchmarks",
+                             spreads_used=spreads, data_source=source)
 
 
 async def outcomes_handler(
@@ -170,12 +189,16 @@ async def outcomes_handler(
                                      modifiers,
                                      include_accuracy=include_accuracy, random_hits=random_hits)
     result = result_from_outcomes(outcomes)
-    return {"attacker_showdown_paste": pokemon_build_to_showdown(attacker),
-            "defender_showdown_paste": pokemon_build_to_showdown(defender),
-            "move": move.name, "damage": result.damage_range,
-            "ohko_percent": result.ohko_percent, "survival_percent": result.survival_percent,
-            "ko_percent_by_uses": [float(p * 100) for p in outcomes.ko_chances],
-            "details": result.details}
+    payload = {"attacker_showdown_paste": pokemon_build_to_showdown(attacker),
+               "defender_showdown_paste": pokemon_build_to_showdown(defender),
+               "move": move.name, "damage": result.damage_range,
+               "ohko_percent": result.ohko_percent, "survival_percent": result.survival_percent,
+               "ko_percent_by_uses": [float(p * 100) for p in outcomes.ko_chances],
+               "details": result.details}
+    headline = (f"{sc.species(attacker.name)}'s {sc.words(move.name)} vs {sc.species(defender.name)}: "
+                f"{result.ohko_percent:.1f}% to KO in one use, {result.survival_percent:.1f}% survival")
+    return sc.apply_contract(payload, headline=headline, spreads_used={
+        "attacker": sc.spread_label(attacker), "defender": sc.spread_label(defender)})
 
 
 def reference_sets(manager: TeamManager, name: str, formats: list[str]) -> list[dict[str, Any]]:

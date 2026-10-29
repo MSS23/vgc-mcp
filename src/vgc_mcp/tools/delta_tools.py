@@ -27,19 +27,11 @@ from vgc_mcp_core.models.pokemon import (
     PokemonBuild,
     StatPointSpread,
 )
+from vgc_mcp_core.rules.format_detect import detect_champions_format
 from vgc_mcp_core.tools import get_common_spread
+from vgc_mcp_core.tools.build_helpers import build_pokemon
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 from vgc_mcp_core.utils.normalize import normalize_move
-
-
-def _session_is_champions(pokemon_name: Optional[str] = None) -> bool:
-    """Return True when the active session is the Champions (Reg MA) SP system.
-
-    Mirrors spread_tools._session_is_champions — runs name inference first so a
-    Mega/Reg MA mention auto-selects Champions without explicit user setup.
-    """
-    from vgc_mcp_core.rules.format_detect import detect_champions_format
-    return detect_champions_format(pokemon_name)
 
 
 def _verdict(min_pct: float, max_pct: float) -> str:
@@ -58,8 +50,7 @@ def _verdict(min_pct: float, max_pct: float) -> str:
 
 
 def _mods_for(spread: dict, item_field: str, ability_field: str) -> DamageModifiers:
-    return DamageModifiers(
-        is_doubles=True,
+    return DamageModifiers.from_scenario(
         attacker_item=spread.get(item_field),
         attacker_ability=spread.get(ability_field),
     )
@@ -94,13 +85,13 @@ async def _build_from_overrides(
                 special_defense=sp_src.get("special_defense", 0),
                 speed=sp_src.get("speed", 0),
             )
-        return PokemonBuild(
+        return build_pokemon(
             name=name,
             base_stats=base,
             types=types,
             nature=Nature(nature.lower()) if nature else Nature.SERIOUS,
-            format_system="champions",
-            sps=sp_obj,
+            champions=True,
+            spread=sp_obj,
             ivs=IVSpread(),
             item=item,
             ability=ability,
@@ -117,12 +108,12 @@ async def _build_from_overrides(
             special_defense=evs.get("special_defense", 0),
             speed=evs.get("speed", 0),
         )
-    return PokemonBuild(
+    return build_pokemon(
         name=name,
         base_stats=base,
         types=types,
         nature=Nature(nature.lower()) if nature else Nature.SERIOUS,
-        evs=ev_obj,
+        spread=ev_obj,
         ivs=IVSpread(),
         item=item,
         ability=ability,
@@ -168,7 +159,7 @@ def register_delta_tools(
 
         # Only the USER's subject (pokemon_name) becomes a Champions (SP) build;
         # opposing threats stay mainline meta references.
-        is_champions = _session_is_champions(pokemon_name)
+        is_champions = detect_champions_format(pokemon_name)
 
         try:
             me_before = await _build_from_overrides(
@@ -244,13 +235,9 @@ def register_delta_tools(
                 me_move = await pokeapi.get_move(_first_stab_move(me_before),
                                                   user_name=pokemon_name)
                 r_b = calculate_damage(me_before, td["build"], me_move,
-                                       DamageModifiers(is_doubles=True,
-                                                       attacker_item=me_before.item,
-                                                       attacker_ability=me_before.ability))
+                                       DamageModifiers.from_scenario(attacker=me_before))
                 r_a = calculate_damage(me_after, td["build"], me_move,
-                                       DamageModifiers(is_doubles=True,
-                                                       attacker_item=me_after.item,
-                                                       attacker_ability=me_after.ability))
+                                       DamageModifiers.from_scenario(attacker=me_after))
             else:
                 # Defender Intimidate event (per "before" / "after" defender state),
                 # honouring attacker blockers/punishers.
@@ -267,17 +254,19 @@ def register_delta_tools(
                     is_physical=is_phys,
                 )
                 r_b = calculate_damage(td["build"], me_before, td["move"],
-                                       DamageModifiers(is_doubles=True,
-                                                       attacker_item=td["build"].item,
-                                                       attacker_ability=td["build"].ability,
-                                                       defender_ability=me_before.ability,
-                                                       attack_stage=intim_b if is_phys else 0))
+                                       DamageModifiers.from_scenario(
+                                           attacker=td["build"],
+                                           defender=me_before,
+                                           intimidate_stage=intim_b,
+                                           is_physical=is_phys,
+                                       ))
                 r_a = calculate_damage(td["build"], me_after, td["move"],
-                                       DamageModifiers(is_doubles=True,
-                                                       attacker_item=td["build"].item,
-                                                       attacker_ability=td["build"].ability,
-                                                       defender_ability=me_after.ability,
-                                                       attack_stage=intim_a if is_phys else 0))
+                                       DamageModifiers.from_scenario(
+                                           attacker=td["build"],
+                                           defender=me_after,
+                                           intimidate_stage=intim_a,
+                                           is_physical=is_phys,
+                                       ))
 
             v_b = _verdict(r_b.min_percent, r_b.max_percent)
             v_a = _verdict(r_a.min_percent, r_a.max_percent)

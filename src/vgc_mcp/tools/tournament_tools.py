@@ -25,6 +25,7 @@ from vgc_mcp_core.formats.showdown import (
 )
 from vgc_mcp_core.models.move import Move, MoveCategory
 from vgc_mcp_core.models.pokemon import EVSpread, Nature, PokemonBuild
+from vgc_mcp_core.tools.build_helpers import build_pokemon
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 # Priority moves that Armor Tail / Queenly Majesty / Dazzling block
@@ -710,11 +711,11 @@ def register_tournament_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi:
                     threat_name, pokeapi=pokeapi, smogon_client=smogon,
                 )
 
-                threat_pokemon = PokemonBuild(
+                threat_pokemon = build_pokemon(
                     name=threat_name,
                     base_stats=threat_base_stats,
                     nature=threat_nature if threat_spread else Nature.SERIOUS,
-                    evs=threat_evs if threat_spread else EVSpread(),
+                    spread=threat_evs if threat_spread else EVSpread(),
                     types=threat_types,
                     level=50,
                     ability=threat_ability,
@@ -747,11 +748,11 @@ def register_tournament_tools(mcp: FastMCP, pokepaste: PokePasteClient, pokeapi:
                             attacker_ability=threat_ability,
                             is_physical=is_phys,
                         )
-                        per_move_modifiers = DamageModifiers(
-                            is_doubles=True,
+                        per_move_modifiers = DamageModifiers.from_scenario(
+                            defender=your_pokemon,
                             attacker_ability=threat_ability,
-                            defender_ability=your_pokemon.ability,
-                            attack_stage=intim if is_phys else 0,
+                            intimidate_stage=intim,
+                            is_physical=is_phys,
                         )
                         # Calculate damage
                         result = calculate_damage(threat_pokemon, your_pokemon, move, per_move_modifiers)

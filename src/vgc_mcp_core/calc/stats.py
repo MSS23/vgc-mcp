@@ -14,10 +14,11 @@ Formulas (Level 50):
 
 import bisect
 import math
-from typing import Optional
+from typing import Any, Optional
 
 from ..config import EV_BREAKPOINTS_LV50
-from ..models.pokemon import Nature, PokemonBuild, get_nature_modifier
+from ..models.pokemon import Nature, PokemonBuild
+from ..models.pokemon import get_nature_modifier as get_nature_modifier  # re-exported for callers
 
 
 def calculate_hp(
@@ -377,7 +378,7 @@ def optimize_spread_efficiency(
 def validate_ev_efficiency(
     pokemon: "PokemonBuild",
     evs: dict[str, int]
-) -> dict:
+) -> dict[str, Any]:
     """
     Validate that an EV spread has no wasted EVs.
 
@@ -441,7 +442,7 @@ def validate_ev_efficiency(
 
 
 # Quick validation of benchmarks
-def _validate_benchmarks():
+def _validate_benchmarks() -> None:
     """Validate stat calculations against known benchmarks."""
     benchmarks = [
         # (base_speed, nature, evs, expected)

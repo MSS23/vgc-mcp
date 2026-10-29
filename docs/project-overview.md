@@ -128,7 +128,7 @@ Everything is built for VGC doubles format:
 - **Level 50** - All calculations at VGC standard level
 - **Doubles mechanics** - Spread moves, Helping Hand, partner abilities
 - **Bring 6, Pick 4** - Lead selection and back pair analysis
-- **Current regulations** - Reg F/G/H restricted lists and rules
+- **Current regulations** - Champions Reg MA/MB/MC (default MC) and mainline Reg F/G/H/I rules
 - **Meta awareness** - Smogon VGC usage data integration
 
 ## Data Sources

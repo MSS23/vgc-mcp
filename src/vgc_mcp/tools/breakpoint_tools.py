@@ -46,24 +46,14 @@ from vgc_mcp_core.models.pokemon import (
     PokemonBuild,
     StatPointSpread,
 )
+from vgc_mcp_core.rules.format_detect import detect_champions_format
 from vgc_mcp_core.tools import get_common_spread
 from vgc_mcp_core.tools.ability_helpers import (
     compute_intimidate_attack_stage,
     resolve_ability,
 )
+from vgc_mcp_core.tools.build_helpers import build_pokemon
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
-
-
-def _session_is_champions(pokemon_name: Optional[str] = None) -> bool:
-    """Return True when the active session is the Champions (Reg MA) SP system.
-
-    Mirrors spread_tools._session_is_champions: optionally runs Pokemon-name
-    inference first so a Mega/Reg MA mention auto-selects Champions without the
-    user having to set it explicitly. The mainline path is taken when False.
-    """
-    from vgc_mcp_core.rules.format_detect import detect_champions_format
-    return detect_champions_format(pokemon_name)
-
 
 # Natures that boost / nerf each stat
 _PLUS_NATURES = {
@@ -176,7 +166,7 @@ def register_breakpoint_tools(
 
         # Only the USER's subject Pokemon becomes a Champions (SP) build; the
         # opposing target stays mainline (it's an opposing meta reference).
-        is_champions = _session_is_champions(pokemon_name)
+        is_champions = detect_champions_format(pokemon_name)
 
         if benchmark_type == "outspeed":
             return _find_speed_breakpoint(me_base, tgt_base, tgt_spread,
@@ -284,10 +274,12 @@ def _sp_paste_for(me_name, me_base, nature_str, sp_dict):
         nat = Nature((nature_str or "serious").lower())
     except ValueError:
         nat = Nature.SERIOUS
-    build = PokemonBuild(
-        name=me_name, base_stats=me_base, nature=nat,
-        format_system="champions",
-        sps=StatPointSpread(**sp_dict),
+    build = build_pokemon(
+        name=me_name,
+        base_stats=me_base,
+        nature=nat,
+        champions=True,
+        spread=StatPointSpread(**sp_dict),
     )
     return pokemon_build_to_showdown(build)
 
@@ -459,11 +451,16 @@ def _build_champions_subject(me_base, me_types, me_name, nature, sp_dict,
         nat = Nature((nature or "serious").lower()) if isinstance(nature, str) else nature
     except ValueError:
         nat = Nature.SERIOUS
-    return PokemonBuild(
-        name=me_name, base_stats=me_base, types=me_types,
-        nature=nat, format_system="champions",
-        sps=StatPointSpread(**sp_dict), ivs=IVSpread(),
-        ability=ability, item=item,
+    return build_pokemon(
+        name=me_name,
+        base_stats=me_base,
+        types=me_types,
+        nature=nat,
+        champions=True,
+        spread=StatPointSpread(**sp_dict),
+        ivs=IVSpread(),
+        ability=ability,
+        item=item,
     )
 
 
@@ -487,10 +484,10 @@ def _min_invest_for_ko(me_base, me_types, me_name, off_stat, nat_mod, move, tgt_
             )
             result = calculate_damage(
                 me_build, tgt_build, move,
-                DamageModifiers(
-                    is_doubles=True,
+                DamageModifiers.from_scenario(
                     attacker_ability=me_ability,
-                    attack_stage=intim_stage if is_physical else 0,
+                    intimidate_stage=intim_stage,
+                    is_physical=is_physical,
                 ),
             )
             if result.is_guaranteed_ohko:
@@ -499,17 +496,21 @@ def _min_invest_for_ko(me_base, me_types, me_name, off_stat, nat_mod, move, tgt_
 
     for ev in range(0, 256, 4):
         evs = EVSpread(**{off_stat: ev})
-        me_build = PokemonBuild(
-            name=me_name, base_stats=me_base, types=me_types,
-            nature=nature, evs=evs, ivs=IVSpread(),
+        me_build = build_pokemon(
+            name=me_name,
+            base_stats=me_base,
+            types=me_types,
+            nature=nature,
+            spread=evs,
+            ivs=IVSpread(),
             ability=me_ability,
         )
         result = calculate_damage(
             me_build, tgt_build, move,
-            DamageModifiers(
-                is_doubles=True,
+            DamageModifiers.from_scenario(
                 attacker_ability=me_ability,
-                attack_stage=intim_stage if is_physical else 0,
+                intimidate_stage=intim_stage,
+                is_physical=is_physical,
             ),
         )
         if result.is_guaranteed_ohko:
@@ -609,19 +610,23 @@ def _build_from_spread(
     # Champions Smogon spreads carry `sps` (no `evs`) — build an SP build so
     # the target's stats aren't silently computed at zero investment.
     if spread.get("format_system") == "champions" or spread.get("sps"):
-        return PokemonBuild(
-            name=name, base_stats=base, types=types,
+        return build_pokemon(
+            name=name,
+            base_stats=base,
+            types=types,
             nature=Nature((spread.get("nature") or "serious").lower()),
-            format_system="champions",
-            sps=StatPointSpread.from_sps_dict(spread.get("sps") or {}),
+            champions=True,
+            spread=StatPointSpread.from_sps_dict(spread.get("sps") or {}),
             item=spread.get("item"),
             ability=spread.get("ability"),
         )
     evs = spread.get("evs") or {}
-    return PokemonBuild(
-        name=name, base_stats=base, types=types,
+    return build_pokemon(
+        name=name,
+        base_stats=base,
+        types=types,
         nature=Nature((spread.get("nature") or "serious").lower()),
-        evs=EVSpread(
+        spread=EVSpread(
             hp=evs.get("hp", 0),
             attack=evs.get("attack", 0),
             defense=evs.get("defense", 0),
@@ -663,11 +668,12 @@ def _min_total_invest_for_survival(me_base, me_types, me_name, def_stat,
                 )
                 result = calculate_damage(
                     tgt_build, me_build, move,
-                    DamageModifiers(is_doubles=True,
-                                    attacker_item=tgt_build.item,
-                                    attacker_ability=tgt_build.ability,
-                                    defender_ability=me_ability,
-                                    attack_stage=intim_stage if is_physical else 0),
+                    DamageModifiers.from_scenario(
+                        attacker=tgt_build,
+                        defender_ability=me_ability,
+                        intimidate_stage=intim_stage,
+                        is_physical=is_physical,
+                    ),
                 )
                 if result.survival_percent >= threshold_rolls / 16 * 100:
                     best = (hp_sp, def_sp)
@@ -683,18 +689,23 @@ def _min_total_invest_for_survival(me_base, me_types, me_name, def_stat,
             if hp_ev + def_ev >= best_total:
                 continue
             evs = EVSpread(hp=hp_ev, **{def_stat: def_ev})
-            me_build = PokemonBuild(
-                name=me_name, base_stats=me_base, types=me_types,
-                nature=nature, evs=evs, ivs=IVSpread(),
+            me_build = build_pokemon(
+                name=me_name,
+                base_stats=me_base,
+                types=me_types,
+                nature=nature,
+                spread=evs,
+                ivs=IVSpread(),
                 ability=me_ability,
             )
             result = calculate_damage(
                 tgt_build, me_build, move,
-                DamageModifiers(is_doubles=True,
-                                attacker_item=tgt_build.item,
-                                attacker_ability=tgt_build.ability,
-                                defender_ability=me_ability,
-                                attack_stage=intim_stage if is_physical else 0),
+                DamageModifiers.from_scenario(
+                    attacker=tgt_build,
+                    defender_ability=me_ability,
+                    intimidate_stage=intim_stage,
+                    is_physical=is_physical,
+                ),
             )
             if result.survival_percent >= threshold_rolls / 16 * 100:
                 best = (hp_ev, def_ev)

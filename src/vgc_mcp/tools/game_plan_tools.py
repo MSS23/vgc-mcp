@@ -28,6 +28,7 @@ from vgc_mcp_core.models.pokemon import (
 )
 from vgc_mcp_core.rules.regulation_loader import get_regulation_config
 from vgc_mcp_core.team.manager import TeamManager
+from vgc_mcp_core.tools.build_helpers import build_pokemon
 from vgc_mcp_core.utils.errors import ErrorCodes, api_error, error_response, pokemon_not_found_error
 from vgc_mcp_core.utils.fuzzy import suggest_pokemon_name
 from vgc_mcp_core.utils.normalize import normalize_smogon_name as _normalize_smogon_name
@@ -103,23 +104,23 @@ async def _build_profile(
         # fetched spread is itself champions-tagged. Opponent references with a
         # mainline spread stay mainline even in a Champions session.
         if is_champions_subject or spread_is_champions:
-            build = PokemonBuild(
+            build = build_pokemon(
                 name=pokemon_name,
                 base_stats=base_stats,
                 types=types,
                 nature=nature_enum,
-                format_system="champions",
-                sps=StatPointSpread.from_sps_dict(spread_dict) if spread_dict else StatPointSpread(),
+                champions=True,
+                spread=StatPointSpread.from_sps_dict(spread_dict) if spread_dict else StatPointSpread(),
                 item=item,
                 ability=ability,
             )
         else:
-            build = PokemonBuild(
+            build = build_pokemon(
                 name=pokemon_name,
                 base_stats=base_stats,
                 types=types,
                 nature=nature_enum,
-                evs=EVSpread(
+                spread=EVSpread(
                     hp=spread_dict.get("hp", 0),
                     attack=spread_dict.get("attack", 0),
                     defense=spread_dict.get("defense", 0),
@@ -223,7 +224,7 @@ def register_game_plan_tools(
                     your_builds.append(slot.pokemon)
                     your_names.append(slot.pokemon.name)
             else:
-                return error_response(ErrorCodes.INTERNAL_ERROR, 'No team provided. Either pass your_team names or load a team first.', hint="Use import_showdown_paste to load your team, or pass your_team=['pokemon1', 'pokemon2', ...]")
+                return error_response(ErrorCodes.INTERNAL_ERROR, 'No team provided. Either pass your_team names or load a team first.', hint="Use import_showdown_team to load your team, or pass your_team=['pokemon1', 'pokemon2', ...]")
 
         if len(your_names) < 2:
             return error_response(ErrorCodes.INTERNAL_ERROR, 'Your team needs at least 2 Pokemon.')

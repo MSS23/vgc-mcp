@@ -1,7 +1,8 @@
 """PokeAPI client with caching and retry logic."""
 
 import asyncio
-from typing import Optional
+from types import TracebackType
+from typing import Any, Optional
 
 import httpx
 
@@ -80,7 +81,7 @@ class PokeAPIClient:
         self._client: Optional[httpx.AsyncClient] = None
         # In-flight request coalescing: concurrent identical fetches await one
         # shared task instead of each hitting the network.
-        self._inflight: dict[str, "asyncio.Future[dict]"] = {}
+        self._inflight: dict[str, "asyncio.Future[dict[str, Any]]"] = {}
         # endpoint -> monotonic timestamp when it 404'd (short-TTL negative cache)
         self._negative_cache: dict[str, float] = {}
 
@@ -127,10 +128,10 @@ class PokeAPIClient:
             normalized = POKEAPI_FORM_ALIASES.get(normalized, normalized)
         return normalized
 
-    async def _fetch(self, endpoint: str) -> dict:
+    async def _fetch(self, endpoint: str) -> dict[str, Any]:
         """Fetch from API with caching, negative caching, and coalescing."""
         # Persistent (positive) cache first.
-        cached = self.cache.get("pokeapi", endpoint)
+        cached: Optional[dict[str, Any]] = self.cache.get("pokeapi", endpoint)
         if cached is not None:
             return cached
 
@@ -149,14 +150,14 @@ class PokeAPIClient:
         if existing is not None:
             return await existing
 
-        task: "asyncio.Task[dict]" = asyncio.ensure_future(self._do_fetch(endpoint))
+        task: "asyncio.Task[dict[str, Any]]" = asyncio.ensure_future(self._do_fetch(endpoint))
         self._inflight[endpoint] = task
         try:
             return await task
         finally:
             self._inflight.pop(endpoint, None)
 
-    async def _do_fetch(self, endpoint: str) -> dict:
+    async def _do_fetch(self, endpoint: str) -> dict[str, Any]:
         """Perform the actual HTTP fetch with retry logic."""
         client = await self._get_client()
         last_error: Optional[Exception] = None
@@ -165,7 +166,7 @@ class PokeAPIClient:
             try:
                 response = await client.get(f"{settings.POKEAPI_BASE_URL}/{endpoint}")
                 response.raise_for_status()
-                data = response.json()
+                data: dict[str, Any] = response.json()
                 self.cache.set("pokeapi", endpoint, value=data)
                 return data
 
@@ -187,7 +188,7 @@ class PokeAPIClient:
 
         raise PokeAPIError(f"Failed after {settings.API_MAX_RETRIES} attempts: {last_error}")
 
-    async def get_pokemon(self, name_or_id: str | int) -> dict:
+    async def get_pokemon(self, name_or_id: str | int) -> dict[str, Any]:
         """Get Pokemon data including base stats, types, abilities.
 
         Returns the raw PokeAPI payload with two keys normalized for callers:
@@ -206,7 +207,7 @@ class PokeAPIClient:
         ]
         return {**data, "base_stats": stats, "types": types}
 
-    async def get_pokemon_species(self, name_or_id: str | int) -> dict:
+    async def get_pokemon_species(self, name_or_id: str | int) -> dict[str, Any]:
         """Get Pokemon species data (for species clause)."""
         name = self._normalize_name(str(name_or_id))
         try:
@@ -315,17 +316,17 @@ class PokeAPIClient:
             always_crit=always_crit
         )
 
-    async def get_type(self, name: str) -> dict:
+    async def get_type(self, name: str) -> dict[str, Any]:
         """Get type data including damage relations."""
         name = self._normalize_name(name, apply_form_aliases=False)
         return await self._fetch(f"type/{name}")
 
-    async def get_ability(self, name_or_id: str | int) -> dict:
+    async def get_ability(self, name_or_id: str | int) -> dict[str, Any]:
         """Get ability data."""
         name = self._normalize_name(str(name_or_id), apply_form_aliases=False)
         return await self._fetch(f"ability/{name}")
 
-    async def get_item(self, name_or_id: str | int) -> dict:
+    async def get_item(self, name_or_id: str | int) -> dict[str, Any]:
         """Get item data."""
         name = self._normalize_name(str(name_or_id), apply_form_aliases=False)
         return await self._fetch(f"item/{name}")
@@ -339,5 +340,10 @@ class PokeAPIClient:
     async def __aenter__(self) -> "PokeAPIClient":
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+    async def __aexit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
         await self.close()

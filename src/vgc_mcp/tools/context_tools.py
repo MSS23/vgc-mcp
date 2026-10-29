@@ -13,7 +13,8 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from vgc_mcp_core.calc.stats import calculate_all_stats
-from vgc_mcp_core.models.pokemon import EVSpread, Nature, PokemonBuild
+from vgc_mcp_core.models.pokemon import EVSpread, Nature
+from vgc_mcp_core.tools.build_helpers import build_pokemon
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 
@@ -81,16 +82,16 @@ def register_context_tools(mcp: FastMCP, pokeapi, team_manager):
             speed=spe_evs
         )
 
-        pokemon_build = PokemonBuild(
+        pokemon_build = build_pokemon(
             name=pokemon_data["name"],
             base_stats=base_stats,
             types=types,
             nature=nature_enum,
-            evs=evs,
+            spread=evs,
             ability=ability or (abilities[0] if abilities else None),
             item=item,
             tera_type=tera_type,
-            level=50
+            level=50,
         )
 
         # Store in context
@@ -399,7 +400,7 @@ def register_context_tools(mcp: FastMCP, pokeapi, team_manager):
             "next_steps": [
                 "Use 'set_my_pokemon' to store a Pokemon spread for analysis",
                 "Use 'add_to_team' to start building a team",
-                "Use 'import_showdown_paste' to import from Pokemon Showdown"
+                "Use 'import_showdown_team' to import from Pokemon Showdown"
             ]
         }
 

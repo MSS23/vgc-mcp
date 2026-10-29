@@ -74,7 +74,7 @@ class TeamManager:
                 return False, reason, {
                     "error": "team_full",
                     "current_team": self._team.get_pokemon_names(),
-                    "suggestion": "Use swap_pokemon to replace one, or remove_pokemon first"
+                    "suggestion": "Use swap_team_pokemon to replace one, or remove_from_team first"
                 }
             else:
                 return False, reason, {

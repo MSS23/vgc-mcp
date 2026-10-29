@@ -57,9 +57,9 @@ ROUTING_RULES: list[tuple[re.Pattern, list[str], str]] = [
 
     # Speed
     (re.compile(r"\b(?:outspeed|faster\s+than|out[-\s]?speed)\b", re.I),
-     ["find_speed_evs_to_outspeed", "find_breakpoint", "compare_speed", "outspeed_probability"],
+     ["find_speed_evs_to_outspeed", "find_breakpoint", "compare_speed", "analyze_outspeed_probability"],
      "Outspeed question — `find_breakpoint` with benchmark_type='outspeed' is the "
-     "richest answer; `outspeed_probability` for usage-weighted answers."),
+     "richest answer; `analyze_outspeed_probability` for usage-weighted answers."),
 
     (re.compile(r"\bspeed\s+tier", re.I),
      ["get_speed_tiers", "visualize_speed_tiers", "find_speed_benchmark"],
@@ -142,7 +142,7 @@ ROUTING_RULES: list[tuple[re.Pattern, list[str], str]] = [
 
     # Meta usage
     (re.compile(r"\b(?:meta|usage|popular|top\s+\d+|tournament)\b", re.I),
-     ["get_top_pokemon", "get_meta_teams", "get_usage_stats", "get_meta_speed_tiers"],
+     ["get_top_pokemon", "get_meta_teams", "get_usage_stats", "get_speed_tiers"],
      "Meta / usage question."),
 
     # Education / explanation

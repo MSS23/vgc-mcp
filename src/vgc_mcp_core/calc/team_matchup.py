@@ -1,7 +1,7 @@
 """Team vs team matchup analysis with scoring algorithm and game plan generation."""
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 from ..models.move import Move, MoveCategory
 from ..models.pokemon import PokemonBuild
@@ -96,7 +96,7 @@ class ThreatInfo:
     danger_level: str  # "HIGH", "MEDIUM", "LOW"
     reason: str
     your_best_answer: str
-    answer_move: str
+    answer_move: Optional[str]
     answer_damage: str
 
 
@@ -112,7 +112,7 @@ class TeamMatchupResult:
     key_threats: list[ThreatInfo]
     your_key_pokemon: list[str]  # Most important Pokemon to preserve
     recommended_leads: list[LeadMatchup]
-    speed_advantages: dict  # Your Pokemon -> list of opponent Pokemon they outspeed
+    speed_advantages: dict[str, Any]  # Your Pokemon -> list of opponent Pokemon they outspeed
     game_plan: str
     detailed_matchups: list[MatchupScore]
 
@@ -167,8 +167,8 @@ def _create_generic_moves(pokemon: PokemonBuild) -> list[Move]:
 def score_1v1_matchup(
     pokemon1: PokemonBuild,
     pokemon2: PokemonBuild,
-    pokemon1_moves: list[Move] = None,
-    pokemon2_moves: list[Move] = None
+    pokemon1_moves: Optional[list[Move]] = None,
+    pokemon2_moves: Optional[list[Move]] = None
 ) -> MatchupScore:
     """
     Calculate matchup score for pokemon1 attacking pokemon2.
@@ -197,7 +197,7 @@ def score_1v1_matchup(
     p2_speed = p2_stats["speed"]
 
     # === DAMAGE SCORE (0-40) ===
-    best_damage_pct = 0
+    best_damage_pct: float = 0
     best_move_name = None
     best_result = None
 
@@ -238,6 +238,7 @@ def score_1v1_matchup(
         damage_range = f"{best_result.min_percent:.1f}-{best_result.max_percent:.1f}%"
 
     # === SPEED SCORE (0-25) ===
+    speed_score: float
     if p1_speed > p2_speed:
         speed_score = 25
         outspeeds = True
@@ -257,7 +258,7 @@ def score_1v1_matchup(
 
     # === DEFENSIVE SCORE (0-25) ===
     # Check if pokemon1 survives pokemon2's best attack
-    opponent_best_damage = 0
+    opponent_best_damage: float = 0
     for move in pokemon2_moves:
         if move.power == 0:
             continue
@@ -352,8 +353,8 @@ def calculate_team_advantage(
     """
     matrix, _ = build_matchup_matrix(team1, team2)
 
-    total_weighted_advantage = 0
-    total_weight = 0
+    total_weighted_advantage: float = 0
+    total_weight: float = 0
 
     for i, p1 in enumerate(team1):
         # Find this Pokemon's best matchup against opponent team
@@ -453,7 +454,7 @@ def analyze_lead_matchups(
             # Score against likely opponent leads (first 4 Pokemon as potential leads)
             opponent_leads = team2[:min(4, len(team2))]
 
-            total_advantage = 0
+            total_advantage: float = 0
             for oi in range(len(opponent_leads)):
                 for oj in range(oi + 1, len(opponent_leads)):
                     # Our lead pair vs their lead pair
@@ -494,7 +495,7 @@ def analyze_lead_matchups(
 def analyze_speed_tiers(
     team1: list[PokemonBuild],
     team2: list[PokemonBuild]
-) -> dict:
+) -> dict[str, Any]:
     """
     Compare speed tiers between two teams.
     """
@@ -641,7 +642,7 @@ class PokemonProfile:
     is_prankster: bool
     prankster_moves: list[str]  # Status moves that get +1 priority from Prankster
     is_intimidate: bool
-    priority_moves: list[dict]  # [{name, priority, is_status}]
+    priority_moves: list[dict[str, Any]]  # [{name, priority, is_status}]
     is_trick_room_setter: bool
     is_tailwind_setter: bool
     is_weather_setter: bool
@@ -1047,7 +1048,7 @@ def _score_lead_pair(
     predicted_opp_leads = _predict_opponent_leads(their_profiles)
 
     # --- Matchup matrix score (biggest factor) ---
-    avg_adv = 0
+    avg_adv: float = 0
     for j in range(len(their_profiles)):
         avg_adv += (matrix[idx1][j] + matrix[idx2][j]) / 2
     avg_adv /= max(len(their_profiles), 1)
@@ -1438,7 +1439,7 @@ def _build_turn_1_priority_order(
 
 def _best_turn1_move(
     profile: PokemonProfile,
-    opponent_leads: list[PokemonProfile] = None,
+    opponent_leads: Optional[list[PokemonProfile]] = None,
 ) -> tuple[str, int, str]:
     """Pick the most likely turn 1 move for a Pokemon and return (move, priority, note).
 
@@ -1521,10 +1522,10 @@ def _best_turn1_move(
     # Default: strongest attacking move
     best_move = None
     best_power = 0
-    for m in profile.moves:
-        if m.power and m.power > best_power:
-            best_power = m.power
-            best_move = m
+    for mv in profile.moves:
+        if mv.power and mv.power > best_power:
+            best_power = mv.power
+            best_move = mv
     if best_move:
         mn = normalize_move_name(best_move.name)
         prio = PRIORITY_MOVES.get(mn, 0)
@@ -1996,8 +1997,17 @@ def generate_full_game_plan(
 
 
 def _format_game_plan_markdown(
-    your_profiles, their_profiles, overall_matchup, overall_score,
-    leads, turn_1, threats, win_strat, win_details, speed_notes, bring_rec,
+    your_profiles: list[PokemonProfile],
+    their_profiles: list[PokemonProfile],
+    overall_matchup: str,
+    overall_score: float,
+    leads: list[GamePlanLeadRec],
+    turn_1: list[Turn1Action],
+    threats: list[GamePlanThreat],
+    win_strat: str,
+    win_details: list[str],
+    speed_notes: list[str],
+    bring_rec: BringRec,
 ) -> str:
     """Format the game plan as readable markdown."""
     lines = []

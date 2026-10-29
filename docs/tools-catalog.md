@@ -2,6 +2,8 @@
 
 Auto-generated from the running server. **213 tools** organized by module.
 
+★ marks the **34 core tools** that `/mcp` serves by default. `/mcp/full` (or `VGC_MCP_PROFILE=full`) serves all of them.
+
 To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 
 ## ability_tools  (10 tools)
@@ -23,11 +25,11 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 
 ## battle_tools  (5 tools)
 
-- **`end_battle`** — Close the active battle and return its final state.
+- **`end_battle`** ★ — Close the active battle and return its final state.
 - **`get_battle_state`** — Return the full structured snapshot of the active battle.
-- **`record_turn`** — Record one turn of an active battle.
-- **`start_battle`** — Begin a new battle. Replaces any active battle.
-- **`suggest_next_move`** — Recommend the next turn given the remembered battle state.
+- **`record_turn`** ★ — Record one turn of an active battle.
+- **`start_battle`** ★ — Begin a new battle. Replaces any active battle.
+- **`suggest_next_move`** ★ — Recommend the next turn given the remembered battle state.
 
 ## breakpoint_tools  (1 tools)
 
@@ -47,8 +49,8 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 
 ## bulk_calc_tools  (2 tools)
 
-- **`calculate_bulk_offensive_calcs`** — Run bulk offensive damage calculations: 1 attacker x N moves x M defenders x K scenarios.
-- **`export_damage_report`** — Export bulk damage calculations as an Excel spreadsheet or PDF file on disk.
+- **`calculate_bulk_offensive_calcs`** ★ — Run bulk offensive damage calculations: 1 attacker x N moves x M defenders x K scenarios.
+- **`export_damage_report`** ★ — Export bulk damage calculations as an Excel spreadsheet or PDF file on disk.
 
 ## chip_damage_tools  (6 tools)
 
@@ -89,10 +91,10 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 
 ## damage_tools  (6 tools)
 
-- **`calculate_damage_output`** — ⭐ PRIMARY DAMAGE TOOL — use this for ANY damage / KO / survival question.
+- **`calculate_damage_output`** ★ — ⭐ PRIMARY DAMAGE TOOL — use this for ANY damage / KO / survival question.
 - **`find_bulk_to_survive_hits`** — Find minimum HP/Def EVs to survive multiple hits of an attack.
 - **`find_ko_evs`** — Find minimum offensive EVs needed to achieve a certain KO probability.
-- **`find_survival_evs`** — Find minimum HP/Defense EVs needed to SURVIVE a specific attack.
+- **`find_survival_evs`** ★ — Find minimum HP/Defense EVs needed to SURVIVE a specific attack.
 - **`survive_double_up`** — Check if a Pokemon survives combined damage from two attackers in one turn (double-up).
 - **`survive_multiple_hits`** — Calculate if a Pokemon can survive multiple hits of an attack.
 
@@ -114,7 +116,7 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 
 ## glossary_tools  (1 tools)
 
-- **`explain_vgc_term`** — Explain a VGC/Pokemon competitive term in simple language.
+- **`explain_vgc_term`** ★ — Explain a VGC/Pokemon competitive term in simple language.
 
 ## help_tools  (1 tools)
 
@@ -123,9 +125,9 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 ## import_export_tools  (4 tools)
 
 - **`export_pokemon_to_paste`** — Export a single Pokemon from the team to Showdown paste format.
-- **`export_team_to_paste`** — Export the current team to Showdown paste format.
+- **`export_team_to_paste`** ★ — Export the current team to Showdown paste format.
 - **`import_showdown_pokemon`** — Parse a single Pokemon from Showdown paste format and optionally add it to the team.
-- **`import_showdown_team`** — Parse a full team from Showdown paste format and add each Pokemon to the team.
+- **`import_showdown_team`** ★ — Parse a full team from Showdown paste format and add each Pokemon to the team.
 
 ## item_optimization_tools  (3 tools)
 
@@ -150,7 +152,7 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 
 ## legality_tools  (14 tools)
 
-- **`auto_detect_regulation_from_pokemon`** — ZERO-CONFIG REGULATION DETECTION — call this whenever a user mentions
+- **`auto_detect_regulation_from_pokemon`** ★ — ZERO-CONFIG REGULATION DETECTION — call this whenever a user mentions
 - **`check_item_clause_tool`** — Check if the current team violates the item clause (no duplicate items).
 - **`check_pokemon_legality`** — Check if a specific Pokemon is legal, restricted, or banned.
 - **`check_restricted_count`** — Check how many restricted (box legend) Pokemon are on the team.
@@ -161,9 +163,9 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 - **`list_available_regulations`** — List all available VGC regulations with key parameters and date ranges.
 - **`list_banned_pokemon`** — List all banned Pokemon for a VGC regulation.
 - **`list_restricted_pokemon`** — List all restricted (box legend) Pokemon for a VGC regulation.
-- **`set_session_regulation`** — Override the current regulation for this session based on user phrasing.
+- **`set_session_regulation`** ★ — Override the current regulation for this session based on user phrasing.
 - **`suggest_item_alternatives`** — Suggest alternative items when the item clause flags a duplicate.
-- **`validate_team_legality`** — Validate full team legality for VGC tournament play.
+- **`validate_team_legality`** ★ — Validate full team legality for VGC tournament play.
 
 ## matchup_tools  (6 tools)
 
@@ -179,7 +181,7 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 - **`analyze_spread_vs_threats`** — Analyze a spread against the top meta threats.
 - **`analyze_stored_pokemon_threats`** — Analyze a stored Pokemon's spread against the top meta threats.
 - **`check_survival_benchmark`** — ⚠️ NARROW USE ONLY. Prefer `calculate_damage_output` for general damage/survival.
-- **`find_survival_evs_meta`** — Find minimum bulk EVs needed to survive a specific attack (meta-threat variant).
+- **`find_survival_evs_meta`** — Deprecated alias of `find_survival_evs`; will be removed in the next release.
 
 ## move_tools  (7 tools)
 
@@ -193,7 +195,7 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 
 ## multi_threat_tools  (1 tools)
 
-- **`find_multi_threat_bulk_evs`** — Find the minimum HP/Def/SpD EV distribution that survives multiple threats simultaneously.
+- **`find_multi_threat_bulk_evs`** — Deprecated alias of `optimize_multi_survival_spread`; will be removed in the next release.
 
 ## multicalc_tools  (3 tools)
 
@@ -204,8 +206,8 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 ## onboarding_tools  (3 tools)
 
 - **`get_starter_prompts`** — Get a list of starter prompts for UI integration.
-- **`show_capabilities`** — Show what this server can do, with example prompts.
-- **`welcome_new_user`** — Show the welcome message for first-time users.
+- **`show_capabilities`** ★ — Show what this server can do, with example prompts.
+- **`welcome_new_user`** ★ — Show the welcome message for first-time users.
 
 ## pokepaste_tools  (3 tools)
 
@@ -215,11 +217,11 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 
 ## preparation_tools  (5 tools)
 
-- **`calculate_move_outcomes`** — Calculate independent hit rolls, misses, berries and Parental Bond from exact Showdown pastes.
-- **`import_reference_team`** — Store complete user-supplied sets with attribution in this MCP session.
-- **`prepare_team`** — Prepare a Showdown team or current session team in one MCP call.
-- **`recommend_verified_spreads`** — Offer minimum-investment, offensive and bulky spreads that pass final exact verification.
-- **`verify_spread_benchmarks`** — Recalculate survive, KO and outspeed constraints against exact or chaos opponents.
+- **`calculate_move_outcomes`** ★ — Calculate independent hit rolls, misses, berries and Parental Bond from exact Showdown pastes.
+- **`import_reference_team`** ★ — Store complete user-supplied sets with attribution in this MCP session.
+- **`prepare_team`** ★ — Prepare a Showdown team or current session team in one MCP call.
+- **`recommend_verified_spreads`** ★ — Offer minimum-investment, offensive and bulky spreads that pass final exact verification.
+- **`verify_spread_benchmarks`** ★ — Recalculate survive, KO and outspeed constraints against exact or chaos opponents.
 
 ## preset_tools  (4 tools)
 
@@ -245,7 +247,7 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 
 ## replay_tools  (1 tools)
 
-- **`analyze_replay`** — Pull a public Showdown replay and produce a turn-by-turn breakdown.
+- **`analyze_replay`** ★ — Pull a public Showdown replay and produce a turn-by-turn breakdown.
 
 ## report_tools  (1 tools)
 
@@ -270,11 +272,11 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 - **`analyze_team_tailwind`** — Analyze how the current team performs with Tailwind active.
 - **`analyze_team_trick_room`** — Analyze how the current team performs under Trick Room.
 - **`calculate_speed_after_modifier`** — Calculate what a speed stat becomes after various modifiers.
-- **`compare_speed`** — Compare speed between two Pokemon to determine who moves first.
+- **`compare_speed`** ★ — Compare speed between two Pokemon to determine who moves first.
 - **`find_speed_benchmark`** — Find what Pokemon/spreads hit a specific speed stat.
-- **`find_speed_evs_to_outspeed`** — Find minimum Speed EVs needed to reach or exceed a target Speed stat.
+- **`find_speed_evs_to_outspeed`** ★ — Find minimum Speed EVs needed to reach or exceed a target Speed stat.
 - **`get_full_speed_analysis`** — Get comprehensive speed control analysis for the current team.
-- **`get_meta_speed_tiers`** — Get common speed tiers in the current VGC metagame.
+- **`get_meta_speed_tiers`** — Deprecated alias of `get_speed_tiers`; will be removed in the next release.
 - **`get_speed_tiers`** — Get speed tier benchmarks for common VGC Pokemon.
 - **`visualize_speed_tiers`** — Visualize speed tiers as a text-based chart.
 
@@ -282,35 +284,35 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 
 - **`compare_speed_investment`** — Compare different Speed EV investments against a target.
 - **`meta_outspeed_analysis`** — Analyze what percentage of the top meta Pokemon you outspeed.
-- **`outspeed_probability`** — Calculate the probability of outspeeding a specific opponent.
-- **`outspeed_probability_stored`** — Calculate outspeed probability using a Pokemon previously stored with set_my_pokemon.
+- **`outspeed_probability`** — Deprecated alias of `analyze_outspeed_probability`; will be removed in the next release.
+- **`outspeed_probability_stored`** — Deprecated alias of `analyze_outspeed_probability`; will be removed in the next release.
 - **`speed_creep_calculator`** — Calculate how many Speed EVs are needed to outspeed a target.
 
 ## speed_tools  (1 tools)
 
-- **`analyze_outspeed_probability`** — Analyze what percentage of a target Pokemon's common spreads you outspeed.
+- **`analyze_outspeed_probability`** ★ — Analyze what percentage of a target Pokemon's common spreads you outspeed.
 
 ## speed_viz_tools  (1 tools)
 
-- **`visualize_team_speed_tiers`** — Generate a speed tier chart comparing your team against common meta Pokemon.
+- **`visualize_team_speed_tiers`** — Deprecated alias of `visualize_speed_tiers`; will be removed in the next release.
 
 ## spread_tools  (10 tools)
 
 - **`analyze_bulk_diminishing_returns`** — Analyze diminishing returns for HP, Def, and SpD investment.
 - **`analyze_hp_number`** — Analyze HP EV options for optimal item-based recovery or recoil.
 - **`check_spread_efficiency`** — Check an EV spread for efficiency (wasted EVs, optimal distribution).
-- **`design_spread_with_benchmarks`** — Design an EV spread that meets specific speed and SINGLE survival benchmarks.
+- **`design_spread_with_benchmarks`** ★ — Design an EV spread that meets specific speed and SINGLE survival benchmarks.
 - **`optimize_bulk`** — Optimize HP/Def/SpD EVs for maximum effective bulk.
-- **`optimize_bulk_math`** — Find the mathematically optimal HP/Def/SpD split using diminishing returns analysis.
-- **`optimize_dual_survival_spread`** — Find the optimal EV spread to survive TWO DIFFERENT attacks while meeting a speed benchmark.
-- **`optimize_multi_survival_spread`** — Find the optimal EV spread to survive 3-6 different attacks while meeting a speed benchmark.
+- **`optimize_bulk_math`** — Deprecated alias of `optimize_bulk`; will be removed in the next release.
+- **`optimize_dual_survival_spread`** ★ — Find the optimal EV spread to survive TWO DIFFERENT attacks while meeting a speed benchmark.
+- **`optimize_multi_survival_spread`** ★ — Find the optimal EV spread to survive 3-6 different attacks while meeting a speed benchmark.
 - **`suggest_nature_optimization`** — Suggest a nature change that achieves the same stats with fewer EVs.
 - **`suggest_spread`** — Suggest an EV spread based on role, with a Showdown paste.
 
 ## stats_tools  (2 tools)
 
 - **`get_pokemon_speed`** — Calculate the Speed stat for a Pokemon, with min/max reference values.
-- **`get_pokemon_stats`** — Calculate all six final stats for a Pokemon at level 50 (VGC standard).
+- **`get_pokemon_stats`** ★ — Calculate all six final stats for a Pokemon at level 50 (VGC standard).
 
 ## team_matchup_tools  (1 tools)
 
@@ -346,10 +348,10 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 ## usage_tools  (6 tools)
 
 - **`compare_pokemon_month_over_month`** — Compare a Pokemon's usage between the current and previous month.
-- **`get_common_sets`** — Get the most common competitive sets for a Pokemon.
+- **`get_common_sets`** ★ — Get the most common competitive sets for a Pokemon.
 - **`get_current_format_info`** — Get information about the currently detected VGC format.
 - **`get_top_pokemon`** — Get the top used Pokemon in the current VGC format.
-- **`get_usage_stats`** — Get Smogon usage statistics for a Pokemon in VGC.
+- **`get_usage_stats`** ★ — Get Smogon usage statistics for a Pokemon in VGC.
 - **`suggest_teammates`** — Get suggested teammates based on Smogon usage data.
 
 ## wizard_tools  (1 tools)
@@ -358,9 +360,9 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 
 ## workflow_tools  (14 tools)
 
-- **`add_pokemon_smart`** — Add a Pokemon to the team with an intelligently suggested build.
+- **`add_pokemon_smart`** ★ — Add a Pokemon to the team with an intelligently suggested build.
 - **`analyze_speed_matchup`** — Compare Speed between two Pokemon across various scenarios.
-- **`calc_damage_vs_smogon_sets`** — Calculate damage using YOUR exact spread vs the top Smogon sets.
+- **`calc_damage_vs_smogon_sets`** ★ — Calculate damage using YOUR exact spread vs the top Smogon sets.
 - **`check_team_vs_threat`** — Check how your currently loaded team handles a specific threat.
 - **`compare_pokemon_options`** — Compare two Pokemon to help decide which fits your team better.
 - **`design_pokemon_for_role`** — Design a complete Pokemon build for a specific role in ONE call.
@@ -368,7 +370,7 @@ To regenerate: `PYTHONPATH=src python scripts/build_catalog.py`
 - **`find_counter_for`** — Find counters for a threatening Pokemon.
 - **`fix_team_issues`** — Identify team legality/structure issues and suggest specific fixes.
 - **`full_team_check`** — Team analysis with configurable detail level.
-- **`import_and_analyze`** — Import a Showdown team paste and immediately analyze it.
+- **`import_and_analyze`** ★ — Import a Showdown team paste and immediately analyze it.
 - **`optimize_spread`** — Optimize or fix an EV spread to meet specific stat/benchmark targets.
 - **`quick_damage_check`** — Quick damage calculation with smart defaults - ONE call for damage info.
 - **`suggest_ev_spread`** — Design an optimal EV spread meeting multiple constraints in ONE call.

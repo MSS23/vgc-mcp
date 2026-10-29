@@ -84,7 +84,7 @@ Compare speeds, find tiers, and analyze speed control.
 - `analyze_team_tailwind` - Tailwind performance
 - `analyze_speed_drops` - Icy Wind/Electroweb analysis
 - `analyze_paralysis_matchup` - Paralysis speed analysis
-- `outspeed_probability` - Probability of outspeeding (using Smogon data)
+- `analyze_outspeed_probability` - Probability of outspeeding (using Smogon data)
 - `calculate_meta_outspeed_rate` - Outspeed rate vs meta
 - `speed_creep_analysis` - EVs to outspeed common threats
 
@@ -156,7 +156,7 @@ Optimize spreads, check efficiency, save EVs.
 **Available Tools:**
 - `check_spread_efficiency` - Find wasted EVs
 - `find_bulk_evs` - Survive specific attacks
-- `find_multi_threat_bulk_evs` - Survive multiple threats
+- `optimize_multi_survival_spread` - Survive multiple threats
 - `suggest_nature_optimization` - Save EVs with better nature
 - `find_optimal_speed_tier` - Best speed tier
 - `optimize_defensive_spread` - Multi-threat bulk optimization
@@ -500,9 +500,8 @@ Learn competitive Pokemon basics.
 ## Need Help?
 
 - Say **"What can you do?"** to see all capabilities
-- Say **"Help damage"** for damage calculation help
-- Say **"Help team"** for team building help
-- Say **"/help"** to see slash commands
+- Say **"What can you do for damage?"** for damage calculation examples
+- Say **"What can you do for team?"** for team building examples
 - Say **"Explain [term]"** to learn VGC vocabulary
 
 For bugs or feature requests: https://github.com/MSS23/vgc-mcp/issues

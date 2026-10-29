@@ -61,9 +61,9 @@ class _FakeSmogon:
 
 def _make_tm(monkeypatch):
     # Silence Smogon common-spread lookups so attackers fall back to defaults.
-    import vgc_mcp.tools.spread_tools as st
+    import vgc_mcp_core.tools.spread_common as st
 
-    async def _no_spread(name):
+    async def _no_spread(smogon, name):
         return None
 
     monkeypatch.setattr(st, "_get_common_spread", _no_spread)

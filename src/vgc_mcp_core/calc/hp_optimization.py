@@ -13,6 +13,8 @@ differences can change the actual amount recovered/lost per turn:
   Optimal: HP divisible by 4
 """
 
+from typing import Any
+
 from ..config import EV_BREAKPOINTS_LV50
 from .stats import calculate_hp
 
@@ -101,7 +103,7 @@ def find_optimal_hp_evs(
     item: str,
     iv: int = 31,
     level: int = 50,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Find all HP EV options with their item optimization scores.
 
     Args:
@@ -116,7 +118,7 @@ def find_optimal_hp_evs(
           "recovery_per_turn": int, "notes": str}, ...]
     """
     category = _get_item_category(item)
-    results = []
+    results: list[dict[str, Any]] = []
 
     for ev in EV_BREAKPOINTS_LV50:
         hp = calculate_hp(base_hp, iv, ev, level)
@@ -172,7 +174,7 @@ def adjust_hp_evs_for_item(
     max_adjustment: int = 8,
     iv: int = 31,
     level: int = 50,
-) -> dict:
+) -> dict[str, Any]:
     """Adjust HP EVs to the nearest optimal number for the given item.
 
     Looks within ±max_adjustment EVs of the current allocation to find

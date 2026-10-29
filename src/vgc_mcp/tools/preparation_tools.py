@@ -1,6 +1,6 @@
 """Thin MCP registrations for verified preparation and sourced sets."""
 
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Awaitable, Literal, cast
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
@@ -18,9 +18,25 @@ from vgc_mcp_core.tools.preparation_handlers import (
     outcomes_handler,
     prepare_team_handler,
 )
+from vgc_mcp_core.tools.response_contract import CalcResult
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 READ_ONLY = ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=True)
+
+
+async def _calc(call: Awaitable[dict[str, Any]]) -> CalcResult:
+    """Await a calc handler, mapping failures to structured errors.
+
+    FastMCP validates the returned dict against CalcResult (publishing an
+    outputSchema); returning the dict itself keeps direct `.fn` callers working.
+    """
+    try:
+        result = await call
+    except (ValueError, TypeError) as exc:
+        result = error_response(ErrorCodes.INVALID_PARAMETER, str(exc))
+    except Exception as exc:
+        result = error_response(ErrorCodes.API_ERROR, str(exc))
+    return cast(CalcResult, result)
 
 
 def register_preparation_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: SmogonStatsClient, team_manager: TeamManager) -> None:
@@ -31,56 +47,41 @@ def register_preparation_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Smo
         attacker_paste: str, defender_paste: str, move_name: str,
         regulation: str | None = None, conditions: dict[str, Any] | None = None,
         include_accuracy: bool = True, random_hits: bool = True,
-    ) -> dict[str, Any]:
+    ) -> CalcResult:
         """Calculate independent hit rolls, misses, berries and Parental Bond from exact Showdown pastes.
 
         Probability includes accuracy and random hit counts by default. Set both
         flags false for damage conditional on the chosen/default number of hits.
         conditions accepts DamageModifiers fields; regulation defaults to the session.
         """
-        try:
-            return await outcomes_handler(attacker_paste, defender_paste, move_name, pokeapi,
-                                          regulation, conditions, include_accuracy, random_hits)
-        except (ValueError, TypeError) as exc:
-            return error_response(ErrorCodes.INVALID_PARAMETER, str(exc))
-        except Exception as exc:
-            return error_response(ErrorCodes.API_ERROR, str(exc))
+        return await _calc(outcomes_handler(attacker_paste, defender_paste, move_name, pokeapi,
+                                            regulation, conditions, include_accuracy, random_hits))
 
     @mcp.tool(title="Verify Exact Spread Benchmarks", annotations=READ_ONLY)
     async def verify_spread_benchmarks(
         pokemon_paste: str, benchmarks: Annotated[list[BenchmarkSpec], Field(min_length=1, max_length=6)],
         regulation: str | None = None,
-    ) -> dict[str, Any]:
+    ) -> CalcResult:
         """Recalculate survive, KO and outspeed constraints against exact or chaos opponents.
 
         Each benchmark supplies kind, exactly one opponent_paste/opponent_name,
         move for damage, optional probability percent and conditions. Includes
         all exact spreads, assumptions and provenance for independent checking.
         """
-        try:
-            return await benchmark_handler(pokemon_paste, benchmarks, pokeapi, smogon, regulation)
-        except (ValueError, TypeError) as exc:
-            return error_response(ErrorCodes.INVALID_PARAMETER, str(exc))
-        except Exception as exc:
-            return error_response(ErrorCodes.API_ERROR, str(exc))
+        return await _calc(benchmark_handler(pokemon_paste, benchmarks, pokeapi, smogon, regulation))
 
     @mcp.tool(title="Recommend Verified Spread Alternatives", annotations=READ_ONLY)
     async def recommend_verified_spreads(
         pokemon_paste: str, benchmarks: Annotated[list[BenchmarkSpec], Field(min_length=1, max_length=6)],
         regulation: str | None = None, natures: Annotated[list[Nature] | None, Field(max_length=25)] = None,
-    ) -> dict[str, Any]:
+    ) -> CalcResult:
         """Offer minimum-investment, offensive and bulky spreads that pass final exact verification.
 
         Retains item, ability, moves, IVs and level. Reports stat tradeoffs and
         bounded search scope; no result is not proof that every spread is impossible.
         """
-        try:
-            return await benchmark_handler(pokemon_paste, benchmarks, pokeapi, smogon, regulation,
-                                           recommend=True, natures=natures)
-        except (ValueError, TypeError) as exc:
-            return error_response(ErrorCodes.INVALID_PARAMETER, str(exc))
-        except Exception as exc:
-            return error_response(ErrorCodes.API_ERROR, str(exc))
+        return await _calc(benchmark_handler(pokemon_paste, benchmarks, pokeapi, smogon, regulation,
+                                             recommend=True, natures=natures))
 
     @mcp.tool(title="Import Complete Reference Sets", annotations=ToolAnnotations(
         readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=True))

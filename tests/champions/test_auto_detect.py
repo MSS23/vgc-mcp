@@ -103,3 +103,15 @@ def test_clear_session_override_resets_auto_detect_flag(cfg):
     cfg.clear_session_override()
     assert not cfg.session_set_explicitly
     assert cfg.last_auto_detection is None
+
+
+def test_read_only_detect_does_not_persist_but_auto_variant_does():
+    from vgc_mcp_core.rules.format_detect import auto_detect_champions_format
+
+    ro_cfg = RegulationConfig()
+    assert detect_champions_format("Mega Manectric", cfg=ro_cfg) is True
+    assert ro_cfg.session_regulation is None  # read-only: nothing persisted
+
+    mut_cfg = RegulationConfig()
+    assert auto_detect_champions_format("Mega Manectric", cfg=mut_cfg) is True
+    assert mut_cfg.session_regulation is not None  # build/team flows persist

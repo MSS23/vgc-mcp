@@ -9,6 +9,8 @@ import json
 
 import pytest
 
+from vgc_mcp.profiles import CORE_TOOLS, FULL_TOOL_COUNT
+
 REMOTE_AVAILABLE = importlib.util.find_spec("starlette") is not None
 
 pytestmark = pytest.mark.skipif(
@@ -170,7 +172,9 @@ def test_health_endpoint(http_client, monkeypatch):
     body = resp.json()
     assert body["status"] == "healthy"
     assert body["tool_modules"] == 52
-    assert body["tools"] == 213
+    assert body["profile"] == "core"
+    assert body["tools"] == len(CORE_TOOLS)
+    assert body["tools_total"] == FULL_TOOL_COUNT
     assert "active_sessions" in body
     assert body["revision"] == "abc123"
     assert body["branch"] == "main"
@@ -181,8 +185,10 @@ def test_root_endpoint(http_client):
     assert resp.status_code == 200
     body = resp.json()
     assert body["endpoints"]["mcp"] == "/mcp"
+    assert body["endpoints"]["mcp_full"] == "/mcp/full"
     assert body["tool_modules"] == 52
-    assert body["tools"] == 213
+    assert body["tools"] == len(CORE_TOOLS)
+    assert body["tools_total"] == FULL_TOOL_COUNT
 
 
 def test_mcp_endpoint_exists(http_client):
@@ -216,7 +222,7 @@ def test_streamable_http_initialize_on_mcp(http_client):
     assert "VGC Team Builder" in resp.text
 
 
-def _start_mcp_session(http_client, request_id):
+def _start_mcp_session(http_client, request_id, path="/mcp"):
     init_body = {
         **_INITIALIZE_BODY,
         "id": request_id,
@@ -225,12 +231,12 @@ def _start_mcp_session(http_client, request_id):
             "clientInfo": {"name": f"probe-{request_id}", "version": "1.0"},
         },
     }
-    response = http_client.post("/mcp", json=init_body, headers=_MCP_HEADERS)
+    response = http_client.post(path, json=init_body, headers=_MCP_HEADERS)
     assert response.status_code == 200
     session_id = response.headers["Mcp-Session-Id"]
     ready_headers = {**_MCP_HEADERS, "Mcp-Session-Id": session_id}
     ready = http_client.post(
-        "/mcp",
+        path,
         json={"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}},
         headers=ready_headers,
     )
@@ -238,9 +244,18 @@ def _start_mcp_session(http_client, request_id):
     return session_id
 
 
-def _call_mcp_tool(http_client, session_id, request_id, name, arguments):
+def _mcp_request(http_client, session_id, body, path="/mcp"):
     response = http_client.post(
-        "/mcp",
+        path, json=body, headers={**_MCP_HEADERS, "Mcp-Session-Id": session_id}
+    )
+    assert response.status_code == 200
+    data_line = next(line for line in response.text.splitlines() if line.startswith("data:"))
+    return json.loads(data_line.removeprefix("data:").strip())
+
+
+def _call_mcp_tool(http_client, session_id, request_id, name, arguments, path="/mcp"):
+    response = http_client.post(
+        path,
         json={
             "jsonrpc": "2.0",
             "id": request_id,
@@ -257,24 +272,61 @@ def _call_mcp_tool(http_client, session_id, request_id, name, arguments):
 
 
 def test_streamable_http_sessions_isolate_regulation_choice(http_client):
-    session_a = _start_mcp_session(http_client, 101)
-    session_b = _start_mcp_session(http_client, 102)
+    full = "/mcp/full"
+    session_a = _start_mcp_session(http_client, 101, full)
+    session_b = _start_mcp_session(http_client, 102, full)
 
     _call_mcp_tool(
-        http_client, session_a, 103, "set_session_regulation", {"regulation": "Reg F"}
+        http_client, session_a, 103, "set_session_regulation", {"regulation": "Reg F"}, full
     )
     _call_mcp_tool(
-        http_client, session_b, 104, "set_session_regulation", {"regulation": "Reg H"}
+        http_client, session_b, 104, "set_session_regulation", {"regulation": "Reg H"}, full
     )
 
     current_a = _call_mcp_tool(
-        http_client, session_a, 105, "get_current_regulation_info", {}
+        http_client, session_a, 105, "get_current_regulation_info", {}, full
     )
     current_b = _call_mcp_tool(
-        http_client, session_b, 106, "get_current_regulation_info", {}
+        http_client, session_b, 106, "get_current_regulation_info", {}, full
     )
     assert current_a["current_regulation"] == "reg_f"
     assert current_b["current_regulation"] == "reg_h"
+
+
+def _listed_tool_names(http_client, path, request_id):
+    session = _start_mcp_session(http_client, request_id, path)
+    envelope = _mcp_request(
+        http_client,
+        session,
+        {"jsonrpc": "2.0", "id": request_id + 1, "method": "tools/list", "params": {}},
+        path,
+    )
+    return {tool["name"] for tool in envelope["result"]["tools"]}
+
+
+def test_mcp_lists_exactly_the_core_profile(http_client):
+    assert _listed_tool_names(http_client, "/mcp", 201) == set(CORE_TOOLS)
+
+
+def test_mcp_full_lists_every_registered_tool(http_client):
+    names = _listed_tool_names(http_client, "/mcp/full", 211)
+    assert len(names) == FULL_TOOL_COUNT
+    assert set(CORE_TOOLS) <= names
+
+
+def test_core_endpoint_rejects_non_core_tools(http_client):
+    session = _start_mcp_session(http_client, 221)
+    envelope = _mcp_request(
+        http_client,
+        session,
+        {
+            "jsonrpc": "2.0",
+            "id": 222,
+            "method": "tools/call",
+            "params": {"name": "get_current_regulation_info", "arguments": {}},
+        },
+    )
+    assert envelope["result"]["isError"] is True
 
 
 def test_post_sse_forwards_to_streamable_http(http_client):

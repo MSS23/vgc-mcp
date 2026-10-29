@@ -164,8 +164,8 @@ def verify_champions_tools(mcp_url: str, session_id: str) -> None:
         raise RuntimeError(f"Production Champions Tailwind regression: {benchmark}")
 
 
-def verify_mcp(base_url: str, health: dict[str, Any]) -> None:
-    mcp_url = f"{base_url}/mcp"
+def _open_session(mcp_url: str) -> str:
+    """Initialize an MCP session at ``mcp_url`` and return its session id."""
     initialize, response_headers = _post_mcp(
         mcp_url,
         {
@@ -191,13 +191,52 @@ def verify_mcp(base_url: str, health: dict[str, Any]) -> None:
         {"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}},
         session_id=session_id,
     )
+    return session_id
+
+
+def _list_tools(mcp_url: str, session_id: str) -> list[dict[str, Any]]:
     tools_envelope, _ = _post_mcp(
         mcp_url,
         {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
         session_id=session_id,
     )
-    tools = tools_envelope.get("result", {}).get("tools", []) if tools_envelope else []
-    if len(tools) != health.get("tools") or len(tools) < 200:
+    return tools_envelope.get("result", {}).get("tools", []) if tools_envelope else []
+
+
+def _close_session(mcp_url: str, session_id: str) -> None:
+    try:
+        _request(
+            mcp_url,
+            method="DELETE",
+            headers={"Accept": "application/json, text/event-stream", "Mcp-Session-Id": session_id},
+        )
+    except urllib.error.HTTPError:
+        pass
+
+
+def verify_full_profile(base_url: str, health: dict[str, Any]) -> None:
+    """/mcp/full must list every registered tool."""
+    if "tools_total" not in health:  # revision predates tool profiles
+        return
+    full_url = f"{base_url}/mcp/full"
+    session_id = _open_session(full_url)
+    try:
+        tools = _list_tools(full_url, session_id)
+    finally:
+        _close_session(full_url, session_id)
+    if len(tools) != health["tools_total"] or len(tools) < 200:
+        raise RuntimeError(
+            f"Full tool surface mismatch: /mcp/full listed {len(tools)}, "
+            f"health reported {health['tools_total']}"
+        )
+
+
+def verify_mcp(base_url: str, health: dict[str, Any]) -> None:
+    mcp_url = f"{base_url}/mcp"
+    session_id = _open_session(mcp_url)
+    tools = _list_tools(mcp_url, session_id)
+    minimum = 25 if health.get("profile") == "core" else 200
+    if len(tools) != health.get("tools") or len(tools) < minimum:
         raise RuntimeError(
             f"Tool surface mismatch: MCP listed {len(tools)}, health reported {health.get('tools')}"
         )
@@ -228,14 +267,8 @@ def verify_mcp(base_url: str, health: dict[str, Any]) -> None:
         verify_functional_tools(mcp_url, session_id)
         verify_champions_tools(mcp_url, session_id)
     finally:
-        try:
-            _request(
-                mcp_url,
-                method="DELETE",
-                headers={"Accept": "application/json, text/event-stream", "Mcp-Session-Id": session_id},
-            )
-        except urllib.error.HTTPError:
-            pass
+        _close_session(mcp_url, session_id)
+    verify_full_profile(base_url, health)
 
 
 def main() -> int:
@@ -255,7 +288,8 @@ def main() -> int:
 
     print(
         f"Production verified: revision={health.get('revision')} "
-        f"tools={health.get('tools')} url={base_url}"
+        f"profile={health.get('profile', 'full')} tools={health.get('tools')} "
+        f"tools_total={health.get('tools_total', health.get('tools'))} url={base_url}"
     )
     return 0
 
