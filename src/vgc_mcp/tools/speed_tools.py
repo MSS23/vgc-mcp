@@ -13,7 +13,7 @@ from pydantic import Field
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
 from vgc_mcp_core.tools import speed_handlers
-from vgc_mcp_core.tools.response_contract import CalcResult
+from vgc_mcp_core.tools.calc_result import CalcResultDict
 
 # Common VGC Pokemon with their base speeds and common speed investments
 # Used as fallback when Smogon data is unavailable
@@ -98,7 +98,7 @@ def register_speed_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional[
         nature: Annotated[str, Field(description="Your Pokemon's nature (ignored if speed_stat is provided)")] = "serious",
         speed_evs: Annotated[Union[Annotated[int, Field(ge=0, le=252)], str], Field(description="Speed EVs (0-252), or Stat Points (0-32) in Champions; also accepts the full 'HP/Atk/Def/SpA/SpD/Spe' slash string (its Spe value is used). Ignored if speed_stat is provided")] = 0,
         speed_stat: Annotated[Optional[int], Field(description="Your Pokemon's final Speed stat (overrides the nature/EVs calculation)")] = None
-    ) -> CalcResult:
+    ) -> CalcResultDict:
         """Analyze what percentage of a target Pokemon's common spreads you outspeed.
 
         Uses real Smogon usage data when available, falling back to hardcoded

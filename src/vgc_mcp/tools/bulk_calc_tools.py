@@ -22,8 +22,8 @@ from vgc_mcp_core.rules.format_detect import detect_champions_format
 from vgc_mcp_core.tools.build_helpers import build_pokemon
 from vgc_mcp_core.tools.build_helpers import parse_ev_string as _parse_ev_string
 from vgc_mcp_core.tools.build_helpers import parse_sp_string as _parse_sp_string
+from vgc_mcp_core.tools.calc_result import CalcResultDict
 from vgc_mcp_core.tools.response_contract import (
-    CalcResult,
     apply_contract,
     data_source_from_meta,
     spread_label,
@@ -191,7 +191,7 @@ def register_bulk_calc_tools(
         defender_tera_types: Annotated[Optional[dict[str, str]], Field(
             description="Map of defender name to their Tera type (e.g. {'incineroar': 'water', 'rillaboom': 'fire'})",
         )] = None,
-    ) -> CalcResult:
+    ) -> CalcResultDict:
         """Run bulk offensive damage calculations: 1 attacker x N moves x M defenders x K scenarios.
 
         Replaces running dozens of individual damage calcs. Returns structured
@@ -256,7 +256,7 @@ def register_bulk_calc_tools(
             defenders = []
             failed_defenders = []
             for name, result in zip(defender_names, defender_results):
-                if isinstance(result, Exception):
+                if isinstance(result, BaseException):
                     failed_defenders.append({"name": name, "error": str(result)})
                 else:
                     defenders.append(result)

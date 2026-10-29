@@ -35,7 +35,8 @@ from vgc_mcp_core.formats.showdown import format_showdown_species
 from vgc_mcp_core.models.pokemon import Nature
 from vgc_mcp_core.team.manager import TeamManager
 from vgc_mcp_core.tools import speed_handlers
-from vgc_mcp_core.tools.response_contract import CalcResult, apply_contract
+from vgc_mcp_core.tools.calc_result import CalcResultDict
+from vgc_mcp_core.tools.response_contract import apply_contract
 from vgc_mcp_core.utils.errors import ErrorCodes, error_response
 
 
@@ -60,7 +61,7 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
         pokemon1_speed_evs: Annotated[Union[Annotated[int, Field(ge=0, le=252)], str], Field(description="First Pokemon's Speed EVs (0-252); Stat Points 0-32 in Champions sessions. Also accepts the full 'HP/Atk/Def/SpA/SpD/Spe' slash string (its Spe value is used).")] = 0,
         pokemon2_nature: Annotated[str, Field(description="Second Pokemon's nature")] = "serious",
         pokemon2_speed_evs: Annotated[Union[Annotated[int, Field(ge=0, le=252)], str], Field(description="Second Pokemon's Speed EVs (0-252); Stat Points 0-32 in Champions sessions. Also accepts the full 'HP/Atk/Def/SpA/SpD/Spe' slash string (its Spe value is used).")] = 0
-    ) -> CalcResult:
+    ) -> CalcResultDict:
         """Compare speed between two Pokemon to determine who moves first.
 
         In a Pokemon Champions (Reg MA) session the ``*_speed_evs`` arguments are
@@ -198,7 +199,7 @@ def register_speed_analysis_tools(mcp: FastMCP, pokeapi: PokeAPIClient, team_man
         pokemon_name: Annotated[str, Field(description="Your Pokemon's name", min_length=1)],
         target_speed: Annotated[int, Field(description="The Speed stat you want to reach or exceed")],
         nature: Annotated[str, Field(description="Your Pokemon's nature")] = "serious"
-    ) -> CalcResult:
+    ) -> CalcResultDict:
         """Find minimum Speed EVs needed to reach or exceed a target Speed stat.
 
         Returns the required EVs (or Stat Points in a Champions Reg MA session)

@@ -1602,7 +1602,7 @@ async def find_survival_evs(
 
         # Set defaults if still None (use neutral nature to match "252 Atk" notation)
         attacker_nature = attacker_nature or "serious"
-        attacker_evs = attacker_evs if attacker_evs is not None else 252
+        attacker_evs = int(attacker_evs) if attacker_evs is not None else 252
 
         # Auto-detect Ruinous abilities from attacker
         sword_of_ruin = False

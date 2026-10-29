@@ -189,9 +189,11 @@ async def analyze_outspeed_probability(
                     speed_set = set()
                     for spread in target_data["spreads"]:
                         nature_str = spread.get("nature", "Serious").lower()
-                        speed_evs = spread.get("evs", 0)
-                        nature = NATURE_MAP.get(nature_str, Nature.SERIOUS)
-                        speed = calculate_speed(base, 31, speed_evs, 50, nature)
+                        # Distinct names: these must not clobber the caller's
+                        # nature / speed_evs, which the response echoes back.
+                        spread_evs = spread.get("evs", 0)
+                        spread_nature = NATURE_MAP.get(nature_str, Nature.SERIOUS)
+                        speed = calculate_speed(base, 31, spread_evs, 50, spread_nature)
                         if speed not in speed_set:
                             speed_set.add(speed)
                             common_speeds.append(speed)

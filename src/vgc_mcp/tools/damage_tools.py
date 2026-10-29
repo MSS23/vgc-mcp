@@ -12,12 +12,12 @@ from pydantic import Field
 from vgc_mcp_core.api.pokeapi import PokeAPIClient
 from vgc_mcp_core.api.smogon import SmogonStatsClient
 from vgc_mcp_core.tools import damage_handlers
+from vgc_mcp_core.tools.calc_result import CalcResultDict
 from vgc_mcp_core.tools.damage_handlers import _get_common_spread as _get_common_spread
 from vgc_mcp_core.tools.damage_handlers import _get_common_spreads as _get_common_spreads
 from vgc_mcp_core.tools.damage_handlers import (
     format_transparent_output as format_transparent_output,
 )
-from vgc_mcp_core.tools.response_contract import CalcResult
 from vgc_mcp_core.utils.normalize import (
     normalize_smogon_name as _normalize_smogon_name,  # noqa: F401
 )
@@ -86,7 +86,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         friend_guard: Annotated[bool, Field(description="True if ally has Friend Guard ability (reduces damage to 0.75x)")] = False,
         defender_starting_hp_percent: Annotated[float, Field(description="Defender's HP at the moment of the hit (0.1-100). Use this to model prior chip damage — e.g. 90.0 if defender has taken one Life Orb chip (10%), 75.0 if it lost a Sitrus to a previous hit. Affects KO computation only; damage rolls themselves are unchanged.")] = 100.0,
         attacker_starting_hp_percent: Annotated[float, Field(description="Attacker's HP %, used only for Multiscale / Shadow Shield activation checks (these abilities halve damage at full HP). Default 100.0 (full HP).")] = 100.0,
-    ) -> CalcResult:
+    ) -> CalcResultDict:
         """⭐ PRIMARY DAMAGE TOOL — use this for ANY damage / KO / survival question.
 
         USE THIS WHEN the user asks ANY of:
@@ -252,7 +252,7 @@ def register_damage_tools(mcp: FastMCP, pokeapi: PokeAPIClient, smogon: Optional
         defender_ability: Annotated[Optional[str], Field(description="Defender's ability. Auto-detected if not specified (Mega forms resolve to their post-mega ability, e.g. Mega Manectric → Intimidate).")] = None,
         attacker_ability: Annotated[Optional[str], Field(description="Attacker's ability — overrides auto-detection")] = None,
         apply_defender_intimidate: Annotated[bool, Field(description="If True (default), automatically applies the defender's Intimidate (-1 attacker Atk for physical moves), accounting for attacker blockers (Clear Body, Inner Focus, etc.) and punishers (Defiant, Contrary). Set False to ignore Intimidate (e.g. simulating a turn after switch-in).")] = True
-    ) -> CalcResult:
+    ) -> CalcResultDict:
         """Find minimum HP/Defense EVs needed to SURVIVE a specific attack.
 
         Default behavior (93.75% survival) survives the MAXIMUM damage roll but

@@ -18,7 +18,8 @@ from vgc_mcp_core.formats.showdown import format_showdown_species, pokemon_build
 from vgc_mcp_core.models.pokemon import EVSpread, IVSpread, Nature, PokemonBuild, StatPointSpread
 from vgc_mcp_core.rules.format_detect import detect_champions_format
 from vgc_mcp_core.tools.build_helpers import build_pokemon
-from vgc_mcp_core.tools.response_contract import CalcResult, apply_contract, spread_label
+from vgc_mcp_core.tools.calc_result import CalcResultDict
+from vgc_mcp_core.tools.response_contract import apply_contract, spread_label
 from vgc_mcp_core.utils.errors import (
     api_error,
     invalid_evs_error,
@@ -137,7 +138,7 @@ def register_stats_tools(mcp: FastMCP, pokeapi: PokeAPIClient):
         spd_evs: Annotated[int, Field(ge=0, le=252, description="Special Defense EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0,
         spe_evs: Annotated[int, Field(ge=0, le=252, description="Speed EVs (0-252); Stat Points 0-32 in Champions sessions")] = 0,
         level: Annotated[int, Field(ge=1, le=100, description="Pokemon level (VGC standard is 50)")] = 50,
-    ) -> CalcResult:
+    ) -> CalcResultDict:
         """Calculate all six final stats for a Pokemon at level 50 (VGC standard).
 
         Returns base stats, the investment used, final calculated stats, a
