@@ -814,7 +814,7 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                     "Team is full (6 Pokemon)",
                     suggestions=[
                         "Use 'remove_from_team' to remove a Pokemon first",
-                        "Use 'swap_pokemon' to replace a specific slot"
+                        "Use 'swap_team_pokemon' to replace a specific slot"
                     ],
                     suggested_build={
                         "pokemon": species_name,
@@ -843,7 +843,7 @@ def register_workflow_tools(mcp: FastMCP, pokeapi, smogon, team_manager, analyze
                 team_size=team_manager.size,
                 format_system=format_system,
                 showdown_paste=pokemon_build_to_showdown(pokemon_build),
-                tip="Use 'update_pokemon' to customize the build, or 'get_usage_stats' to see common competitive sets",
+                tip="Use 'get_common_sets' to see common competitive sets, or 'swap_team_pokemon' to replace this slot with a custom build",
             )
             # Surface what the auto-detect resolved (documented contract).
             if regulation_auto_detected is not None:

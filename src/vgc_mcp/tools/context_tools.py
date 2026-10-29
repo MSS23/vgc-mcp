@@ -400,7 +400,7 @@ def register_context_tools(mcp: FastMCP, pokeapi, team_manager):
             "next_steps": [
                 "Use 'set_my_pokemon' to store a Pokemon spread for analysis",
                 "Use 'add_to_team' to start building a team",
-                "Use 'import_showdown_paste' to import from Pokemon Showdown"
+                "Use 'import_showdown_team' to import from Pokemon Showdown"
             ]
         }
 

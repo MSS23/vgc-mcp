@@ -224,7 +224,7 @@ def register_game_plan_tools(
                     your_builds.append(slot.pokemon)
                     your_names.append(slot.pokemon.name)
             else:
-                return error_response(ErrorCodes.INTERNAL_ERROR, 'No team provided. Either pass your_team names or load a team first.', hint="Use import_showdown_paste to load your team, or pass your_team=['pokemon1', 'pokemon2', ...]")
+                return error_response(ErrorCodes.INTERNAL_ERROR, 'No team provided. Either pass your_team names or load a team first.', hint="Use import_showdown_team to load your team, or pass your_team=['pokemon1', 'pokemon2', ...]")
 
         if len(your_names) < 2:
             return error_response(ErrorCodes.INTERNAL_ERROR, 'Your team needs at least 2 Pokemon.')
