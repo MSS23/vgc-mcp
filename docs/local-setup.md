@@ -321,7 +321,7 @@ If it starts without errors, the server is working. Press Ctrl+C to stop.
 
 3. **Test Tool Response:**
    Ask Claude: "List all your VGC tools" or "What VGC commands do you have?"
-   - If it lists 157+ tools → Local server working ✅
+   - If it lists 213 tools → Local server working ✅
    - If it says it doesn't have VGC tools → Server not connected ❌
 
 4. **Verify Speed:**

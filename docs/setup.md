@@ -202,7 +202,7 @@ Find your Python path with: `where python` (Windows) or `which python` (Mac/Linu
    Say to Claude:
    > "What can you help me with?"
 
-   You should see VGC tools listed (157+ tools if using local server)
+   You should see VGC tools listed (213 tools if using local server)
 
 3. **Test a Command:**
    > "Does Flutter Mane OHKO Incineroar?"

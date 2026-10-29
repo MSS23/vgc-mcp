@@ -456,7 +456,7 @@ def register_legality_tools(mcp: FastMCP, team_manager):
     )
     async def set_session_regulation(
         regulation: Annotated[str, Field(
-            description="Any reasonable regulation phrasing — 'Reg F'/'F'/'regulation_f', 'Reg G', 'Reg H', 'Reg I', 'Champions'/'Pokemon Champions'/'Reg MB'/'MB', or 'Reg MA'/'MA'",
+            description="Any reasonable regulation phrasing — 'Reg F'/'F'/'regulation_f', 'Reg G', 'Reg H', 'Reg I', 'Champions'/'Pokemon Champions'/'Reg MC'/'MC', 'Reg MB'/'MB', or 'Reg MA'/'MA'",
             min_length=1,
         )],
     ) -> dict:
@@ -464,9 +464,10 @@ def register_legality_tools(mcp: FastMCP, team_manager):
 
         Routes natural inputs to the right format system:
         - "Reg F" / "G" / "H" / "I" -> mainline regulations (EVs, 252/508)
-        - "Champions" / "Reg MB" -> reg_mb_champs (Stat Points, 32/66;
+        - "Champions" / "Reg MC" -> reg_mc_champs (Stat Points, 32/66; current default)
+        - "Reg MB" -> reg_mb_champs (Stat Points, 32/66;
           current default Champions roster)
-        - "Reg MA" -> reg_ma_champs (original Champions roster, subset of MB)
+        - "Reg MA" -> reg_ma_champs (original Champions roster, subset of MB/MC)
 
         Champions formats automatically use the matching gen9championsvgc2026regm*
         Smogon JSON files; mainline regulations use the gen9vgc2025/2026
@@ -487,7 +488,7 @@ def register_legality_tools(mcp: FastMCP, team_manager):
             return error_response(
                 ErrorCodes.INTERNAL_ERROR,
                 f"Unknown regulation: {regulation!r}. "
-                f"Try 'Reg F', 'Reg G', 'Reg H', 'Reg I', 'Champions' / 'Reg MB', or 'Reg MA'.",
+                f"Try 'Reg F', 'Reg G', 'Reg H', 'Reg I', 'Champions' / 'Reg MC', 'Reg MB', or 'Reg MA'.",
                 available=available,
             )
 
@@ -530,7 +531,7 @@ def register_legality_tools(mcp: FastMCP, team_manager):
         - Returns action ("set" | "skipped" | "low_confidence"), the regulation
           code, format_system, stat units, confidence, and the reasoning so you
           can mention it to the user (e.g. "I noticed you have a Mega — using
-          Champions Reg MB").
+          Champions Reg MC").
 
         Use when the user pastes a team, asks about a specific Pokemon or
         damage matchup, or anytime the active regulation is unclear.
@@ -569,10 +570,10 @@ def register_legality_tools(mcp: FastMCP, team_manager):
         session can be set with `set_session_regulation` to the inferred code.
 
         Detection rules (in order of confidence):
-        - Any Mega form -> Champions Reg MB (the current Champions default).
-        - Any Pokemon legal in Champions but banned in mainline -> Champions Reg MB.
+        - Any Mega form -> Champions Reg MC (the current Champions default).
+        - Any Pokemon legal in Champions but banned in mainline -> Champions Reg MC.
         - 1 restricted Pokemon -> Reg G; 2+ restricteds -> Reg I (Reg F fallback).
-        - 0 restricteds + no Mega -> Reg F primary, Reg MB as alternative.
+        - 0 restricteds + no Mega -> Reg F primary, Reg MC as alternative.
 
         Returns the inferred regulation, confidence, reasons, alternatives,
         restricted/illegal Pokemon seen, format system, stat units, and a

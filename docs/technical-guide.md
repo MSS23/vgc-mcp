@@ -948,7 +948,7 @@ DEBUG:mcp: ← Sending: {"jsonrpc": "2.0", "id": 1, "result": {...}}
 
 ## Summary
 
-**MCP (Model Context Protocol)** enables AI assistants to call external tools. The VGC MCP Server provides 157+ tools for competitive Pokemon team building.
+**MCP (Model Context Protocol)** enables AI assistants to call external tools. The VGC MCP Server provides 213 tools for competitive Pokemon team building.
 
 **Key Concepts:**
 - **Client** (Claude Desktop) sends tool requests

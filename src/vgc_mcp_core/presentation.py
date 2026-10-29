@@ -9,7 +9,7 @@ Edit this file when you want to change how the server presents results.
 """
 
 PRESENTATION_INSTRUCTIONS = """VGC Pokemon team building server (damage calcs, usage stats, team analysis).
-Supports mainline VGC (EVs, 252/508) and Pokemon Champions Reg MA/MB (Stat Points, 32/66).
+Supports mainline VGC (EVs, 252/508) and Pokemon Champions Reg MA/MB/MC (Stat Points, 32/66).
 
 COHESIVE MCP WORKFLOWS
 - For a team review/preparation request, prefer prepare_team. It accepts a paste
@@ -43,10 +43,10 @@ the FIRST TIME you see Pokemon names in a conversation. It:
 - Infers the regulation from the names (Mega → Champions, restricteds → Reg G/I, etc.)
 - Auto-sets the session regulation if confidence is high or medium
 - Skips silently if the user already picked a regulation explicitly
-- Returns what it inferred so you can mention it ("I noticed Mega Manectric — using Champions Reg MB")
+- Returns what it inferred so you can mention it ("I noticed Mega Manectric — using Champions Reg MC")
 
-**When you also have a wording signal** ("Reg F", "Champions", "Reg MB",
-"Reg MA", etc.), call `set_session_regulation` with that exact phrase — explicit
+**When you also have a wording signal** ("Reg F", "Champions", "Reg MC",
+"Reg MB", "Reg MA", etc.), call `set_session_regulation` with that exact phrase — explicit
 user wording always wins over inference.
 
 **Adding Pokemon to a team auto-detects too.** `add_pokemon_smart` and the
@@ -57,10 +57,10 @@ Common signals the inference uses:
 
    | What they mention | Inferred regulation |
    |---|---|
-   | Any Mega form (Mega Manectric, Charizard-Mega-Y, etc.) | Champions Reg MB (current default) |
+   | Any Mega form (Mega Manectric, Charizard-Mega-Y, etc.) | Champions Reg MC (current default) |
    | 1 restricted (Kyogre, Calyrex-Ice, Miraidon, etc.) alone | Reg G |
    | 2 restricteds (Calyrex-Shadow + Koraidon, etc.) | Reg I |
-   | 0 restricteds, no Megas | Reg F (or Reg MB — ask if all are also Champions-legal) |
+   | 0 restricteds, no Megas | Reg F (or Reg MC — ask if all are also Champions-legal) |
 
 If the auto-detect returns `action: "low_confidence"` or surfaces alternatives,
 ASK the user which regulation they meant before continuing. Don't guess silently.
@@ -68,7 +68,7 @@ ASK the user which regulation they meant before continuing. Don't guess silently
 **Format system implications** — once a regulation is set, the entire
 server dispatches accordingly. You don't need to track this manually:
    - Mainline regs (F/G/H/I) → builds use EVs (0-252/stat, 508 total)
-   - Champions Reg MA/MB → builds use Stat Points (0-32/stat, 66 total)
+   - Champions Reg MA/MB/MC → builds use Stat Points (0-32/stat, 66 total)
    - Damage calcs, stat displays, Showdown pastes, and usage stats all
      branch automatically based on the build's `format_system` flag.
 
@@ -105,6 +105,27 @@ The server has 200+ tools. The high-leverage routing rules:
 permutations, with/without Tera) → use `calculate_bulk_offensive_calcs` once,
 not 20 individual `calculate_damage_output` calls. After it returns, ALWAYS
 offer to export results as Excel/PDF via `export_damage_report`.
+
+**Head-to-head: "my X vs Y" / "offensive and defensive calcs"** (the user
+gives THEIR spread and names an opponent). Run BOTH directions against the
+opponent's real chaos sets, never a single assumed set:
+- Your move(s) into each of their top sets → `calc_damage_vs_smogon_sets`
+  with direction='to' (one call per move), or `calculate_damage_output`
+  (its `results_by_spread` covers the top defender sets).
+- Their retaliation into your exact spread → `calc_damage_vs_smogon_sets`
+  with direction='from' using their most-used damaging move(s).
+- Intimidate is automatic only when the defending Pokemon really has it
+  (Incineroar, Landorus-T, Mega Manectric...). When the user asks for the
+  Intimidate calc themselves (an Intimidate partner on the field), pass
+  `intimidate=True`; pass `intimidate=False` to suppress. Each set then
+  carries `after_intimidate` — show it as its own column next to the
+  neutral number; if the top-level `intimidate.note` says it was blocked,
+  say so in one line.
+Every row must name the opponent's set exactly as the tool returned it
+(nature, EVs or SPs, item, usage %) — e.g. "Adamant 24 HP / 16 Atk / 26 Spe
+SP @ Choice Band (31% of sets)" — and the response must cite the chaos
+month/format/rating from `meta_info` / `data_source`. "16 SP Atk Basculegion
+Wave Crash does 71-84% to you" is the standard; "Basculegion does ~80%" is not.
 
 **Speed questions**
 - "Is X faster than Y?" → `compare_speed`
@@ -197,6 +218,15 @@ For multi-defender / multi-move calcs, build one table where each row is a
 defender and each move is a column (or vice versa). Always include the
 verdict column (OHKO / X% OHKO / 2HKO / 3HKO / Resists).
 
+For per-set calcs (`results_by_spread` / `damage_vs_sets`), one row per
+opponent set, with the set's spread and usage % in the row, both directions:
+
+| # | Their set (usage) | Psychic | Heat Wave | Their Wave Crash → you | …at -1 (Intimidate) |
+|---|-------------------|---------|-----------|------------------------|---------------------|
+| 1 | Adamant 24/16/0/0/0/26 SP @ Choice Band (31%) | 92-108% (50% OHKO) | 61-72% | 71-84% | 48-57% |
+
+Footer line: "Spreads: Smogon chaos <month>, <format>, <rating> rating."
+
 ──────────────────────────────────────────────────────────────────────────
 SPREAD / OPTIMIZATION RESULTS — required format
 ──────────────────────────────────────────────────────────────────────────
@@ -264,7 +294,7 @@ SURVIVAL % DEFAULTS (interpret user intent)
 CHAMPIONS-SPECIFIC OUTPUT (when format_system="champions")
 ──────────────────────────────────────────────────────────────────────────
 
-When the active regulation is Reg MA or Reg MB Champions, all spread output uses
+When the active regulation is a Champions reg (MA/MB/MC), all spread output uses
 Stat Points (SPs), not EVs:
 
 - Showdown paste line: `SPs: 4 HP / 32 Atk / 30 Spe` (NOT `EVs:`)

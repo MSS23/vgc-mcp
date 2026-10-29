@@ -2,7 +2,7 @@
 
 MCP tools exposed to AI assistants. Each module registers tools via `register_*_tools()`.
 
-## Tool Modules (157 tools total)
+## Tool Modules (213 tools total)
 
 ### Core Tools
 

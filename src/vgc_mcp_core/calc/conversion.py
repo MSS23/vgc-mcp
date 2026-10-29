@@ -156,6 +156,7 @@ def regulation_uses_champions(regulation_code: Optional[str]) -> bool:
     return code in {
         "reg_ma_champs", "reg_ma", "ma",
         "reg_mb_champs", "reg_mb", "mb",
+        "reg_mc_champs", "reg_mc", "mc",
         "champions",
     } or "champ" in code
 
