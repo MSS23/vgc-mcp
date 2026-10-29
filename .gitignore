@@ -56,3 +56,8 @@ Thumbs.db
 coverage.xml
 htmlcov/
 graphify-out/
+
+# Personal Claude Code permissions; never commit
+.claude/settings.local.json
+# Claude Code agent worktrees
+.claude/worktrees/
