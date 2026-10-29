@@ -1,38 +1,38 @@
 name: Keep Render dyno warm
 
-# Render's free tier spins instances down after 15 minutes of inactivity
-# (cold restart is ~50s, which breaks the Claude connector handshake).
+# Render's free tier spins the service down after 15 minutes without traffic.
+# Waking it takes 20-60 s, which breaks the Claude connector handshake and
+# makes the first reply on a phone look broken. This workflow keeps the free
+# instance awake without a paid plan or any outside account.
 #
-# IMPORTANT — this workflow is the BACKUP pinger, not the primary one.
-# GitHub delays high-frequency scheduled workflows on shared runners: a
-# "*/14" cron was observed firing ~2 hours apart (see
-# docs/connection-fix-plan.md). Cron granularity from GitHub CANNOT keep a
-# 15-minute-idle dyno warm by itself. The reliable options are:
-#   1. An external uptime monitor (UptimeRobot / cron-job.org / Better
-#      Stack, free tiers ping every 5 min): point it at
-#      https://vgc-mcp.onrender.com/health          <- RECOMMENDED
-#   2. Render Starter plan (`plan: starter` in render.yaml) — never sleeps.
+# How it stays continuous even though GitHub delays scheduled runs:
+# - GitHub fires high-frequency crons late (observed: every 4-6 hours).
+# - So each run does not ping once. It pings every 10 minutes for ~5h50m,
+#   just under the 6-hour job limit.
+# - The concurrency group keeps exactly one run active and one queued. When
+#   the active run ends, the queued run starts at once and carries on.
+# - Net effect: one ping every 10 minutes around the clock, which is inside
+#   Render's 15-minute idle window.
 #
-# To compensate for cron drift, each run of this workflow pings /health
-# every 4 minutes for ~24 minutes instead of pinging once. Even when GitHub
-# fires runs late, every run that does fire keeps the dyno warm for a
-# ~25-minute window, and on-schedule runs chain into continuous coverage.
+# Budget: one free Render service awake all month is ~744 instance-hours,
+# inside the 750-hour free allowance (keep only ONE free service on the
+# account). Actions minutes are free for public repositories.
 #
-# - Free Render tier gives 750 instance-hours/month. Continuous keep-alive
-#   uses ~720h, so this fits inside the cap as long as you only run ONE
-#   free Render service.
-# - Public-repo GitHub Actions minutes are free.
+# GitHub disables scheduled workflows after 60 days with no repository
+# activity. If that ever happens, re-enable "Keep Render dyno warm" in the
+# Actions tab, or add an external 5-minute monitor (UptimeRobot, cron-job.org)
+# on https://vgc-mcp.onrender.com/health as a second pinger.
 
 on:
   schedule:
-    - cron: "*/12 * * * *"
-  workflow_dispatch:  # allow manual trigger from the Actions tab
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
 
 permissions:
   contents: read
 
-# Never stack runs: if GitHub fires the next schedule while a ping loop is
-# still running, skip the queued duplicate instead of running two loops.
+# One run pings, one waits. A newer queued run replaces an older queued one,
+# and nothing is cancelled mid-loop.
 concurrency:
   group: keep-alive
   cancel-in-progress: false
@@ -40,31 +40,45 @@ concurrency:
 jobs:
   ping:
     runs-on: ubuntu-latest
-    timeout-minutes: 28
+    timeout-minutes: 355
     steps:
-      - name: Ping loop (every 4 min for ~24 min)
-        # Each individual ping tolerates a worst-case cold start (90s) and
-        # retries; the loop only fails the workflow if EVERY ping in the
-        # window failed, so transient blips don't page anyone.
+      - name: Ping /health every 10 minutes for ~5h50m
+        env:
+          URL: https://vgc-mcp.onrender.com/health
+          INTERVAL_SECONDS: "600"
+          WINDOW_SECONDS: "20700" # 5h45m; leaves room for the last ping before the 355-min timeout
         run: |
           set -u
-          URL="https://vgc-mcp.onrender.com/health"
-          PINGS=7            # 7 pings x 4 min = 24 min of coverage
-          INTERVAL=240
+          start=$(date +%s)
+          pings=0
           successes=0
-          for i in $(seq 1 $PINGS); do
-            echo "--- Ping $i/$PINGS: GET $URL"
-            attempt=0
-            while [ $attempt -lt 3 ]; do
-              attempt=$((attempt + 1))
-              if curl -fsS --max-time 90 -o /tmp/body -w "HTTP %{http_code}, %{time_total}s\n" "$URL"; then
-                successes=$((successes + 1))
+          slowest=0
+          while :; do
+            pings=$((pings + 1))
+            ok=0
+            for attempt in 1 2 3; do
+              if out=$(curl -fsS --max-time 90 -o /dev/null -w "%{http_code} %{time_total}" "$URL"); then
+                secs=${out#* }
+                echo "ping $pings: HTTP ${out% *} in ${secs}s"
+                secs_int=${secs%.*}
+                [ "$secs_int" -gt "$slowest" ] && slowest=$secs_int
+                ok=1
                 break
               fi
-              echo "attempt $attempt failed; sleeping $((attempt * 10))s"
+              echo "ping $pings attempt $attempt failed; retrying in $((attempt * 10))s"
               sleep $((attempt * 10))
             done
-            [ "$i" -lt "$PINGS" ] && sleep $INTERVAL
+            successes=$((successes + ok))
+            elapsed=$(( $(date +%s) - start ))
+            [ $((elapsed + INTERVAL_SECONDS)) -ge "$WINDOW_SECONDS" ] && break
+            sleep "$INTERVAL_SECONDS"
           done
-          echo "Successful pings: $successes/$PINGS"
+          {
+            echo "### Keep-alive window"
+            echo "| Pings | Succeeded | Slowest response |"
+            echo "|---|---|---|"
+            echo "| $pings | $successes | ${slowest}s |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          # A slow first ping means the dyno had already fallen asleep before
+          # this run started; that is expected right after a gap, not a failure.
           [ "$successes" -gt 0 ] || exit 1
