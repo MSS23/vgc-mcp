@@ -18,10 +18,25 @@ persisting anything.
 
 from __future__ import annotations
 
+from contextvars import ContextVar
 from typing import Optional
 
 from .regulation_loader import RegulationConfig, get_regulation_config
 from .regulation_router import auto_detect_regulation, infer_format_from_pokemon
+
+# The regulation inferred for the current tool call when the session has no
+# regulation of its own. Usage-data lookups read it so a calc that resolved to
+# mainline Reg F does not pull Champions sets from the default regulation.
+# A ContextVar is scoped to one request's task, so the hint never reaches
+# another call or another session, and the session itself is never changed.
+_INFERRED_REGULATION: ContextVar[Optional[str]] = ContextVar(
+    "vgc_inferred_regulation", default=None
+)
+
+
+def inferred_regulation() -> Optional[str]:
+    """Regulation inferred by detect_champions_format in this call, if any."""
+    return _INFERRED_REGULATION.get()
 
 
 def detect_champions_format(
@@ -52,6 +67,7 @@ def detect_champions_format(
             info = infer_format_from_pokemon(names, cfg)
             reg = info.get("regulation")
             if reg:
+                _INFERRED_REGULATION.set(reg)
                 return cfg.get_format_system(reg) == "champions"
         except Exception:  # noqa: BLE001 — inference must never break a calc
             pass

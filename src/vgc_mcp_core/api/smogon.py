@@ -10,6 +10,7 @@ from weakref import WeakKeyDictionary
 import httpx
 
 from ..config import logger, settings
+from ..rules.format_detect import inferred_regulation
 from ..rules.regulation_loader import RegulationConfig, get_regulation_config
 from ..utils.normalize import reorder_mega_prefix
 from .cache import APICache
@@ -86,9 +87,17 @@ class SmogonStatsClient:
 
     @property
     def ACTIVE_VGC_FORMATS(self) -> list[str]:  # noqa: N802
-        """Smogon formats for the calling session's active regulation."""
+        """Smogon formats for the calling session's active regulation.
+
+        When the session has no regulation of its own and this tool call
+        inferred one from the Pokemon involved, use that regulation's formats,
+        so usage data matches the format the calc is running in.
+        """
         cfg = self.regulation_config
-        formats = cfg.get_smogon_formats(cfg.current_regulation)
+        regulation = cfg.current_regulation
+        if cfg.session_regulation is None:
+            regulation = inferred_regulation() or regulation
+        formats = cfg.get_smogon_formats(regulation)
         return formats or cfg.get_all_smogon_formats()
 
     @property
