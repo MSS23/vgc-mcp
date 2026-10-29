@@ -47,6 +47,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The rate limiter keys on the proxy-appended client address
   (`VGC_MCP_TRUSTED_PROXY_HOPS`) instead of the spoofable leftmost
   `X-Forwarded-For` entry.
+- Fixed: with no regulation chosen, a calc that inferred mainline (e.g.
+  Flutter Mane vs Incineroar) still pulled Champions usage sets and showed
+  them as `0/0/0/0/0/0`. Usage data now follows the inferred format for that
+  call only, without changing the session.
 - Fixed: 15 tools raised `TypeError` inside their own error handler;
   `find_survival_evs` dropped Def/SpD EVs from its mainline paste;
   `analyze_outspeed_probability` echoed the wrong nature and EVs after its
