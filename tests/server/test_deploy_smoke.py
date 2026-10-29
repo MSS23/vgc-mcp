@@ -59,3 +59,15 @@ def test_http_transport_dependencies_importable():
     import uvicorn  # noqa: F401
     from mcp.server.sse import SseServerTransport  # noqa: F401
     from starlette.applications import Starlette  # noqa: F401
+
+
+def test_workflow_prompts_registered_and_name_real_tools():
+    """Starter prompts exist and only point at tools that are registered."""
+    import asyncio
+
+    from vgc_mcp.server import mcp
+
+    prompts = {p.name for p in asyncio.run(mcp.list_prompts())}
+    assert {"prepare_for_tournament", "explain_replay", "check_damage"} <= prompts
+    tools = {t.name for t in asyncio.run(mcp.list_tools())}
+    assert {"prepare_team", "analyze_replay"} <= tools

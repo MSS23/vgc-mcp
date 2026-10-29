@@ -93,24 +93,38 @@ class RateLimitMiddleware:
         limit: int,
         window: float = 60.0,
         exempt_paths: Iterable[str] = ("/", "/health"),
+        trusted_proxy_hops: int = 1,
     ) -> None:
         self.app = app
         self.limit = limit
         self.window = window
+        self.trusted_proxy_hops = max(0, trusted_proxy_hops)
         self.exempt_paths = set(exempt_paths)
         self._lock = Lock()
         # ip -> (window_start, count)
         self._buckets: dict[str, tuple[float, int]] = defaultdict(lambda: (0.0, 0))
 
     def _client_ip(self, scope: Scope) -> str:
-        # Honor X-Forwarded-For (Render/Fly put the real client here) then fall
-        # back to the socket peer.
+        """Return the client address as seen by the last trusted proxy.
+
+        The client controls everything it sends in X-Forwarded-For, so the
+        leftmost entry can be rotated to dodge the limit. Each proxy appends
+        the address it received the request from, so with N trusted proxies
+        the Nth entry from the right is the first one the client cannot forge.
+        ``trusted_proxy_hops=0`` ignores the header and uses the socket peer.
+        """
+        client = scope.get("client")
+        peer = client[0] if client else "unknown"
+        if self.trusted_proxy_hops == 0:
+            return peer
         headers = dict(scope.get("headers") or [])
         xff = headers.get(b"x-forwarded-for")
-        if xff:
-            return xff.decode().split(",")[0].strip()
-        client = scope.get("client")
-        return client[0] if client else "unknown"
+        if not xff:
+            return peer
+        hops = [h.strip() for h in xff.decode().split(",") if h.strip()]
+        if not hops:
+            return peer
+        return hops[-min(self.trusted_proxy_hops, len(hops))]
 
     def _allowed(self, ip: str, now: float) -> bool:
         with self._lock:

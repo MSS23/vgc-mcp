@@ -167,6 +167,36 @@ Use calculate_damage_output and show:
 - The EXACT attacker spread used (so I can verify)"""
 
 
+@mcp.prompt()
+def prepare_for_tournament() -> str:
+    """Get a team ready for a Regional or other event"""
+    return """I'm taking a team to a tournament and want it checked end to end.
+
+I'll paste my team in Showdown format. Then please:
+1. Run prepare_team on it and tell me which regulation and usage month you used.
+2. Lead with the three most important fixes, one line each.
+3. Show any spread changes as Showdown pastes I can copy.
+4. List the meta threats my team struggles with and how to play around them.
+5. Offer the full report as an Excel or PDF export.
+
+I'll paste my team now..."""
+
+
+@mcp.prompt()
+def explain_replay() -> str:
+    """Explain what happened in a Showdown replay"""
+    return """I want to understand a battle I played. I'll share a Pokemon Showdown
+replay link.
+
+Please run analyze_replay on it and then explain:
+1. The turn where the game was won or lost, in one or two sentences.
+2. Each side's leads and what they were trying to do.
+3. Two or three decisions I could have made differently, with the reason.
+4. Any damage roll or speed tie that decided a key turn.
+
+Keep it short and lead with the answer. Here's the replay link..."""
+
+
 # ============================================================================
 # Initialize shared state
 # ============================================================================
@@ -210,6 +240,9 @@ def _build_middleware(cors_cls, middleware_wrapper):
     - VGC_MCP_API_KEY: require `Authorization: Bearer <key>` when set.
     - VGC_MCP_RATE_LIMIT: max requests/IP per VGC_MCP_RATE_WINDOW seconds
       (default window 60s). Unset or 0 disables limiting.
+    - VGC_MCP_TRUSTED_PROXY_HOPS: how many proxies in front of the app append
+      to X-Forwarded-For (default 1, Render's load balancer). The limiter keys
+      on that hop, never the client-supplied leftmost entry. 0 = socket peer.
     """
     import os
 
@@ -237,9 +270,18 @@ def _build_middleware(cors_cls, middleware_wrapper):
         rate_window = float(os.environ.get("VGC_MCP_RATE_WINDOW", "60"))
     except ValueError:
         rate_window = 60.0
+    try:
+        proxy_hops = int(os.environ.get("VGC_MCP_TRUSTED_PROXY_HOPS", "1"))
+    except ValueError:
+        proxy_hops = 1
     if rate_limit > 0:
         stack.append(
-            middleware_wrapper(RateLimitMiddleware, limit=rate_limit, window=rate_window)
+            middleware_wrapper(
+                RateLimitMiddleware,
+                limit=rate_limit,
+                window=rate_window,
+                trusted_proxy_hops=proxy_hops,
+            )
         )
         logger.info(f"Rate limiting enabled: {rate_limit} req / {rate_window:g}s per IP")
 

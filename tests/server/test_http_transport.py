@@ -92,6 +92,42 @@ def test_rate_limit_returns_429_over_limit():
     assert client.get("/health").status_code == 200
 
 
+def test_rate_limit_ignores_spoofed_leftmost_forwarded_for():
+    """Rotating the client-controlled leftmost XFF entry must not reset the limit."""
+    from starlette.middleware import Middleware
+
+    from vgc_mcp.http_middleware import RateLimitMiddleware
+
+    client = _dummy_app_client(
+        Middleware(RateLimitMiddleware, limit=2, window=60.0)
+    )
+    codes = [
+        client.get(
+            "/mcp", headers={"X-Forwarded-For": f"10.0.0.{i}, 203.0.113.7"}
+        ).status_code
+        for i in range(4)
+    ]
+    assert codes[:2] == [200, 200]
+    assert codes[2:] == [429, 429]
+
+
+def test_client_ip_uses_trusted_hop():
+    from vgc_mcp.http_middleware import RateLimitMiddleware
+
+    def scope(xff: str | None) -> dict:
+        headers = [(b"x-forwarded-for", xff.encode())] if xff else []
+        return {"type": "http", "headers": headers, "client": ("127.0.0.9", 1)}
+
+    one = RateLimitMiddleware(app=None, limit=1)  # type: ignore[arg-type]
+    two = RateLimitMiddleware(app=None, limit=1, trusted_proxy_hops=2)  # type: ignore[arg-type]
+    none = RateLimitMiddleware(app=None, limit=1, trusted_proxy_hops=0)  # type: ignore[arg-type]
+    assert one._client_ip(scope("spoof, 198.51.100.4")) == "198.51.100.4"
+    assert two._client_ip(scope("spoof, 198.51.100.4, 10.1.1.1")) == "198.51.100.4"
+    assert two._client_ip(scope("198.51.100.4")) == "198.51.100.4"
+    assert none._client_ip(scope("spoof, 198.51.100.4")) == "127.0.0.9"
+    assert one._client_ip(scope(None)) == "127.0.0.9"
+
+
 def test_rate_limit_disabled_when_zero():
     from starlette.middleware import Middleware
 
