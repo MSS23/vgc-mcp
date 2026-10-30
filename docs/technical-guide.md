@@ -372,7 +372,7 @@ vgc-mcp/
 │   ├── vgc_mcp/                    # Plain, client-agnostic MCP server
 │   │   ├── server.py               # Stdio + HTTP entrypoints
 │   │   ├── http_middleware.py      # Optional auth and rate limiting
-│   │   ├── tools/                  # 52 auto-discovered registration modules
+│   │   ├── tools/                  # 50 auto-discovered registration modules
 │   │   └── __main__.py             # CLI entry point
 │   │
 │   └── vgc_mcp_core/               # Shared calculation/data/state library
@@ -948,7 +948,7 @@ DEBUG:mcp: ← Sending: {"jsonrpc": "2.0", "id": 1, "result": {...}}
 
 ## Summary
 
-**MCP (Model Context Protocol)** enables AI assistants to call external tools. The VGC MCP Server provides 213 tools for competitive Pokemon team building.
+**MCP (Model Context Protocol)** enables AI assistants to call external tools. The VGC MCP Server provides 206 tools for competitive Pokemon team building.
 
 **Key Concepts:**
 - **Client** (Claude Desktop) sends tool requests

@@ -10,7 +10,7 @@ Pokemon Champions, inside Claude on your phone or computer.
 1. Open **claude.ai → Settings → Connectors → Add custom connector**.
 2. Paste `https://vgc-mcp.onrender.com/mcp` and save. This gives you the
    34 core tools, which cover almost every question. Power users can use
-   `https://vgc-mcp.onrender.com/mcp/full` for all 213.
+   `https://vgc-mcp.onrender.com/mcp/full` for all 206.
 3. Start a new chat and say hi. The connector also appears in the Claude
    phone app once it is added on the web.
 

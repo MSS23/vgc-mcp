@@ -8,7 +8,7 @@ and thin MCP tool registration wrappers.
 
 | File | Purpose |
 |------|---------|
-| `server.py` | Stdio and HTTP entrypoints for the 213-tool server |
+| `server.py` | Stdio and HTTP entrypoints for the 206-tool server |
 | `__init__.py` | Package exports |
 | `__main__.py` | `python -m vgc_mcp` entry point |
 
@@ -16,7 +16,7 @@ and thin MCP tool registration wrappers.
 
 | Folder | Purpose |
 |--------|---------|
-| `tools/` | 52 auto-discovered MCP registration modules (213 tools) |
+| `tools/` | 50 auto-discovered MCP registration modules (206 tools) |
 
 ## Architecture
 
